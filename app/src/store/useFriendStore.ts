@@ -179,11 +179,12 @@ function committedCleanupUncertainResult(action: 'Block' | 'Unfriend'): FriendMu
  */
 export async function sendFriendRequest(
   email: string,
+  shareMemory = false,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const res = await authenticatedFetch('/api/friends/request', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, shareMemory }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -211,11 +212,11 @@ export async function fetchFriendRequests(): Promise<Array<{ id: string; fromUse
 /**
  * Accept a friend request.
  */
-export async function acceptFriendRequestAPI(requestId: string): Promise<boolean> {
+export async function acceptFriendRequestAPI(requestId: string, shareMemory = false): Promise<boolean> {
   try {
     const res = await authenticatedFetch('/api/friends/accept', {
       method: 'POST',
-      body: JSON.stringify({ requestId }),
+      body: JSON.stringify({ requestId, shareMemory }),
     });
     return res.ok;
   } catch {

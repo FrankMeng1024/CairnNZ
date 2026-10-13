@@ -130,6 +130,7 @@ export function RunningScreen() {
   const sharedRouteKey = sharedRouteLease ? `shared:${sharedRouteLease.leaseId}` : null;
   const isFocused = useIsFocused();
   const routes = useRouteStore(s => s.routes);
+  const sharedRoutes = useRouteStore(s => s.sharedRoutes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
   const activityRouteReference = useRouteStore(s => s.activityRouteReference);
@@ -209,10 +210,10 @@ export function RunningScreen() {
     if (sharedRouteKey) setSelectedRoute(sharedRouteKey);
   }, [sharedRouteKey]);
   useEffect(() => {
-    const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+    const selected = selectedRoute ? [...routes, ...sharedRoutes].find(item => routeMatchesIdentity(item, selectedRoute)) : null;
     if (!selected || selected.points.length >= 2) return;
     void loadRouteDetail(selected.id).catch(() => {});
-  }, [loadRouteDetail, routes, selectedRoute]);
+  }, [loadRouteDetail, routes, selectedRoute, sharedRoutes]);
   // Sleep-run 2026-08-16 rev-2: lock concept dropped. R1 is now just a
   // clean map + polyline + top stats bar; R2 is a persistent 3-button
   // tray (Pause / Cairn / Done) that no longer requires a double-tap
@@ -303,6 +304,7 @@ export function RunningScreen() {
     void refreshBackgroundLocationPermission();
   }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
+  const remoteStartConflict = useTrackingStore(s => s.remoteStartConflict);
   const activityOwnerUserId = useTrackingStore(s => s.ownerUserId);
   const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
   const activityMode = useTrackingStore(s => s.activityMode);
@@ -499,7 +501,7 @@ export function RunningScreen() {
 
   const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
     ? sharedRouteLease.name
-    : routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
+    : [...routes, ...sharedRoutes].find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
 
   useFocusEffect(React.useCallback(() => {
     setRunFollowUser(true);
@@ -856,7 +858,7 @@ export function RunningScreen() {
 
   // One native Mapbox owner spans pre-start and Tracking. Activity/provider
   // transitions update layers and camera targets; they never replace the map.
-  const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+  const activeRoute = selectedRoute ? [...routes, ...sharedRoutes].find(item => routeMatchesIdentity(item, selectedRoute)) : null;
   const plannedRoutePoints = isActivitySessionVisible(operationalState) && activityRouteReference
     ? activityRouteReference.points
     : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
@@ -1099,8 +1101,18 @@ export function RunningScreen() {
         notices={runNotices}
       />
       <PublicWalkingDiscoveryCard
+        surface="run"
+        blocked={Boolean(
+          showSaveSheet
+          || (unfinishedResolutionRequested && unfinishedRun)
+          || lastStopReason === 'too-short'
+          || showTooShortConfirmRun
+          || permissionDeniedVisible
+        )}
         safeTop={insets.top}
-        onOpen={(cairnId) => nav.navigate('PublicCairnDetail', { cairnId })}
+        onOpen={(markerId) => markerId
+          ? nav.navigate('AcquiredCairnDetail', { markerId })
+          : nav.navigate('AllCairns', { initialSection: 'found' })}
       />
 
       {!showSaveSheet ? (
@@ -1113,6 +1125,9 @@ export function RunningScreen() {
             : status === 'paused' ? 'paused' : 'tracking'}
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
+          syncWarning={remoteStartConflict
+            ? 'Saved locally · another unfinished Activity must be resolved before sync'
+            : null}
           cairnDisabled={!locationAvailable || quickCairnInFlight}
           onPauseResume={() => {
             haptic.impact('light');

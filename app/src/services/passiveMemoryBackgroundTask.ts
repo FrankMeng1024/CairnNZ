@@ -271,6 +271,9 @@ export async function handlePassiveMemoryBackgroundTask({ data, error }: { data:
           atMs: point.t,
           source: 'passive_real',
           ownerUserId: context.ownerUserId,
+          // The durable lease epoch survives headless callbacks and changes
+          // only when a new authorized background lifecycle begins.
+          sourceSegmentId: context.epoch,
           horizontalAccuracyM: point.accuracy ?? undefined,
           continuityState: 'accepted',
           ownerAuthority: 'durable_passive_lease',

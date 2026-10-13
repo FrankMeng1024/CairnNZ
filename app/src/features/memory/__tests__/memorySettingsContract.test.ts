@@ -22,6 +22,7 @@ describe('passive exploration settings migration', () => {
     await useMemorySettingsStore.getState().hydrate();
     expect(useMemorySettingsStore.getState()).toMatchObject({
       passiveExplorationEnabled: false,
+      memoryLocationTransitionRequired: true,
       passiveBackgroundConsent: 'not-asked',
     });
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('recordMode');
@@ -31,7 +32,7 @@ describe('passive exploration settings migration', () => {
     await Promise.resolve();
     expect(JSON.parse(raw)).toMatchObject({
       passiveExplorationEnabled: true,
-      passiveExplorationContractVersion: 4,
+      passiveExplorationContractVersion: 5,
       passiveBackgroundConsentVersion: 0,
     });
   });
@@ -51,6 +52,7 @@ describe('passive exploration settings migration', () => {
     const { useMemorySettingsStore } = require('../store/useMemorySettingsStore');
     await useMemorySettingsStore.getState().hydrate();
     expect(useMemorySettingsStore.getState().passiveExplorationEnabled).toBe(true);
+    expect(useMemorySettingsStore.getState().memoryLocationTransitionRequired).toBe(false);
     expect(useMemorySettingsStore.getState().passiveBackgroundConsent).toBe('not-asked');
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('recordMode');
     expect(useMemorySettingsStore.getState()).not.toHaveProperty('showFriendOverlay');

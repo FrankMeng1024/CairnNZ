@@ -55,17 +55,46 @@ import {
   type DataExportSummary,
 } from '../services/authService';
 import { deleteAllMemoryFromServer } from '../services/memorySync';
+import { authenticatedFetch } from '../services/apiService';
 import { haptic } from '../services/hapticService';
 import { PRIVACY_URL } from '../config/api';
 import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackground } from '../utils/homeBackground';
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { exportLatestActivityStageLedger } from '../features/activity/activityStageLedger';
+import {
+  buildActivityNativeCrossLedgerReport,
+  exportNativeGpsEvidence,
+} from '../features/activity/nativeGpsEvidence';
+import { offlineMapsFeatureEnabled } from '../features/offlineMaps/offlineMapContracts';
 
-type Page = 'root' | 'account' | 'privacy' | 'help';
+type Page = 'root' | 'account' | 'privacy' | 'content-review' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
 type AsyncState = 'idle' | 'sending' | 'sent' | 'failed';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+interface MyReviewCase {
+  id: number;
+  case_type: 'report' | 'appeal';
+  marker_id: number;
+  cairn_revision_id: number | null;
+  content_revision: number | null;
+  category: string;
+  state: 'pending' | 'reviewed' | 'dismissed' | 'actioned';
+  content_state: 'available' | 'under_review' | 'unavailable' | 'removed';
+  created_at: string;
+  disposition_note: string | null;
+  owner_case: boolean;
+}
+
+interface AffectedCairnRevision {
+  revision_id: number;
+  marker_id: number;
+  content_revision: number;
+  content_state: 'under_review' | 'unavailable';
+  changed_at: string;
+  appeal_pending: boolean;
+}
 
 const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 const UNITS_SEGMENTS = [
@@ -241,6 +270,7 @@ export function SettingsScreen() {
   const hapticFeedback = useSettingsStore((state) => state.hapticFeedback);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
   const exploreEnabled = useMemorySettingsStore((state) => state.passiveExplorationEnabled);
+  const memoryLocationTransitionRequired = useMemorySettingsStore((state) => state.memoryLocationTransitionRequired);
   const passiveBackgroundConsent = useMemorySettingsStore((state) => state.passiveBackgroundConsent);
   const passiveBackgroundEducationDismissed = useMemorySettingsStore(
     (state) => state.passiveBackgroundEducationDismissed,
@@ -285,6 +315,11 @@ export function SettingsScreen() {
   const [memoryDeleteOpen, setMemoryDeleteOpen] = useState(false);
   const [memoryDeleteResult, setMemoryDeleteResult] = useState('');
   const [activityDiagnosticsCopying, setActivityDiagnosticsCopying] = useState(false);
+  const [reviewCases, setReviewCases] = useState<MyReviewCase[]>([]);
+  const [affectedRevisions, setAffectedRevisions] = useState<AffectedCairnRevision[]>([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [appealSubmittingRevisionId, setAppealSubmittingRevisionId] = useState<number | null>(null);
 
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>('feedback');
   const [feedbackText, setFeedbackText] = useState('');
@@ -306,6 +341,7 @@ export function SettingsScreen() {
   const settingsMounted = useRef(true);
   const priorRenderedOwnerId = useRef(renderedOwnerId);
   const profileRefreshGeneration = useRef(0);
+  const reviewGeneration = useRef(0);
 
   useEffect(() => {
     settingsMounted.current = true;
@@ -317,6 +353,7 @@ export function SettingsScreen() {
       passwordGeneration.current += 1;
       deleteGeneration.current += 1;
       exportGeneration.current += 1;
+      reviewGeneration.current += 1;
       exportFlight.current = false;
       feedbackGeneration.current += 1;
       feedbackFlight.current = false;
@@ -365,6 +402,12 @@ export function SettingsScreen() {
     setExportStateOwnerId(renderedOwnerId);
     setMemoryDeleteOpen(false);
     setMemoryDeleteResult('');
+    reviewGeneration.current += 1;
+    setReviewCases([]);
+    setAffectedRevisions([]);
+    setReviewLoading(false);
+    setReviewError('');
+    setAppealSubmittingRevisionId(null);
     feedbackGeneration.current += 1;
     feedbackFlight.current = false;
     setFeedbackKind('feedback');
@@ -423,6 +466,33 @@ export function SettingsScreen() {
     }
   }, []);
 
+  const refreshReviewCases = useCallback(async () => {
+    const ownerId = currentOwnerId();
+    if (!settingsMounted.current || !ownerId) return;
+    const generation = ++reviewGeneration.current;
+    setReviewLoading(true);
+    setReviewError('');
+    try {
+      const response = await authenticatedFetch('/api/cairn-memory/review-cases/mine', {
+        expectedUserId: ownerId,
+      });
+      const body = await response.json().catch(() => null);
+      if (!settingsMounted.current || generation !== reviewGeneration.current
+        || currentOwnerId() !== ownerId) return;
+      if (!response.ok) throw new Error('review_cases_unavailable');
+      setReviewCases(Array.isArray(body?.cases) ? body.cases : []);
+      setAffectedRevisions(Array.isArray(body?.affected_revisions) ? body.affected_revisions : []);
+    } catch {
+      if (settingsMounted.current && generation === reviewGeneration.current
+        && currentOwnerId() === ownerId) {
+        setReviewError('Connect to review content issues and appeals.');
+      }
+    } finally {
+      if (settingsMounted.current && generation === reviewGeneration.current
+        && currentOwnerId() === ownerId) setReviewLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshPermission();
     void refreshProfile();
@@ -436,6 +506,11 @@ export function SettingsScreen() {
     if (page !== 'privacy') return;
     void refreshExports();
   }, [page, refreshExports, renderedOwnerId]);
+
+  useEffect(() => {
+    if (page !== 'content-review') return;
+    void refreshReviewCases();
+  }, [page, refreshReviewCases, renderedOwnerId]);
 
   const exportStateIsCurrentOwner = !!renderedOwnerId && exportStateOwnerId === renderedOwnerId;
   const visibleExports = exportStateIsCurrentOwner ? exports : [];
@@ -454,11 +529,7 @@ export function SettingsScreen() {
     if (next === 'account') void refreshProfile();
   };
 
-  const handleExploreChange = async (next: boolean) => {
-    if (!next) {
-      setMemorySetting('passiveExplorationEnabled', false);
-      return;
-    }
+  const enableUnifiedMemoryLocation = async () => {
     setPermissionLoading(true);
     try {
       let result = await Location.getForegroundPermissionsAsync();
@@ -469,6 +540,7 @@ export function SettingsScreen() {
       setPermissionCanAskAgain(result.canAskAgain !== false);
       if (result.status === Location.PermissionStatus.GRANTED) {
         setMemorySetting('passiveExplorationEnabled', true);
+        setMemorySetting('memoryLocationTransitionRequired', false);
         haptic.selection();
         if (passiveBackgroundCapability.supported
           && passiveBackgroundConsent !== 'granted'
@@ -525,9 +597,17 @@ export function SettingsScreen() {
     setActivityDiagnosticsCopying(true);
     try {
       const ledger = await exportLatestActivityStageLedger(ownerId);
+      const nativeGpsEvidence = await exportNativeGpsEvidence(ownerId, ledger.clientActivityId);
+      const nativeCrossLedgerReport = buildActivityNativeCrossLedgerReport(ledger, nativeGpsEvidence);
       if (currentOwnerId() !== ownerId) return;
       const Clipboard = await import('expo-clipboard');
-      await Clipboard.setStringAsync(JSON.stringify(ledger, null, 2));
+      await Clipboard.setStringAsync(JSON.stringify({
+        schema: 'cairn-activity-forensic-export',
+        version: 2,
+        stageLedger: ledger,
+        nativeGpsEvidence,
+        nativeCrossLedgerReport,
+      }, null, 2));
       if (currentOwnerId() !== ownerId) return;
       Alert.alert(
         'Activity diagnostics copied',
@@ -645,9 +725,9 @@ export function SettingsScreen() {
             testID="settings-haptics"
           />
           <Divider color={background.settingsCardBorderColor} />
-          <ToggleRow
+          <Row
             icon="Compass"
-            title="Explore beyond Activities"
+            title="Memory location"
             detail={permissionStatus === 'granted'
               ? passiveBackgroundCapability.supported
                 && passiveBackgroundConsent === 'granted'
@@ -656,10 +736,9 @@ export function SettingsScreen() {
                 : passiveBackgroundCapability.supported
                   ? 'Updates while Cairn is open; background access is optional'
                   : 'Updates while Cairn is open on this installed build'
-              : 'Needs foreground location permission; Activities are separate'}
-            value={exploreEnabled}
-            disabled={permissionLoading}
-            onChange={(value) => void handleExploreChange(value)}
+              : 'Needs foreground location permission; Hike and Run use the same accepted evidence lifecycle'}
+            value={permissionLoading ? 'Checking…' : exploreEnabled ? 'On' : memoryLocationTransitionRequired ? 'Review' : 'Off'}
+            onPress={exploreEnabled ? () => openPage('privacy') : () => void enableUnifiedMemoryLocation()}
             testID="settings-explore-open"
           />
         </ContentSurface>
@@ -667,6 +746,14 @@ export function SettingsScreen() {
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy & Data</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="Shield" title="Privacy & Data" detail="Location, export and exploration history" value="Review" onPress={() => openPage('privacy')} testID="settings-privacy-row" />
+          <Divider color={background.settingsCardBorderColor} />
+          <Row icon="FileText" title="Content issue / appeal" detail="Track reports and request review of an affected Cairn revision" value="Review" onPress={() => openPage('content-review')} testID="settings-content-review-row" />
+          {offlineMapsFeatureEnabled() ? (
+            <>
+              <Divider color={background.settingsCardBorderColor} />
+              <Row icon="Download" title="Offline maps" detail="Download basemap areas to this device" value="Pilot" onPress={() => navigation.navigate('OfflineMaps')} testID="settings-offline-maps-row" />
+            </>
+          ) : null}
         </ContentSurface>
 
         <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Help & About</SectionTitle>
@@ -840,7 +927,7 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <Row
             icon="Compass"
-            title="Explore beyond Activities"
+            title="Memory location"
             detail={exploreEnabled && permissionStatus === 'granted'
               ? passiveBackgroundCapability.supported
                 && passiveBackgroundConsent === 'granted'
@@ -851,8 +938,9 @@ export function SettingsScreen() {
                   : `On in foreground · background Memory requires a newer native build than ${passiveBackgroundCapability.nativeBuild ?? 'this build'}`
               : exploreEnabled
                 ? 'On in Cairn · unavailable until foreground location is allowed in iOS'
-                : 'Off · Hike and Run recording is separate'}
-            value={exploreEnabled ? 'On' : 'Off'}
+                : 'Needs your one-time review · existing Off choices stay Off'}
+            value={exploreEnabled ? 'On' : 'Review'}
+            onPress={exploreEnabled ? undefined : () => void enableUnifiedMemoryLocation()}
           />
         </ContentSurface>
 
@@ -1060,12 +1148,116 @@ export function SettingsScreen() {
     </>
   );
 
+  const submitAppeal = async (revision: AffectedCairnRevision) => {
+    const ownerId = currentOwnerId();
+    if (!ownerId || appealSubmittingRevisionId != null) return;
+    setAppealSubmittingRevisionId(revision.revision_id);
+    setReviewError('');
+    try {
+      const response = await authenticatedFetch(
+        `/api/cairn-memory/revisions/${revision.revision_id}/cases`,
+        {
+          method: 'POST',
+          expectedUserId: ownerId,
+          body: JSON.stringify({
+            client_submission_id: Crypto.randomUUID(),
+            case_type: 'appeal',
+            category: 'other',
+            detail: 'Author requested review from Cairn Settings.',
+          }),
+        },
+      );
+      if (!response.ok) throw new Error('appeal_failed');
+      await refreshReviewCases();
+    } catch {
+      if (currentOwnerId() === ownerId) setReviewError('The appeal was not sent. Connect and try again.');
+    } finally {
+      if (currentOwnerId() === ownerId) setAppealSubmittingRevisionId(null);
+    }
+  };
+
+  const renderContentReview = () => (
+    <>
+      {renderHeader('Content issue / appeal')}
+      <ScrollView style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
+        <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
+          <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
+          <View style={styles.rowCopy}>
+            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Review states are separate from editing</Text>
+            <Text style={[styles.body, { color: theme.textSecondary }]}>Reports enter a manual queue. If one of your shared Cairn revisions is affected, request review here; editing cannot bypass a source freeze.</Text>
+          </View>
+        </ContentSurface>
+
+        {reviewLoading ? <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Checking content review status…</Text></View> : null}
+        {reviewError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{reviewError}</Text> : null}
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Affected Cairns</SectionTitle>
+        {affectedRevisions.length === 0 && !reviewLoading ? (
+          <ContentSurface style={[styles.surface, surfaceStyle]}>
+            <Row icon="CircleCheck" title="No affected Cairn revisions" detail="Nothing on this account currently needs an author appeal." />
+          </ContentSurface>
+        ) : affectedRevisions.map(revision => (
+          <ContentSurface key={revision.revision_id} style={[styles.surface, surfaceStyle]}>
+            <Row
+              icon="FileText"
+              title={`Cairn ${revision.marker_id} · revision ${revision.content_revision}`}
+              detail={revision.content_state === 'under_review'
+                ? 'Under review · content is hidden while the case is open'
+                : 'Unavailable · request review if you believe this is an error'}
+              value={revision.appeal_pending ? 'Appeal pending' : undefined}
+            />
+            {!revision.appeal_pending ? (
+              <View style={styles.stackSmall}>
+                <PrimaryButton
+                  label="Request review"
+                  variant="secondary"
+                  loading={appealSubmittingRevisionId === revision.revision_id}
+                  onPress={() => void submitAppeal(revision)}
+                  testID={`settings-appeal-${revision.revision_id}`}
+                />
+              </View>
+            ) : null}
+          </ContentSurface>
+        ))}
+
+        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Your submitted cases</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          {reviewCases.length === 0 && !reviewLoading ? (
+            <Row icon="FileText" title="No submitted cases" detail="Reports can be sent from acquired Cairn details." />
+          ) : reviewCases.map((reviewCase, index) => (
+            <React.Fragment key={reviewCase.id}>
+              {index > 0 ? <Divider color={background.settingsCardBorderColor} /> : null}
+              <Row
+                icon="FileText"
+                title={`${reviewCase.case_type === 'appeal' ? 'Appeal' : 'Report'} · Cairn ${reviewCase.marker_id}`}
+                detail={`Revision ${reviewCase.content_revision ?? 'unavailable'} · ${reviewCase.content_state.replace('_', ' ')}`}
+                value={reviewCase.state}
+              />
+            </React.Fragment>
+          ))}
+        </ContentSurface>
+
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <Row icon="Mail" title="Contact support" detail="For rights requests or a content issue you cannot access in-app" external onPress={() => void Linking.openURL('mailto:support@cairnapp.nz')} />
+        </ContentSurface>
+      </ScrollView>
+    </>
+  );
+
   return (
     <View style={[styles.root, { backgroundColor: background.settingsBackgroundColor }]}>
       <Image source={background.bgAsset} style={[styles.backgroundImage, backgroundLayout]} resizeMode="cover" />
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: background.settingsVeilColor }]} />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        {page === 'root' ? renderRoot() : page === 'account' ? renderAccount() : page === 'privacy' ? renderPrivacy() : renderHelp()}
+        {page === 'root'
+          ? renderRoot()
+          : page === 'account'
+            ? renderAccount()
+            : page === 'privacy'
+              ? renderPrivacy()
+              : page === 'content-review'
+                ? renderContentReview()
+                : renderHelp()}
       </SafeAreaView>
 
       <ModalCard visible={nameOpen} onDismiss={() => !nameSaving && setNameOpen(false)} dismissible={!nameSaving} testID="settings-name-modal">

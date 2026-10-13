@@ -35,6 +35,7 @@ import { useMapTheme } from '../../../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
 import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
 import { useAppStore } from '../../../store/useAppStore';
+import { AcquiredCairnClusterLayer } from './AcquiredCairnClusterLayer';
 
 let memoryMapHasRendered = false;
 
@@ -96,6 +97,8 @@ interface Props {
    */
   flyToTarget?: { center: [number, number]; zoom: number; token: number } | null;
   qaWorkspaceActive?: boolean;
+  onOpenAcquiredCairn?: (markerId: string) => void;
+  onOpenAcquiredGroup?: (markerIds: string[]) => void;
 }
 
 const INITIAL_ZOOM = 16.5;
@@ -111,7 +114,7 @@ export type MemoryMapHandle = {
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
-  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false },
+  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false, onOpenAcquiredCairn, onOpenAcquiredGroup },
   ref,
 ) {
   const theme = useVisualTheme();
@@ -129,10 +132,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const allMarkers = useMemo(() => {
     if (memoryScope === 'self') return ownMarkers;
-    if (memoryScope === 'friend') {
-      return friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId));
-    }
-    return friendMarkers;
+    const visibleFriends = memoryScope === 'friend'
+      ? friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId))
+      : friendMarkers;
+    const seen = new Set(ownMarkers.map(marker => String(marker.id)));
+    return [...ownMarkers, ...visibleFriends.filter(marker => !seen.has(String(marker.id)))];
   }, [friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
   const mapViewRef = useRef<any>(null);
 
@@ -381,8 +385,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           : { styleJSON: memoryResolvedMapStyle.json })}
         compassEnabled={false}
         scaleBarEnabled={false}
-        logoEnabled={false}
-        attributionEnabled={false}
+        logoEnabled
+        attributionEnabled
+        logoPosition={{ bottom: 76, left: 8 }}
+        attributionPosition={{ bottom: 76, right: 8 }}
         onMapIdle={onMapSettle}
         onCameraChanged={(e: any) => {
           // v386: propagate live zoom to shared value every camera frame
@@ -613,7 +619,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             Mystery flash without breaking the case where the flag never
             sets (existing users). */}
         {fogReady && pinsAuthorityReady && (
-          <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
+          <>
+            <AcquiredCairnClusterLayer
+              onOpenSingle={markerId => onOpenAcquiredCairn?.(markerId)}
+              onOpenGroup={markerIds => onOpenAcquiredGroup?.(markerIds)}
+            />
+            <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
+          </>
         )}
       </MapView>
       {/* O1: MemoryFogBurstOverlay removed — v303 Skia burst is dead layer

@@ -13,6 +13,8 @@ let mockCurrentUserId = 'raw-gps-qa';
 const mockHikeJournalPoints: any[] = [];
 const mockAddSession = jest.fn(async () => undefined);
 const mockMarkSynced = jest.fn(async () => true);
+const mockCrashBreadcrumb = jest.fn();
+let mockSessions: any[] = [];
 const mockCanonicalHikeJournal = () => mockHikeJournalPoints.map(point => ({
   ...point,
   accuracy: point.accuracy ?? point.acc ?? null,
@@ -90,16 +92,23 @@ jest.mock('../../../store/useSettingsStore', () => ({
   useSettingsStore: { getState: () => ({ debugMode: true, activityGpsDistanceFilterM: 5 }) },
 }));
 jest.mock('../../../store/useSessionStore', () => ({
-  useSessionStore: { getState: () => ({
-    addSession: mockAddSession,
-    markSynced: mockMarkSynced,
-    sessions: [],
-  }) },
+  useSessionStore: {
+    getState: () => ({
+      addSession: mockAddSession,
+      markSynced: mockMarkSynced,
+      sessions: mockSessions,
+    }),
+    setState: (update: any) => {
+      const current = { sessions: mockSessions };
+      const next = typeof update === 'function' ? update(current) : update;
+      if (Array.isArray(next?.sessions)) mockSessions = next.sessions;
+    },
+  },
 }));
 jest.mock('../../../services/debugLogger', () => ({
   debugLogger: { startSession: jest.fn(), endSession: jest.fn(async () => null), log: jest.fn(), logError: jest.fn(), isEnabled: jest.fn(() => false) },
 }));
-jest.mock('../../../services/crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn(), captureException: jest.fn() } }));
+jest.mock('../../../services/crashLogger', () => ({ crashLogger: { breadcrumb: mockCrashBreadcrumb, captureException: jest.fn() } }));
 jest.mock('../../../services/appLog', () => ({ log: jest.fn() }));
 jest.mock('../../../services/batteryMonitor', () => ({ batteryMonitor: { start: jest.fn(async () => undefined), stop: jest.fn(async () => undefined), getCurrentLevel: jest.fn(() => null), getIsCharging: jest.fn(() => false) } }));
 jest.mock('../../../services/networkMonitor', () => ({ networkMonitor: { start: jest.fn(async () => undefined), stop: jest.fn() } }));
@@ -388,6 +397,7 @@ async function seedTracking(
 ) {
   await waitForAllActivityMemoryProjections();
   mockCurrentUserId = account;
+  mockSessions = [];
   mockHikeJournalPoints.length = 0;
   await memoryPersistence.detachMemoryPersistence();
   await memoryPersistence.hydrateMemoryForUser(account);
@@ -822,6 +832,9 @@ describe('revision-03 realistic Raw GPS -> live isolated Memory pipeline', () =>
     const activityId = useTrackingStore.getState().sessionId;
     const finished = await useTrackingStore.getState().stopTracking(`R-GPS-01 ${seed}`);
     const finishMs = performance.now() - finishStarted;
+    if (finished?.status === 'recoverable-failure') {
+      throw new Error(`unexpected recoverable Finish: ${mockCrashBreadcrumb.mock.calls.map(call => String(call[0])).join(' | ')}`);
+    }
     expect(finished).toMatchObject({
       status: 'saved-local',
       clientActivityId: activityId,

@@ -56,6 +56,7 @@ import {
   deriveRoadAwareLiveTrack,
   type ActivityRoadContext,
 } from '../features/activity/activityRoadContext';
+import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
 
 // Session-local readiness memory: cold entry keeps the intentional Cairn
 // preparation boundary; subsequent ready-from-cache entries suppress only a
@@ -384,7 +385,13 @@ type HikingMapProps = {
   // the polyline at GPS-signal-loss gaps. When two consecutive points are
   // separated by more than GAP_THRESHOLD_MS in time, we render that
   // segment as a dashed "lost signal" line instead of a solid track.
-  trackPoints: Array<{ lat: number; lng: number; t?: number; segmentId?: string }>;
+  trackPoints: Array<{
+    lat: number;
+    lng: number;
+    t?: number;
+    rawOrdinal?: number;
+    segmentId?: string;
+  }>;
   /** Saved Route shown as quiet reference geometry; never mutates Activity truth. */
   plannedRoutePoints?: Array<{ lat: number; lng: number }>;
   onMarkerPress: (id: string) => void;
@@ -604,6 +611,47 @@ export function HikingMap({
     );
     return routePresentationRef.current;
   }, [roadAwareTrackPoints]);
+  const presentedFrontierRef = useRef<{
+    clientActivityId: string;
+    lastRawOrdinal: number;
+  } | null>(null);
+  const presentedTailRawOrdinal = trackPoints[trackPoints.length - 1]?.rawOrdinal;
+  useEffect(() => {
+    if (simulatorEnabled || !isFocused || trackPoints.length === 0
+      || typeof presentedTailRawOrdinal !== 'number') return;
+    const owner = useTrackingStore.getState();
+    if (!owner.ownerUserId || !owner.sessionId || owner.status === 'idle') return;
+    const previous = presentedFrontierRef.current?.clientActivityId === owner.sessionId
+      ? presentedFrontierRef.current.lastRawOrdinal
+      : null;
+    const firstRawOrdinal = previous === null
+      ? trackPoints.find(point => typeof point.rawOrdinal === 'number')?.rawOrdinal
+      : previous + 1;
+    if (firstRawOrdinal == null || presentedTailRawOrdinal <= (previous ?? -1)) return;
+    presentedFrontierRef.current = {
+      clientActivityId: owner.sessionId,
+      lastRawOrdinal: presentedTailRawOrdinal,
+    };
+    const committedAtMs = Date.now();
+    void recordActivityStageEvent({
+      ownerUserId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      stage: 'presentation',
+      evidenceId: `${owner.sessionId.slice(-8)}:${presentedTailRawOrdinal}`,
+      wallTimeMs: committedAtMs,
+      details: {
+        consumer: 'activity-map-react-commit',
+        firstRawOrdinal,
+        lastRawOrdinal: presentedTailRawOrdinal,
+        presentedPointCount: trackPoints.length,
+        observationTimeMs: trackPoints[trackPoints.length - 1]?.t ?? null,
+        receiptToPresentationLagMs: trackPoints[trackPoints.length - 1]?.t == null
+          ? null
+          : Math.max(0, committedAtMs - trackPoints[trackPoints.length - 1]!.t!),
+        nativeMapFrameMeasured: false,
+      },
+    });
+  }, [isFocused, presentedTailRawOrdinal, simulatorEnabled, trackPoints]);
   const activeConfirmedSegment = routePresentation.activeHead;
   const trackingStatus = useTrackingStore(s => s.status);
   const trackingIsFinishing = useTrackingStore(s => s.isFinishing);

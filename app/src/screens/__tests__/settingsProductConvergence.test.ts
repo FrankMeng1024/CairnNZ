@@ -114,10 +114,10 @@ describe('Settings product and correctness convergence', () => {
   });
 
   test('internal session telemetry cannot be force-enabled by a normal product screen', () => {
-    const routeEditor = read('src/screens/RouteEditorScreen.tsx');
+    const routeEditor = read('src/screens/OrderedRouteEditorScreen.tsx');
     const uploader = read('src/services/telemetryUploader.ts');
     expect(routeEditor).not.toContain('debugLogger.setEnabled(true)');
-    expect(routeEditor).toContain('if (!qaToolsAvailable || !debugMode) return');
+    expect(routeEditor).not.toContain('debugLogger.setEnabled');
     expect(uploader.match(/Internal QA upload is not authorized/g)).toHaveLength(2);
     expect(uploader).toContain('settings.debugMode');
     expect(uploader).toContain('activitySimulatorBuildCapable');

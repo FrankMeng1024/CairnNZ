@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -30,6 +31,7 @@ import { PressBtn } from '../components/PressBtn';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { SyncBadge } from '../components/SyncBadge';
+import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { FontSize, IconSize, RadiusRole, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useDistance } from '../utils/distanceFormat';
@@ -164,11 +166,11 @@ function EmptyLibraryState({
       <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>
         {isActivities
           ? 'Record a Hike or Run. When you finish, the journey will be waiting here.'
-          : 'Open an Activity and save its path as an independent Route to use again.'}
+          : 'Create a plan from an empty map, or import an Activity as an independent editable Route.'}
       </Text>
       <View style={styles.emptyActions}>
         <PrimaryButton
-          label={isActivities ? 'Start a Hike' : 'View Activities'}
+          label={isActivities ? 'Start a Hike' : 'Create Route'}
           onPress={onPrimary}
           renderIcon={color => <Icon name={isActivities ? 'Navigation' : 'Map'} size={17} color={color} strokeWidth={2} />}
           style={styles.emptyPrimary}
@@ -329,7 +331,10 @@ function ActivitiesLibrary() {
       renderItem={({ item }) => (
         <ActivityRecord
           session={item}
-          onOpen={() => nav.navigate('MapHistory', { sessionId: item.id })}
+          onOpen={() => nav.navigate('MapHistory', {
+            sessionId: item.id,
+            activityBackContext: 'activities',
+          })}
           onRetry={retry}
         />
       )}
@@ -352,17 +357,23 @@ function RouteLoadNotice({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function RoutesLibrary({ onViewActivities }: { onViewActivities: () => void }) {
+function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
   const nav = useNavigation<Nav>();
   const theme = useVisualTheme();
   const routes = useRouteStore(state => state.routes);
+  const sharedRoutes = useRouteStore(state => state.sharedRoutes);
+  const loadSharedRoutes = useRouteStore(state => state.loadSharedRoutes);
   const loadRoutes = useRouteStore(state => state.loadRoutes);
   const retryRouteSync = useRouteStore(state => state.retryRouteSync);
   const loading = useRouteStore(state => state.routesLoading);
   const loadError = useRouteStore(state => state.routesLoadError);
   const [query, setQuery] = useState('');
-  const visible = useMemo(() => filterRoutes(routes, query), [routes, query]);
+  const [library, setLibrary] = useState<'mine' | 'shared'>('mine');
+  const sourceRoutes = library === 'mine' ? routes : sharedRoutes;
+  const visible = useMemo(() => filterRoutes(sourceRoutes, query), [sourceRoutes, query]);
   const retryLoad = () => { void loadRoutes(); };
+
+  useEffect(() => { void loadSharedRoutes(); }, [loadSharedRoutes]);
 
   if (loading && routes.length === 0) {
     return (
@@ -386,7 +397,7 @@ function RoutesLibrary({ onViewActivities }: { onViewActivities: () => void }) {
     );
   }
 
-  if (routes.length === 0) return <EmptyLibraryState kind="routes" onPrimary={onViewActivities} />;
+  if (routes.length === 0 && sharedRoutes.length === 0) return <EmptyLibraryState kind="routes" onPrimary={onCreate} />;
 
   return (
     <FlatList
@@ -399,8 +410,14 @@ function RoutesLibrary({ onViewActivities }: { onViewActivities: () => void }) {
       windowSize={9}
       ListHeaderComponent={(
         <View>
-          <LibraryIntro tab="routes" count={routes.length} />
+          <LibraryIntro tab="routes" count={sourceRoutes.length} />
           {loadError ? <RouteLoadNotice onRetry={retryLoad} /> : null}
+          <SegmentedControl
+            value={library}
+            segments={[{ key: 'mine', label: 'My Routes' }, { key: 'shared', label: 'Shared Routes' }]}
+            onChange={setLibrary}
+            testID="route-library-tabs"
+          />
           <View style={styles.discoveryTools}>
             <SearchField
               value={query}
@@ -415,8 +432,10 @@ function RoutesLibrary({ onViewActivities }: { onViewActivities: () => void }) {
       renderItem={({ item }) => (
         <RouteRecord
           route={item}
-          onOpen={() => nav.navigate('MapHistory', { routeId: item.id })}
-          onRetry={() => { void retryRouteSync(item.id); }}
+          onOpen={() => item.isSharedDelivery && item.sharedDeliveryId
+            ? nav.navigate('RouteEditor', { sharedDeliveryId: item.sharedDeliveryId })
+            : nav.navigate('MapHistory', { routeId: item.id })}
+          onRetry={() => { if (!item.isSharedDelivery) void retryRouteSync(item.id); }}
         />
       )}
       ListEmptyComponent={<NoResults kind="routes" onClear={() => setQuery('')} />}
@@ -431,6 +450,9 @@ export function RoutesScreen() {
   const theme = useVisualTheme();
   const initialTab: TrailsTab = route.params?.initialTab === 'routes' ? 'routes' : 'activities';
   const [tab, setTab] = useState<TrailsTab>(initialTab);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [activityPickerOpen, setActivityPickerOpen] = useState(false);
+  const sessions = useSessionStore(state => state.sessions);
   const loadRoutes = useRouteStore(state => state.loadRoutes);
 
   useEffect(() => { void loadRoutes(); }, [loadRoutes]);
@@ -441,6 +463,7 @@ export function RoutesScreen() {
   }, [route.params?.initialTab]);
 
   return (
+    <>
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.background }]} edges={['top']} testID="trails-personal-library">
       <LinearGradient
         pointerEvents="none"
@@ -454,7 +477,17 @@ export function RoutesScreen() {
           <Text style={[styles.title, { color: theme.textPrimary }]}>Trails</Text>
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Your journeys, ready to revisit</Text>
         </View>
-        <View style={styles.headerBalance} />
+        {tab === 'routes' ? (
+          <TouchableOpacity
+            style={[styles.createButton, { backgroundColor: theme.primaryAction }]}
+            onPress={() => setCreateOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Create Route"
+            testID="routes-create"
+          >
+            <Icon name="Plus" size={18} color={theme.onPrimary} strokeWidth={2.4} />
+          </TouchableOpacity>
+        ) : <View style={styles.headerBalance} />}
       </View>
       <SegmentedControl
         value={tab}
@@ -466,9 +499,66 @@ export function RoutesScreen() {
       <View style={styles.libraryBody}>
         {tab === 'activities'
           ? <ActivitiesLibrary />
-          : <RoutesLibrary onViewActivities={() => setTab('activities')} />}
+          : <RoutesLibrary onCreate={() => setCreateOpen(true)} />}
       </View>
     </SafeAreaView>
+    <ModalCard visible={createOpen} onDismiss={() => setCreateOpen(false)} testID="route-create-source">
+      <ModalCardHeader
+        title="Create Route"
+        body="Choose one starting source. Both open the same editor with Draw and Point."
+      />
+      <PrimaryButton
+        label="Plan a route"
+        onPress={() => {
+          setCreateOpen(false);
+          nav.navigate('RouteEditor', { creationSource: 'plan' });
+        }}
+        renderIcon={color => <Icon name="Map" size={18} color={color} strokeWidth={2} />}
+        testID="route-create-plan"
+      />
+      <PrimaryButton
+        label="Use an Activity"
+        variant="secondary"
+        onPress={() => { setCreateOpen(false); setActivityPickerOpen(true); }}
+        renderIcon={color => <Icon name="Footprints" size={18} color={color} strokeWidth={2} />}
+        style={styles.modalAction}
+        testID="route-create-activity"
+      />
+    </ModalCard>
+    <ModalCard visible={activityPickerOpen} onDismiss={() => setActivityPickerOpen(false)} testID="route-activity-picker">
+      <ModalCardHeader
+        title="Use an Activity"
+        body="The factual Activity stays read-only. Cairn creates a separate editable Route draft with its recorded section order."
+      />
+      {sessions.length === 0 ? (
+        <Text style={[styles.pickerEmpty, { color: theme.textSecondary }]}>No saved Activities are available yet.</Text>
+      ) : (
+        <ScrollView style={styles.pickerList}>
+          {sessions.map(session => (
+            <TouchableOpacity
+              key={session.id}
+              style={[styles.pickerRow, { borderColor: theme.borderSubtle }]}
+              onPress={() => {
+                setActivityPickerOpen(false);
+                nav.navigate('RouteEditor', { creationSource: 'activity', fromSessionId: session.id });
+              }}
+              accessibilityRole="button"
+              testID={`route-activity-${session.id}`}
+            >
+              {session.activityMode === 'running'
+                ? <RunningIcon size={19} color={theme.iconActive} />
+                : <HikingIcon size={19} color={theme.iconActive} />}
+              <View style={styles.pickerCopy}>
+                <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{activityDisplayName(session)}</Text>
+                <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>{activityDateLabel(session.startedAt)}</Text>
+              </View>
+              <Icon name="ChevronRight" size={16} color={theme.iconInactive} strokeWidth={2} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+    </ModalCard>
+    </>
   );
 }
 
@@ -483,10 +573,16 @@ const styles = StyleSheet.create({
   },
   headerCopy: { flex: 1, alignItems: 'center', paddingHorizontal: Spacing.sm },
   headerBalance: { width: 60 },
+  createButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: FontSize.h2, fontWeight: '700', letterSpacing: -0.2 },
   subtitle: { marginTop: 2, fontSize: FontSize.small, fontWeight: '500', textAlign: 'center' },
   tabs: { marginHorizontal: Spacing.base, marginTop: Spacing.xs },
   libraryBody: { flex: 1 },
+  modalAction: { marginTop: Spacing.sm },
+  pickerList: { maxHeight: 420 },
+  pickerEmpty: { paddingVertical: Spacing.xl, textAlign: 'center', fontSize: FontSize.body },
+  pickerRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: Spacing.sm },
+  pickerCopy: { flex: 1, minWidth: 0 },
   listContent: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.xxl },
   libraryIntro: {
     minHeight: 54,

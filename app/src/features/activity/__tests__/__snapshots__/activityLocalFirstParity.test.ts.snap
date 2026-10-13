@@ -1,0 +1,283 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`hiking local-first connectivity parity emits a stable local truth fingerprint for the locked replay 1`] = `
+{
+  "activeDurationS": 25,
+  "canonical": [
+    {
+      "lat": -41.28,
+      "lng": 174.77,
+      "segmentId": "segment-1",
+      "segmentStartReason": "start",
+      "t": 1800000000000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7700717,
+      "segmentId": "segment-1",
+      "segmentStartReason": null,
+      "t": 1800000005000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7701434,
+      "segmentId": "segment-1",
+      "segmentStartReason": null,
+      "t": 1800000010000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7702152,
+      "segmentId": "segment-1",
+      "segmentStartReason": null,
+      "t": 1800000015000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7747815,
+      "segmentId": "segment-2",
+      "segmentStartReason": "gps-reacquired",
+      "t": 1800000500000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7748532,
+      "segmentId": "segment-2",
+      "segmentStartReason": null,
+      "t": 1800000505000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7749249,
+      "segmentId": "segment-2",
+      "segmentStartReason": null,
+      "t": 1800000510000,
+    },
+  ],
+  "decisions": [
+    {
+      "id": "observation-1",
+      "kind": "ACCEPT",
+      "reason": "first-trusted-fix",
+    },
+    {
+      "id": "observation-2",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+    {
+      "id": "observation-3",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+    {
+      "id": "observation-4",
+      "kind": "REJECT",
+      "reason": "impossible-accuracy-adjusted-speed",
+    },
+    {
+      "id": "observation-5",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+    {
+      "id": "observation-6",
+      "kind": "QUARANTINE",
+      "reason": "possible-gap-reacquisition",
+    },
+    {
+      "id": "observation-7",
+      "kind": "ACCEPT",
+      "reason": "candidate-new-direction-confirmed",
+    },
+    {
+      "id": "observation-8",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+  ],
+  "distanceM": 29.966294,
+  "gapCount": 1,
+  "localFinalFingerprint": "2a21464c",
+  "mode": "hiking",
+  "rawIdentities": [
+    "observation-1",
+    "observation-2",
+    "observation-3",
+    "observation-4",
+    "observation-5",
+    "observation-6",
+    "observation-7",
+    "observation-8",
+  ],
+  "rawOrdering": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+  ],
+  "segmentBoundaries": [
+    {
+      "firstT": 1800000000000,
+      "id": "segment-1",
+      "lastT": 1800000015000,
+      "pointCount": 4,
+      "reason": "start",
+    },
+    {
+      "firstT": 1800000500000,
+      "id": "segment-2",
+      "lastT": 1800000510000,
+      "pointCount": 3,
+      "reason": "gps-reacquired",
+    },
+  ],
+  "selectedFinalFingerprint": "2a21464c",
+  "selectedFinalRevision": 1,
+}
+`;
+
+exports[`running local-first connectivity parity emits a stable local truth fingerprint for the locked replay 1`] = `
+{
+  "activeDurationS": 25,
+  "canonical": [
+    {
+      "lat": -41.28,
+      "lng": 174.77,
+      "segmentId": "segment-1",
+      "segmentStartReason": "start",
+      "t": 1800000000000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7700717,
+      "segmentId": "segment-1",
+      "segmentStartReason": null,
+      "t": 1800000005000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7701434,
+      "segmentId": "segment-1",
+      "segmentStartReason": null,
+      "t": 1800000010000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7702152,
+      "segmentId": "segment-1",
+      "segmentStartReason": null,
+      "t": 1800000015000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7747815,
+      "segmentId": "segment-2",
+      "segmentStartReason": "gps-reacquired",
+      "t": 1800000500000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7748532,
+      "segmentId": "segment-2",
+      "segmentStartReason": null,
+      "t": 1800000505000,
+    },
+    {
+      "lat": -41.28,
+      "lng": 174.7749249,
+      "segmentId": "segment-2",
+      "segmentStartReason": null,
+      "t": 1800000510000,
+    },
+  ],
+  "decisions": [
+    {
+      "id": "observation-1",
+      "kind": "ACCEPT",
+      "reason": "first-trusted-fix",
+    },
+    {
+      "id": "observation-2",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+    {
+      "id": "observation-3",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+    {
+      "id": "observation-4",
+      "kind": "REJECT",
+      "reason": "impossible-accuracy-adjusted-speed",
+    },
+    {
+      "id": "observation-5",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+    {
+      "id": "observation-6",
+      "kind": "QUARANTINE",
+      "reason": "possible-gap-reacquisition",
+    },
+    {
+      "id": "observation-7",
+      "kind": "ACCEPT",
+      "reason": "candidate-new-direction-confirmed",
+    },
+    {
+      "id": "observation-8",
+      "kind": "ACCEPT",
+      "reason": "coherent-motion",
+    },
+  ],
+  "distanceM": 29.966294,
+  "gapCount": 1,
+  "localFinalFingerprint": "2a21464c",
+  "mode": "running",
+  "rawIdentities": [
+    "observation-1",
+    "observation-2",
+    "observation-3",
+    "observation-4",
+    "observation-5",
+    "observation-6",
+    "observation-7",
+    "observation-8",
+  ],
+  "rawOrdering": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+  ],
+  "segmentBoundaries": [
+    {
+      "firstT": 1800000000000,
+      "id": "segment-1",
+      "lastT": 1800000015000,
+      "pointCount": 4,
+      "reason": "start",
+    },
+    {
+      "firstT": 1800000500000,
+      "id": "segment-2",
+      "lastT": 1800000510000,
+      "pointCount": 3,
+      "reason": "gps-reacquired",
+    },
+  ],
+  "selectedFinalFingerprint": "2a21464c",
+  "selectedFinalRevision": 1,
+}
+`;

@@ -217,10 +217,10 @@ export function MarkForm(props: MarkFormProps) {
         ) : null}
       </View>
       {visibility === 'group' ? (
-        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>Friends can discover this when they pass nearby. No notification is sent.</Text>
+        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>Friends who genuinely pass nearby may acquire this version and keep that copy even after later edits or unsharing. Avoid sensitive details. No notification is sent.</Text>
       ) : null}
       {visibility === 'public' ? (
-        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>After review, people who genuinely pass nearby may discover this exact text version.</Text>
+        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>After review, people who genuinely pass nearby may acquire this exact version. It is anonymous to strangers, but current friends may recognize you; acquired copies can remain. Avoid sensitive details.</Text>
       ) : null}
       </> : null}
 

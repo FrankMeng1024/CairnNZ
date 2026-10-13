@@ -436,6 +436,10 @@ function samePresenceContext(witness: MemoryPresenceWitness, event: DurableMemor
     return witness.sourceActivityClientId === event.sourceActivityClientId
       && witness.sourceSegmentId === event.sourceSegmentId;
   }
+  if (witness.sourceSegmentId || event.sourceSegmentId) {
+    return Boolean(witness.sourceSegmentId)
+      && witness.sourceSegmentId === event.sourceSegmentId;
+  }
   const dayMs = 24 * 60 * 60 * 1000;
   return Math.floor(witness.firstObservedAtMs / dayMs) === Math.floor(event.atMs / dayMs);
 }
@@ -477,6 +481,8 @@ export function mergeDurableMemoryEvidence(
       const segmentId = 'sourceSegmentId' in value ? value.sourceSegmentId : undefined;
       return `activity:${activityId ?? ''}:${segmentId ?? ''}`;
     }
+    const passiveSegmentId = 'sourceSegmentId' in value ? value.sourceSegmentId : undefined;
+    if (passiveSegmentId) return `passive:${passiveSegmentId}`;
     const atMs = 'firstObservedAtMs' in value ? value.firstObservedAtMs : value.atMs;
     return `passive:${Math.floor(atMs / (24 * 60 * 60 * 1000))}`;
   };

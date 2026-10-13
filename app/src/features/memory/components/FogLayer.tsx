@@ -14,7 +14,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
-import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
+import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { log } from '../../../services/appLog';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
@@ -45,6 +45,15 @@ interface Props {
   onFogPreparing?: (readinessKey: string) => void;
   onFogReady?: (readinessKey: string) => void;
   onFogUnavailable?: (readinessKey: string) => void;
+  /**
+   * Planning screens may render an authorized read-only scope without
+   * changing Memory's own persisted/UI selection. This never changes Fog
+   * geometry, sharing grants, or the server-enforced projection delay.
+   */
+  scopeOverride?: MemoryScope;
+  selectedFriendIdOverride?: string | null;
+  /** Presentation-only dimming used to keep roads/labels legible in planning. */
+  opacityScale?: number;
 }
 
 // Bug-6 fix: module-level cache so FogLayer unmount/remount (tab switch)
@@ -891,6 +900,8 @@ export async function buildTiledCombinedDisplayEvidence(
   shouldContinue: () => boolean,
 ): Promise<{
   evidence: Feature<Polygon | MultiPolygon> | null;
+  friendEvidence: Feature<Polygon | MultiPolygon> | null;
+  overlapEvidence: Feature<Polygon | MultiPolygon> | null;
   sliceDurationsMs: number[];
   rejectedFriendCellCount: number;
 } | null> {
@@ -972,6 +983,15 @@ export async function buildTiledCombinedDisplayEvidence(
   await yieldToEventLoop();
 
   const outputPolygons: Polygon['coordinates'][] = [];
+  const friendOutputPolygons: Polygon['coordinates'][] = [];
+  const overlapOutputPolygons: Polygon['coordinates'][] = [];
+  const appendGeometry = (
+    target: Polygon['coordinates'][],
+    value: Feature<Polygon | MultiPolygon> | null,
+  ) => {
+    if (value?.geometry.type === 'Polygon') target.push(value.geometry.coordinates);
+    else if (value?.geometry.type === 'MultiPolygon') target.push(...value.geometry.coordinates);
+  };
   const sortStartedAt = Date.now();
   const ordered = [...tileInputs.entries()].sort(([left], [right]) => compareDisplayKeys(left, right));
   sliceDurationsMs.push(Date.now() - sortStartedAt);
@@ -981,7 +1001,21 @@ export async function buildTiledCombinedDisplayEvidence(
     if (!shouldContinue()) return null;
     const [x, y] = key.split('|').map(Number);
     if (input.fullFriendTile) {
-      outputPolygons.push(displayTilePolygon(x, y).geometry.coordinates);
+      const fullFriend = displayTilePolygon(x, y);
+      outputPolygons.push(fullFriend.geometry.coordinates);
+      friendOutputPolygons.push(fullFriend.geometry.coordinates);
+      if (input.self) {
+        try {
+          const overlap = intersectTurf(featureCollection([input.self, fullFriend]));
+          appendGeometry(overlapOutputPolygons, overlap as Feature<Polygon | MultiPolygon> | null);
+        } catch (error: any) {
+          log('fog.union_overlap_failed', {
+            tile: key,
+            err: String(error?.message ?? error).slice(0, 100),
+          });
+          return null;
+        }
+      }
       if (Date.now() - outputSliceStartedAt >= DISPLAY_SCAN_SLICE_BUDGET_MS) {
         sliceDurationsMs.push(Date.now() - outputSliceStartedAt);
         await yieldToEventLoop();
@@ -989,11 +1023,34 @@ export async function buildTiledCombinedDisplayEvidence(
       }
       continue;
     }
-    const features: Array<Feature<Polygon | MultiPolygon>> = [
-      ...(input.self ? [input.self] : []),
+    const friendFeatures: Array<Feature<Polygon | MultiPolygon>> = [
       ...[...input.friends.entries()]
         .sort(([left], [right]) => compareDisplayKeys(left, right))
         .map(([, coordinates]) => polygon(coordinates)),
+    ];
+    if (friendFeatures.length > MAX_COMBINED_FEATURES_PER_TILE) return null;
+    const friendMerged = friendFeatures.length === 0
+      ? null
+      : friendFeatures.length === 1
+        ? friendFeatures[0]
+        : await unionDisplayFeatures(friendFeatures, shouldContinue, sliceDurationsMs);
+    if (friendFeatures.length > 0 && !friendMerged) return null;
+    appendGeometry(friendOutputPolygons, friendMerged);
+    if (input.self && friendMerged) {
+      try {
+        const overlap = intersectTurf(featureCollection([input.self, friendMerged]));
+        appendGeometry(overlapOutputPolygons, overlap as Feature<Polygon | MultiPolygon> | null);
+      } catch (error: any) {
+        log('fog.union_overlap_failed', {
+          tile: key,
+          err: String(error?.message ?? error).slice(0, 100),
+        });
+        return null;
+      }
+    }
+    const features: Array<Feature<Polygon | MultiPolygon>> = [
+      ...(input.self ? [input.self] : []),
+      ...(friendMerged ? [friendMerged] : []),
     ];
     if (features.length > MAX_COMBINED_FEATURES_PER_TILE) {
       // Fail closed: an unexpected projection density leaves the prior/solid
@@ -1020,13 +1077,30 @@ export async function buildTiledCombinedDisplayEvidence(
   }
   sliceDurationsMs.push(Date.now() - outputSliceStartedAt);
   await yieldToEventLoop();
-  if (outputPolygons.length === 0) return { evidence: null, sliceDurationsMs, rejectedFriendCellCount };
+  if (outputPolygons.length === 0) return {
+    evidence: null,
+    friendEvidence: null,
+    overlapEvidence: null,
+    sliceDurationsMs,
+    rejectedFriendCellCount,
+  };
   const assemblyStartedAt = Date.now();
   const evidence = outputPolygons.length === 1
     ? polygon(outputPolygons[0], { cairnTiledEvidence: true, cairnGeometryRevision: MEMORY_FOG_GEOMETRY_REVISION })
     : multiPolygon(outputPolygons, { cairnTiledEvidence: true, cairnGeometryRevision: MEMORY_FOG_GEOMETRY_REVISION });
   sliceDurationsMs.push(Date.now() - assemblyStartedAt);
-  return { evidence, sliceDurationsMs, rejectedFriendCellCount };
+  const makeTiledEvidence = (polygons: Polygon['coordinates'][]) => polygons.length === 0
+    ? null
+    : polygons.length === 1
+      ? polygon(polygons[0], { cairnTiledEvidence: true, cairnGeometryRevision: MEMORY_FOG_GEOMETRY_REVISION })
+      : multiPolygon(polygons, { cairnTiledEvidence: true, cairnGeometryRevision: MEMORY_FOG_GEOMETRY_REVISION });
+  return {
+    evidence,
+    friendEvidence: makeTiledEvidence(friendOutputPolygons),
+    overlapEvidence: makeTiledEvidence(overlapOutputPolygons),
+    sliceDurationsMs,
+    rejectedFriendCellCount,
+  };
 }
 /**
  * Build the fog GeoJSON from persisted Memory evidence footprints.
@@ -1060,7 +1134,15 @@ export function buildFogShape(
   return null;
 }
 
-export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, onFogUnavailable }: Props) {
+export function FogLayer({
+  userCenter: _userCenter,
+  onFogPreparing,
+  onFogReady,
+  onFogUnavailable,
+  scopeOverride,
+  selectedFriendIdOverride,
+  opacityScale = 1,
+}: Props) {
   const theme = useVisualTheme();
   const Mapbox = getMapbox();
   // v346: drive geometry from useMemoryStore.points (real GPS path),
@@ -1088,8 +1170,11 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
   // 反勾 → enabledFriendIds 删 → union → fog 立即回缩 (借来的解锁还回去)
   // v413 (4-eye fix E2): union 只在 Friends tab 生效, Mine tab 保 self-only
   // 尊重 useMemoryScopeStore.ts:5-8 已文档化的契约 + 用户口述"打开 Memory 首先看到自己"
-  const scope = useMemoryScopeStore((s) => s.scope);
-  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
+  const storedScope = useMemoryScopeStore((s) => s.scope);
+  const storedSelectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
+  const scope = scopeOverride ?? storedScope;
+  const selectedFriendId = scopeOverride ? (selectedFriendIdOverride ?? null) : storedSelectedFriendId;
+  const clampedOpacityScale = Math.max(0, Math.min(1, opacityScale));
   const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
   const friendMemoryRef = useFriendMemoryStore.getState;
 
@@ -1102,7 +1187,9 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
     // It is never merged into self points or friend projections and therefore
     // cannot become shareable exploration.
     if (syntheticQaAuthority) return syntheticTestPoints;
-    return scope === 'self' ? selfPoints : [];
+    // Mine remains visible in every scope. Friend projections are a derived
+    // overlay and never replace or weaken the user's canonical Memory.
+    return selfPoints;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selfPoints, scope, syntheticQaAuthority, syntheticTestPoints]);
   const friendCells = useMemo(
@@ -1133,7 +1220,10 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
   const readinessKey = `${authority}|local:${localHydration.ownerUserId ?? 'none'}:${localHydration.status}:${localHydration.requiresInitialReconcile ? 'needs-reconcile' : 'durable'}:${localHydration.initialReconcile}:${localHydration.revision}|${contentSignature}`;
   const readinessKeyRef = useRef(readinessKey);
   readinessKeyRef.current = readinessKey;
-  const exactCachedAuthority = _moduleFogAuthority === authority;
+  // The module cache stores canonical fog but not the two derived Union
+  // classification layers. Rebuild bounded friend tiles on remount so a
+  // cached fog can never silently lose or misclassify Friend/overlap color.
+  const exactCachedAuthority = _moduleFogAuthority === authority && friendCells.length === 0;
   const lastAuthorityRef = useRef<string>(exactCachedAuthority ? authority : '');
   const lastSigRef = useRef<string>(exactCachedAuthority ? _moduleFogSig : '');
   const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(
@@ -1163,6 +1253,8 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
   const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon>>(
     exactCachedAuthority && _moduleFogShape ? _moduleFogShape : solidFogShape(),
   );
+  const [friendDisplayShape, setFriendDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
+  const [overlapDisplayShape, setOverlapDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
   const [geometryReady, setGeometryReady] = useState(
     localHydrationReady && ((exactCachedAuthority && _moduleFogSig === contentSignature)
       || (points.length === 0 && friendCells.length === 0)),
@@ -1174,6 +1266,10 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
   // authority can paint with the prior geometry.
   useLayoutEffect(() => {
     fogReadyFiredRef.current = '';
+    // Revocation/selection changes remove borrowed color before async geometry
+    // work. They never wait for a cache rebuild to stop being visible.
+    setFriendDisplayShape(null);
+    setOverlapDisplayShape(null);
     setGeometryReady(false);
     onFogPreparingRef.current?.(readinessKey);
   }, [readinessKey]);
@@ -1227,6 +1323,8 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
     const generation = ++buildGenerationRef.current;
     if (!localHydrationReady) {
       setFogShape(solidFogShape());
+      setFriendDisplayShape(null);
+      setOverlapDisplayShape(null);
       setGeometryReady(false);
       return undefined;
     }
@@ -1251,6 +1349,8 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
       _moduleFogShape = solid;
       _moduleEvidenceShape = null;
       _moduleDisplayGeometryCache = null;
+      setFriendDisplayShape(null);
+      setOverlapDisplayShape(null);
       return undefined;
     }
     if (!authorityChanged && lastSigRef.current === contentSignature && lastShapeRef.current) {
@@ -1287,6 +1387,8 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
         : null;
       if (friendSnapshot.length > 0 && !combined) return;
       const displayEvidence = combined?.evidence ?? built.evidence;
+      const nextFriendDisplay = combined?.friendEvidence ?? null;
+      const nextOverlapDisplay = combined?.overlapEvidence ?? null;
       const shape = (pointSnapshot.length > 0 || friendSnapshot.length > 0) && !displayEvidence
         ? null
         : composeFogShape(displayEvidence);
@@ -1333,6 +1435,8 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
       lastEvidenceRef.current = displayEvidence;
       lastDisplayGeometryCacheRef.current = built.cache;
       setFogShape(shape);
+      setFriendDisplayShape(nextFriendDisplay);
+      setOverlapDisplayShape(nextOverlapDisplay);
       setGeometryReady(true);
       _moduleFogAuthority = authority;
       _moduleFogSig = contentSignature;
@@ -1433,6 +1537,7 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
   const { ShapeSource, FillLayer, LineLayer } = Mapbox as any;
 
   return (
+    <>
     <ShapeSource id="memory-fog-src" shape={displayedFogShape}>
       <FillLayer
         id="memory-fog"
@@ -1443,7 +1548,7 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
           // (theme.mapFogFill) — three-state palette lives in tokens.ts so
           // UI + map surfaces share one source of truth.
           fillColor: theme.mapFogFill,
-          fillOpacity: 1,
+          fillOpacity: clampedOpacityScale,
           // Antialiasing is presentation-only: it softens the exact boundary
           // without changing, buffering, or bridging the evidence geometry.
           // The quiet edge pass below masks historical tile seams.
@@ -1466,7 +1571,7 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
             lineColor: theme.mapFogEdgeOuter,
             lineWidth: 6,
             lineBlur: 7,
-            lineOpacity: 0.54,
+            lineOpacity: 0.54 * clampedOpacityScale,
           }}
         />
       ) : null}
@@ -1477,10 +1582,35 @@ export function FogLayer({ userCenter: _userCenter, onFogPreparing, onFogReady, 
             lineColor: theme.mapFogEdgeInner,
             lineWidth: 1,
             lineBlur: 2.2,
-            lineOpacity: 0.44,
+            lineOpacity: 0.44 * clampedOpacityScale,
           }}
         />
       ) : null}
     </ShapeSource>
+    {friendDisplayShape ? (
+      <ShapeSource id="memory-friend-union-src" shape={friendDisplayShape}>
+        <FillLayer
+          id="memory-friend-union"
+          style={{
+            fillColor: theme.mapFriendMemoryFill,
+            fillOpacity: theme.mapFriendMemoryOpacity * clampedOpacityScale,
+            fillAntialias: true,
+          }}
+        />
+      </ShapeSource>
+    ) : null}
+    {overlapDisplayShape ? (
+      <ShapeSource id="memory-overlap-src" shape={overlapDisplayShape}>
+        <FillLayer
+          id="memory-overlap"
+          style={{
+            fillColor: theme.mapMemoryOverlapFill,
+            fillOpacity: theme.mapMemoryOverlapOpacity * clampedOpacityScale,
+            fillAntialias: true,
+          }}
+        />
+      </ShapeSource>
+    ) : null}
+    </>
   );
 }

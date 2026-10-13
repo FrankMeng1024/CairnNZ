@@ -35,7 +35,6 @@ import { sessionRecorder } from '../services/sessionRecorder';
 import { telemetryUploader } from '../services/telemetryUploader';
 import {
   startSessionResolved,
-  fetchSessionDetail,
   deleteRemoteSession,
   deleteRemoteSessionByClientId,
   saveHikeAtomic,
@@ -106,12 +105,20 @@ import {
   getActivityRegistry,
   getUnfinishedActivity,
   mapActivityServerId,
-  reconcileStartConflict,
   registerUnfinishedActivity,
-  replaceUnfinishedActivityQueue,
   tombstoneActivity,
   updateUnfinishedActivity,
 } from '../features/activity/activityRegistry';
+import {
+  reconcileActivityRemoteStart,
+  type ActivityRemoteStartWakeReason,
+} from '../features/activity/activityRemoteStartCoordinator';
+import {
+  clearActivityRemoteStartConflict,
+  getActivityRemoteStartConflict,
+  persistActivityRemoteStartConflict,
+  type ActivityRemoteStartConflictRecord,
+} from '../features/activity/activityRemoteConflictStore';
 import {
   flushRecordedMemoryEvidence,
   recordMemoryEvidence,
@@ -206,12 +213,15 @@ import {
   runOwnedTrackingTokenRefresh,
   type TrackingTokenRefreshSnapshot,
 } from '../services/trackingTokenRefreshAuthority';
-import { maybeVerifyPublicWalkingDiscovery } from '../features/public/services/publicWalkingDiscovery';
 import {
   exportLatestActivityStageLedger,
   flushActivityStageLedger,
   recordActivityStageEvent,
 } from '../features/activity/activityStageLedger';
+import {
+  activateNativeGpsEvidenceScope,
+  deactivateNativeGpsEvidenceScope,
+} from '../features/activity/nativeGpsEvidence';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -223,6 +233,7 @@ let tokenRefreshEpoch = 0;
 let realTelemetryHealthInterval: ReturnType<typeof setInterval> | null = null;
 let activityLifecycleInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
+let remoteStartNetworkUnsubscribe: (() => void) | null = null;
 const ACTIVITY_LOCATION_TIME_INTERVAL_MS = 1_000;
 let backgroundTaskActive = false;
 let simulatorSourceActive = false;
@@ -744,6 +755,30 @@ async function emitRealTelemetryHealth(reason: string): Promise<void> {
   } catch { /* counters must never affect Activity truth */ }
   const segmentIds = new Set(state.trackPoints.map(point => point.segmentId ?? 'legacy-0'));
   const gaps = state.trackPoints.filter(point => point.segmentStartReason === 'gps-reacquired');
+  void recordActivityStageEvent({
+    ownerUserId: state.ownerUserId,
+    clientActivityId: state.sessionId,
+    stage: 'health-heartbeat',
+    wallTimeMs: nowMs,
+    details: {
+      reason,
+      expectedRawOrdinalHighWatermark: realGpsRawOrdinal,
+      rawPointCount: state.trackPointsRaw.length,
+      canonicalPointCount: state.trackPoints.length,
+      livePublishedPointCount: state.trackPointsSmoothed.length,
+      sourceAgeMs: locationHealth.sourceAgeMs,
+      canonicalAgeMs: locationHealth.canonicalAgeMs,
+      latestSourceKind: state.latestSourceKind,
+      latestCanonicalDecisionReason: latestRealCanonicalDecisionReason,
+      pendingCandidate: Boolean(realGpsContinuityState.pending),
+      foregroundWatcherActive: Boolean(locationSubscription),
+      backgroundTaskActive,
+      backgroundPermissionState: state.backgroundLocationPermission,
+      appState: AppState.currentState,
+      segmentCount: segmentIds.size,
+      gapCount: gaps.length,
+    },
+  });
   appendSimulatorLog('SYNC_STATE', 'activity_telemetry_health_v2', {
     reason,
     expectedRawOrdinalHighWatermark: realGpsRawOrdinal,
@@ -916,6 +951,9 @@ interface TrackingState {
   isFinishing: boolean;
   /** Last proven start failure. Cleared on a new start attempt or success. */
   startError: TrackingStartError | null;
+  /** Durable, owner-scoped server singleton conflict. This is advisory remote
+   * state only and can never stop or replace the local recording lifecycle. */
+  remoteStartConflict: ActivityRemoteStartConflictRecord | null;
   sessionId: string | null;
   /** Immutable account owner captured before Activity initialization awaits. */
   ownerUserId: string | null;
@@ -1075,11 +1113,144 @@ interface TrackingState {
   }>;
 }
 
+function clearRemoteStartNetworkRecovery(): void {
+  try { remoteStartNetworkUnsubscribe?.(); } catch { /* best-effort listener cleanup */ }
+  remoteStartNetworkUnsubscribe = null;
+}
+
+function scheduleRemoteSessionStart(
+  getState: () => TrackingState,
+  setState: (patch: Partial<TrackingState>) => void,
+  wakeReason: ActivityRemoteStartWakeReason,
+): void {
+  const captured = getState();
+  if (captured.locationProviderSource !== 'real'
+    || captured.remoteSessionId !== null
+    || !captured.ownerUserId
+    || !captured.sessionId
+    || !captured.liveOwnerGeneration
+    || !captured.startedAt
+    || (captured.status !== 'tracking' && captured.status !== 'paused' && !captured.isFinishing)) return;
+
+  const identity = {
+    ownerUserId: captured.ownerUserId,
+    clientActivityId: captured.sessionId,
+    ownerGeneration: captured.liveOwnerGeneration,
+    activityMode: captured.activityMode,
+    startedAt: captured.startedAt,
+  } as const;
+  void reconcileActivityRemoteStart(identity, wakeReason, {
+    isLocallyCurrent: () => {
+      const current = getState();
+      return String(useAppStore.getState().user?.id ?? '') === identity.ownerUserId
+        && current.ownerUserId === identity.ownerUserId
+        && current.sessionId === identity.clientActivityId
+        && current.remoteSessionId === null
+        && (current.status === 'tracking' || current.status === 'paused' || current.isFinishing);
+    },
+    start: () => startSessionResolved(
+      identity.activityMode,
+      new Date(identity.startedAt).toISOString(),
+      identity.clientActivityId,
+      identity.ownerUserId,
+    ),
+    persistServerMapping: serverActivityId => mapActivityServerId(
+      identity.ownerUserId,
+      identity.clientActivityId,
+      serverActivityId,
+    ),
+    persistPendingMapping: async (serverActivityId) => {
+      try {
+        // Finish may commit while the Start request is in flight. Mapping the
+        // pending Save is local-only and lets the daemon skip a duplicate
+        // Start request; absence of a pending payload is the normal live case.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { updateRemoteId } = require('../services/pendingSyncStore');
+        await updateRemoteId(identity.clientActivityId, serverActivityId);
+      } catch { /* no completed-local pending payload exists yet */ }
+    },
+    readPendingConflict: () => getActivityRemoteStartConflict(
+      identity.ownerUserId,
+      identity.clientActivityId,
+    ),
+    persistConflict: conflict => persistActivityRemoteStartConflict({
+      ownerUserId: identity.ownerUserId,
+      clientActivityId: identity.clientActivityId,
+      ownerGeneration: identity.ownerGeneration,
+      activityMode: identity.activityMode,
+      localStartedAt: identity.startedAt,
+      code: conflict.code,
+      existing: conflict.existing,
+      existingActivities: conflict.existingActivities,
+    }),
+    clearConflict: () => clearActivityRemoteStartConflict(
+      identity.ownerUserId,
+      identity.clientActivityId,
+    ),
+    publishConflict: conflict => {
+      const current = getState();
+      if (String(useAppStore.getState().user?.id ?? '') !== identity.ownerUserId
+        || current.ownerUserId !== identity.ownerUserId
+        || current.sessionId !== identity.clientActivityId) return;
+      setState({ remoteStartConflict: conflict });
+    },
+    publishServerMapping: (serverActivityId, mappingTarget) => {
+      const current = getState();
+      if (mappingTarget === 'tombstoned'
+        || String(useAppStore.getState().user?.id ?? '') !== identity.ownerUserId
+        || current.ownerUserId !== identity.ownerUserId
+        || current.sessionId !== identity.clientActivityId
+        || (current.status === 'idle' && !current.isFinishing)) return;
+      setState({ remoteSessionId: serverActivityId });
+      crashLogger.breadcrumb(`session:start:server-id=${serverActivityId}`);
+    },
+    observe: event => {
+      crashLogger.breadcrumb(
+        `session:start:${event.phase} wake=${wakeReason} ms=${event.elapsedMs}`
+        + `${event.status === undefined ? '' : ` status=${event.status}`}`,
+      );
+      void recordActivityStageEvent({
+        ownerUserId: identity.ownerUserId,
+        clientActivityId: identity.clientActivityId,
+        stage: 'sync-state',
+        details: {
+          operation: 'remote-start',
+          phase: event.phase,
+          wakeReason,
+          elapsedMs: event.elapsedMs,
+          status: event.status ?? null,
+          code: event.code ?? null,
+          serverMapped: typeof event.serverActivityId === 'number',
+          mappingTarget: event.mappingTarget ?? null,
+          replayedConflict: event.replayedConflict ?? false,
+        },
+      });
+    },
+  });
+}
+
+function installRemoteStartNetworkRecovery(
+  getState: () => TrackingState,
+  setState: (patch: Partial<TrackingState>) => void,
+): void {
+  clearRemoteStartNetworkRecovery();
+  const subscribe = (networkMonitor as unknown as {
+    onChange?: typeof networkMonitor.onChange;
+  }).onChange;
+  if (typeof subscribe !== 'function') return;
+  remoteStartNetworkUnsubscribe = subscribe.call(networkMonitor, (network) => {
+    if (network.state === 'online') {
+      scheduleRemoteSessionStart(getState, setState, 'network-online');
+    }
+  });
+}
+
 const initialState = {
   status: 'idle' as TrackingStatus,
   transitionState: 'idle' as ActivityTransitionState,
   isFinishing: false,
   startError: null as TrackingStartError | null,
+  remoteStartConflict: null as ActivityRemoteStartConflictRecord | null,
   sessionId: null,
   ownerUserId: null as string | null,
   liveOwnerGeneration: null as string | null,
@@ -1203,6 +1374,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // the lock. A second tap/caller cannot initialize another writer,
     // location subscription, timer set, or remote session.
     if (beforeStart.status !== 'idle' || beforeStart.isFinishing) return false;
+    clearRemoteStartNetworkRecovery();
 
     const startWallClockTimestamp = Date.now();
     const mode = beforeStart.activityMode;
@@ -1362,176 +1534,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       return false;
     }
 
-    // Only real Activities reserve the production singleton. Snap Lab uses a
-    // separate registry/WAL/shelf and is forbidden from crossing this network
-    // boundary even when the device is online.
-    const startResolution = locationProviderSource === 'real' ? await startSessionResolved(
-      mode,
-      new Date(startedAt).toISOString(),
-      localSessionId,
-      userId,
-    ) : null;
-    if (startResolution?.kind === 'started') {
-      await mapActivityServerId(userId, localSessionId, startResolution.serverActivityId);
-      if (!startAuthorityIsCurrent()) {
-        crashLogger.breadcrumb(`session:start:stale_owner_response localId=${localSessionId.slice(0, 8)}`);
-        return false;
-      }
-      set({ remoteSessionId: startResolution.serverActivityId });
-      crashLogger.breadcrumb(`session:start:server-id=${startResolution.serverActivityId}`);
-    } else if (startResolution?.kind === 'conflict') {
-      if (!startAuthorityIsCurrent()) {
-        crashLogger.breadcrumb(`session:start:stale_owner_conflict localId=${localSessionId.slice(0, 8)}`);
-        return false;
-      }
-      let existing = startResolution.existing;
-      let queuedPrimary: Awaited<ReturnType<typeof getUnfinishedActivity>> = null;
-      if (startResolution.existingActivities.length > 1) {
-        const ordered = [...startResolution.existingActivities].sort((left, right) => {
-          const timeDelta = Date.parse(right.startedAt) - Date.parse(left.startedAt);
-          return Number.isFinite(timeDelta) && timeDelta !== 0 ? timeDelta : right.id - left.id;
-        });
-        const queued = ordered.map((item) => {
-          const itemStartedAt = Date.parse(item.startedAt);
-          const itemOwnerGeneration = uuidv4();
-          return {
-            clientActivityId: item.clientActivityId,
-            serverActivityId: item.id,
-            userId,
-            activityMode: item.type,
-            startedAt: Number.isFinite(itemStartedAt) ? itemStartedAt : Date.now(),
-            lastMeaningfulAt: Number.isFinite(itemStartedAt) ? itemStartedAt : Date.now(),
-            activeDurationMs: 0,
-            activeSinceMs: null,
-            liveOwnerGeneration: itemOwnerGeneration,
-            currentSegmentId: newSegmentId(item.clientActivityId, Date.now()),
-            nextSegmentStartReason: 'process-recovery' as const,
-            locationProviderSource: 'real' as const,
-            lifecycle: 'unfinished' as const,
-          };
-        });
-        if (await replaceUnfinishedActivityQueue(userId, localSessionId, queued)) {
-          queuedPrimary = queued[0];
-          existing = ordered[0];
-          crashLogger.breadcrumb(
-            `session:start:multiple_unfinished preserved=${ordered.map(item => `${item.id}:${item.clientActivityId.slice(0, 8)}`).join(',')}`,
-          );
-        }
-      }
-      if (existing) {
-        const existingStartedAt = Date.parse(existing.startedAt);
-        const existingOwnerGeneration = queuedPrimary?.liveOwnerGeneration ?? uuidv4();
-        const existingSegmentId = queuedPrimary?.currentSegmentId
-          ?? newSegmentId(existing.clientActivityId, Date.now());
-        const authoritativeRecovery = queuedPrimary ?? {
-          clientActivityId: existing.clientActivityId,
-          serverActivityId: existing.id,
-          userId,
-          activityMode: existing.type,
-          startedAt: Number.isFinite(existingStartedAt) ? existingStartedAt : Date.now(),
-          lastMeaningfulAt: Date.now(),
-          activeDurationMs: 0,
-          activeSinceMs: null,
-          liveOwnerGeneration: existingOwnerGeneration,
-          currentSegmentId: existingSegmentId,
-          nextSegmentStartReason: 'process-recovery' as const,
-          locationProviderSource: 'real' as const,
-          lifecycle: 'unfinished' as const,
-        };
-        // Reconcile against local terminal truth before exposing any recovery
-        // action. A completed-local pending Save may still own the server's
-        // unfinished shell; it is not an unfinished Activity and must never be
-        // made discardable again.
-        const disposition = await reconcileStartConflict(
-          userId,
-          localSessionId,
-          authoritativeRecovery,
-        );
-        if (disposition === 'completed-local') {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { updateRemoteId } = require('../services/pendingSyncStore');
-            await updateRemoteId(existing.clientActivityId, existing.id);
-          } catch (pendingMappingError) {
-            crashLogger.breadcrumb(`session:start:completed_conflict_pending_map ${String(pendingMappingError).slice(0, 80)}`);
-          }
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { drainPending } = require('../services/syncDaemon');
-            void drainPending({ wakeReason: 'manual', force: true });
-          } catch { /* durable pending data remains available for the daemon */ }
-          set({ ...initialState, activityMode: mode, startError: 'previous-sync-pending' });
-          return false;
-        }
-        if (disposition === 'discarded') {
-          // The local discard is terminal. Reconcile only that exact business
-          // identity; never rehydrate it and never touch another Activity.
-          const cancelled = await deleteRemoteSessionByClientId(existing.clientActivityId);
-          if (!cancelled) await deleteRemoteSession(existing.id);
-          set({ ...initialState, activityMode: mode, startError: 'previous-cleanup-pending' });
-          return false;
-        }
-        if (disposition !== 'recoverable-unfinished') {
-          crashLogger.breadcrumb(`session:start:conflict_disposition=${disposition}`);
-          set({ ...initialState, activityMode: mode, startError: 'unfinished-exists' });
-          return false;
-        }
-        try {
-          // Materialize a recoverable local anchor for the authoritative
-          // Activity. If server detail is available, preserve its real points;
-          // otherwise the zero-point recovery remains discardable, not live.
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { startHikeTrack, appendHikePoint, listActiveHikes } = require('../services/hikeTrackWriter');
-          const hasLocalJournal = (await listActiveHikes()).some(
-            (meta: { session_id?: string; ended_at?: number | null }) =>
-              meta.session_id === existing.clientActivityId && !meta.ended_at,
-          );
-          if (!hasLocalJournal) {
-            await startHikeTrack(existing.clientActivityId, {
-              started_at: Number.isFinite(existingStartedAt) ? existingStartedAt : Date.now(),
-              activity_mode: existing.type,
-              user_id: userId,
-              owner_generation: existingOwnerGeneration,
-              remote_id: existing.id,
-            });
-            const detail = await fetchSessionDetail(existing.id);
-            const remotePoints = Array.isArray(detail?.route_points) ? detail.route_points : [];
-            for (const point of remotePoints) {
-              const pointTime = typeof point.t === 'number'
-                ? point.t
-                : (typeof point.timestamp === 'string' ? Date.parse(point.timestamp) : NaN);
-              if (!Number.isFinite(pointTime)) continue;
-              await appendHikePoint({
-                t: pointTime,
-                lat: point.lat,
-                lng: point.lng,
-                alt: point.alt ?? null,
-                acc: point.acc ?? null,
-                vAcc: point.v_acc ?? null,
-                speed: point.speed_mps ?? null,
-                speedAccuracy: point.speed_accuracy_mps ?? null,
-                course: point.course_deg ?? null,
-                courseAccuracy: point.course_accuracy_deg ?? null,
-                src: 'slc',
-                conf: 1,
-                clientActivityId: existing.clientActivityId,
-                ownerGeneration: existingOwnerGeneration,
-                segmentId: point.segment_id ?? existingSegmentId,
-                segmentStartReason: point.segment_start_reason ?? 'process-recovery',
-              });
-            }
-          }
-        } catch (conflictMaterializeError) {
-          crashLogger.breadcrumb(`session:start:conflict_materialize_failed ${String(conflictMaterializeError).slice(0, 80)}`);
-        }
-      }
-      set({ ...initialState, activityMode: mode, startError: 'unfinished-exists' });
-      return false;
-    } else if (locationProviderSource === 'real') {
-      if (!startAuthorityIsCurrent()) return false;
-      crashLogger.breadcrumb('session:start:server-unavailable');
-    }
-
+    // Network state is not recording authority. WAL, background ownership and
+    // the native source are established below before an optional remote shell
+    // is requested. The stable clientActivityId makes later reconciliation
+    // idempotent without changing local geometry or lifecycle truth.
     if (!startAuthorityIsCurrent()) return false;
 
     // Start debug logger session (no-op if disabled)
@@ -1609,6 +1615,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (locationProviderSource === 'real') void deleteRemoteSessionByClientId(localSessionId);
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
       return false;
+    }
+
+    if (locationProviderSource === 'real') {
+      // Diagnostics must never join or delay source activation. The future
+      // instrumented native writer reads this opaque scope on its own utility
+      // queue; missing the initial race remains explicitly partial evidence.
+      void activateNativeGpsEvidenceScope(userId, localSessionId).catch(() => undefined);
     }
 
     // Start battery + network monitors (non-blocking)
@@ -1755,6 +1768,20 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         activeDurationAccumulatedMs: 0,
         activeDurationStartedAtMs: lifecycleStartedAt,
       });
+      if (locationProviderSource === 'real') {
+        // GPS source + WAL ownership are already live. The default-off map
+        // pilot may now yield its in-progress downloads without extending or
+        // becoming a prerequisite of Activity Start.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const contracts = require('../features/offlineMaps/offlineMapContracts');
+          if (contracts.offlineMapsFeatureEnabled()) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { offlineMapService } = require('../features/offlineMaps/offlineMapService');
+            void offlineMapService.pauseForActivityStart().catch(() => undefined);
+          }
+        } catch { /* download throttling is diagnostic/resource best-effort */ }
+      }
       await updateUnfinishedActivity(userId, localSessionId, {
         activeDurationMs: 0,
         activeSinceMs: lifecycleStartedAt,
@@ -1777,6 +1804,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           backgroundCapability: get().backgroundLocationPermission,
         },
       });
+      if (locationProviderSource === 'real') {
+        installRemoteStartNetworkRecovery(get, set);
+        scheduleRemoteSessionStart(get, set, 'local-start');
+      }
       startRealTelemetryHealthTimer();
 
       // Subscribe AppState ONCE to flip sources foreground ↔ background.
@@ -1814,6 +1845,26 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             coordinateSource: lifecycleOwner.locationProviderSource === 'real' ? 'real' : 'simulator',
           },
         );
+        if (lifecycleOwner.ownerUserId && lifecycleOwner.sessionId) {
+          void recordActivityStageEvent({
+            ownerUserId: lifecycleOwner.ownerUserId,
+            clientActivityId: lifecycleOwner.sessionId,
+            stage: 'lifecycle',
+            details: {
+              event: 'app-state-change',
+              appState: nextState,
+              foregroundWatcherActive: Boolean(locationSubscription),
+              backgroundTaskActive,
+              backgroundPermissionState: lifecycleOwner.backgroundLocationPermission,
+              latestSourceAgeMs: lifecycleOwner.latestSourceLocationTime === null
+                ? null
+                : Math.max(0, Date.now() - lifecycleOwner.latestSourceLocationTime),
+              latestCanonicalAgeMs: lifecycleOwner.lastCoordinateTime === null
+                ? null
+                : Math.max(0, Date.now() - lifecycleOwner.lastCoordinateTime),
+            },
+          });
+        }
         if (nextState !== 'active' && lifecycleOwner.locationProviderSource === 'real') {
           void flushSimulatorLogs(lifecycleOwner.ownerUserId ?? undefined);
         }
@@ -1830,6 +1881,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         } catch { /* swallow */ }
         if (nextState === 'active') {
           if (lifecycleOwner.locationProviderSource === 'real') {
+            scheduleRemoteSessionStart(get, set, 'foreground');
             void enqueueRealLocationLifecycleTransition(nextState);
           } else {
             // Simulator behavior is functionally frozen.
@@ -1904,7 +1956,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           const state = get();
           if (state.status !== 'tracking') return;
           const remoteId = state.remoteSessionId;
-          if (!remoteId) return;
+          if (!remoteId) {
+            scheduleRemoteSessionStart(get, set, 'periodic-flush');
+            return;
+          }
           const ownerSessionId = state.sessionId;
           const ownerGeneration = state.liveOwnerGeneration;
           if (!state.ownerUserId || !ownerSessionId || !ownerGeneration || state.trackPoints.length === 0) return;
@@ -2008,6 +2063,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       markRealProviderStopped('background');
       backgroundTaskActive = false;
       if (incrementalFlushInterval) { clearInterval(incrementalFlushInterval); incrementalFlushInterval = null; }
+      clearRemoteStartNetworkRecovery();
       stopOwnedTokenRefreshTimer();
       stopRealTelemetryHealthTimer();
       // Connectivity monitoring is app-owned. Activity teardown must never
@@ -2018,6 +2074,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         void debugLogger.endSession().catch(() => {});
       }
       await persistBackgroundContext(null, false).catch(() => {});
+      if (locationProviderSource === 'real') {
+        void deactivateNativeGpsEvidenceScope(userId, localSessionId).catch(() => undefined);
+      }
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { discardActiveHike } = require('../services/hikeTrackWriter');
@@ -2150,6 +2209,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         roadRefinementPending: false,
       },
     });
+    clearRemoteStartNetworkRecovery();
     try {
       // A TaskManager callback may be executing in a separate JS runtime. Its
       // module-level queue cannot observe ours, so install a verified durable
@@ -3782,6 +3842,22 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           );
           if (!sessionMarked || !registryMarked) throw new Error('activity_ack_persistence_failed');
           serverSaveAcknowledged = true;
+          void recordActivityStageEvent({
+            ownerUserId,
+            clientActivityId: s.sessionId!,
+            stage: 'sync-state',
+            details: {
+              operation: 'completed-activity-upload',
+              phase: 'ack',
+              acknowledged: true,
+              activityIdentityMatched: v412Result.client_activity_id === s.sessionId,
+              serverActivityIdentityMatched: v412Result.session_id === remoteId,
+              canonicalPointCount: v412RouteCanonical.length,
+              finalRevision: finalArtifact.revision,
+              finalFingerprint: finalArtifact.displayFingerprint,
+              idempotentReplay: !!v412Result.idempotent_replay,
+            },
+          });
           if (finishResult) finishResult = { ...finishResult, syncState: 'synced' };
           recordSavePhase('server_ack_persistence', serverAckPersistenceStartedAt, {
             acknowledged: true,
@@ -3923,24 +3999,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           const { drainPending } = require('../services/syncDaemon');
           void drainPending({ wakeReason: 'manual', force: true }).catch(() => {});
         } catch { /* hydrate/foreground remains a later durable wake */ }
-      }
-
-      // Public encounter qualification is derived only from the finalized
-      // server Activity and uploaded real-source witnesses. Queueing this
-      // identity must never block Finish; offline/pending Activities are
-      // retried after their normal server save converges. Simulator evidence
-      // is deliberately excluded at this call boundary as well as server-side.
-      if (serverSaveAcknowledged && s.locationProviderSource === 'real' && s.sessionId) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const publicCairns = require('../features/public/services/publicCairns');
-          const queued = await publicCairns.queuePublicActivityReconciliation(ownerUserId, s.sessionId);
-          if (queued) {
-            void publicCairns.reconcilePublicActivityAfterServerAck(ownerUserId, s.sessionId).catch(() => {});
-          }
-        } catch (publicQueueError) {
-          crashLogger.breadcrumb(`public:post_activity_ack_queue_failed ${String(publicQueueError).slice(0, 80)}`);
-        }
       }
 
       // O7 (2026-07-26): 用户报 12:11 真实 hike Save 后 activity detail
@@ -4182,10 +4240,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         details: {
           artifactRevision: finishResult.finalGeometryRevision,
           artifactFingerprint: finishResult.finalGeometryFingerprint,
+          canonicalPointCount: s.trackPoints.length,
           routeState: finishResult.finalGeometryState,
           syncState: serverSaveAcknowledged ? 'synced' : 'pending',
         },
       });
+    }
+    if (s.locationProviderSource === 'real' && s.sessionId) {
+      void deactivateNativeGpsEvidenceScope(ownerUserId, s.sessionId).catch(() => undefined);
     }
     set((prev) => ({
       ...initialState,
@@ -4261,6 +4323,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         'CairnNZ paused the visible GPS source but could not verify background storage. You can still Finish this Activity.',
       );
       return;
+    }
+    if (pauseOwner.locationProviderSource === 'real'
+      && pauseOwner.ownerUserId && pauseOwner.sessionId) {
+      void deactivateNativeGpsEvidenceScope(
+        pauseOwner.ownerUserId,
+        pauseOwner.sessionId,
+      ).catch(() => undefined);
+      void recordActivityStageEvent({
+        ownerUserId: pauseOwner.ownerUserId,
+        clientActivityId: pauseOwner.sessionId,
+        stage: 'lifecycle',
+        details: { event: 'recording-paused', providerActive: false },
+      });
     }
     // The simulator may move physically while paused. Clearing the accepted
     // anchor ensures Resume starts a real new segment and never fabricates
@@ -4473,6 +4548,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       startError: null,
       activeDurationStartedAtMs: lifecycleStartedAt,
     });
+    if (resumeSource === 'real') {
+      void activateNativeGpsEvidenceScope(ownerUserId, resumeState.sessionId).catch(() => undefined);
+      void recordActivityStageEvent({
+        ownerUserId,
+        clientActivityId: resumeState.sessionId,
+        stage: 'lifecycle',
+        details: {
+          event: 'recording-resumed',
+          providerActive: true,
+          recovery: rebuildingAfterProcessDeath,
+        },
+      });
+    }
     startActivityLifecycleTimer(resumeState.sessionId);
     startRealTelemetryHealthTimer();
     appendSimulatorLog('ACTIVITY_STATE', 'activity_resumed', {
@@ -4484,6 +4572,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       clientActivityId: resumeState.sessionId,
       coordinateSource: 'none',
     });
+    if (resumeSource === 'real') {
+      installRemoteStartNetworkRecovery(get, set);
+      scheduleRemoteSessionStart(
+        get,
+        set,
+        rebuildingAfterProcessDeath ? 'process-recovery' : 'foreground',
+      );
+    }
 
     // The next accepted point proves the first valid interval after Resume.
 
@@ -4518,10 +4614,31 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             coordinateSource: lifecycleOwner.locationProviderSource === 'real' ? 'real' : 'simulator',
           },
         );
+        if (lifecycleOwner.ownerUserId && lifecycleOwner.sessionId) {
+          void recordActivityStageEvent({
+            ownerUserId: lifecycleOwner.ownerUserId,
+            clientActivityId: lifecycleOwner.sessionId,
+            stage: 'lifecycle',
+            details: {
+              event: 'app-state-change-after-recovery',
+              appState: nextState,
+              foregroundWatcherActive: Boolean(locationSubscription),
+              backgroundTaskActive,
+              backgroundPermissionState: lifecycleOwner.backgroundLocationPermission,
+              latestSourceAgeMs: lifecycleOwner.latestSourceLocationTime === null
+                ? null
+                : Math.max(0, Date.now() - lifecycleOwner.latestSourceLocationTime),
+              latestCanonicalAgeMs: lifecycleOwner.lastCoordinateTime === null
+                ? null
+                : Math.max(0, Date.now() - lifecycleOwner.lastCoordinateTime),
+            },
+          });
+        }
         if (nextState !== 'active' && lifecycleOwner.locationProviderSource === 'real') {
           void flushSimulatorLogs(lifecycleOwner.ownerUserId ?? undefined);
         }
         if (lifecycleOwner.locationProviderSource === 'real') {
+          if (nextState === 'active') scheduleRemoteSessionStart(get, set, 'foreground');
           if (nextState === 'active' || nextState === 'background' || nextState === 'inactive') {
             void enqueueRealLocationLifecycleTransition(nextState);
           }
@@ -4540,7 +4657,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
       incrementalFlushInterval = setInterval(async () => {
         const current = get();
-        if (current.status !== 'tracking' || !current.remoteSessionId) return;
+        if (current.status !== 'tracking') return;
+        if (!current.remoteSessionId) {
+          scheduleRemoteSessionStart(get, set, 'periodic-flush');
+          return;
+        }
         const ownerSessionId = current.sessionId;
         const ownerGeneration = current.liveOwnerGeneration;
         if (!current.ownerUserId || !ownerSessionId || !ownerGeneration || current.trackPoints.length === 0) return;
@@ -4939,7 +5060,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             ownerUserId: before.ownerUserId,
             clientActivityId: before.sessionId,
             stage: 'observation-decision',
-            evidenceId: `${before.sessionId.slice(-8)}:${rawOrdinal}`,
+            evidenceId: receiptEvidenceId,
             details: {
               observationTimeMs: sampleTimestamp,
               prefilterDecision: 'PASS',
@@ -5296,6 +5417,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           accuracy: acceptedCoord.accuracy,
           speed: acceptedCoord.speed,
           t,
+          rawOrdinal: cleanPoint.rawOrdinal,
           segmentId,
           ...(segmentStartReason ? { segmentStartReason } : {}),
         };
@@ -5454,6 +5576,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               firstRawOrdinal: acceptedPoints[0]?.rawOrdinal ?? null,
               lastRawOrdinal: accepted.rawOrdinal ?? null,
               acceptedCount: acceptedPoints.length,
+              evidenceIds: acceptedPoints.map(point => (
+                point.rawOrdinal == null
+                  ? receiptEvidenceId
+                  : `${before.sessionId!.slice(-8)}:${point.rawOrdinal}`
+              )),
               journalCommitLatencyMs: Math.max(0, journalCommittedAt - journalStartedAt),
             },
           });
@@ -5540,6 +5667,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             details: {
               firstRawOrdinal: acceptedPoints[0]?.rawOrdinal ?? null,
               lastRawOrdinal: accepted.rawOrdinal ?? null,
+              evidenceIds: acceptedPoints.map(point => (
+                point.rawOrdinal == null
+                  ? receiptEvidenceId
+                  : `${before.sessionId!.slice(-8)}:${point.rawOrdinal}`
+              )),
               canonicalStorePublished: true,
               qualifiedPuckPublished: true,
               liveRoutePublished: true,
@@ -5682,33 +5814,6 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           memoryProjectionPending = true;
         }
         const latest = get();
-        if (
-          !isSimulatorSample
-          && before.sessionId
-          && before.remoteSessionId
-          && before.liveOwnerGeneration
-        ) {
-          const discoveryIdentity = {
-            sessionId: before.sessionId,
-            ownerGeneration: before.liveOwnerGeneration,
-            remoteSessionId: before.remoteSessionId,
-          };
-          void maybeVerifyPublicWalkingDiscovery({
-            sourceActivityClientId: discoveryIdentity.sessionId,
-            serverActivityId: discoveryIdentity.remoteSessionId,
-            ownerUserId: before.ownerUserId,
-            ownerGeneration: discoveryIdentity.ownerGeneration,
-            points: latest.trackPoints.map(toServerPoint),
-            isCurrent: () => {
-              const live = get();
-              return live.status === 'tracking'
-                && live.locationProviderSource === 'real'
-                && live.sessionId === discoveryIdentity.sessionId
-                && live.liveOwnerGeneration === discoveryIdentity.ownerGeneration
-                && live.remoteSessionId === discoveryIdentity.remoteSessionId;
-            },
-          }).catch(() => {});
-        }
         appendSimulatorLog('ACTIVITY_POINT', 'activity_point_committed', {
           sampleSource: owned.source ?? 'foreground',
           segmentId: accepted.segmentId,
@@ -6244,6 +6349,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // Invalidate already-running callbacks before the first suspension await;
     // clearInterval alone cannot stop a callback that has already fired.
     stopOwnedTokenRefreshTimer();
+    clearRemoteStartNetworkRecovery();
     const activity = get();
     if (activity.status === 'idle' || !activity.sessionId) {
       stopActivityLifecycleTimer();
@@ -6295,6 +6401,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     } catch { /* monitor unavailable */ }
     const backgroundFence = await persistBackgroundContext(null, false).catch(() => false);
     if (!backgroundFence) throw new Error('activity_logout_background_fence_failed');
+    if (activity.locationProviderSource === 'real') {
+      void deactivateNativeGpsEvidenceScope(
+        String(activity.ownerUserId ?? ''),
+        activity.sessionId,
+      ).catch(() => undefined);
+    }
     await pointIngestTail.catch(() => {});
     // Finish owns a captured A snapshot and may be persisting its local commit.
     // Keep A as the active store owner until that operation resolves, otherwise
@@ -6338,6 +6450,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       : null;
     stopActivityLifecycleTimer();
     set({ ...(frozenLifecycle ?? {}), isFinishing: true });
+    clearRemoteStartNetworkRecovery();
     if (discardEntry.locationProviderSource === 'simulator') {
       pauseSimulatorProvider();
       simulatorSourceActive = false;
@@ -6398,6 +6511,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
         if (acceptedPoints.length > 0) await flushRecordedMemoryEvidence();
       }
+    }
+    if (s.locationProviderSource === 'real' && s.sessionId) {
+      void deactivateNativeGpsEvidenceScope(ownerUserId, s.sessionId).catch(() => undefined);
     }
     // Persist cancellation before attempting any network or file cleanup.
     // A crash after this point cannot let stale queued work resurrect the
@@ -7106,6 +7222,7 @@ async function drainCommittedBackgroundLocations(
     // disappear before foreground takeover, so rebuild from the complete WAL
     // instead of replaying only this module instance's mutable tail.
     const writer = require('../services/hikeTrackWriter');
+    const journalProjectionStartedAtMs = Date.now();
     let journal: any[];
     if (projectionAuthority === 'finish-fence') {
       const terminalSnapshot = await writer.readActiveHikeTerminalSnapshot(owner.sessionId, {
@@ -7258,6 +7375,10 @@ async function drainCommittedBackgroundLocations(
               appendedFromJournal: projection.appendedFromJournal,
               queueHintCount: drained.length,
               publicationWallTimeMs: publishedAtMs,
+              journalProjectionLatencyMs: Math.max(0, publishedAtMs - journalProjectionStartedAtMs),
+              observationToStorePublicationLagMs: last?.t == null
+                ? null
+                : Math.max(0, publishedAtMs - last.t),
             },
           });
           break;

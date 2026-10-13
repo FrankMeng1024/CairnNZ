@@ -35,6 +35,7 @@ describe('Memory server reconciliation', () => {
     }));
 
     const memorySync = require('../../../services/memorySync');
+    expect(memorySync.MEMORY_DISCOVERY_SYNC_CADENCE).toEqual({ debounceMs: 5_000, maxWaitMs: 10_000 });
     memorySync.attachMemorySync('account-a');
     await memorySync.pullMemoryFromServer('account-a', { reconcile: true });
     memorySync.detachMemorySync();
@@ -119,7 +120,10 @@ describe('Memory server reconciliation', () => {
       useAppStore: { getState: () => ({ isLoggedIn: true, user: { id: 'account-a' } }) },
     }));
     let uploadedBody: any;
-    const authenticatedFetch = jest.fn(async (_path: string, init: any) => {
+    const authenticatedFetch = jest.fn(async (path: string, init: any) => {
+      if (path === '/api/cairn-memory/discover') {
+        return { ok: true, status: 200, json: async () => ({ acquired: [] }) };
+      }
       uploadedBody = JSON.parse(init.body);
       return {
         ok: true,
@@ -146,6 +150,10 @@ describe('Memory server reconciliation', () => {
       evidence_source: 'passive_real',
     });
     expect(state.markPresenceWitnessesSynced).toHaveBeenCalledWith([witness], [witness.cid]);
+    expect(authenticatedFetch).toHaveBeenCalledWith(
+      '/api/cairn-memory/discover',
+      expect.objectContaining({ method: 'POST', expectedUserId: 'account-a' }),
+    );
     expect(memorySync.getMemorySyncMetrics()).toMatchObject({
       pushedPoints: 0,
       pushedPresenceWitnesses: 1,

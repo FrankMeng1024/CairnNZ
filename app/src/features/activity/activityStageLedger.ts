@@ -3,6 +3,10 @@ import { applySnapLabDiagnosticWriteDelay } from '../activitySimulator/snapLabFa
 
 export type ActivityStage =
   | 'activity-start'
+  | 'lifecycle'
+  | 'health-heartbeat'
+  | 'native-callback'
+  | 'native-js-delivery'
   | 'observation-received'
   | 'observation-decision'
   | 'canonical-accepted'
@@ -15,7 +19,65 @@ export type ActivityStage =
   | 'final-job'
   | 'final-selected'
   | 'completion-presented'
-  | 'detail-selected';
+  | 'detail-selected'
+  | 'sync-state';
+
+export type ActivityEvidenceCompleteness = 'complete' | 'partial' | 'not-observable-current-binary';
+
+export interface ActivityObservabilitySummary {
+  stageCounts: Partial<Record<ActivityStage, number>>;
+  frontiers: Partial<Record<ActivityStage, {
+    count: number;
+    lastWallTimeMs: number;
+    lastEvidenceId: string | null;
+  }>>;
+  evidenceCompleteness: {
+    nativeCallback: ActivityEvidenceCompleteness;
+    nativeToJsCorrelation: ActivityEvidenceCompleteness;
+    jsIntake: ActivityEvidenceCompleteness;
+    acceptanceDecision: ActivityEvidenceCompleteness;
+    walDurability: ActivityEvidenceCompleteness;
+    canonicalStore: ActivityEvidenceCompleteness;
+    livePublication: ActivityEvidenceCompleteness;
+    networkSync: ActivityEvidenceCompleteness;
+  };
+  pipelineFindings: {
+    nativeCallbacksWithoutJsDelivery: number;
+    jsReceiptsWithoutDecision: number;
+    rejectedByFiltering: number;
+    canonicalAcceptsWithoutWal: number;
+    walCommitsWithoutStorePublication: number;
+    storePublicationsWithoutPresentationEvidence: number;
+    locallyCompleteWithoutUploadAck: boolean;
+    refinementUnavailable: boolean;
+  };
+  timing: {
+    maximumObservationReceiptLagMs: number | null;
+    maximumWalToStoreLagMs: number | null;
+    longestJsReceiptGapMs: number | null;
+    longestObservationTimestampGapMs: number | null;
+  };
+  longObservationGaps: Array<{
+    /** Gap between JavaScript receipt clocks. This is not a GPS measurement gap. */
+    durationMs: number;
+    receiptGapDurationMs: number;
+    /** Gap between original provider observation timestamps, when both exist. */
+    observationTimestampGapMs: number | null;
+    fromWallTimeMs: number;
+    toWallTimeMs: number;
+    heartbeatCount: number;
+    /** Exact overlap with retained Pause -> Resume intervals, never an estimate. */
+    intentionalInactiveDurationMs: number | null;
+    /** Whether retained lifecycle boundaries explain none, part, or all of the gap. */
+    pauseEvidenceCompleteness: 'none' | 'partial' | 'complete' | 'unknown';
+    conclusion:
+      | 'recording-source-intentionally-inactive'
+      | 'no-js-callback-native-cause-unknown'
+      | 'js-runtime-not-observed'
+      | 'none';
+  }>;
+  interpretationLimits: string[];
+}
 
 export interface ActivityStageLedgerEvent {
   schema: 'cairn-activity-stage-ledger';
@@ -44,7 +106,7 @@ export interface ActivityStageLedgerExport {
     coordinatesIncluded: false;
     automaticUpload: false;
   };
-  presentationMeasurement: 'NOT_MEASURED';
+  presentationMeasurement: 'REACT_COMMIT_NOT_NATIVE_FRAME';
   diagnosticCompleteness: {
     persistence: 'complete' | 'partial';
     summaryAvailable: boolean;
@@ -57,6 +119,7 @@ export interface ActivityStageLedgerExport {
     missingRequiredStages: ActivityStage[];
   };
   phaseSummary: ActivityStagePhaseSummary | null;
+  observability: ActivityObservabilitySummary;
   events: ActivityStageLedgerEvent[];
 }
 
@@ -543,6 +606,341 @@ async function waitBounded<T>(promise: Promise<T>, timeoutMs: number): Promise<{
   }
 }
 
+function finiteDetail(event: ActivityStageLedgerEvent, key: string): number | null {
+  const value = event.details[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function maximum(values: Array<number | null>): number | null {
+  const finite = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  return finite.length > 0 ? Math.max(...finite) : null;
+}
+
+function evidenceIds(events: ActivityStageLedgerEvent[], stage: ActivityStage): Set<string> {
+  const result = new Set<string>();
+  events.filter(event => event.stage === stage).forEach(event => {
+    if (event.evidenceId) result.add(event.evidenceId);
+    const batch = event.details.evidenceIds;
+    if (Array.isArray(batch)) {
+      batch.filter(identity => typeof identity === 'string').forEach(identity => result.add(identity));
+    }
+  });
+  return result;
+}
+
+function correlatedCompleteness(
+  upstream: Set<string>,
+  downstream: Set<string>,
+  unavailable: ActivityEvidenceCompleteness = 'partial',
+): ActivityEvidenceCompleteness {
+  if (upstream.size === 0) return unavailable;
+  return [...upstream].every(identity => downstream.has(identity)) ? 'complete' : 'partial';
+}
+
+function stageCoversEvidence(
+  events: ActivityStageLedgerEvent[],
+  stage: ActivityStage,
+  identity: string,
+): boolean {
+  const direct = evidenceIds(events, stage);
+  if (direct.has(identity)) return true;
+  const ordinal = Number(identity.slice(identity.lastIndexOf(':') + 1));
+  if (!Number.isFinite(ordinal)) return false;
+  return events.some(event => {
+    if (event.stage !== stage) return false;
+    const first = finiteDetail(event, 'firstRawOrdinal');
+    const last = finiteDetail(event, 'lastRawOrdinal');
+    return first !== null && last !== null && ordinal >= first && ordinal <= last;
+  });
+}
+
+function correlatedStageCompleteness(
+  upstream: Set<string>,
+  events: ActivityStageLedgerEvent[],
+  downstreamStage: ActivityStage,
+): ActivityEvidenceCompleteness {
+  if (upstream.size === 0) return 'partial';
+  return [...upstream].every(identity => stageCoversEvidence(events, downstreamStage, identity))
+    ? 'complete'
+    : 'partial';
+}
+
+function detailString(event: ActivityStageLedgerEvent | null, ...keys: string[]): string | null {
+  if (!event) return null;
+  for (const key of keys) {
+    const value = event.details[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
+}
+
+function detailNumber(event: ActivityStageLedgerEvent | null, ...keys: string[]): number | null {
+  if (!event) return null;
+  for (const key of keys) {
+    const value = event.details[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function exactCompletedUploadAcknowledged(events: ActivityStageLedgerEvent[]): boolean {
+  const completion = [...events].reverse().find(event => event.stage === 'completion-presented')
+    ?? [...events].reverse().find(event => event.stage === 'final-selected')
+    ?? null;
+  if (!completion) return false;
+  const expectedRevision = detailNumber(completion, 'artifactRevision', 'selectedRevision', 'revision');
+  const expectedFingerprint = detailString(
+    completion,
+    'artifactFingerprint',
+    'selectedFingerprint',
+    'displayFingerprint',
+  );
+  const expectedCanonicalCount = detailNumber(completion, 'canonicalPointCount');
+  // A legacy/truncated completion cannot establish which exact local artifact
+  // the server acknowledged. Prefer honest partial evidence to a false PASS.
+  if (expectedRevision === null
+    || expectedFingerprint === null
+    || expectedCanonicalCount === null) return false;
+  return events.some(event => {
+    if (event.stage !== 'sync-state'
+      || event.details.operation !== 'completed-activity-upload'
+      || event.details.phase !== 'ack'
+      || event.details.acknowledged !== true
+      || event.details.activityIdentityMatched !== true
+      || event.details.serverActivityIdentityMatched !== true) return false;
+    const acknowledgedRevision = detailNumber(event, 'finalRevision', 'artifactRevision');
+    const acknowledgedFingerprint = detailString(event, 'finalFingerprint', 'artifactFingerprint');
+    const acknowledgedCanonicalCount = detailNumber(event, 'canonicalPointCount');
+    return acknowledgedRevision === expectedRevision
+      && acknowledgedFingerprint === expectedFingerprint
+      && acknowledgedCanonicalCount === expectedCanonicalCount;
+  });
+}
+
+interface PauseEvidenceForGap {
+  intentionalInactiveDurationMs: number | null;
+  pauseEvidenceCompleteness: 'none' | 'partial' | 'complete' | 'unknown';
+}
+
+/**
+ * Interpret only explicit Pause -> Resume pairs from one uninterrupted JS
+ * process. Open/missing/cross-process boundaries are evidence of uncertainty,
+ * never authority to label an entire receipt gap as intentional inactivity.
+ */
+function pauseEvidenceForGap(
+  events: ActivityStageLedgerEvent[],
+  fromWallTimeMs: number,
+  toWallTimeMs: number,
+): PauseEvidenceForGap {
+  const lifecycle = events.filter(event => event.stage === 'lifecycle'
+    && (event.details.event === 'recording-paused'
+      || event.details.event === 'recording-resumed'));
+  const gapProcessIds = new Set(events
+    .filter(event => event.wallTimeMs >= fromWallTimeMs && event.wallTimeMs <= toWallTimeMs)
+    .map(event => event.processId));
+  const boundedIntervals: Array<{ fromWallTimeMs: number; toWallTimeMs: number }> = [];
+  let openPause: ActivityStageLedgerEvent | null = null;
+  let unknownBoundaryInGap = false;
+
+  for (const event of lifecycle) {
+    if (event.details.event === 'recording-paused') {
+      if (openPause && openPause.wallTimeMs < toWallTimeMs
+        && event.wallTimeMs > fromWallTimeMs) unknownBoundaryInGap = true;
+      openPause = event;
+      continue;
+    }
+    if (!openPause) {
+      if (event.wallTimeMs > fromWallTimeMs && event.wallTimeMs < toWallTimeMs) {
+        unknownBoundaryInGap = true;
+      }
+      continue;
+    }
+    const processDiscontinuity = event.processId !== openPause.processId
+      || events.some(candidate => candidate.wallTimeMs > openPause!.wallTimeMs
+        && candidate.wallTimeMs < event.wallTimeMs
+        && candidate.processId !== openPause!.processId);
+    if (processDiscontinuity) {
+      if (openPause.wallTimeMs < toWallTimeMs && event.wallTimeMs > fromWallTimeMs) {
+        unknownBoundaryInGap = true;
+      }
+    } else {
+      boundedIntervals.push({
+        fromWallTimeMs: openPause.wallTimeMs,
+        toWallTimeMs: event.wallTimeMs,
+      });
+    }
+    openPause = null;
+  }
+
+  if (openPause && openPause.wallTimeMs < toWallTimeMs) unknownBoundaryInGap = true;
+  const lifecycleRelevantToGap = lifecycle.some(event => (
+    event.wallTimeMs > fromWallTimeMs && event.wallTimeMs < toWallTimeMs
+  )) || boundedIntervals.some(interval => (
+    interval.fromWallTimeMs < toWallTimeMs && interval.toWallTimeMs > fromWallTimeMs
+  ));
+  if (lifecycleRelevantToGap && gapProcessIds.size > 1) unknownBoundaryInGap = true;
+  if (unknownBoundaryInGap) {
+    return { intentionalInactiveDurationMs: null, pauseEvidenceCompleteness: 'unknown' };
+  }
+
+  const clipped = boundedIntervals
+    .map(interval => ({
+      fromWallTimeMs: Math.max(fromWallTimeMs, interval.fromWallTimeMs),
+      toWallTimeMs: Math.min(toWallTimeMs, interval.toWallTimeMs),
+    }))
+    .filter(interval => interval.toWallTimeMs > interval.fromWallTimeMs)
+    .sort((left, right) => left.fromWallTimeMs - right.fromWallTimeMs);
+  let inactiveDurationMs = 0;
+  let frontier = fromWallTimeMs;
+  for (const interval of clipped) {
+    const start = Math.max(frontier, interval.fromWallTimeMs);
+    if (interval.toWallTimeMs > start) inactiveDurationMs += interval.toWallTimeMs - start;
+    frontier = Math.max(frontier, interval.toWallTimeMs);
+  }
+  const gapDurationMs = Math.max(0, toWallTimeMs - fromWallTimeMs);
+  if (inactiveDurationMs >= gapDurationMs && gapDurationMs > 0) {
+    return { intentionalInactiveDurationMs: gapDurationMs, pauseEvidenceCompleteness: 'complete' };
+  }
+  if (inactiveDurationMs > 0) {
+    return { intentionalInactiveDurationMs: inactiveDurationMs, pauseEvidenceCompleteness: 'partial' };
+  }
+  return { intentionalInactiveDurationMs: 0, pauseEvidenceCompleteness: 'none' };
+}
+
+/** Pure, coordinate-free interpretation of the retained stage evidence. */
+export function summarizeActivityObservability(
+  events: ActivityStageLedgerEvent[],
+  options: { retentionTruncated?: boolean } = {},
+): ActivityObservabilitySummary {
+  const ordered = events.slice().sort(
+    (left, right) => left.wallTimeMs - right.wallTimeMs || left.eventId.localeCompare(right.eventId),
+  );
+  const stageCounts: Partial<Record<ActivityStage, number>> = {};
+  const frontiers: ActivityObservabilitySummary['frontiers'] = {};
+  for (const event of ordered) {
+    stageCounts[event.stage] = (stageCounts[event.stage] ?? 0) + 1;
+    frontiers[event.stage] = {
+      count: stageCounts[event.stage]!,
+      lastWallTimeMs: event.wallTimeMs,
+      lastEvidenceId: event.evidenceId ?? null,
+    };
+  }
+
+  const received = evidenceIds(ordered, 'observation-received');
+  const decisions = evidenceIds(ordered, 'observation-decision');
+  const canonical = evidenceIds(ordered, 'canonical-accepted');
+  const wal = evidenceIds(ordered, 'wal-committed');
+  const store = evidenceIds(ordered, 'store-published');
+  const syncAcknowledged = options.retentionTruncated !== true
+    && exactCompletedUploadAcknowledged(ordered);
+  const locallyComplete = ordered.some(event => (
+    event.stage === 'final-selected' || event.stage === 'completion-presented'
+  ));
+  const refinementUnavailable = ordered.some(event => (
+    (event.stage === 'final-job' || event.stage === 'sync-state')
+    && (event.details.phase === 'unavailable'
+      || event.details.phase === 'failed'
+      || event.details.providerAvailable === false)
+  ));
+
+  const decisionsById = new Map(ordered
+    .filter(event => event.stage === 'observation-decision' && event.evidenceId)
+    .map(event => [event.evidenceId!, event]));
+  const rejectedByFiltering = [...decisionsById.values()].filter(event => {
+    const decision = String(event.details.decision ?? '').toUpperCase();
+    return decision !== 'ACCEPT' && decision !== 'ACCEPTED';
+  }).length;
+
+  const observationEvents = ordered.filter(event => event.stage === 'observation-received');
+  const longObservationGaps: ActivityObservabilitySummary['longObservationGaps'] = [];
+  for (let index = 1; index < observationEvents.length; index += 1) {
+    const from = observationEvents[index - 1];
+    const to = observationEvents[index];
+    const durationMs = to.wallTimeMs - from.wallTimeMs;
+    if (durationMs < 7 * 60_000) continue;
+    const inside = ordered.filter(event => (
+      event.wallTimeMs > from.wallTimeMs && event.wallTimeMs < to.wallTimeMs
+    ));
+    const heartbeatCount = inside.filter(event => event.stage === 'health-heartbeat').length;
+    const pauseEvidence = pauseEvidenceForGap(ordered, from.wallTimeMs, to.wallTimeMs);
+    const fromObservationTimeMs = finiteDetail(from, 'observationTimeMs');
+    const toObservationTimeMs = finiteDetail(to, 'observationTimeMs');
+    const observationTimestampGapMs = fromObservationTimeMs === null || toObservationTimeMs === null
+      ? null
+      : Math.max(0, toObservationTimeMs - fromObservationTimeMs);
+    const conclusion = pauseEvidence.pauseEvidenceCompleteness === 'complete'
+      ? 'recording-source-intentionally-inactive' as const
+      : heartbeatCount > 0
+        ? 'no-js-callback-native-cause-unknown' as const
+        : 'js-runtime-not-observed' as const;
+    longObservationGaps.push({
+      durationMs,
+      receiptGapDurationMs: durationMs,
+      observationTimestampGapMs,
+      fromWallTimeMs: from.wallTimeMs,
+      toWallTimeMs: to.wallTimeMs,
+      heartbeatCount,
+      ...pauseEvidence,
+      conclusion,
+    });
+  }
+
+  return {
+    stageCounts,
+    frontiers,
+    evidenceCompleteness: {
+      // Native evidence is held in a separate owner-correlated ring. A JS
+      // ledger can never promote these stages on its own; the forensic
+      // cross-ledger report is the only authority for that boundary.
+      nativeCallback: 'not-observable-current-binary',
+      nativeToJsCorrelation: 'not-observable-current-binary',
+      jsIntake: received.size > 0 ? 'complete' : 'partial',
+      acceptanceDecision: correlatedCompleteness(received, decisions),
+      walDurability: correlatedStageCompleteness(canonical, ordered, 'wal-committed'),
+      canonicalStore: correlatedStageCompleteness(wal, ordered, 'store-published'),
+      livePublication: correlatedStageCompleteness(store, ordered, 'presentation'),
+      networkSync: syncAcknowledged ? 'complete' : 'partial',
+    },
+    pipelineFindings: {
+      nativeCallbacksWithoutJsDelivery: 0,
+      jsReceiptsWithoutDecision: [...received].filter(identity => !decisions.has(identity)).length,
+      rejectedByFiltering,
+      canonicalAcceptsWithoutWal: [...canonical]
+        .filter(identity => !stageCoversEvidence(ordered, 'wal-committed', identity)).length,
+      walCommitsWithoutStorePublication: [...wal]
+        .filter(identity => !stageCoversEvidence(ordered, 'store-published', identity)).length,
+      storePublicationsWithoutPresentationEvidence: [...store]
+        .filter(identity => !stageCoversEvidence(ordered, 'presentation', identity)).length,
+      locallyCompleteWithoutUploadAck: locallyComplete && !syncAcknowledged,
+      refinementUnavailable,
+    },
+    timing: {
+      maximumObservationReceiptLagMs: maximum(observationEvents.map(event => {
+        const observationTimeMs = finiteDetail(event, 'observationTimeMs');
+        return observationTimeMs === null ? null : Math.max(0, event.wallTimeMs - observationTimeMs);
+      })),
+      maximumWalToStoreLagMs: maximum(ordered
+        .filter(event => event.stage === 'store-published')
+        .map(event => finiteDetail(event, 'walToStoreLatencyMs'))),
+      longestJsReceiptGapMs: maximum(observationEvents.slice(1).map((event, index) => (
+        event.wallTimeMs - observationEvents[index].wallTimeMs
+      ))),
+      longestObservationTimestampGapMs: maximum(observationEvents.slice(1).map((event, index) => {
+        const previous = finiteDetail(observationEvents[index], 'observationTimeMs');
+        const current = finiteDetail(event, 'observationTimeMs');
+        return previous === null || current === null ? null : Math.max(0, current - previous);
+      })),
+    },
+    longObservationGaps,
+    interpretationLimits: [
+      'This installed binary cannot observe CLLocation callback receipt before Expo delivers it to JavaScript.',
+      'Missing JavaScript observations alone do not prove an iOS, hardware, permission, or native-provider cause.',
+      'JavaScript receipt gaps and original GPS observation-timestamp gaps are reported separately.',
+      'Native callback conclusions require the separately exported owner-correlated collector coverage report.',
+    ],
+  };
+}
+
 /**
  * Persist one privacy-safe stage fact without joining the GPS ingest mutex.
  * Coordinates and credential-shaped fields are removed at this boundary.
@@ -722,7 +1120,7 @@ export async function exportLatestActivityStageLedger(
     clientActivityId: latestActivityId,
     installedIdentity: installedIdentity(),
     privacy: { localOnly: true, coordinatesIncluded: false, automaticUpload: false },
-    presentationMeasurement: 'NOT_MEASURED',
+    presentationMeasurement: 'REACT_COMMIT_NOT_NATIVE_FRAME',
     diagnosticCompleteness: {
       persistence: partial ? 'partial' : 'complete',
       summaryAvailable,
@@ -735,6 +1133,7 @@ export async function exportLatestActivityStageLedger(
       missingRequiredStages,
     },
     phaseSummary,
+    observability: summarizeActivityObservability(events, { retentionTruncated }),
     events: events.map(event => ({ ...event, ownerUserId: 'current-owner' })),
   };
 }

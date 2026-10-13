@@ -208,6 +208,7 @@ export function HikingScreen() {
     void refreshBackgroundLocationPermission();
   }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
+  const remoteStartConflict = useTrackingStore(s => s.remoteStartConflict);
   const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
   const trackPoints = useTrackingStore(s => s.trackPoints);
   const trackPointsSmoothed = useTrackingStore(s => s.trackPointsSmoothed);
@@ -366,6 +367,7 @@ export function HikingScreen() {
   const [selectedRoute, setSelectedRoute] = useState<string | null>(sharedRouteKey ?? requestedRouteId ?? null);
 
   const routes = useRouteStore(s => s.routes);
+  const sharedRoutes = useRouteStore(s => s.sharedRoutes);
   const loadRoutes = useRouteStore(s => s.loadRoutes);
   const loadRouteDetail = useRouteStore(s => s.loadRouteDetail);
   const activityRouteReference = useRouteStore(s => s.activityRouteReference);
@@ -424,10 +426,10 @@ export function HikingScreen() {
     if (sharedRouteKey) setSelectedRoute(sharedRouteKey);
   }, [sharedRouteKey]);
   useEffect(() => {
-    const selected = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+    const selected = selectedRoute ? [...routes, ...sharedRoutes].find(item => routeMatchesIdentity(item, selectedRoute)) : null;
     if (!selected || selected.points.length >= 2) return;
     void loadRouteDetail(selected.id).catch(() => {});
-  }, [loadRouteDetail, routes, selectedRoute]);
+  }, [loadRouteDetail, routes, selectedRoute, sharedRoutes]);
 
   // Sprint 6 round-11 R11B3: SAF-01 alert-visibility ref, shared by
   // primary useEffect and AppState re-fire useEffect. Declared here so
@@ -973,7 +975,7 @@ export function HikingScreen() {
 
   const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
     ? sharedRouteLease.name
-    : routes.find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
+    : [...routes, ...sharedRoutes].find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
 
   // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
@@ -1068,7 +1070,7 @@ export function HikingScreen() {
   // One native Mapbox owner spans pre-start and Tracking. Activity/provider
   // transitions update layers and camera data; they never replace a map that
   // has already loaded on the device.
-  const activeRoute = selectedRoute ? routes.find(item => routeMatchesIdentity(item, selectedRoute)) : null;
+  const activeRoute = selectedRoute ? [...routes, ...sharedRoutes].find(item => routeMatchesIdentity(item, selectedRoute)) : null;
   const routePolyline = activitySessionVisible && activityRouteReference
     ? activityRouteReference.points
     : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
@@ -1305,8 +1307,19 @@ export function HikingScreen() {
         notices={hikeNotices}
       />
       <PublicWalkingDiscoveryCard
+        surface="hike"
+        blocked={Boolean(
+          stopSummary
+          || (unfinishedResolutionRequested && unfinished)
+          || deleteCairnOpen
+          || lastStopReason === 'too-short'
+          || showTooShortConfirm
+          || permissionDeniedVisible
+        )}
         safeTop={insets.top}
-        onOpen={(cairnId) => nav.navigate('PublicCairnDetail', { cairnId })}
+        onOpen={(markerId) => markerId
+          ? nav.navigate('AcquiredCairnDetail', { markerId })
+          : nav.navigate('AllCairns', { initialSection: 'found' })}
       />
 
       {!stopSummary ? (
@@ -1319,6 +1332,9 @@ export function HikingScreen() {
             : status === 'paused' ? 'paused' : 'tracking'}
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
+          syncWarning={remoteStartConflict
+            ? 'Saved locally · another unfinished Activity must be resolved before sync'
+            : null}
           onPauseResume={handlePauseResumeHike}
           onCairn={() => {
             haptic.selection();

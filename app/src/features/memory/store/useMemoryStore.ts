@@ -294,6 +294,10 @@ function samePresenceContext(witness: MemoryPresenceWitness, metadata: MemoryEvi
     return witness.sourceActivityClientId === metadata.sourceActivityClientId
       && witness.sourceSegmentId === metadata.sourceSegmentId;
   }
+  if (witness.sourceSegmentId || metadata.sourceSegmentId) {
+    return Boolean(witness.sourceSegmentId)
+      && witness.sourceSegmentId === metadata.sourceSegmentId;
+  }
   const dayMs = 24 * 60 * 60 * 1000;
   return Math.floor(witness.firstObservedAtMs / dayMs) === Math.floor(ts / dayMs);
 }

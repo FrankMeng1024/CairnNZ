@@ -402,19 +402,27 @@ describe('Free Activity integration contracts', () => {
     expect(foreground).toContain('ownerGeneration');
   });
 
-  test('authoritative Start conflict preserves terminal lifecycle before recovery materialization', () => {
+  test('remote Start is downstream of local registry, WAL and active GPS authority', () => {
     const source = read('src/store/useTrackingStore.ts');
-    const conflict = source.slice(
-      source.indexOf("startResolution?.kind === 'conflict'"),
-      source.indexOf("crashLogger.breadcrumb('session:start:server-unavailable')", source.indexOf("startResolution?.kind === 'conflict'")),
+    const start = source.slice(
+      source.indexOf('startTracking: async'),
+      source.indexOf('stopTracking: async'),
     );
-    expect(conflict).toContain('await reconcileStartConflict');
-    expect(conflict).toContain("disposition === 'completed-local'");
-    expect(conflict).toContain('await updateRemoteId(existing.clientActivityId, existing.id)');
-    expect(conflict).toContain('await startHikeTrack');
-    expect(conflict.indexOf('await reconcileStartConflict')).toBeLessThan(conflict.indexOf('await startHikeTrack'));
-    expect(conflict.indexOf("disposition === 'completed-local'")).toBeLessThan(conflict.indexOf('await startHikeTrack'));
-    expect(source).toContain('await mapActivityServerId(userId, localSessionId, startResolution.serverActivityId)');
+    const registry = start.indexOf('await registerUnfinishedActivity');
+    const lease = start.indexOf('await persistBackgroundContext(get().sessionId');
+    const journal = start.indexOf('await startHikeTrack(sid');
+    const sourceActivation = start.indexOf('await activateForegroundSource()');
+    const tracking = start.indexOf("status: 'tracking'");
+    const remote = start.indexOf("scheduleRemoteSessionStart(get, set, 'local-start')");
+    expect(registry).toBeGreaterThan(0);
+    expect(registry).toBeLessThan(lease);
+    expect(lease).toBeLessThan(journal);
+    expect(journal).toBeLessThan(sourceActivation);
+    expect(sourceActivation).toBeLessThan(tracking);
+    expect(tracking).toBeLessThan(remote);
+    expect(start).not.toContain('await startSessionResolved');
+    expect(source).toContain('persistServerMapping: serverActivityId => mapActivityServerId');
+    expect(source).toContain("mappingTarget === 'tombstoned'");
   });
 
   test('Hike and Run use the same terminal-aware Start error presentation', () => {
@@ -472,7 +480,8 @@ describe('Free Activity integration contracts', () => {
     const settings = read('src/features/memory/store/useMemorySettingsStore.ts');
     const ui = read('src/screens/SettingsScreen.tsx');
     expect(settings).toMatch(/passiveExplorationEnabled:\s*false/);
-    expect(settings).toContain('passiveExplorationContractVersion: 4');
+    expect(settings).toContain('passiveExplorationContractVersion: 5');
+    expect(settings).toContain('memoryLocationTransitionRequired: true');
     expect(settings).not.toContain('recordMode:');
     expect(settings).not.toContain('showFriendOverlay:');
     expect(settings).not.toContain('useH3Fog:');
@@ -604,7 +613,9 @@ describe('Free Activity integration contracts', () => {
     const source = read('src/screens/MapHistoryScreen.tsx');
     expect(source).toContain('testID="activity-detail-unavailable"');
     expect(source).toContain('This Activity could not be found in local Activity history.');
-    expect(source).toContain('label="Back to Activities"');
+    expect(source).toContain("? 'Back'");
+    expect(source).toContain(": 'Back to Activities'");
+    expect(source).toContain('onPress={handleActivityBack}');
   });
 
   test('Activity Detail uses shared semantic roles across Day, Sunset, and Night', () => {
@@ -620,14 +631,16 @@ describe('Free Activity integration contracts', () => {
     expect(detail).toContain('<PrimaryButton');
   });
 
-  test('Save as Route sends only selected real segment geometry', () => {
-    const source = read('src/screens/MapHistoryScreen.tsx');
-    expect(source).toContain('const realSegments = segmentTrace(loadedTrackPoints ?? []).segments');
-    expect(source).toContain('const openSegment = (segment: typeof realSegments[number], reconnectsGap = false)');
-    expect(source).toContain('fromSessionTrackPoints: segment.map');
-    expect(source).toContain("text: 'Reconnect in Route'");
-    expect(source).toContain('openSegment(realSegments.flat(), true)');
-    expect(source).not.toContain('trace.gaps.flatMap');
+  test('Activity Detail stays factual while Routes import preserves real ordered segments', () => {
+    const detail = read('src/screens/MapHistoryScreen.tsx');
+    const trails = read('src/screens/RoutesScreen.tsx');
+    const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
+    expect(detail).not.toContain('activity-save-as-route');
+    expect(detail).not.toContain('Save as Route');
+    expect(trails).toContain('Use an Activity');
+    expect(editor).toContain('const segments = segmentTrace(points).segments');
+    expect(editor).toContain('createImportedOrderedDraft');
+    expect(editor).not.toContain('trace.gaps.flatMap');
   });
 
   test('discard writes resurrection protection before deleting pending work', () => {

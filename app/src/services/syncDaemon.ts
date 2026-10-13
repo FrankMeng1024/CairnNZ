@@ -38,6 +38,7 @@ import {
   completeActivity,
   getActivityRegistry,
   isActivityTombstoned,
+  mapActivityServerId,
   removeAcknowledgedActivity,
   updateCompletedActivitySyncState,
 } from '../features/activity/activityRegistry';
@@ -48,6 +49,11 @@ import {
   reconcileActivityMemoryProjection,
   retireActivityMemoryProjection,
 } from '../features/activity/activityMemoryProjector';
+import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
+import {
+  clearActivityRemoteStartConflict,
+  persistActivityRemoteStartConflict,
+} from '../features/activity/activityRemoteConflictStore';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -538,6 +544,21 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     return 'skipped';
   }
 
+  const syncAttemptStartedAt = Date.now();
+  void recordActivityStageEvent({
+    ownerUserId: hike.userId,
+    clientActivityId: hike.localId,
+    stage: 'sync-state',
+    wallTimeMs: syncAttemptStartedAt,
+    details: {
+      operation: 'completed-activity-upload',
+      phase: 'attempt',
+      attemptCount: hike.attemptCount ?? 0,
+      remoteMapped: !!hike.remoteId,
+      wakeFromOfflineQueue: true,
+    },
+  });
+
   try {
     const preflightRegistry = await getActivityRegistry(hike.userId);
     simulatorActivity = preflightRegistry.completed.some(
@@ -573,27 +594,75 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
       const activityMode = hike.activityMode || 'hiking';  // fallback 兼容老磁盘数据
       const start = await startSessionResolved(activityMode, startTime, hike.localId, hike.userId);
       if (start.kind === 'conflict') {
-        // Another legitimate unfinished Activity owns the server slot. Keep
-        // this completed-local Activity intact until that Activity is resolved;
-        // never weaken the singleton by manufacturing a second server shell.
-        await markAttempt(hike.localId, {
-          kind: 'dependency',
-          status: 409,
-          code: start.code,
-          message: 'Another unfinished Activity owns the server slot.',
-        });
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { useSessionStore } = require('../store/useSessionStore');
-          await useSessionStore.getState().markSyncState?.(hike.localId, 'sync_error', hike.userId, {
-            kind: 'dependency', status: 409, code: start.code,
+        const matching = start.existing?.clientActivityId === hike.localId
+          ? start.existing
+          : start.existingActivities.find(item => item.clientActivityId === hike.localId) ?? null;
+        if (matching) {
+          // A lost/duplicated Start ACK is normal idempotent replay. Preserve
+          // the original local identity and continue the same pending Save.
+          hike.remoteId = matching.id;
+          await mapActivityServerId(hike.userId, hike.localId, matching.id);
+          await updateRemoteId(hike.localId, matching.id);
+          await clearActivityRemoteStartConflict(hike.userId, hike.localId).catch(() => undefined);
+          void recordActivityStageEvent({
+            ownerUserId: hike.userId,
+            clientActivityId: hike.localId,
+            stage: 'sync-state',
+            details: {
+              operation: 'remote-start',
+              phase: 'mapped',
+              serverMapped: true,
+              replayedConflict: true,
+              mappingTarget: 'completed',
+            },
           });
-        } catch { /* pending metadata remains authoritative */ }
-        await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
-        crashLogger.breadcrumb(`activity:sync_start_conflict localId=${hike.localId.slice(0, 8)} existing=${start.existing?.clientActivityId?.slice(0, 8) ?? 'legacy'}`);
-        return 'failed';
+        } else {
+          // Another legitimate unfinished Activity owns the server slot. Keep
+          // this completed-local Activity intact and persist an exact,
+          // owner-scoped action record. Automatic retry may observe later
+          // server resolution, but never discards or replaces either identity.
+          const durableConflict = await persistActivityRemoteStartConflict({
+            ownerUserId: hike.userId,
+            clientActivityId: hike.localId,
+            activityMode,
+            localStartedAt: hike.startedAt ?? hike.createdAt,
+            code: start.code,
+            existing: start.existing,
+            existingActivities: start.existingActivities,
+          });
+          await markAttempt(hike.localId, {
+            kind: 'dependency',
+            status: 409,
+            code: start.code,
+            message: 'Another unfinished Activity owns the server slot.',
+          });
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useSessionStore } = require('../store/useSessionStore');
+            await useSessionStore.getState().markSyncState?.(hike.localId, 'sync_error', hike.userId, {
+              kind: 'dependency', status: 409, code: start.code,
+            });
+          } catch { /* pending metadata remains authoritative */ }
+          await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
+          void recordActivityStageEvent({
+            ownerUserId: hike.userId,
+            clientActivityId: hike.localId,
+            stage: 'sync-state',
+            details: {
+              operation: 'completed-activity-upload',
+              phase: 'conflict',
+              status: 409,
+              code: start.code,
+              durableConflict: true,
+              conflictCount: durableConflict.conflictingActivities.length,
+              elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+            },
+          });
+          crashLogger.breadcrumb(`activity:sync_start_conflict localId=${hike.localId.slice(0, 8)} existing=${start.existing?.clientActivityId?.slice(0, 8) ?? 'legacy'}`);
+          return 'failed';
+        }
       }
-      if (start.kind !== 'started') {
+      if (start.kind === 'unavailable') {
         const startFailureKind = start.status === 401
           ? 'auth_required' as const
           : start.retryable ? 'retryable' as const : 'action_required' as const;
@@ -613,17 +682,35 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
           } catch { /* pending metadata remains authoritative */ }
           await updateCompletedActivitySyncState(hike.userId, hike.localId, 'sync_error');
         }
+        void recordActivityStageEvent({
+          ownerUserId: hike.userId,
+          clientActivityId: hike.localId,
+          stage: 'sync-state',
+          details: {
+            operation: 'completed-activity-upload',
+            phase: 'unavailable',
+            status: start.status,
+            code: start.code,
+            retryable: start.retryable,
+            elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+          },
+        });
         crashLogger.breadcrumb(`v412:sync_start_failed localId=${hike.localId.slice(0, 8)}`);
         return 'failed';
       }
       if (!isCurrentActivityOwner(hike.userId)) return 'skipped';
-      hike.remoteId = start.serverActivityId;
-      await updateRemoteId(hike.localId, start.serverActivityId);
+      if (start.kind === 'started') {
+        hike.remoteId = start.serverActivityId;
+        await updateRemoteId(hike.localId, start.serverActivityId);
+        await clearActivityRemoteStartConflict(hike.userId, hike.localId).catch(() => undefined);
+      }
     }
 
     if (!isCurrentActivityOwner(hike.userId)) return 'skipped';
+    const mappedRemoteId = hike.remoteId;
+    if (!mappedRemoteId) throw new Error('activity_remote_mapping_missing_after_start');
     const result = await saveHikeAtomic(
-      hike.remoteId,
+      mappedRemoteId,
       hike.payload,
       hike.idempotencyKey,
       hike.localId,
@@ -697,16 +784,26 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     }
     const registryAcked = await acknowledgeActivity(hike.userId, hike.localId, result.session_id);
     if (!registryAcked) return 'failed';
-    try {
-      // Public qualification is downstream of the normal Activity ACK. Its
-      // own durable action queue may remain offline without weakening or
-      // rolling back the Activity handoff.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { reconcilePublicActivityAfterServerAck } = require('../features/public/services/publicCairns');
-      await reconcilePublicActivityAfterServerAck(hike.userId, hike.localId);
-    } catch (publicError) {
-      crashLogger.breadcrumb(`public:post_activity_ack_deferred ${String(publicError).slice(0, 80)}`);
-    }
+    await clearActivityRemoteStartConflict(hike.userId, hike.localId).catch(() => undefined);
+    void recordActivityStageEvent({
+      ownerUserId: hike.userId,
+      clientActivityId: hike.localId,
+      stage: 'sync-state',
+      details: {
+        operation: 'completed-activity-upload',
+        phase: 'ack',
+        acknowledged: true,
+        activityIdentityMatched: result.client_activity_id === hike.localId,
+        serverActivityIdentityMatched: result.session_id === mappedRemoteId,
+        canonicalPointCount: Array.isArray(hike.payload.route_points_canonical)
+          ? hike.payload.route_points_canonical.length
+          : null,
+        finalRevision: hike.finalArtifact?.revision ?? null,
+        finalFingerprint: hike.finalArtifact?.displayFingerprint ?? null,
+        idempotentReplay: !!result.idempotent_replay,
+        elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+      },
+    });
     if (simulatorActivity) {
       const { appendSimulatorLog } = require('../features/activitySimulator/simulatorLog');
       appendSimulatorLog('SYNC_ACK', 'simulator_activity_server_acknowledged', {
@@ -756,6 +853,19 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     }
     const failure = classifyPendingSyncFailure(err);
     await markAttempt(hike.localId, failure);
+    void recordActivityStageEvent({
+      ownerUserId: hike.userId,
+      clientActivityId: hike.localId,
+      stage: 'sync-state',
+      details: {
+        operation: 'completed-activity-upload',
+        phase: 'failed',
+        status: failure.status ?? null,
+        code: failure.code ?? null,
+        failureKind: failure.kind,
+        elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
+      },
+    });
     if (failure.kind !== 'retryable' || (hike.attemptCount || 0) + 1 >= 3) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports

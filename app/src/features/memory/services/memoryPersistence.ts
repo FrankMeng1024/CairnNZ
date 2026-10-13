@@ -427,7 +427,7 @@ function deserializePresence(raw: string): MemoryPresenceWitness[] | null {
         observedAtMs: value.t,
         evidenceSource: value.e === 'a' ? 'activity_real' : 'passive_real',
         sourceActivityClientId: value.e === 'a' ? value.i : undefined,
-        sourceSegmentId: value.e === 'a' && typeof value.g === 'string' && value.g.length > 0 ? value.g : undefined,
+        sourceSegmentId: typeof value.g === 'string' && value.g.length > 0 ? value.g : undefined,
         horizontalAccuracyM: value.h,
         continuityState: 'accepted',
         synced: value.s === 1,

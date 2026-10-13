@@ -10,7 +10,7 @@
  * inside the existing tools row, not a wholesale tab-bar swap.
  */
 import React from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -30,7 +30,7 @@ import { HikingScreen } from '../screens/HikingScreen';
 import { RunningScreen } from '../screens/RunningScreen';
 import { MapHistoryScreen } from '../screens/MapHistoryScreen';
 import { RoutesScreen } from '../screens/RoutesScreen';
-import { RouteEditorScreen } from '../screens/RouteEditorScreen';
+import { OrderedRouteEditorScreen as RouteEditorScreen } from '../screens/OrderedRouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
 import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
@@ -41,12 +41,14 @@ import { HikingPreviewScreen } from '../screens/HikingPreviewScreen';
 import { RunningPreviewScreen } from '../screens/RunningPreviewScreen';
 import { RoutesPreviewScreen } from '../screens/RoutesPreviewScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { OfflineMapsScreen } from '../features/offlineMaps/OfflineMapsScreen';
 import { MemoryScreen } from '../features/memory/screens/MemoryScreen';
 import { MarkDetailDevPreviewScreen } from '../features/marks/dev/MarkDetailDevPreviewScreen';
 import { Gate1IconSheetScreen } from '../screens/Gate1IconSheetScreen';
 import { MarkerDetailScreen } from '../screens/MarkerDetailScreen';
 import { AllCairnsScreen } from '../screens/AllCairnsScreen';
 import { PublicCairnDetailScreen } from '../screens/PublicCairnDetailScreen';
+import { AcquiredCairnDetailScreen } from '../screens/AcquiredCairnDetailScreen';
 import { OnboardingModal, hasCompletedOnboarding } from '../features/onboarding/OnboardingModal';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useAppStore } from '../store/useAppStore';
@@ -60,6 +62,7 @@ import {
   retryPendingFriendContentActions,
 } from '../features/friends/services/friendContent';
 import { usePublicCairnStore } from '../features/public/services/publicCairns';
+import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import networkMonitor from '../services/networkMonitor';
 
 // v302: mark immediately after all transitive imports above resolved.
@@ -72,14 +75,23 @@ export type RootStackParamList = {
   Home: undefined;
   Hiking: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
   Running: { recoverClientActivityId?: string; routeId?: string; sharedRouteLease?: SharedRouteLaunch } | undefined;
-  MapHistory: { sessionId?: string; routeId?: string; qaReviewClone?: 'almost-done-v1' } | undefined;
+  MapHistory: {
+    sessionId?: string;
+    routeId?: string;
+    qaReviewClone?: 'almost-done-v1';
+    /**
+     * Activity Detail is shared by Home, Trails, Cairn provenance, Finish and
+     * direct/deep-link entry. Only callers with a real retained parent may ask
+     * Back to pop it; absent/activities remains the safe canonical fallback.
+     */
+    activityBackContext?: 'previous' | 'activities';
+  } | undefined;
   Routes: { initialTab?: 'routes' | 'activities' } | undefined;
   RouteEditor: {
     routeId?: string;
     fromSessionId?: string;
-    fromSessionTrackPoints?: Array<{ lat: number; lng: number; alt?: number | null; t?: number; accuracy?: number | null }>;
-    /** Explicit user choice; never written back to the Activity. */
-    reconnectsActivityGap?: boolean;
+    sharedDeliveryId?: string;
+    creationSource?: 'plan' | 'activity' | 'shared-copy';
   } | undefined;
   Plant: {
     origin: {
@@ -90,10 +102,11 @@ export type RootStackParamList = {
     } | { kind: 'standalone' };
   } | undefined;
   MarkerDetail: { markerId: string };
-  AllCairns: undefined;
+  AllCairns: { initialSection?: 'left' | 'found'; markerIds?: string[] } | undefined;
   Friends: undefined;
   FriendContent: { friendId: string; friendName: string };
   PublicCairnDetail: { cairnId: string };
+  AcquiredCairnDetail: { markerId: string };
   /** dev-only preview: renders the auto-generated FriendsScreen from spec.json.
    *  Query param 'state' picks which of F0-F6 to render. */
   FriendsPreview: { state?: string } | undefined;
@@ -109,6 +122,7 @@ export type RootStackParamList = {
    *  Query param 'state' picks which of R0-R9 to render (10 Trails-Flow screens). */
   RoutesPreview: { state?: string } | undefined;
   Settings: undefined;
+  OfflineMaps: undefined;
   Memory: undefined;
   Debug: undefined;
   /** Sprint 68 STORY-00532: dev-only preview for MarkDetailSheet 4 forms. */
@@ -130,11 +144,13 @@ export function RootNavigator() {
   React.useEffect(() => {
     if (!isLoggedIn || !user?.id) {
       usePublicCairnStore.getState().clearForAccountBoundary();
+      useCairnPresentationStore.getState().clearForAccountBoundary();
       return;
     }
     void retryPendingFriendContentActions();
     void drainBorrowedRouteTerminalOutbox();
     void usePublicCairnStore.getState().initialize(String(user.id));
+    void useCairnPresentationStore.getState().initialize(String(user.id));
   }, [isLoggedIn, user?.id]);
   React.useEffect(() => networkMonitor.onChange(state => {
     if (state.state === 'online') {
@@ -145,9 +161,29 @@ export function RootNavigator() {
         // activation path for an already-installed client after server-side
         // canary enablement; requiring `enabled` here made it unreachable.
         void usePublicCairnStore.getState().initialize(viewerId, { preservePresentation: true });
+        void useCairnPresentationStore.getState().refresh();
       }
     }
   }), []);
+  React.useEffect(() => {
+    if (!isLoggedIn || !user?.id) return undefined;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (timer) return;
+      void useCairnPresentationStore.getState().refresh();
+      timer = setInterval(() => { void useCairnPresentationStore.getState().refresh(); }, 5_000);
+    };
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
+    if (AppState.currentState === 'active') start();
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') start();
+      else stop();
+    });
+    return () => { stop(); subscription.remove(); };
+  }, [isLoggedIn, user?.id]);
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 
   // v312 anchor: just before NavigationContainer JSX. If we see this
@@ -179,6 +215,12 @@ export function RootNavigator() {
     })();
     return () => { cancelled = true; };
   }, [isLoggedIn]);
+
+  React.useEffect(() => {
+    const blocksPresentation = isLoggedIn && (!onboardingChecked || showOnboarding);
+    useCairnPresentationStore.getState().setPresentationBlock('onboarding', blocksPresentation);
+    return () => useCairnPresentationStore.getState().setPresentationBlock('onboarding', false);
+  }, [isLoggedIn, onboardingChecked, showOnboarding]);
 
   return (
     <NavigationContainer
@@ -253,6 +295,7 @@ export function RootNavigator() {
               stores.useMemorySettingsStore = require('../features/memory/store/useMemorySettingsStore').useMemorySettingsStore;
               stores.useMarkerStore = require('../store/useMarkerStore').useMarkerStore;
               stores.usePublicCairnStore = require('../features/public/services/publicCairns').usePublicCairnStore;
+              stores.useCairnPresentationStore = useCairnPresentationStore;
             } catch { /* ignore */ }
             (globalThis as unknown as { __cairnStores?: unknown }).__cairnStores = stores;
           }
@@ -289,12 +332,14 @@ export function RootNavigator() {
             <Stack.Screen name="Friends"     component={FriendsScreen} />
             <Stack.Screen name="FriendContent" component={FriendContentScreen} />
             <Stack.Screen name="PublicCairnDetail" component={PublicCairnDetailScreen} />
+            <Stack.Screen name="AcquiredCairnDetail" component={AcquiredCairnDetailScreen} />
             {__DEV__ && <Stack.Screen name="FriendsPreview" component={FriendsPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="HomePreview" component={HomePreviewScreen} />}
             {__DEV__ && <Stack.Screen name="HikingPreview" component={HikingPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="RunningPreview" component={RunningPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="RoutesPreview" component={RoutesPreviewScreen} />}
             <Stack.Screen name="Settings"    component={SettingsScreen} />
+            <Stack.Screen name="OfflineMaps" component={OfflineMapsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
             {__DEV__ && <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />}

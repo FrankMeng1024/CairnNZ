@@ -647,6 +647,7 @@ async function appendDirectlyToHikeTrack(
           firstRawOrdinal: accepted[0]?.rawOrdinal ?? null,
           lastRawOrdinal: accepted[accepted.length - 1]?.rawOrdinal ?? null,
           acceptedCount: accepted.length,
+          evidenceIds: accepted.map(point => point.observationId).filter(Boolean),
           nativeBatchSequence,
           commitWallTimeMs: Date.now(),
         },

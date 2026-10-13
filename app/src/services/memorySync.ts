@@ -31,9 +31,20 @@ import {
 } from '../features/memory/services/memoryPersistence';
 import { purgeFogDisplayCache } from '../features/memory/services/fogDisplayCache';
 import { resetH3PersistenceForUser } from '../features/memory/services/h3Persistence';
+import {
+  flushMemorySyncAttachSkipSummary,
+  recordMemorySyncAttachSkip,
+} from './memorySyncDiagnosticNoise';
 
-const PUSH_DEBOUNCE_MS = 30_000;
-const PUSH_MAX_WAIT_MS = 60_000;
+// Accepted presence is coalesced into bounded foreground bursts. This keeps
+// normal connected discovery near the 5-10 second product target without
+// changing GPS sampling or issuing a request for every observation.
+export const MEMORY_DISCOVERY_SYNC_CADENCE: Readonly<{ debounceMs: number; maxWaitMs: number }> = Object.freeze({
+  debounceMs: 5_000,
+  maxWaitMs: 10_000,
+});
+const PUSH_DEBOUNCE_MS = MEMORY_DISCOVERY_SYNC_CADENCE.debounceMs;
+const PUSH_MAX_WAIT_MS = MEMORY_DISCOVERY_SYNC_CADENCE.maxWaitMs;
 const BACKOFF_MS = 15_000;
 const MAX_BATCH = 500;
 const HTTP_TIMEOUT_MS = 30_000;
@@ -597,6 +608,17 @@ async function pushPendingPoints(options?: { sourceActivityClientId?: string }):
       if (completeEcho) {
         result = { status: 'acknowledged', acceptedPointCids, acceptedPresenceCids };
         backoffUntil = 0;
+        // Discovery is an independent online projection of already-ACKed
+        // accepted evidence. Never await it here: a slow/unavailable content
+        // service must not hold the Memory durability ACK or its retry queue.
+        // The server owns visit limits, proximity, version dedupe, and durable
+        // presentation grouping, so repeated fire-and-forget calls are safe.
+        const discoveryController = new AbortController();
+        void fetchWithTimeout('/api/cairn-memory/discover', {
+          method: 'POST',
+          expectedUserId: myUserId,
+          body: JSON.stringify({}),
+        }, discoveryController).catch(() => {});
         const hasMore = pending.length > MAX_BATCH || pendingPresence.length > MAX_BATCH;
         pendingBurstStartedAt = hasMore ? Date.now() : null;
         if (hasMore) schedulePush(0);
@@ -659,7 +681,7 @@ export function attachMemorySync(userId: string): void {
   // + AuthScreen 二次 hydrate 三处都调 attachMemorySync 时反复 detach
   // abort in-flight push,memory_points 丢批次(下个 bounded debounce 后重推)。
   if (activeUserId === userId && unsubscribe) {
-    require('./appLog').log('memory_sync.attach_skip', { userId, reason: 'same-user-already-attached' });
+    recordMemorySyncAttachSkip();
     return;
   }
   const fromEpoch = epoch;
@@ -683,6 +705,7 @@ export function attachMemorySync(userId: string): void {
 }
 
 export function detachMemorySync(): void {
+  flushMemorySyncAttachSkipSummary('detach');
   epoch++;
   if (pushAbortController) {
     try { pushAbortController.abort(); } catch { /* noop */ }

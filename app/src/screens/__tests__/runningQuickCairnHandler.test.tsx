@@ -69,6 +69,7 @@ jest.mock('../../store/useMarkerStore', () => ({
 jest.mock('../../store/useRouteStore', () => ({
   useRouteStore: (selector: (state: any) => unknown) => selector({
     routes: mockRoutes,
+    sharedRoutes: [],
     loadRoutes: mockLoadRoutes,
     loadRouteDetail: mockLoadRouteDetail,
     activityRouteReference: mockActivityRouteReference,

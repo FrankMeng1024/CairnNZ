@@ -21,6 +21,7 @@ export type PassiveBackgroundConsent = 'not-asked' | 'granted' | 'declined';
 
 interface MemorySettings {
   passiveExplorationEnabled: boolean;
+  memoryLocationTransitionRequired: boolean;
   passiveBackgroundConsent: PassiveBackgroundConsent;
   passiveBackgroundConsentVersion: number;
   passiveBackgroundEducationDismissed: boolean;
@@ -38,6 +39,9 @@ const DEFAULTS: MemorySettings = {
   // This controls only passive exploration outside an explicit Activity.
   // Activity Memory capture is unconditional and lives in the recorder.
   passiveExplorationEnabled: false,
+  // The unified Memory lifecycle is never silently enabled for a device that
+  // previously chose or inherited Off. One explicit transition is required.
+  memoryLocationTransitionRequired: true,
   passiveBackgroundConsent: 'not-asked',
   passiveBackgroundConsentVersion: 0,
   passiveBackgroundEducationDismissed: false,
@@ -47,7 +51,7 @@ const DEFAULTS: MemorySettings = {
 function persist(state: MemorySettings): void {
   void storage.setItem(STORAGE_KEY, JSON.stringify({
     ...state,
-    passiveExplorationContractVersion: 4,
+    passiveExplorationContractVersion: 5,
   }));
 }
 
@@ -65,12 +69,16 @@ async function tryLoad(): Promise<MemorySettings | null> {
     const expandedBackgroundConsent = Number(parsed.passiveBackgroundConsentVersion || 0)
       >= PASSIVE_BACKGROUND_CONSENT_VERSION
       && parsed.passiveBackgroundConsent === 'granted';
+    const passiveEnabled = migratedToPassiveContract
+      ? Boolean(parsed.passiveExplorationEnabled
+        ?? parsed.foregroundAutoUnlockEnabled
+        ?? DEFAULTS.passiveExplorationEnabled)
+      : false;
     return {
-      passiveExplorationEnabled: migratedToPassiveContract
-        ? Boolean(parsed.passiveExplorationEnabled
-          ?? parsed.foregroundAutoUnlockEnabled
-          ?? DEFAULTS.passiveExplorationEnabled)
-        : false,
+      passiveExplorationEnabled: passiveEnabled,
+      memoryLocationTransitionRequired: passiveEnabled
+        ? false
+        : Boolean(parsed.memoryLocationTransitionRequired ?? true),
       // A prior foreground-only true is preserved for foreground use, but is
       // never treated as consent for lock/background collection.
       passiveBackgroundConsent: expandedBackgroundConsent ? 'granted' : 'not-asked',
@@ -105,6 +113,7 @@ export const useMemorySettingsStore = create<MemorySettingsState>((set, get) => 
     set({ [key]: value } as Partial<MemorySettingsState>);
     const {
       passiveExplorationEnabled,
+      memoryLocationTransitionRequired,
       passiveBackgroundConsent,
       passiveBackgroundConsentVersion,
       passiveBackgroundEducationDismissed,
@@ -112,6 +121,7 @@ export const useMemorySettingsStore = create<MemorySettingsState>((set, get) => 
     } = get();
     persist({
       passiveExplorationEnabled,
+      memoryLocationTransitionRequired,
       passiveBackgroundConsent,
       passiveBackgroundConsentVersion,
       passiveBackgroundEducationDismissed,

@@ -62,13 +62,25 @@ describe('Route product contracts', () => {
     expect(snapshot.capturedAt).toBe(123);
     expect(routeCanBeUsed(source)).toBe(true);
     expect(routeCanBeUsed(route({ points: [] }))).toBe(false);
+    expect(routeCanBeUsed(route({
+      resolutionState: 'continuous',
+      orderedDraft: {
+        schemaVersion: 1,
+        draftId: 'repair',
+        ownerId: '1',
+        revision: 0,
+        origin: 'activity',
+        parts: [],
+        gaps: [{ id: 'gap', afterPartId: 'a', reason: 'activity-gap' }],
+      },
+    }))).toBe(false);
   });
 });
 
 describe('Route Detail / editor / use source contracts', () => {
   const detail = read('src/screens/MapHistoryScreen.tsx');
-  const editor = read('src/screens/RouteEditorScreen.tsx');
-  const overlay = read('src/components/map/EditOverlayV274.tsx');
+  const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
+  const overlay = read('src/components/map/RouteDrawOverlay.tsx');
   const hike = read('src/screens/HikingScreen.tsx');
   const run = read('src/screens/RunningScreen.tsx');
 
@@ -85,15 +97,34 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(detail).not.toContain('shown on the map for guidance');
   });
 
-  test('editor separates Apply from durable Save and guards unsaved exit', () => {
-    expect(overlay).toContain("saveLabel = 'Apply to draft'");
-    expect(editor).toContain('saveLabel="Apply to draft"');
-    expect(editor).toContain('>Save Route</Text>');
-    expect(editor).toContain("addListener('beforeRemove'");
-    expect(editor).toContain("'Discard Route changes?'");
-    expect(editor).toContain("'Route is still saving'");
-    expect(editor).toContain('saveCoordinatorRef.current.claimNavigation');
-    expect(editor).not.toContain('TODO route settings');
+  test('Route sharing is friend-directed snapshot delivery and unresolved gaps stay blocked', () => {
+    expect(detail).toContain('title="Send an independent Route"');
+    expect(detail).toContain('shareRouteSnapshot(serverRouteId, recipients, attempt.key)');
+    expect(detail).toContain('Retry uses the same request identity');
+    expect(detail).toContain('key: attempt.key');
+    expect(detail).toContain("signature: `${serverRouteId}|${failedRecipients.join(',')}`");
+    expect(detail).toContain('disabled={!routeCanBeUsed(selectedRoute)}');
+    expect(detail).toContain('route-unresolved-gap-notice');
+    expect(detail).not.toContain('Share Activity');
+  });
+
+  test('editor keeps Draw/Point transactional, recoverable, and separate from Activity truth', () => {
+    expect(overlay).toContain("onCancel('gesture-interrupted')");
+    expect(editor).toContain('label={draft.gaps.length ? \'Save repairable draft\' : \'Save Route\'}');
+    expect(editor).toContain('saveRoutePlannerDraft({');
+    expect(editor).toContain('loadActivityFinalArtifact(ownerId, clientActivityId)');
+    expect(editor).toContain('createImportedOrderedDraft');
+    expect(editor).toContain("'This Route changed while the edit was being reviewed");
+    expect(editor).toContain('setPendingPointReview({ kind: \'point\', points: result.points, intent');
+    expect(editor).toContain('animateAcceptedPoint(points');
+    expect(editor).toContain('plannerDraftMatchesRequest(recovered, requestedDraftId)');
+    expect(editor).toContain('useRouteStore.getState().routes.find');
+    expect(editor).toContain('invalidatePendingOperation();');
+    expect(editor).toContain("nav.replace('MapHistory', { routeId: savedId })");
+    expect(editor).toContain('scopeOverride={planningMemoryScope} opacityScale={0.42}');
+    expect(overlay).toContain('<Polyline');
+    expect(overlay).toContain('.maxPointers(1)');
+    expect(editor).not.toContain('startTracking(');
   });
 
   test('Detail uses ordinary metrics and labels the shared mode chooser honestly', () => {
@@ -129,6 +160,6 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(hike).toContain('useVisualTheme()');
     expect(run).toContain('useVisualTheme()');
     expect(detail).toContain('visualTheme.surfaceElevated');
-    expect(editor).toContain('visualTheme.surfaceElevated');
+    expect(editor).toContain('theme.surfaceElevated');
   });
 });

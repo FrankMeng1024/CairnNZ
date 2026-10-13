@@ -1,14 +1,13 @@
 /**
- * useMemorySubscriptionsStore — Friend System v1 / Sprint 70 / STORY-00540
+ * useMemorySubscriptionsStore — explicit Friends Memory source selection.
  *
- * Memory tab 5-friend pick state, backed by Sprint 67 backend endpoints
+ * Memory tab friend-source state, backed by the existing endpoints
  *   GET    /api/memory-subscriptions       → { limit, count, subscriptions[] }
  *   POST   /api/memory-subscriptions       body { friend_id }
  *   DELETE /api/memory-subscriptions/:fid
  *
- * Local slice mirrors what the server has so UI doesn't blink. Trigger
- * on the server enforces the 5-cap (race-safe SELECT...FOR UPDATE);
- * client also displays the cap visually as 🔒 on the 6th+ friend.
+ * Local slice mirrors what the server has so UI doesn't blink. There is no
+ * paid five-friend cap in the accepted product contract.
  */
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
@@ -25,10 +24,12 @@ export interface AvailableMemorySource {
   selected: boolean;
   authorization_version: number;
   effective_at: string;
+  sharing_status: 'not_shared' | 'shared_empty' | 'shared';
+  coverage_scope: 'legacy_activity_since_grant' | 'full_history_delayed_v1' | null;
 }
 
 interface State {
-  limit: number;        // server-side memory_subscription_limit (default 5)
+  limit: number;        // Infinity when the server returns the uncapped contract.
   subscriptions: MemorySubscription[];
   availableSources: AvailableMemorySource[];
   loading: boolean;
@@ -49,7 +50,7 @@ interface State {
 }
 
 export const useMemorySubscriptionsStore = create<State>((set, get) => ({
-  limit: 5,
+  limit: Number.POSITIVE_INFINITY,
   subscriptions: [],
   availableSources: [],
   loading: false,
@@ -94,7 +95,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         return;
       }
       set({
-        limit: data.limit ?? 5,
+        limit: data.limit == null ? Number.POSITIVE_INFINITY : Number(data.limit),
         subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
         availableSources: Array.isArray(sourcesBody.sources) ? sourcesBody.sources : [],
         loading: false,
@@ -165,7 +166,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
 
   reset: () =>
     set({
-      limit: 5,
+      limit: Number.POSITIVE_INFINITY,
       subscriptions: [],
       availableSources: [],
       loading: false,

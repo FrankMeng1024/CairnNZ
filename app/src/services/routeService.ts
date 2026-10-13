@@ -4,6 +4,7 @@
  */
 import { authenticatedFetch } from './apiService';
 import type { Route, RoutePoint, Waypoint } from '../store/useRouteStore';
+import type { OrderedRouteDraft } from '../features/route/orderedRouteDraft';
 
 export type RouteDeleteOutcome = 'deleted' | 'already-absent' | 'unsupported';
 
@@ -52,6 +53,8 @@ interface RoutePayload {
   name: string;
   description?: string;
   points: RoutePoint[];
+  ordered_draft?: OrderedRouteDraft;
+  resolution_state?: 'continuous' | 'unresolved_gaps';
   waypoints?: Waypoint[];
   distance_m: number;
   elevation_gain_m: number;
@@ -87,6 +90,52 @@ interface RemoteRoute {
   created_geometry_hash?: string | null;
   geometry_edited_since_creation?: number | boolean;
   origin_gap_reconnected?: number | boolean;
+  ordered_draft?: OrderedRouteDraft | null;
+  resolution_state?: 'continuous' | 'unresolved_gaps';
+}
+
+interface RemoteSharedRoute {
+  id: string;
+  sender: { id: string; name: string | null };
+  source_route_key: string;
+  source_content_revision: number;
+  content_hash: string;
+  delivered_at: string;
+  name?: string;
+  distance_m?: number;
+  resolution_state?: 'continuous' | 'unresolved_gaps';
+  route?: {
+    name: string;
+    description?: string | null;
+    points: RoutePoint[];
+    ordered_draft?: OrderedRouteDraft | null;
+    resolution_state?: 'continuous' | 'unresolved_gaps';
+    distance_m: number;
+    elevation_gain_m: number;
+  };
+}
+
+function sharedRemoteToLocal(remote: RemoteSharedRoute): Route {
+  const detail = remote.route;
+  return {
+    id: `delivery:${remote.id}`,
+    name: detail?.name ?? remote.name ?? 'Shared Route',
+    description: detail?.description ?? undefined,
+    createdAt: new Date(remote.delivered_at).getTime(),
+    updatedAt: new Date(remote.delivered_at).getTime(),
+    points: detail?.points ?? [],
+    orderedDraft: detail?.ordered_draft ?? undefined,
+    resolutionState: detail?.resolution_state ?? remote.resolution_state ?? 'continuous',
+    waypoints: [],
+    distanceM: Number(detail?.distance_m ?? remote.distance_m ?? 0),
+    elevationGainM: Number(detail?.elevation_gain_m ?? 0),
+    runCount: 0,
+    sharedBy: remote.sender.name ?? 'Friend',
+    sharedDeliveryId: remote.id,
+    sharedContentHash: remote.content_hash,
+    isSharedDelivery: true,
+    isActive: false,
+  };
 }
 
 function remoteToLocal(r: RemoteRoute): Route {
@@ -97,6 +146,8 @@ function remoteToLocal(r: RemoteRoute): Route {
     createdAt: new Date(r.created_at).getTime(),
     updatedAt: new Date(r.updated_at).getTime(),
     points: r.points ?? [],
+    orderedDraft: r.ordered_draft ?? undefined,
+    resolutionState: r.resolution_state ?? 'continuous',
     waypoints: r.waypoints ?? [],
     distanceM: r.distance_m,
     elevationGainM: r.elevation_gain_m,
@@ -126,6 +177,53 @@ export async function fetchRoutes(): Promise<Route[]> {
   if (!res.ok) throw new Error(`Route fetch failed (${res.status})`);
   const data = await res.json();
   return (data?.routes ?? []).map(remoteToLocal);
+}
+
+export async function fetchSharedRoutes(): Promise<Route[]> {
+  const res = await authenticatedFetch('/api/routes/shared');
+  if (!res.ok) throw new Error(`Shared Route fetch failed (${res.status})`);
+  const data = await res.json();
+  return (data?.routes ?? []).map(sharedRemoteToLocal);
+}
+
+export async function fetchSharedRouteDetail(deliveryId: string): Promise<Route | null> {
+  const res = await authenticatedFetch(`/api/routes/shared/${encodeURIComponent(deliveryId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Shared Route fetch failed (${res.status})`);
+  const data = await res.json();
+  return data?.route ? sharedRemoteToLocal(data.route) : null;
+}
+
+export interface ShareRouteResult {
+  content_hash: string;
+  delivered: Array<{ recipient_id: string; delivery_id: string; code: string }>;
+  failed: Array<{ recipient_id: string; code: string }>;
+}
+
+export async function shareRouteSnapshot(
+  routeId: string,
+  recipientIds: string[],
+  idempotencyKey: string,
+): Promise<ShareRouteResult> {
+  const res = await mutationRequest(`/api/routes/${encodeURIComponent(routeId)}/share`, {
+    method: 'POST',
+    body: JSON.stringify({ recipient_ids: recipientIds.map(Number), idempotency_key: idempotencyKey }),
+  });
+  const body = await responseBody(res);
+  if (!res.ok) {
+    const error: any = new Error(body?.error ?? `Route share failed (${res.status})`);
+    error.code = body?.code ?? `HTTP_${res.status}`;
+    error.status = res.status;
+    throw error;
+  }
+  return body as ShareRouteResult;
+}
+
+export async function removeSharedRouteDelivery(deliveryId: string): Promise<void> {
+  const res = await mutationRequest(`/api/routes/shared/${encodeURIComponent(deliveryId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`Shared Route remove failed (${res.status})`);
 }
 
 // v123: GET /api/routes/:id returns the full route including points + waypoints

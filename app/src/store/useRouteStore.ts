@@ -9,6 +9,9 @@ import { create } from 'zustand';
 import {
   fetchRoutes,
   fetchRouteDetail,
+  fetchSharedRouteDetail,
+  fetchSharedRoutes,
+  removeSharedRouteDelivery,
   updateRoute as apiUpdateRoute,
   deleteRoute as apiDeleteRoute,
   deleteRouteByClientId,
@@ -24,6 +27,7 @@ import {
 import type { SyncState } from '../services/offlineEntity';
 import {
   cloneActivityRouteReference,
+  routeCanBeUsed,
   routeIdentityKeys,
   routeMatchesIdentity,
   type ActivityRouteReference,
@@ -80,6 +84,10 @@ export interface Route {
   createdAt: number;       // timestamp (ms)
   updatedAt: number;
   points: RoutePoint[];    // the route polyline (current/edited version)
+  /** Ordered planner truth. Legacy rows omit this and remain one continuous part. */
+  orderedDraft?: import('../features/route/orderedRouteDraft').OrderedRouteDraft;
+  /** Inherited Activity gaps block Share / Use until explicitly repaired. */
+  resolutionState?: 'continuous' | 'unresolved_gaps';
   // Phase 1: original GPS trace, set once at save-as-route and never
   // mutated by edit operations. Edit corridors are computed against
   // this baseline forever (route-rules.md §4.4 "original is forever").
@@ -94,6 +102,9 @@ export interface Route {
   runCount: number;        // how many times user completed this route
   lastRunAt?: number;      // timestamp of last completion
   sharedBy?: string;       // friend name if received from a friend
+  sharedDeliveryId?: string;
+  sharedContentHash?: string;
+  isSharedDelivery?: boolean;
   isActive: boolean;       // currently selected for navigation
   // O1 batch 40: mutedMarkerIds, heroPhotoUrl, photoCredit removed — 0 external readers
   activityMode?: 'hiking' | 'running'; // inherited from the originating session
@@ -130,10 +141,12 @@ export type RouteDetailState = 'idle' | 'loading' | 'ready' | 'not-found' | 'err
 export interface RouteDeleteResult { remoteState: 'not-needed' | 'deleted' | 'queued' }
 
 const routeCacheKey = (userId: string) => `@cairn:routes:v1:${userId}`;
+const sharedRouteCacheKey = (userId: string) => `@cairn:shared-routes:v1:${userId}`;
 const routeCacheWriteTails = new Map<string, Promise<void>>();
 
 let routeMutationEpoch = 0;
 let listRequestSequence = 0;
+let sharedRequestSequence = 0;
 const routeMutationRevision = new Map<string, number>();
 
 function revisionKey(userId: string, identity: string): string {
@@ -223,6 +236,31 @@ async function persistRouteCache(routes: Route[], userId = currentUserId()): Pro
   }
 }
 
+async function readSharedRouteCache(userId: string): Promise<Route[]> {
+  if (!userId) return [];
+  try {
+    const raw = await storage.getItem(sharedRouteCacheKey(userId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(route => route?.isSharedDelivery === true) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function persistSharedRouteCache(routes: Route[], userId = currentUserId()): Promise<void> {
+  if (!userId) return;
+  const tailKey = `shared:${userId}`;
+  const snapshot = JSON.stringify(routes);
+  const previous = routeCacheWriteTails.get(tailKey) ?? Promise.resolve();
+  const write = previous.catch(() => undefined).then(() => (
+    storage.setItem(sharedRouteCacheKey(userId), snapshot, { strict: true })
+  ));
+  routeCacheWriteTails.set(tailKey, write);
+  try { await write; } finally {
+    if (routeCacheWriteTails.get(tailKey) === write) routeCacheWriteTails.delete(tailKey);
+  }
+}
+
 function pendingRoute(entry: Awaited<ReturnType<typeof offlineRoutes.listPending>>[number]): Route {
   return {
     ...entry.data.route,
@@ -281,6 +319,7 @@ async function reconcileRemoteRouteDelete(
 
 interface RouteStore {
   routes: Route[];
+  sharedRoutes: Route[];
   routeOwnerId: string | null;
   /** Personal-library load state. Cached/local Routes remain visible on error. */
   routesLoading: boolean;
@@ -309,6 +348,9 @@ interface RouteStore {
 
   // Load from backend
   loadRoutes: () => Promise<void>;
+  loadSharedRoutes: () => Promise<void>;
+  loadSharedRouteDetail: (deliveryId: string) => Promise<RouteDetailState>;
+  removeSharedRoute: (deliveryId: string) => Promise<void>;
   /** Sprint 69 STORY-00538: load friend routes. */
   loadCircleRoutes: () => Promise<void>;
   // v123: hydrate the FULL route (including points) for a single id.
@@ -338,6 +380,7 @@ interface RouteStore {
 
 export const useRouteStore = create<RouteStore>((set, get) => ({
   routes: [],
+  sharedRoutes: [],
   routeOwnerId: null,
   // The first list request begins when Trails mounts. Starting in loading
   // prevents an empty-library flash before cache/server truth is known.
@@ -356,8 +399,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       set({ activityRouteReference: null });
       return null;
     }
-    const route = get().routes.find(item => routeMatchesIdentity(item, id));
-    if (!route || route.points.length < 2) return null;
+    const route = [...get().routes, ...get().sharedRoutes]
+      .find(item => routeMatchesIdentity(item, id));
+    if (!route || !routeCanBeUsed(route)) return null;
     const snapshot = cloneActivityRouteReference(route);
     set({ activityRouteReference: snapshot });
     return snapshot;
@@ -381,6 +425,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       detailRequestSequence += 1;
       set({
         routes: [],
+        sharedRoutes: [],
         routeOwnerId: ownerId || null,
         activityRouteReference: null,
         followingRouteId: null,
@@ -465,6 +510,10 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
           ...(route.points.length < 2 && existing.points.length >= 2
             ? {
                 points: existing.points.map(point => ({ ...point })),
+                orderedDraft: existing.orderedDraft
+                  ? JSON.parse(JSON.stringify(existing.orderedDraft))
+                  : undefined,
+                resolutionState: existing.resolutionState,
                 originalPoints: existing.originalPoints?.map(point => ({ ...point })),
                 segments: existing.segments?.map(segment => ({ ...segment })),
                 waypoints: existing.waypoints.map(waypoint => ({ ...waypoint })),
@@ -491,6 +540,69 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
         set({ routesLoading: false, routesLoadError: true });
       }
     }
+  },
+
+  loadSharedRoutes: async () => {
+    const ownerId = currentUserId();
+    const requestId = ++sharedRequestSequence;
+    if (!ownerId) {
+      set({ sharedRoutes: [] });
+      return;
+    }
+    const cached = await readSharedRouteCache(ownerId);
+    if (requestId !== sharedRequestSequence || currentUserId() !== ownerId) return;
+    set({ sharedRoutes: cached });
+    try {
+      const routes = await fetchSharedRoutes();
+      if (requestId !== sharedRequestSequence || currentUserId() !== ownerId) return;
+      const cachedByDelivery = new Map(cached.map(route => [route.sharedDeliveryId, route]));
+      const merged = routes.map(route => {
+        const local = cachedByDelivery.get(route.sharedDeliveryId);
+        return local && local.sharedContentHash === route.sharedContentHash && local.points.length >= 2
+          ? { ...route, points: local.points, orderedDraft: local.orderedDraft, resolutionState: local.resolutionState }
+          : route;
+      });
+      set({ sharedRoutes: merged });
+      await persistSharedRouteCache(merged, ownerId);
+    } catch {
+      // A failed refresh never discards already-delivered projections.
+    }
+  },
+
+  loadSharedRouteDetail: async (deliveryId) => {
+    const ownerId = currentUserId();
+    const requestId = ++sharedRequestSequence;
+    if (!ownerId) return 'not-found';
+    try {
+      const route = await fetchSharedRouteDetail(deliveryId);
+      if (requestId !== sharedRequestSequence || currentUserId() !== ownerId) return 'idle';
+      if (!route) {
+        set(state => ({
+          sharedRoutes: state.sharedRoutes.filter(item => item.sharedDeliveryId !== deliveryId),
+        }));
+        return 'not-found';
+      }
+      set(state => ({
+        sharedRoutes: [route, ...state.sharedRoutes.filter(item => item.sharedDeliveryId !== deliveryId)],
+      }));
+      await persistSharedRouteCache(get().sharedRoutes, ownerId);
+      return 'ready';
+    } catch {
+      return get().sharedRoutes.some(item => item.sharedDeliveryId === deliveryId && item.points.length >= 2)
+        ? 'ready'
+        : 'error';
+    }
+  },
+
+  removeSharedRoute: async (deliveryId) => {
+    const ownerId = currentUserId();
+    if (!ownerId) return;
+    await removeSharedRouteDelivery(deliveryId);
+    if (currentUserId() !== ownerId) return;
+    set(state => ({
+      sharedRoutes: state.sharedRoutes.filter(item => item.sharedDeliveryId !== deliveryId),
+    }));
+    await persistSharedRouteCache(get().sharedRoutes, ownerId);
   },
 
   // Sprint 69 STORY-00538: load subscribed-friend routes from
@@ -654,6 +766,9 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       creationOrigin: sourceActivity ? 'activity' as const : (routeData.creationOrigin ?? 'manual' as const),
       originPersistence: 'pending' as const,
       points: routeData.points.map(point => ({ ...point })),
+      orderedDraft: routeData.orderedDraft
+        ? JSON.parse(JSON.stringify(routeData.orderedDraft))
+        : undefined,
       originalPoints: routeData.originalPoints?.map(point => ({ ...point })),
       segments: routeData.segments?.map(segment => ({ ...segment })),
       waypoints: routeData.waypoints.map(waypoint => ({ ...waypoint })),
@@ -731,6 +846,8 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     if (acceptedUpdates.name !== undefined) payload.name = acceptedUpdates.name;
     if (acceptedUpdates.description !== undefined) payload.description = acceptedUpdates.description;
     if (acceptedUpdates.points !== undefined) payload.points = acceptedUpdates.points;
+    if (acceptedUpdates.orderedDraft !== undefined) payload.ordered_draft = acceptedUpdates.orderedDraft;
+    if (acceptedUpdates.resolutionState !== undefined) payload.resolution_state = acceptedUpdates.resolutionState;
     if (acceptedUpdates.waypoints !== undefined) payload.waypoints = acceptedUpdates.waypoints;
     if (acceptedUpdates.distanceM !== undefined) payload.distance_m = acceptedUpdates.distanceM;
     if (acceptedUpdates.elevationGainM !== undefined) payload.elevation_gain_m = acceptedUpdates.elevationGainM;

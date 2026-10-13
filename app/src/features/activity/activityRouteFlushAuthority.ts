@@ -1,5 +1,6 @@
 import { appendPoints as remoteAppendPoints } from '../../services/sessionService';
 import type { SegmentStartReason } from './activityContracts';
+import { recordActivityStageEvent } from './activityStageLedger';
 
 export interface FlushableActivityPoint {
   lat: number;
@@ -85,16 +86,56 @@ export async function flushActivityRoutePrefix(input: {
     }
     const from = state.acknowledgedCount;
     const suffix = points.slice(from);
+    const attemptStartedAt = Date.now();
+    void recordActivityStageEvent({
+      ownerUserId: input.identity.ownerUserId,
+      clientActivityId: input.identity.clientActivityId,
+      stage: 'sync-state',
+      wallTimeMs: attemptStartedAt,
+      details: {
+        operation: 'live-route-prefix',
+        phase: 'attempt',
+        acknowledgedPrefixCount: from,
+        attemptedSuffixCount: suffix.length,
+        canonicalPointCount: points.length,
+      },
+    });
     const acknowledged = await remoteAppendPoints(input.identity.serverActivityId, suffix, {
       userId: input.identity.ownerUserId,
       clientActivityId: input.identity.clientActivityId,
     });
     if (!acknowledged || !input.isCurrent()) {
+      void recordActivityStageEvent({
+        ownerUserId: input.identity.ownerUserId,
+        clientActivityId: input.identity.clientActivityId,
+        stage: 'sync-state',
+        details: {
+          operation: 'live-route-prefix',
+          phase: !acknowledged ? 'failed' : 'stale-owner-ack',
+          acknowledgedPrefixCount: state.acknowledgedCount,
+          attemptedSuffixCount: suffix.length,
+          elapsedMs: Math.max(0, Date.now() - attemptStartedAt),
+        },
+      });
       result = { acknowledged: false, acknowledgedCount: state.acknowledgedCount, appendedCount: 0 };
       return;
     }
     state.acknowledgedCount = points.length;
     state.acknowledgedPrefixFingerprint = prefixFingerprint(points, points.length);
+    void recordActivityStageEvent({
+      ownerUserId: input.identity.ownerUserId,
+      clientActivityId: input.identity.clientActivityId,
+      stage: 'sync-state',
+      details: {
+        operation: 'live-route-prefix',
+        phase: 'ack',
+        acknowledged: true,
+        acknowledgedPrefixCount: points.length,
+        appendedCount: suffix.length,
+        elapsedMs: Math.max(0, Date.now() - attemptStartedAt),
+        prefixFingerprint: state.acknowledgedPrefixFingerprint,
+      },
+    });
     result = { acknowledged: true, acknowledgedCount: points.length, appendedCount: suffix.length };
   });
   state.tail = run.then(() => undefined, () => undefined);

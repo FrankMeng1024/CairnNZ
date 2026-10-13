@@ -53,6 +53,8 @@ export function HomeScreen(props: {
   onHikingPress?: () => void;
   onRunningPress?: () => void;
   onPlantPress?: () => void;
+  /** Distinct acquired Cairn groups that remain unread in Memory. */
+  memoryUnreadCount?: number;
 } = {}) {
   const nav = useNavigation<any>();
   const state = props.state ?? 'H0';
@@ -151,6 +153,7 @@ export function HomeScreen(props: {
     ? { backgroundColor: tabBg, borderColor: tabBorder }
     : null;
   const actionIconReviewActive = !!props.hikingIconCandidate || !!props.runningIconCandidate;
+  const memoryUnreadCount = Math.max(0, Math.floor(props.memoryUnreadCount ?? 0));
   const renderActionIcon = (name: 'hiking' | 'running' | 'leaveCairn') => {
     if (name === 'hiking' && props.hikingIconCandidate) {
       return <HomeActionCandidateIcon kind="hiking" candidate={props.hikingIconCandidate} size={29} color={actionIconColor} />;
@@ -168,6 +171,25 @@ export function HomeScreen(props: {
   const renderNavIcon = (name: 'trails' | 'friends' | 'memory' | 'settings') => useCorrectedSunnyIcons
     ? <HomeProductIcon name={name} size={20} color={navIconColor} />
     : <CairnIcon name={name} size={20} color={navIconColor} accent={navAccent} />;
+  const renderMemoryNavIcon = () => (
+    <View>
+      {renderNavIcon('memory')}
+      {memoryUnreadCount > 0 ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute', right: -9, top: -7, minWidth: 16, height: 16,
+            paddingHorizontal: 4, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: '#315B4E',
+          }}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 9, lineHeight: 12, fontWeight: '800' }}>
+            {memoryUnreadCount > 99 ? '99+' : memoryUnreadCount}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
 
   // R21 (2026-08-17): display formatting per user rules:
   //  - 走了一段但 <0.1 km² → show "0.1" (round up so progress is visible)
@@ -243,8 +265,8 @@ export function HomeScreen(props: {
               <View style={styles.shared__tab_bar__tab_friends_icon_wrap}>{renderNavIcon('friends')}</View>
               <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)}>
-              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}>{renderNavIcon('memory')}</View>
+            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)} accessibilityLabel={memoryUnreadCount > 0 ? `Memory, ${memoryUnreadCount} unread Cairn groups` : 'Memory'}>
+              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}>{renderMemoryNavIcon()}</View>
               <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>
@@ -295,8 +317,8 @@ export function HomeScreen(props: {
               <View style={styles.shared__tab_bar__tab_friends_icon_wrap}>{renderNavIcon('friends')}</View>
               <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)}>
-              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}>{renderNavIcon('memory')}</View>
+            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)} accessibilityLabel={memoryUnreadCount > 0 ? `Memory, ${memoryUnreadCount} unread Cairn groups` : 'Memory'}>
+              <View style={styles.shared__tab_bar__tab_memory_icon_wrap}>{renderMemoryNavIcon()}</View>
               <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>

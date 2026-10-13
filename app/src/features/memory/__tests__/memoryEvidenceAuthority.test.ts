@@ -51,6 +51,28 @@ describe('central Memory semantic authority', () => {
       .toEqual([day, day * 4]);
   });
 
+  test('passive acquisition lifecycles remain separate without changing personal coverage', () => {
+    const first = useMemoryStore.getState().recordPoint(-45, 170, 100_000, {
+      source: 'passive_real', sourceSegmentId: 'foreground-lifecycle-a',
+      horizontalAccuracyM: 8, continuityState: 'accepted',
+    });
+    const sameLifecycle = useMemoryStore.getState().recordPoint(-45.00001, 170, 116_000, {
+      source: 'passive_real', sourceSegmentId: 'foreground-lifecycle-a',
+      horizontalAccuracyM: 7, continuityState: 'accepted',
+    });
+    const restarted = useMemoryStore.getState().recordPoint(-45, 170, 132_000, {
+      source: 'passive_real', sourceSegmentId: 'foreground-lifecycle-b',
+      horizontalAccuracyM: 7, continuityState: 'accepted',
+    });
+
+    expect(first).toMatchObject({ coverageChanged: true, presenceChanged: true });
+    expect(sameLifecycle).toMatchObject({ coverageChanged: false, presenceChanged: true });
+    expect(restarted).toMatchObject({ coverageChanged: false, presenceChanged: true });
+    expect(useMemoryStore.getState().points).toHaveLength(1);
+    expect(useMemoryStore.getState().presenceWitnesses.map(witness => witness.sourceSegmentId))
+      .toEqual(['foreground-lifecycle-a', 'foreground-lifecycle-b']);
+  });
+
   test('a later real Activity at the same place is a new witness, not new coverage', () => {
     const first = useMemoryStore.getState().recordPoint(-41, 174, 100_000, {
       source: 'activity_real',

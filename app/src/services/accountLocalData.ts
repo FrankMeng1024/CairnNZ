@@ -19,6 +19,7 @@ import {
   type AccountTransitionAuthority,
 } from './accountTransitionAuthority';
 import { purgeActivityStageLedgerForOwner } from '../features/activity/activityStageLedger';
+import { purgeNativeGpsEvidenceScopesForOwner } from '../features/activity/nativeGpsEvidence';
 
 const SCHEDULED_PURGE_KEY = '@cairn:account-deletion-local-purge:v1';
 const SECURE_SCHEDULED_PURGE_KEY = 'cairn_account_deletion_local_purge_v1';
@@ -332,7 +333,16 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   await Promise.all(routeIds.map((routeId) => deleteExtras(routeId)));
   await clearSimulatorLogs(owner).catch(() => undefined);
   await purgeActivityStageLedgerForOwner(owner);
+  await purgeNativeGpsEvidenceScopesForOwner(owner);
   await purgeDurableMemoryEvidence(owner);
+  // Newly introduced presentation coordinates/unread state also have an
+  // in-process snapshot. Fence and clear that authority before the key sweep.
+  const { purgeCairnPresentationForOwner } = require('../features/cairns/cairnPresentationStore');
+  await purgeCairnPresentationForOwner(owner);
+  const { purgeAcquiredCairnHistoryForOwner } = require('../features/cairns/acquiredCairnHistoryCache');
+  await purgeAcquiredCairnHistoryForOwner(owner);
+  const { purgeRoutePlannerDraftsForOwner } = require('../features/route/routePlannerDraftPersistence');
+  await purgeRoutePlannerDraftsForOwner(owner);
   // Fence deferred/chunked precise-geometry writes before the broad key sweep;
   // otherwise an in-flight cache write could recreate data after deletion.
   await purgeFogDisplayCache(owner);
@@ -345,6 +355,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `cairn_sessions_${owner}`,
     `cairn_markers_v026_${owner}`,
     routeCacheKey,
+    `@cairn:shared-routes:v1:${owner}`,
     `@cairn:offline_markers:v2:${owner}`,
     `@cairn:offline_routes:v1:${owner}`,
     `@cairn:marker_tombstones:v1:${owner}`,
@@ -366,6 +377,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `cairn:memory:synthetic:v1:${owner}`,
     `cairn_onboarding_v1_done_${owner}`,
     `cairn:plant:draft:v3:${owner}`,
+    `cairn:presentation:v1:${owner}`,
     `cairn_saf01_payload:${owner}`,
     `cairn_qa_snap_review_clone_v1_${owner}`,
   ]);
@@ -378,6 +390,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
     `@cairn:activity_simulator_logs:v1:${owner}:`,
     `@cairn:activity_simulator_upload:v1:${owner}:`,
     `cairn:memory:fog-display:v3:${owner}:chunk:`,
+    `@cairn:route-planner:v1:${encodeURIComponent(owner)}:`,
   ];
   const keys = await AsyncStorage.getAllKeys();
   const hierarchyOwned = (key: string) => (

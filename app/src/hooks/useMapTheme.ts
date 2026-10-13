@@ -1,10 +1,11 @@
 /**
  * useMapTheme — resolves the effective map theme for all mapbox surfaces.
  *
- * Three states drive every map style choice in the app:
- *   day    → outdoors-v12 (Hike/Route/etc), Standard + lightPreset=day (Plant)
- *   sunset → bundled sunset-2d.json (Hike/Route/etc), Standard + dusk (Plant)
- *   night  → dark-v11 (Hike/Route/etc), Standard + night (Plant)
+ * Three states drive every non-satellite Mapbox surface through Standard:
+ *   day    → Standard + lightPreset=day
+ *   sunset → Standard + lightPreset=dusk
+ *   night  → Standard + lightPreset=night
+ * Satellite remains imagery-led and intentionally skips Standard imports.
  *
  * The three-state value comes from useScenicTimeState().timeOfDay which
  * already fans out from the same Appearance setting used everywhere else

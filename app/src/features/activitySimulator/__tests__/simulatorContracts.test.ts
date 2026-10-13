@@ -266,17 +266,24 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(map).toContain('mapboxTokenConfigured: isMapboxTokenConfigured()');
   });
 
-  test('Activity Detail deletion invalidates retained state and resets to Trails without a Back loop', () => {
+  test('Activity Detail deletion stays canonical while explicit retained origins may pop safely', () => {
     const detail = read('src/screens/MapHistoryScreen.tsx');
-    const backContract = detail.slice(
+    const canonicalReset = detail.slice(
       detail.indexOf('const returnToActivities'),
+      detail.indexOf('const handleActivityBack'),
+    );
+    const contextualBack = detail.slice(
+      detail.indexOf('const handleActivityBack'),
       detail.indexOf('const commitActivityRename'),
     );
     expect(detail).toContain('selectedSessionId === invalidatedSessionId ? null');
     expect(detail).toContain('setInvalidatedSessionId(id)');
     expect(detail).toContain('detailSessionSnapshots.current.delete(id)');
     expect(detail).toContain("routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'activities' } }]");
-    expect(backContract).not.toContain('nav.goBack()');
+    expect(canonicalReset).not.toContain('nav.goBack()');
+    expect(contextualBack).toContain('resolveActivityDetailBackAction(activityBackContext, nav.canGoBack())');
+    expect(contextualBack).toContain("action === 'go-back'");
+    expect(contextualBack).toContain('nav.goBack()');
     expect(detail).not.toContain("? () => nav.navigate('Routes', { initialTab: 'activities' })");
   });
 
@@ -296,13 +303,13 @@ describe('Activity Simulator integration and safety contracts', () => {
   test('rename and Activity-derived Route mutations are server-authoritative', () => {
     const sessions = read('src/store/useSessionStore.ts');
     const sessionService = read('src/services/sessionService.ts');
-    const editor = read('src/screens/RouteEditorScreen.tsx');
+    const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
     const routeService = read('src/services/routeService.ts');
     expect(sessions).toContain('await renameRemoteSession(remoteId, trimmed)');
     expect(sessions.indexOf('await renameRemoteSession(remoteId, trimmed)'))
       .toBeLessThan(sessions.indexOf('const run = sessionWriteTail.then', sessions.indexOf('renameSession: async')));
     expect(sessionService).toContain('/api/sessions/${remoteId}/name');
-    expect(editor).toContain('if (fromSessionId && !liveSourceSession)');
+    expect(editor).toContain("if (!session) throw new Error('This Activity is no longer available.')");
     expect(routeService).toContain('source_activity_client_id');
   });
 

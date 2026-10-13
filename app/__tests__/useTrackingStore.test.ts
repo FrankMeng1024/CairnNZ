@@ -293,11 +293,13 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       },
     });
     const decision = exported.events.find((event: any) => event.stage === 'observation-decision');
+    expect(decision.evidenceId).toBe(receipt.evidenceId);
     expect(decision.details).toMatchObject({
       prefilterDecision: 'PASS', decision: 'ACCEPT', rawOrdinal: 1,
     });
     expect(JSON.stringify(exported)).not.toMatch(/-45\.0312|168\.6626|token/i);
-    expect(exported.presentationMeasurement).toBe('NOT_MEASURED');
+    expect(exported.presentationMeasurement).toBe('REACT_COMMIT_NOT_NATIVE_FRAME');
+    expect(exported.observability.evidenceCompleteness.acceptanceDecision).toBe('complete');
   });
 
   it('publishes an accepted Live point without waiting for delayed Memory-intent storage', async () => {

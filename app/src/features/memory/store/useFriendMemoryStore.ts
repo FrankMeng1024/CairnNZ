@@ -16,6 +16,14 @@ export interface FriendProjection {
   projectionVersion: string;
   cellSizeM: number;
   cells: FriendProjectionCell[];
+  regions: Array<{
+    id: string;
+    parentId: string | null;
+    level: 2 | 3;
+    name: string;
+    bbox: [number, number, number, number];
+    anchor: [number, number];
+  }>;
   serverAuthorizedAtMs: number;
   authorizationExpiresAtMs: number;
 }
@@ -73,7 +81,17 @@ function validProjection(value: any, now: number): value is FriendProjection {
       && cell.polygon.every((coordinate: any) => Array.isArray(coordinate)
         && coordinate.length === 2
         && Number.isFinite(coordinate[0])
-        && Number.isFinite(coordinate[1])));
+        && Number.isFinite(coordinate[1])))
+    && Array.isArray(value.regions ?? [])
+    && (value.regions ?? []).every((region: any) => typeof region?.id === 'string'
+      && (region.level === 2 || region.level === 3)
+      && typeof region.name === 'string'
+      && Array.isArray(region.bbox)
+      && region.bbox.length === 4
+      && region.bbox.every(Number.isFinite)
+      && Array.isArray(region.anchor)
+      && region.anchor.length === 2
+      && region.anchor.every(Number.isFinite));
 }
 
 function sourceGeneration(friendId: string): number {
@@ -219,6 +237,14 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           cells: (Array.isArray(incoming?.cells) ? incoming.cells : []).map((cell: any) => ({
             id: String(cell.id),
             polygon: cell.polygon,
+          })),
+          regions: (Array.isArray(incoming?.regions) ? incoming.regions : []).map((region: any) => ({
+            id: String(region.id),
+            parentId: region.parent_id == null ? null : String(region.parent_id),
+            level: Number(region.level) as 2 | 3,
+            name: String(region.name_en ?? ''),
+            bbox: region.bbox,
+            anchor: region.anchor,
           })),
           serverAuthorizedAtMs,
           authorizationExpiresAtMs: Math.min(parsedExpiry, serverAuthorizedAtMs + MAX_CACHE_AGE_MS),

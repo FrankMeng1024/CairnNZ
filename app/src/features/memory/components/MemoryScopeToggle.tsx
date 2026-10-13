@@ -39,8 +39,10 @@ interface Props {
 export function MemoryScopeToggle({ onPickPress }: Props) {
   const theme = useVisualTheme();
   const scope = useMemoryScopeStore((s) => s.scope);
+  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const setScope = useMemoryScopeStore((s) => s.setScope);
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
+  const sources = useMemorySubscriptionsStore((s) => s.availableSources);
 
   // v376: third-segment expand animation. Width grows from 0→44 and
   // opacity 0→1 when scope flips to friends. Reverses on flip back.
@@ -61,13 +63,20 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
 
   const opts: { id: MemoryScope; label: string }[] = [
     { id: 'self', label: 'Mine' },
-    { id: 'combined', label: 'Friends' },
+    {
+      id: 'combined',
+      label: scope === 'friend'
+        ? sources.find(source => source.friend_id === selectedFriendId)?.friend_name || 'Friend'
+        : subscriptions.length === 0
+          ? 'Friends'
+          : `Mine & ${subscriptions.length} ${subscriptions.length === 1 ? 'friend' : 'friends'}`,
+    },
   ];
 
   return (
     <View style={[styles.container, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]} testID="memory-scope-toggle">
       {opts.map((o) => {
-        const active = scope === o.id;
+        const active = o.id === 'combined' ? scope !== 'self' : scope === o.id;
         return (
           <TouchableOpacity
             key={o.id}

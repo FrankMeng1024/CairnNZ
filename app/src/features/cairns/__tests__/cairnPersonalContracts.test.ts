@@ -15,7 +15,7 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   const webMapbox = read('src/features/memory/services/mapboxAdapter.web.tsx');
 
   test('Memory exposes a normal All Cairns route outside map/location branches', () => {
-    expect(navigation).toContain('AllCairns: undefined');
+    expect(navigation).toContain("AllCairns: { initialSection?: 'left' | 'found'; markerIds?: string[] } | undefined");
     expect(navigation).toContain('<Stack.Screen name="AllCairns" component={AllCairnsScreen} />');
     expect(memory).toContain('testID="memory-all-cairns-entry"');
     expect(memory).toContain("nav.navigate('AllCairns')");
@@ -40,6 +40,14 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
     expect(detail).toContain('Left here {dateStr}');
     expect(detail).toContain('testID="cairn-source-activity-unavailable"');
     expect(detail).toContain('Activity link unavailable');
+  });
+
+  test('owner acknowledgement is a restrained aggregate with no discoverer or visit details', () => {
+    expect(markerStore).toContain('thanksCount: row.thanks_count == null ? undefined : Number(row.thanks_count)');
+    expect(detail).toContain('testID="cairn-owner-thanks-acknowledgement"');
+    expect(detail).toContain("Number(marker.thanksCount ?? 0) > 0");
+    expect(detail).toContain("'1 Thanks received'");
+    expect(detail).not.toMatch(/thanks.*discoverer|thanks.*observed_at|thanks.*acquired_at/i);
   });
 
   test('incomplete retrieval never claims a global search-empty result', () => {

@@ -458,6 +458,10 @@ export function PublicCairnDetailScreen() {
             style={StyleSheet.absoluteFill}
             {...(style.kind === 'url' ? { styleURL: style.url } : { styleJSON: style.json })}
             compassEnabled={false}
+            logoEnabled
+            attributionEnabled
+            logoPosition={{ bottom: 8, left: 8 }}
+            attributionPosition={{ bottom: 8, right: 8 }}
           >
             {StyleImport ? <StyleImport id="basemap" existing config={buildStandardConfig(mapTheme) as any} /> : null}
             <Camera defaultSettings={{ centerCoordinate: [detail.lng, detail.lat], zoomLevel: 15, pitch: 0 }} />

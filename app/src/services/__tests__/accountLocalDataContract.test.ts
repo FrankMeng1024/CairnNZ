@@ -50,6 +50,14 @@ jest.mock('../../features/memory/services/memoryEvidenceJournal', () => ({
 jest.mock('../../features/activity/activityFinalRefinementQueue', () => ({
   cancelAllActivityFinalRefinementsForOwner: jest.fn(async () => undefined),
 }));
+const mockPurgeCairnPresentation = jest.fn(async () => undefined);
+jest.mock('../../features/cairns/cairnPresentationStore', () => ({
+  purgeCairnPresentationForOwner: mockPurgeCairnPresentation,
+}));
+const mockPurgeRoutePlanner = jest.fn(async () => undefined);
+jest.mock('../../features/route/routePlannerDraftPersistence', () => ({
+  purgeRoutePlannerDraftsForOwner: mockPurgeRoutePlanner,
+}));
 
 const { purgeDeletedAccountLocalData } = require('../accountLocalData');
 
@@ -66,6 +74,7 @@ describe('deleted-account local ownership isolation', () => {
       'discardActiveHike(activity.session_id)',
       'deleteExtras(routeId)',
       'clearSimulatorLogs(owner)',
+      'purgeNativeGpsEvidenceScopesForOwner(owner)',
       'debugLogger.clearAllSessions()',
       'deleteAcknowledgedHikeTrackArtifacts(activityId, owner)',
       'purgeDurableMemoryEvidence(owner)',
@@ -79,11 +88,16 @@ describe('deleted-account local ownership isolation', () => {
       '@cairn:activity_registry:v1:${owner}',
       '@cairn:offline_markers:v2:${owner}',
       '@cairn:offline_routes:v1:${owner}',
+      '@cairn:shared-routes:v1:${owner}',
       'cairn:memory:tiles:v5:${owner}',
       'cairn:memory:presence:v1:${owner}',
       'cairn:memory:h3:v2:${owner}',
       'cairn_saf01_payload:${owner}',
       'cairn:plant:draft:v3:${owner}',
+      'cairn:presentation:v1:${owner}',
+      '@cairn:route-planner:v1:${encodeURIComponent(owner)}:',
+      'purgeCairnPresentationForOwner(owner)',
+      'purgeRoutePlannerDraftsForOwner(owner)',
       '@cairn:offline_queue:v1',
       '@cairn:edit_session_active_v6_3',
       'cairn_friends',
@@ -99,12 +113,14 @@ describe('deleted-account local ownership isolation', () => {
       'cairn_sessions_',
       'cairn_markers_v026_',
       '@cairn:routes:v1:',
+      '@cairn:shared-routes:v1:',
       'cairn:memory:tiles:v5:',
       'cairn:memory:presence:v1:',
       'cairn:friend-content:v2:',
       'cairn:public-cairns:v1:',
       'cairn:friend-memory-projections:v1:',
       'cairn:memory:synthetic:v1:',
+      'cairn:presentation:v1:',
     ];
     for (const prefix of ownerFamilies) {
       mockAsyncValues.set(`${prefix}A`, '[]');
@@ -118,6 +134,10 @@ describe('deleted-account local ownership isolation', () => {
     mockAsyncValues.set('@cairn:activity_final_refinement:v1:B:activity-b', 'private-b');
     mockAsyncValues.set('cairn:activity-mapbox-governor:v1:A:activity-a', 'private-a');
     mockAsyncValues.set('cairn:activity-mapbox-governor:v1:B:activity-b', 'private-b');
+    mockAsyncValues.set('@cairn:route-planner:v1:A:latest', 'plan-a');
+    mockAsyncValues.set('@cairn:route-planner:v1:A:plan-a', 'private-a-route');
+    mockAsyncValues.set('@cairn:route-planner:v1:B:latest', 'plan-b');
+    mockAsyncValues.set('@cairn:route-planner:v1:B:plan-b', 'private-b-route');
 
     await purgeDeletedAccountLocalData('A');
 
@@ -133,6 +153,12 @@ describe('deleted-account local ownership isolation', () => {
     expect(mockAsyncValues.get('@cairn:activity_final_refinement:v1:B:activity-b')).toBe('private-b');
     expect(mockAsyncValues.has('cairn:activity-mapbox-governor:v1:A:activity-a')).toBe(false);
     expect(mockAsyncValues.get('cairn:activity-mapbox-governor:v1:B:activity-b')).toBe('private-b');
+    expect(mockAsyncValues.has('@cairn:route-planner:v1:A:latest')).toBe(false);
+    expect(mockAsyncValues.has('@cairn:route-planner:v1:A:plan-a')).toBe(false);
+    expect(mockAsyncValues.get('@cairn:route-planner:v1:B:latest')).toBe('plan-b');
+    expect(mockAsyncValues.get('@cairn:route-planner:v1:B:plan-b')).toBe('private-b-route');
+    expect(mockPurgeCairnPresentation).toHaveBeenCalledWith('A');
+    expect(mockPurgeRoutePlanner).toHaveBeenCalledWith('A');
     expect(mockMultiRemove).toHaveBeenCalledTimes(1);
   });
 

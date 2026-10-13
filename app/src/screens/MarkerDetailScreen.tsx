@@ -421,6 +421,18 @@ export function MarkerDetailScreen() {
           qa={marker.qaProvenance === 'simulator_test'}
         />
 
+        {isOwner && Number(marker.thanksCount ?? 0) > 0 ? (
+          <View
+            style={[styles.thanksAcknowledgement, { backgroundColor: visualTheme.surface, borderColor: visualTheme.border }]}
+            testID="cairn-owner-thanks-acknowledgement"
+          >
+            <Icon name="Heart" size={14} color={visualTheme.primary} strokeWidth={2} />
+            <Text style={[styles.thanksAcknowledgementText, { color: visualTheme.foregroundSecondary }]}>
+              {Number(marker.thanksCount) === 1 ? '1 Thanks received' : `${Number(marker.thanksCount)} Thanks received`}
+            </Text>
+          </View>
+        ) : null}
+
         {/* 3. Meta pills row: type, visibility, sync state */}
         <View style={styles.headerRow}>
           <View style={[styles.typeBadge, { backgroundColor: meta.bg, borderColor: meta.color }]}>
@@ -458,7 +470,10 @@ export function MarkerDetailScreen() {
         {sourceActivity ? (
           <ContentSurface
             level="record"
-            onPress={() => nav.navigate('MapHistory', { sessionId: sourceActivity.id })}
+            onPress={() => nav.navigate('MapHistory', {
+              sessionId: sourceActivity.id,
+              activityBackContext: 'previous',
+            })}
             style={styles.activityContext}
             testID="cairn-source-activity"
           >
@@ -732,6 +747,21 @@ const styles = StyleSheet.create({
   metaList: {
     gap: 10,
     marginBottom: 18,
+  },
+  thanksAcknowledgement: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  thanksAcknowledgementText: {
+    fontSize: FontSize.small,
+    fontWeight: '500',
   },
   metaDivider: {
     height: 1,

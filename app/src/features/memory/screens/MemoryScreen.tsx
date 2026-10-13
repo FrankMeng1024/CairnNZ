@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager, FlatList } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -29,18 +29,17 @@ import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
+import { useMemoryCameraStore } from '../store/useMemoryCameraStore';
 import { useFriendStore } from '../../../store/useFriendStore';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap, type MemoryMapHandle } from '../components/MemoryMap';
 import { MemoryScopeToggle } from '../components/MemoryScopeToggle';
 import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
-import { MemorySharingSheet } from '../components/MemorySharingSheet';
-import { PaywallSheet } from '../components/PaywallSheet';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { CairnIcon } from '../../../components/CairnIcon';
-import { Colors, Radius } from '../../../components/tokens';
+import { Colors, FontSize, Spacing } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // v322: ForegroundUnlockManager moved here from App root. Mounts only
@@ -50,11 +49,12 @@ import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // Home (which has no fog UI) crashed the app.
 import { ForegroundUnlockManager } from '../components/ForegroundUnlockManager';
 // v425: fly to real explored point inside sibling region (bug 2 fix)
-import { ModalCard } from '../../../components/ModalCard';
+import { ModalCard, ModalCardHeader } from '../../../components/ModalCard';
 import { AppButton } from '../../../components/AppButton';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { useAppStore } from '../../../store/useAppStore';
-import { usePublicCairnStore } from '../../public/services/publicCairns';
+import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
+import { stableAcquiredGroupOrder } from '../components/acquiredCairnClusters';
 import { pullMemoryFromServer } from '../../../services/memorySync';
 import { publishInitialMemoryReconcile } from '../services/memoryPersistence';
 // v427: async hierarchy from /api/hierarchy (world-wide data)
@@ -173,6 +173,17 @@ export function MemoryScreen() {
   // leaks over Settings/Friends/Map when user navigates away with the hint
   // still open. Gate Modal `visible={showHint && isFocused}`.
   const isMemoryFocused = useIsFocused();
+  const acquiredMarkers = useCairnPresentationStore(state => state.acquiredMarkers);
+  const acquiredUnreadCount = useCairnPresentationStore(state => state.unreadCount);
+  const [acquiredGroupIds, setAcquiredGroupIds] = useState<string[] | null>(null);
+  const acquiredGroupRows = useMemo(() => {
+    if (!acquiredGroupIds) return [];
+    const byId = new Map(acquiredMarkers.map(marker => [marker.markerId, marker]));
+    return acquiredGroupIds.flatMap(markerId => byId.get(markerId) ?? []);
+  }, [acquiredGroupIds, acquiredMarkers]);
+  useEffect(() => {
+    if (acquiredGroupIds && acquiredGroupRows.length === 0) setAcquiredGroupIds(null);
+  }, [acquiredGroupIds, acquiredGroupRows.length]);
 
   // v434 hierarchy panel state (2-layer tree: World → Country → City)
   const [hierarchyOpen, setHierarchyOpen] = useState(false);
@@ -208,10 +219,8 @@ export function MemoryScreen() {
   // States: 'loading' (overlay opaque) | 'ready' (faded out) | 'slow'
   // (faded out + banner).
   const [mapReady, setMapReady] = useState(false);
-  // Sprint 70 STORY-00540 + 542: 5-friend pick modal + paywall when 6+.
+  // Outgoing sharing is managed in Friends; this is display selection only.
   const [pickModalOpen, setPickModalOpen] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [sharingOpen, setSharingOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
   const [fogReady, setFogReady] = useState(false);
   const [restoringMemoryVisible, setRestoringMemoryVisible] = useState(false);
@@ -222,13 +231,15 @@ export function MemoryScreen() {
   const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
   const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
   const friendProjectionError = useFriendMemoryStore((s) => s.error);
+  const friendProjections = useFriendMemoryStore((s) => s.projections);
   const userId = useAppStore((s) => s.user?.id ?? null);
   const activeOwnerId = userId == null ? null : String(userId);
-  const publicEnabled = usePublicCairnStore((s) => s.enabled);
-  const publicEntries = usePublicCairnStore((s) => s.entries);
-  const publicNewlySurfacedId = usePublicCairnStore((s) => s.newlySurfacedId);
-  const publicError = usePublicCairnStore((s) => s.error);
-  const presentPublicCairn = usePublicCairnStore((s) => s.present);
+  const cameraOwnerId = useMemoryCameraStore((s) => s.ownerId);
+  const cameraHydrated = useMemoryCameraStore((s) => s.hydrated);
+  const manualCity = useMemoryCameraStore((s) => s.manualCity);
+  const hydrateMemoryCamera = useMemoryCameraStore((s) => s.hydrate);
+  const selectMemoryCity = useMemoryCameraStore((s) => s.selectCity);
+  const clearManualMemoryCity = useMemoryCameraStore((s) => s.clearManualCity);
   const loadCircleMarkers = useMarkerStore((s) => s.loadCircleMarkers);
   // Bug-5 fix: pre-load friend list on Memory mount so friend picker always
   // has data immediately (previously required visiting Friends tab first).
@@ -238,6 +249,22 @@ export function MemoryScreen() {
   // Previously fired on every mount (tab switch), stacking concurrent
   // network requests that caused the "weak signal" timeout banner.
   const lastFriendLoadRef = useRef<number>(0);
+  const restoredManualCityRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeOwnerId || cameraOwnerId === activeOwnerId) return;
+    void hydrateMemoryCamera(activeOwnerId);
+  }, [activeOwnerId, cameraOwnerId, hydrateMemoryCamera]);
+  useEffect(() => {
+    if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId || !manualCity) return;
+    const restorationKey = `${activeOwnerId}:${manualCity.cityId}:${manualCity.center.join(',')}`;
+    if (restoredManualCityRef.current === restorationKey) return;
+    restoredManualCityRef.current = restorationKey;
+    flyTokenRef.current += 1;
+    setFlyToTarget({ center: manualCity.center, zoom: manualCity.zoom, token: flyTokenRef.current });
+    setHierarchyCurrentCityId(manualCity.cityId);
+    setHierarchyCurrentCountryId(manualCity.countryId);
+    setMapMoved(true);
+  }, [activeOwnerId, cameraHydrated, cameraOwnerId, manualCity]);
   useEffect(() => {
     // Bug-5: load friends once per mount if not already loaded this session
     if (!friendsLoadedRef.current) {
@@ -262,6 +289,31 @@ export function MemoryScreen() {
     pickerOpeningIdsRef.current = subscriptions.map(item => String(item.friend_id)).sort();
     setPickModalOpen(true);
   }, [subscriptions]);
+  const friendRegionSources = useMemo(() => {
+    const result: Record<string, {
+      names: string[];
+      region: {
+        id: string;
+        parentId: string | null;
+        level: 2 | 3;
+        name: string;
+        bbox: [number, number, number, number];
+        anchor: [number, number];
+      };
+    }> = {};
+    const namesById = new Map(subscriptions.map(source => [String(source.friend_id), source.friend_name]));
+    for (const [friendId, projection] of Object.entries(friendProjections)) {
+      const friendName = namesById.get(friendId);
+      if (!friendName) continue;
+      for (const region of projection.regions ?? []) {
+        const current = result[region.id] ?? { names: [], region };
+        if (!current.names.includes(friendName)) current.names.push(friendName);
+        current.names.sort((a, b) => a.localeCompare(b));
+        result[region.id] = current;
+      }
+    }
+    return result;
+  }, [friendProjections, subscriptions]);
 
   // Refresh friend fog when pick modal closes and subscriptions changed,
   // rather than on every individual subscribe/unsubscribe tap. This
@@ -491,9 +543,7 @@ export function MemoryScreen() {
         lastRefetchAtRef.current = now;
         setRefetchToken((n) => n + 1);
       }
-      if (usePublicCairnStore.getState().enabled) {
-        void usePublicCairnStore.getState().refreshScene();
-      }
+      void useCairnPresentationStore.getState().refreshAcquiredMap();
       // v303 OTA 三修:JS heartbeat — 500ms 一次的 log,证明 JS thread alive
       // (用户报"卡 15s 期间 log 也没上传" → heartbeat 帮我们看到 freeze 区间)。
       // 用 setInterval,失败时 GC 自动停。tab_blur cleanup 时 clearInterval。
@@ -738,6 +788,8 @@ export function MemoryScreen() {
   const onRecenter = () => {
     log('memory.recenter_tap');
     setRecenterToken((n) => n + 1);
+    restoredManualCityRef.current = null;
+    void clearManualMemoryCity();
     // v445 fix: eagerly update cameraCenterRef to real GPS location so
     // that reopening the hierarchy panel right after recenter uses the
     // new location, not the stale KL/etc from previous fly-to. The map's
@@ -786,30 +838,20 @@ export function MemoryScreen() {
         onPress={() => nav.navigate('AllCairns')}
         activeOpacity={0.86}
         accessibilityRole="button"
-        accessibilityLabel="Open All Cairns"
+        accessibilityLabel={acquiredUnreadCount > 0
+          ? `Open All Cairns, ${acquiredUnreadCount} unread Cairn groups`
+          : 'Open All Cairns'}
       >
         <Icon name="MapPin" size={16} color={theme.iconActive} strokeWidth={2} />
         <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>All Cairns</Text>
+        {acquiredUnreadCount > 0 ? (
+          <View style={[styles.allCairnsUnread, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.allCairnsUnreadText, { color: theme.onPrimary }]}>
+              {acquiredUnreadCount > 99 ? '99+' : acquiredUnreadCount}
+            </Text>
+          </View>
+        ) : null}
         <Icon name="ChevronRight" size={14} color={theme.iconInactive} strokeWidth={2} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        testID="memory-sharing-entry"
-        style={[
-          styles.sharingEntry,
-          {
-            top: insets.top + 72,
-            backgroundColor: theme.mapOverlay,
-            borderColor: theme.borderStrong,
-            shadowColor: theme.shadow,
-          },
-        ]}
-        onPress={() => setSharingOpen(true)}
-        activeOpacity={0.86}
-        accessibilityRole="button"
-        accessibilityLabel="Choose whether friends can see new Memory"
-      >
-        <Icon name="Users" size={15} color={theme.iconActive} strokeWidth={2} />
-        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>Share mine</Text>
       </TouchableOpacity>
       {syntheticQaAuthority ? (
         <View
@@ -843,6 +885,14 @@ export function MemoryScreen() {
           showUserLocation={Boolean(stableCoord)}
           recenterToken={recenterToken}
           flyToTarget={flyToTarget}
+          onOpenAcquiredCairn={markerId => nav.navigate('AcquiredCairnDetail', { markerId })}
+          onOpenAcquiredGroup={markerIds => {
+            if (markerIds.length === 0) nav.navigate('AllCairns', { initialSection: 'found' });
+            else setAcquiredGroupIds(stableAcquiredGroupOrder(
+              markerIds,
+              useCairnPresentationStore.getState().acquiredMarkers,
+            ));
+          }}
           onMapMoved={() => {
             if (mountKeyRef.current === mountKey) setMapMoved(true);
           }}
@@ -1076,40 +1126,6 @@ export function MemoryScreen() {
         </TouchableOpacity>
       ) : null}
 
-      {publicEnabled && !syntheticQaAuthority && publicEntries.length > 0 ? (() => {
-        const entry = publicEntries.find(item => item.id === publicNewlySurfacedId) ?? publicEntries[0];
-        return (
-          <TouchableOpacity
-            testID={`public-cairn-card-${entry.id}`}
-            style={[styles.publicCard, { backgroundColor: theme.sheetSurface, borderColor: theme.borderStrong, shadowColor: theme.shadow }]}
-            onPress={() => {
-              void presentPublicCairn(entry.id);
-              nav.navigate('PublicCairnDetail', { cairnId: entry.id });
-            }}
-            activeOpacity={0.9}
-            accessibilityRole="button"
-            accessibilityLabel={`Open Public Cairn from ${entry.author.name}`}
-          >
-            <View style={[styles.publicCardIcon, { backgroundColor: theme.controlSelected }]}>
-              <Icon name="Globe" size={17} color={theme.primary} strokeWidth={2.2} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.publicCardEyebrow, { color: theme.foregroundSecondary }]}>FOUND NEARBY</Text>
-              <Text style={[styles.publicCardTitle, { color: theme.foreground }]}>A Public Cairn</Text>
-              <Text style={[styles.publicCardAuthor, { color: theme.foregroundSecondary }]} numberOfLines={1}>Left by {entry.author.name}</Text>
-            </View>
-            <Icon name="ChevronRight" size={17} color={theme.iconInactive} />
-          </TouchableOpacity>
-        );
-      })() : null}
-
-      {publicEnabled && !syntheticQaAuthority && publicEntries.length === 0 && publicError === 'offline' ? (
-        <View style={[styles.publicOffline, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}>
-          <Icon name="CloudOff" size={13} color={theme.iconInactive} />
-          <Text style={[styles.publicOfflineText, { color: theme.foregroundSecondary }]}>Connect to check nearby Public Cairns</Text>
-        </View>
-      ) : null}
-
       <ModalCard visible={showHint && isMemoryFocused} onDismiss={dismissHint} testID="memory-unlock-guidance">
           <View>
             <Text style={[styles.hintTitle, { color: theme.foreground }]}>Walk to unlock your memory</Text>
@@ -1123,6 +1139,49 @@ export function MemoryScreen() {
           </View>
       </ModalCard>
 
+      <ModalCard
+        visible={isMemoryFocused && acquiredGroupIds !== null}
+        onDismiss={() => setAcquiredGroupIds(null)}
+        testID="memory-acquired-cairn-group"
+      >
+        <ModalCardHeader
+          title={`${acquiredGroupRows.length} Cairns here`}
+          body={`${acquiredGroupRows.filter(row => row.unread).length} unread · opening this list does not mark stories read`}
+          onClose={() => setAcquiredGroupIds(null)}
+        />
+        <FlatList
+          style={styles.acquiredGroupList}
+          contentContainerStyle={styles.acquiredGroupListContent}
+          data={acquiredGroupRows}
+          keyExtractor={row => row.markerId}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          renderItem={({ item: row }) => {
+            const source = row.sourceAudience === 'friends'
+              ? (row.authorName ? `Friend · ${row.authorName}` : 'Friend Cairn')
+              : 'Public Cairn';
+            const acquired = row.acquiredAt ? new Date(row.acquiredAt).toLocaleDateString() : 'Saved in Memory';
+            return (
+              <TouchableOpacity
+                key={row.markerId}
+                style={[styles.acquiredGroupRow, { borderColor: theme.border }]}
+                onPress={() => nav.navigate('AcquiredCairnDetail', { markerId: row.markerId })}
+                accessibilityRole="button"
+                accessibilityLabel={`${source}, ${row.unread ? 'unread' : 'read'}, found ${acquired}`}
+              >
+                <View style={styles.acquiredGroupCopy}>
+                  <Text style={[styles.acquiredGroupTitle, { color: theme.foreground }]}>{source}</Text>
+                  <Text style={[styles.acquiredGroupMeta, { color: theme.foregroundSecondary }]}>{acquired}</Text>
+                </View>
+                {row.unread ? <View style={[styles.acquiredGroupUnread, { backgroundColor: theme.primary }]} /> : null}
+                <Icon name="ChevronRight" size={16} color={theme.iconInactive} />
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </ModalCard>
+
       {/* BUG-D fix (v371 post-OTA): old bottom-right "Pick friends" FAB
           was replaced by the top-right Users icon in the top bar above.
           The bottom-right area was occluding map content too aggressively.
@@ -1130,13 +1189,7 @@ export function MemoryScreen() {
       <MemoryFriendPickModal
         visible={pickModalOpen}
         onClose={handlePickModalClose}
-        onCapHit={() => {
-          handlePickModalClose();
-          setPaywallOpen(true);
-        }}
       />
-      <PaywallSheet visible={paywallOpen} onClose={() => setPaywallOpen(false)} />
-      <MemorySharingSheet visible={sharingOpen} onClose={() => setSharingOpen(false)} />
 
       {/* v434: Hierarchy popover — 2-layer tree (World → Country → City).
           Fetches panel data from /api/hierarchy/panel. */}
@@ -1145,6 +1198,7 @@ export function MemoryScreen() {
           titleId={hierarchyTitleId}
           currentCityId={hierarchyCurrentCityId}
           currentCountryId={hierarchyCurrentCountryId}
+          friendRegionSources={friendRegionSources}
           onSelectItem={(itemId, itemType, bbox) => {
             log('v434.hierarchy_tap', { id: itemId, type: itemType });
             if (itemType === 'country') {
@@ -1169,17 +1223,34 @@ export function MemoryScreen() {
             let flyLng = bboxCenterLng;
             let flyLat = bboxCenterLat;
             let foundExplored = false;
-            let bestDist = Infinity;
+            let newestOwnTimestamp = -Infinity;
             for (const p of points) {
               if (!inBbox(p.lat, p.lng)) continue;
-              const d = (p.lat - bboxCenterLat) ** 2 + (p.lng - bboxCenterLng) ** 2;
-              if (d < bestDist) { bestDist = d; flyLat = p.lat; flyLng = p.lng; foundExplored = true; }
+              const timestamp = Number(p.ts) || 0;
+              if (timestamp >= newestOwnTimestamp) {
+                newestOwnTimestamp = timestamp;
+                flyLat = p.lat;
+                flyLng = p.lng;
+                foundExplored = true;
+              }
             }
             if (!foundExplored) {
               for (const m of markers) {
                 if (!inBbox(m.lat, m.lng)) continue;
-                const d = (m.lat - bboxCenterLat) ** 2 + (m.lng - bboxCenterLng) ** 2;
-                if (d < bestDist) { bestDist = d; flyLat = m.lat; flyLng = m.lng; foundExplored = true; }
+                const timestamp = Number(m.updatedAt ?? m.createdAt) || 0;
+                if (timestamp >= newestOwnTimestamp) {
+                  newestOwnTimestamp = timestamp;
+                  flyLat = m.lat;
+                  flyLng = m.lng;
+                  foundExplored = true;
+                }
+              }
+            }
+            if (!foundExplored && memoryScope !== 'self') {
+              const friendAnchor = friendRegionSources[itemId]?.region.anchor;
+              if (friendAnchor) {
+                [flyLng, flyLat] = friendAnchor;
+                foundExplored = true;
               }
             }
             const spanLng = maxLng - minLng;
@@ -1213,6 +1284,13 @@ export function MemoryScreen() {
             // correctly highlight the country the user just flew to.
             setHierarchyCurrentCityId(itemId);
             setHierarchyCurrentCountryId(hierarchyTitleId === 'world' ? null : hierarchyTitleId);
+            void selectMemoryCity({
+              cityId: itemId,
+              countryId: hierarchyTitleId === 'world' ? null : hierarchyTitleId,
+              bbox: [minLng, minLat, maxLng, maxLat],
+              center: [flyLng, flyLat],
+              zoom,
+            });
           }}
           onGoUp={() => {
             log('v434.hierarchy_up', { from: hierarchyTitleId });
@@ -1259,22 +1337,8 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   allCairnsEntryText: { fontSize: 12, fontWeight: '700' },
-  sharingEntry: {
-    position: 'absolute',
-    right: 12,
-    zIndex: 12,
-    minHeight: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
+  allCairnsUnread: { minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  allCairnsUnreadText: { fontSize: 9, lineHeight: 12, fontWeight: '800' },
   evidenceContext: {
     position: 'absolute',
     left: 12,
@@ -1287,24 +1351,6 @@ const styles = StyleSheet.create({
   },
   evidenceContextTitle: { fontSize: 12, fontWeight: '700' },
   evidenceContextText: { fontSize: 11, lineHeight: 16, marginTop: 2 },
-  publicCard: {
-    position: 'absolute', left: 16, right: 16, bottom: 24, zIndex: 30,
-    minHeight: 76, borderWidth: 1, borderRadius: Radius.card,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 14, paddingVertical: 12,
-    shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 6,
-  },
-  publicCardIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  publicCardEyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1.1 },
-  publicCardTitle: { fontSize: 16, fontWeight: '700', marginTop: 2 },
-  publicCardAuthor: { fontSize: 11, marginTop: 2 },
-  publicOffline: {
-    position: 'absolute', left: 48, right: 48, bottom: 28, zIndex: 25,
-    minHeight: 38, borderWidth: 1, borderRadius: Radius.pill,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-    paddingHorizontal: 12,
-  },
-  publicOfflineText: { fontSize: 11, fontWeight: '600' },
   // Concept-aligned empty state (2026-08-16 sleep-run redesign):
   //   - Centered vertically on paper background
   //   - Title: 18px, dark textPrimary, weight 500
@@ -1463,4 +1509,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+  acquiredGroupList: { maxHeight: 360 },
+  acquiredGroupListContent: { gap: Spacing.xs },
+  acquiredGroupRow: {
+    minHeight: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+  },
+  acquiredGroupCopy: { flex: 1 },
+  acquiredGroupTitle: { fontSize: FontSize.body, fontWeight: '700' },
+  acquiredGroupMeta: { fontSize: FontSize.small, marginTop: 2 },
+  acquiredGroupUnread: { width: 8, height: 8, borderRadius: 4 },
 });
