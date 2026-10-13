@@ -37,8 +37,12 @@ export function AcquiredCairnDetailScreen() {
   const [reviewMessage, setReviewMessage] = useState('');
   const [showingOfflineCopy, setShowingOfflineCopy] = useState(false);
   const actionFlights = useRef(new Set<string>());
+  const loadGeneration = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const isCurrentOwner = () => loadGeneration.current === generation
+      && String(useAppStore.getState().user?.id ?? '') === ownerId;
     setLoading(true);
     setError('');
     setShowingOfflineCopy(false);
@@ -47,6 +51,7 @@ export function AcquiredCairnDetailScreen() {
         expectedUserId: ownerId,
         skipLogoutOn401: true,
       });
+      if (!isCurrentOwner()) return;
       if (!response.ok) {
         if ([403, 404, 410].includes(response.status)) {
           await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
@@ -56,6 +61,7 @@ export function AcquiredCairnDetailScreen() {
         throw new Error(`HTTP_${response.status}`);
       }
       const body = await response.json();
+      if (!isCurrentOwner()) return;
       const networkRevisions = Array.isArray(body.revisions) ? body.revisions : [];
       if (networkRevisions.length === 0) {
         await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
@@ -67,15 +73,18 @@ export function AcquiredCairnDetailScreen() {
       } catch {
         throw new Error('AUTHORIZATION_UNCONFIRMED');
       }
+      if (!isCurrentOwner()) return;
       setRevisions(next);
       setPageIndex(0);
     } catch (cause) {
+      if (!isCurrentOwner()) return;
       const reason = cause instanceof Error ? cause.message : '';
       if (reason === 'KNOWN_UNAVAILABLE' || reason === 'AUTHORIZATION_UNCONFIRMED') {
         setRevisions([]);
         setError('This acquired Cairn is unavailable right now.');
       } else {
         const cached = await loadCachedAcquiredCairnHistory(ownerId, route.params.markerId).catch(() => null);
+        if (!isCurrentOwner()) return;
         if (cached?.length) {
           setRevisions(cached);
           setPageIndex(0);
@@ -83,11 +92,14 @@ export function AcquiredCairnDetailScreen() {
         } else setError('This acquired Cairn is unavailable right now.');
       }
     } finally {
-      setLoading(false);
+      if (isCurrentOwner()) setLoading(false);
     }
   }, [ownerId, route.params.markerId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => { loadGeneration.current += 1; };
+  }, [load]);
 
   useEffect(() => {
     const revision = revisions[pageIndex];
@@ -124,6 +136,7 @@ export function AcquiredCairnDetailScreen() {
       const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/collection`, {
         method: 'PUT', body: JSON.stringify({ action }), expectedUserId: ownerId, skipLogoutOn401: true,
       });
+      if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
       if (response.ok) {
         if (action === 'remove') await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
         void useCairnPresentationStore.getState().refreshAcquiredMap();
@@ -151,6 +164,7 @@ export function AcquiredCairnDetailScreen() {
       const response = await authenticatedFetch(`/api/cairn-memory/revisions/${revisionId}/thanks`, {
         method: 'POST', body: '{}', expectedUserId: ownerId, skipLogoutOn401: true,
       });
+      if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
       if (response.ok) {
         const thankedAt = new Date().toISOString();
         setRevisions(current => current.map(revision => revision.revision_id === revisionId
@@ -175,6 +189,7 @@ export function AcquiredCairnDetailScreen() {
           category: 'other',
         }),
       });
+      if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
       setReviewMessage(response.ok ? 'Report sent for review.' : 'Could not send the report. Try again later.');
     } catch { setReviewMessage('Could not send the report. Try again later.'); }
     finally { actionFlights.current.delete(flightKey); }

@@ -7,6 +7,7 @@ const mockCacheHistory = jest.fn();
 const mockMarkUnavailable = jest.fn();
 const mockUpdateCache = jest.fn();
 const mockGoBack = jest.fn();
+let mockOwnerId = 'owner-a';
 
 const acquired = {
   revision_id: 5, content_revision: 5, type: 'text', text: 'Already found page',
@@ -49,9 +50,11 @@ jest.mock('../../hooks/useVisualTheme', () => {
   const { DAY_VISUAL_THEME } = jest.requireActual('../../components/tokens');
   return { useVisualTheme: () => DAY_VISUAL_THEME };
 });
-jest.mock('../../store/useAppStore', () => ({
-  useAppStore: (selector: (state: any) => unknown) => selector({ user: { id: 'owner-a' } }),
-}));
+jest.mock('../../store/useAppStore', () => {
+  const hook: any = (selector: (state: any) => unknown) => selector({ user: { id: mockOwnerId } });
+  hook.getState = () => ({ user: { id: mockOwnerId } });
+  return { useAppStore: hook };
+});
 jest.mock('../../services/apiService', () => ({ authenticatedFetch: (...args: any[]) => mockFetch(...args) }));
 jest.mock('../../features/cairns/acquiredCairnHistoryCache', () => ({
   loadCachedAcquiredCairnHistory: (...args: any[]) => mockLoadCache(...args),
@@ -69,6 +72,7 @@ import { AcquiredCairnDetailScreen } from '../AcquiredCairnDetailScreen';
 describe('AcquiredCairnDetail offline entitlement boundary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOwnerId = 'owner-a';
     mockLoadCache.mockResolvedValue([acquired]);
     mockCacheHistory.mockImplementation(async (_owner: string, _marker: string, rows: unknown[]) => rows);
     mockMarkUnavailable.mockResolvedValue(undefined);
@@ -105,5 +109,25 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
     await act(async () => { resolveThanks({ ok: false, status: 503 }); });
     expect(await screen.findByText('Could not send Thanks. Try again later.')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Thanks')).toBeTruthy());
+  });
+
+  test('a delayed account-A history response cannot render or cache after switching to B', async () => {
+    let resolveA!: (value: any) => void;
+    mockFetch.mockReturnValueOnce(new Promise(resolve => { resolveA = resolve; }));
+    mockFetch.mockRejectedValueOnce(new Error('offline'));
+    mockLoadCache.mockResolvedValueOnce(null);
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+    mockOwnerId = 'owner-b';
+    screen.rerender(<AcquiredCairnDetailScreen />);
+    expect(await screen.findByText('This acquired Cairn is unavailable right now.')).toBeTruthy();
+    await act(async () => {
+      resolveA({ ok: true, status: 200, json: async () => ({ revisions: [acquired] }) });
+      await Promise.resolve();
+    });
+
+    expect(mockCacheHistory).not.toHaveBeenCalledWith('owner-a', 'marker-1', expect.anything());
+    expect(screen.queryByText('Already found page')).toBeNull();
   });
 });

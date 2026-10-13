@@ -131,11 +131,13 @@ export async function cacheAcquiredCairnHistory(
   const revisions = rawRevisions.map(normalizeRevision).filter(Boolean)
     .slice(0, MAX_REVISIONS_PER_MARKER) as CachedAcquiredCairnRevision[];
   if (revisions.length === 0) throw new Error('acquired_cache_empty_history');
+  const generation = generations.get(owner) ?? 0;
   const cache = await loadOwner(owner);
+  if ((generations.get(owner) ?? 0) !== generation) throw new Error('acquired_cache_owner_invalidated');
   cache.markers[marker] = { markerId: marker, state: 'active', revisions, updatedAt: Date.now() };
   const ordered = Object.values(cache.markers).sort((a, b) => b.updatedAt - a.updatedAt);
   for (const evicted of ordered.slice(MAX_MARKERS_PER_OWNER)) delete cache.markers[evicted.markerId];
-  await persist(owner, cache, generations.get(owner) ?? 0);
+  await persist(owner, cache, generation);
   return cloneRevisions(revisions);
 }
 
@@ -152,9 +154,11 @@ export async function loadCachedAcquiredCairnHistory(
 export async function markAcquiredCairnKnownUnavailable(ownerId: string, markerId: string): Promise<void> {
   const owner = exactOwner(ownerId);
   const marker = exactMarker(markerId);
+  const generation = generations.get(owner) ?? 0;
   const cache = await loadOwner(owner);
+  if ((generations.get(owner) ?? 0) !== generation) return;
   cache.markers[marker] = { markerId: marker, state: 'known-unavailable', revisions: [], updatedAt: Date.now() };
-  await persist(owner, cache, generations.get(owner) ?? 0);
+  await persist(owner, cache, generation);
 }
 
 export async function updateCachedAcquiredRevision(
@@ -165,7 +169,9 @@ export async function updateCachedAcquiredRevision(
 ): Promise<void> {
   const owner = exactOwner(ownerId);
   const marker = exactMarker(markerId);
+  const generation = generations.get(owner) ?? 0;
   const cache = await loadOwner(owner);
+  if ((generations.get(owner) ?? 0) !== generation) return;
   const record = cache.markers[marker];
   if (!record || record.state !== 'active') return;
   record.revisions = record.revisions.map(revision => revision.revision_id === revisionId
@@ -176,7 +182,7 @@ export async function updateCachedAcquiredRevision(
       }
     : revision);
   record.updatedAt = Date.now();
-  await persist(owner, cache, generations.get(owner) ?? 0);
+  await persist(owner, cache, generation);
 }
 
 export async function purgeAcquiredCairnHistoryForOwner(ownerId: string): Promise<void> {
