@@ -60,7 +60,8 @@ for migration in \
   041_public_cairn_pilot.sql \
   042_v1_closure_authority.sql \
   043_friend_discovery_marker_location.sql \
-  044_public_cairn_moderation_audit.sql; do
+  044_public_cairn_moderation_audit.sql \
+  045_memory_friends_cairn_contract.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done
 

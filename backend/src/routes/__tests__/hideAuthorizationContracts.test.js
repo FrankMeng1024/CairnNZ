@@ -19,19 +19,19 @@ function compact(sql) {
 
 function assertCairnAuthoritySql(sql, binds, fixture) {
   const statement = compact(sql);
-  assert.match(statement, /FROM friend_cairn_encounters encounter/);
-  assert.match(statement, /JOIN markers m ON m\.id = encounter\.marker_id/);
-  assert.match(statement, /m\.user_id = encounter\.author_id/);
-  assert.match(statement, /m\.permission = 'group'/);
-  assert.match(statement, /m\.audience_epoch = encounter\.audience_epoch/);
-  assert.match(statement, /m\.status <> 'hidden'/);
-  assert.match(statement, /JOIN friends f ON f\.user_id = encounter\.viewer_id AND f\.friend_id = encounter\.author_id/);
-  assert.match(statement, /episode\.id = encounter\.friendship_episode_id AND episode\.ended_at IS NULL/);
-  assert.match(statement, /u\.id = encounter\.author_id AND u\.deleted_at IS NULL/);
-  assert.match(statement, /encounter\.viewer_id = \? AND encounter\.marker_id = \?/);
-  assert.match(statement, /b\.blocker_id = encounter\.viewer_id AND b\.blocked_id = encounter\.author_id/);
-  assert.match(statement, /b\.blocker_id = encounter\.author_id AND b\.blocked_id = encounter\.viewer_id/);
-  assert.doesNotMatch(statement, /encounter\.hidden_at IS NULL/);
+  assert.match(statement, /FROM cairn_acquisitions acquisition/);
+  assert.match(statement, /JOIN cairn_revisions revision ON revision\.id=acquisition\.cairn_revision_id/);
+  assert.match(statement, /JOIN cairn_collections collection/);
+  assert.match(statement, /friend\.user_id=acquisition\.viewer_id AND friend\.friend_id=revision\.owner_id/);
+  assert.match(statement, /owner\.id=revision\.owner_id AND owner\.deleted_at IS NULL/);
+  assert.match(statement, /acquisition\.viewer_id=\? AND acquisition\.marker_id=\?/);
+  assert.match(statement, /acquisition\.acquired_via='friends'/);
+  assert.match(statement, /acquisition\.removed_at IS NULL AND collection\.removed_at IS NULL/);
+  assert.match(statement, /revision\.availability='available'/);
+  assert.match(statement, /COALESCE\(moderation\.state,'available'\)='available'/);
+  assert.match(statement, /b\.blocker_id=acquisition\.viewer_id AND b\.blocked_id=revision\.owner_id/);
+  assert.match(statement, /b\.blocker_id=revision\.owner_id AND b\.blocked_id=acquisition\.viewer_id/);
+  assert.doesNotMatch(statement, /hidden\.user_id IS NULL/);
   assert.deepEqual(binds, ['7', fixture.id]);
 }
 
@@ -54,13 +54,14 @@ function cairnQualifies(fixture) {
   return fixture.exists !== false
     && fixture.kind === 'mark'
     && fixture.ownerId !== 7
-    && fixture.permission === 'group'
-    && fixture.encounter === true
-    && fixture.audienceCurrent === true
+    && fixture.acquired === true
+    && fixture.acquiredVia === 'friends'
+    && fixture.collectionRemoved !== true
+    && fixture.acquisitionRemoved !== true
+    && fixture.revisionAvailable !== false
+    && fixture.sourceAvailable !== false
     && fixture.currentFriend === true
-    && fixture.currentEpisode === true
     && fixture.blocked !== true
-    && fixture.status !== 'hidden'
     && fixture.ownerDeleted !== true;
 }
 
@@ -76,18 +77,18 @@ function routeQualifies(fixture) {
 }
 
 const scenarios = [
-  { name: 'current Friend Cairn with current encounter and audience', kind: 'mark', id: 41, ownerId: 9, permission: 'group', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true, allow: true },
-  { name: 'unencountered Friend Cairn', kind: 'mark', id: 42, ownerId: 9, permission: 'group', encounter: false, audienceCurrent: true, currentFriend: true, currentEpisode: true },
-  { name: 'stale-audience Friend Cairn encounter', kind: 'mark', id: 43, ownerId: 9, permission: 'group', encounter: true, audienceCurrent: false, currentFriend: true, currentEpisode: true },
-  { name: 'revoked Friend Cairn episode', kind: 'mark', id: 44, ownerId: 9, permission: 'group', encounter: true, audienceCurrent: true, currentFriend: false, currentEpisode: false },
-  { name: 'blocked Friend Cairn', kind: 'mark', id: 45, ownerId: 9, permission: 'group', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true, blocked: true },
-  { name: 'owner Cairn', kind: 'mark', id: 46, ownerId: 7, permission: 'group', encounter: true, audienceCurrent: true, currentFriend: false, currentEpisode: false },
-  { name: 'Public Cairn while feature disabled', kind: 'mark', id: 47, ownerId: 9, permission: 'public', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true, publicEnabled: false },
-  { name: 'Public Cairn alternate path while feature enabled', kind: 'mark', id: 48, ownerId: 9, permission: 'public', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true, publicEnabled: true },
-  { name: 'Personal Cairn', kind: 'mark', id: 49, ownerId: 9, permission: 'personal', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true },
-  { name: 'hidden source Friend Cairn', kind: 'mark', id: 50, ownerId: 9, permission: 'group', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true, status: 'hidden' },
-  { name: 'missing/non-authorized Cairn id', kind: 'mark', id: 51, ownerId: 9, permission: 'group', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true, exists: false },
-  { name: 'deleted-owner Friend Cairn', kind: 'mark', id: 52, ownerId: 9, permission: 'group', encounter: true, audienceCurrent: true, currentFriend: true, currentEpisode: true, ownerDeleted: true },
+  { name: 'current acquired Friend Cairn snapshot', kind: 'mark', id: 41, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, allow: true },
+  { name: 'unacquired Friend Cairn', kind: 'mark', id: 42, ownerId: 9, acquired: false, acquiredVia: 'friends', currentFriend: true },
+  { name: 'Public acquisition cannot use Friend hide authority', kind: 'mark', id: 43, ownerId: 9, acquired: true, acquiredVia: 'public', currentFriend: true },
+  { name: 'unfriended acquired Cairn stays in history but not Friend projection', kind: 'mark', id: 44, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: false },
+  { name: 'blocked acquired Friend Cairn', kind: 'mark', id: 45, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, blocked: true },
+  { name: 'owner Cairn', kind: 'mark', id: 46, ownerId: 7, acquired: true, acquiredVia: 'friends', currentFriend: false },
+  { name: 'removed acquisition', kind: 'mark', id: 47, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, acquisitionRemoved: true },
+  { name: 'removed collection', kind: 'mark', id: 48, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, collectionRemoved: true },
+  { name: 'revision under review', kind: 'mark', id: 49, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, revisionAvailable: false },
+  { name: 'source under review', kind: 'mark', id: 50, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, sourceAvailable: false },
+  { name: 'missing/non-authorized Cairn id', kind: 'mark', id: 51, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, exists: false },
+  { name: 'deleted-owner Friend Cairn', kind: 'mark', id: 52, ownerId: 9, acquired: true, acquiredVia: 'friends', currentFriend: true, ownerDeleted: true },
   { name: 'current Friend Route', kind: 'route', id: 61, ownerId: 9, permission: 'friend', currentFriend: true, currentEpisode: true, allow: true, duplicate: true },
   { name: 'revoked Friend Route', kind: 'route', id: 62, ownerId: 9, permission: 'friend', currentFriend: false, currentEpisode: false },
   { name: 'blocked Friend Route', kind: 'route', id: 63, ownerId: 9, permission: 'friend', currentFriend: true, currentEpisode: true, blocked: true },
@@ -108,7 +109,7 @@ test('legacy generic Hide calls real Friend helpers and contract-inspects emitte
   // fixture rows. It is a unit contract, not a claim that MySQL executed SQL.
   pool.execute = async (sql, binds) => {
     const statement = compact(sql);
-    if (statement.includes('FROM friend_cairn_encounters encounter')) {
+    if (statement.includes('FROM cairn_acquisitions acquisition')) {
       selectCount += 1;
       assertCairnAuthoritySql(sql, binds, activeFixture);
       return [cairnQualifies(activeFixture) ? [{ id: activeFixture.id, user_id: activeFixture.ownerId }] : []];

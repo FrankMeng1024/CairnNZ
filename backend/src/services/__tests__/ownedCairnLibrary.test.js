@@ -17,10 +17,15 @@ test('owner history query is always scoped to the authenticated owner', () => {
     query: '',
     cursor: null,
   });
-  assert.match(built.sql, /WHERE user_id = \?/);
+  assert.match(built.sql, /WHERE marker\.user_id = \?/);
   assertLiteralLimitContract(built, 41);
   assert.deepEqual(built.values, [71]);
   assert.doesNotMatch(built.sql, /permission = 'public'|circle/);
+  assert.match(built.sql, /revision_state\.content_revision=marker\.content_revision/);
+  assert.match(built.sql, /revision_state\.availability='removed'/);
+  assert.match(built.sql, /thanked\.thanked_at IS NOT NULL/);
+  assert.match(built.sql, /thanked_revision\.availability='available'/);
+  assert.match(built.sql, /AS thanks_count/);
 });
 
 test('restoring the old prepared LIMIT placeholder fails the literal contract', () => {
@@ -66,8 +71,8 @@ test('search covers owner history before stable pagination', () => {
     query: 'ridge_100%',
     cursor,
   });
-  assert.match(built.sql, /text LIKE \? ESCAPE/);
-  assert.match(built.sql, /created_at < \? OR \(created_at = \? AND id < \?\)/);
+  assert.match(built.sql, /marker\.text LIKE \? ESCAPE/);
+  assert.match(built.sql, /marker\.created_at < \? OR \(marker\.created_at = \? AND marker\.id < \?\)/);
   assert.deepEqual(built.values, [
     71,
     '%ridge\\_100\\%%',
@@ -109,7 +114,7 @@ test('library route paginates owner rows and preserves server plus client identi
   ];
   pool.execute = async (sql, values) => {
     calls.push({ sql, values });
-    assert.match(sql, /WHERE user_id = \?/);
+    assert.match(sql, /WHERE marker\.user_id = \?/);
     assert.match(sql, /LIMIT 3$/);
     assert.doesNotMatch(sql, /LIMIT \?/);
     assert.deepEqual(values, [71]);
@@ -141,8 +146,8 @@ test('library route retains escaped search and cursor binds under the authentica
   let calls = 0;
   pool.execute = async (sql, values) => {
     calls += 1;
-    assert.match(sql, /text LIKE \? ESCAPE/);
-    assert.match(sql, /created_at < \? OR \(created_at = \? AND id < \?\)/);
+    assert.match(sql, /marker\.text LIKE \? ESCAPE/);
+    assert.match(sql, /marker\.created_at < \? OR \(marker\.created_at = \? AND marker\.id < \?\)/);
     assert.match(sql, /LIMIT 21$/);
     assert.doesNotMatch(sql, /ridge_100%|LIMIT \?/);
     assert.deepEqual(values, [71, '%ridge\\_100\\%%', cursorDate, cursorDate, 55]);

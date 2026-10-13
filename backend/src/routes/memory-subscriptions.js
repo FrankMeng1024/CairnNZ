@@ -3,20 +3,17 @@
  *
  * Friend System v1 / Sprint 67 / STORY-00528
  *
- * The "5 of N friends" cap: a user explicitly subscribes to up to N (default 5)
- * friends' memory data (fog + markers + routes) for display in the Memory tab.
+ * A user explicitly selects zero or more authorized friends' derived Memory
+ * projections. A preference record distinguishes first-use initialization from
+ * an intentional empty selection.
  *
  * Schema (migration 018):
  *   - users.memory_subscription_limit INT NOT NULL DEFAULT 5
  *   - memory_subscriptions PK(user_id, friend_id)
- *   - trigger trg_memory_subscription_cap: race-safe BEFORE INSERT
- *       1. friend_id MUST be in friends WHERE user_id=NEW.user_id
- *       2. current count < memory_subscription_limit (with SELECT ... FOR UPDATE)
+ *   - trigger trg_memory_subscription_friend: friend_id must be a current
+ *     friend. The retired paid five-source cap is intentionally absent.
  *
- * The trigger throws SQLSTATE 45000 with one of two MESSAGE_TEXT values:
- *   - 'memory_subscription requires existing friend pair'
- *   - 'memory_subscription limit exceeded'
- * We parse the error message to map to the right HTTP status (403 / 409).
+ * The trigger throws SQLSTATE 45000 with the friend invariant's message.
  *
  * Endpoints:
  *   POST   /api/memory-subscriptions          body { friend_id }   → 201 | 403 | 409
@@ -69,9 +66,6 @@ router.post('/', async (req, res) => {
     if (msg.includes('requires existing friend pair')) {
       return res.status(403).json({ error: 'Not friends with that user' });
     }
-    if (msg.includes('limit exceeded')) {
-      return res.status(409).json({ error: 'Memory subscription limit reached' });
-    }
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Already subscribed' });
     }
@@ -103,8 +97,8 @@ router.delete('/:friend_id', async (req, res) => {
 });
 
 // ── GET /api/memory-subscriptions ────────────────────────────────────────────
-// Returns the viewer's current subscription list + the cap, so the client can
-// render "3 / 5" and the 🔒 lock state without a second roundtrip.
+// Returns the viewer's current selection. `limit: null` is explicit: the old
+// paid five-friend cap is no longer part of the accepted product contract.
 router.get('/', async (req, res) => {
   const userId = req.user.userId;
   try {
@@ -121,9 +115,10 @@ router.get('/', async (req, res) => {
          JOIN users u ON u.id = ms.friend_id AND u.deleted_at IS NULL
          JOIN memory_share_grants g
            ON g.owner_id = ms.friend_id AND g.viewer_id = ms.user_id AND g.status = 'active'
-         JOIN memory_share_policies p ON p.owner_id = g.owner_id AND p.enabled = 1
+         LEFT JOIN memory_share_policies p ON p.owner_id = g.owner_id
          JOIN friendship_episodes e ON e.id = g.friendship_episode_id AND e.ended_at IS NULL
         WHERE ms.user_id = ?
+          AND (g.coverage_scope = 'full_history_delayed_v1' OR p.enabled = 1)
           AND NOT EXISTS (
             SELECT 1 FROM blocked_users b
              WHERE (b.blocker_id = ms.user_id AND b.blocked_id = ms.friend_id)
@@ -132,12 +127,8 @@ router.get('/', async (req, res) => {
         ORDER BY ms.subscribed_at ASC`,
       [userId]
     );
-    const [[me]] = await pool.execute(
-      'SELECT memory_subscription_limit FROM users WHERE id = ?',
-      [userId]
-    );
     return res.json({
-      limit: me?.memory_subscription_limit ?? 5,
+      limit: null,
       count: rows.length,
       subscriptions: rows,
     });

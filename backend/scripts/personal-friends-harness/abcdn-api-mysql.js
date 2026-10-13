@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
-const { loadFriendProjectionEvidence } = require('../../src/services/friendProjection');
+const { cellFor, loadFriendProjectionEvidence } = require('../../src/services/friendProjection');
 
 const baseUrl = process.env.HARNESS_API_URL;
 const dbConfig = {
@@ -203,6 +203,35 @@ async function main() {
     assert.equal(Number(returnCounts.presence_n), 2);
     pass('PF-R3.presence-return', 'same-place later-day presence stores two immutable witnesses alongside one exploration-coverage row');
 
+    await api(actors.B, '/api/friends/request', {
+      method: 'POST', body: { email: actors.D.email, shareMemory: true }, expected: 201,
+    });
+    const requestWithIntent = await api(actors.D, '/api/friends/requests', { expected: 200 });
+    const bToD = requestWithIntent.body.find(row => String(row.from_user_id) === actors.B.id);
+    assert.ok(bToD);
+    assert.equal(Boolean(bToD.requester_memory_share), true);
+    await api(actors.D, '/api/friends/accept', {
+      method: 'POST', body: { requestId: Number(bToD.id), shareMemory: true }, expected: 200,
+    });
+    let grantsB = await api(actors.B, '/api/friend-sharing/grants', { expected: 200 });
+    let grantsD = await api(actors.D, '/api/friend-sharing/grants', { expected: 200 });
+    assert.equal(grantsB.body.grants.find(item => item.friend_id === actors.D.id)?.enabled, true);
+    assert.equal(grantsD.body.grants.find(item => item.friend_id === actors.B.id)?.enabled, true);
+    await api(actors.B, '/api/friend-sharing/grants', {
+      method: 'PUT', body: { friend_ids: [] }, expected: 200,
+    });
+    grantsB = await api(actors.B, '/api/friend-sharing/grants', { expected: 200 });
+    assert.equal(grantsB.body.grants.find(item => item.friend_id === actors.D.id)?.enabled, false);
+    await api(actors.B, '/api/friend-sharing/grants', {
+      method: 'PUT', body: { friend_ids: [Number(actors.D.id)] }, expected: 200,
+    });
+    grantsB = await api(actors.B, '/api/friend-sharing/grants', { expected: 200 });
+    assert.equal(grantsB.body.grants.find(item => item.friend_id === actors.D.id)?.enabled, true);
+    await api(actors.B, `/api/friends/${actors.D.id}`, { method: 'DELETE', expected: 200 });
+    grantsD = await api(actors.D, '/api/friend-sharing/grants', { expected: 200 });
+    assert.equal(grantsD.body.grants.length, 0);
+    pass('FR-03a.request-accept-bulk', 'requester and accepter intents became independent grants only on acceptance; atomic clear/apply affected only the then-current friend set and unfriend revoked both directions');
+
     const [historicalPublicMarker] = await admin.execute(
       `INSERT INTO markers (user_id,type,text,lat,lng,permission,created_at,updated_at)
        VALUES (?, 'cairn', 'historical public sentinel', -41.28, 174.77, 'public', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`,
@@ -236,7 +265,7 @@ async function main() {
     const revisitLat = -41.2865;
     const revisitLng = 174.7762;
     const preGrantActivityA = await completeActivity(actors.A, {
-      lat: revisitLat, lng: revisitLng, startedAtMs: Date.now() - 20 * 60 * 1000,
+      lat: revisitLat, lng: revisitLng, startedAtMs: Date.now() - 40 * 60 * 1000,
     });
     const [[preGrantEvidence]] = await admin.execute(
       `SELECT
@@ -250,9 +279,14 @@ async function main() {
     const sourcesB = await api(actors.B, '/api/friend-sharing/sources', { expected: 200 });
     assert.equal(sourcesB.body.sources.length, 1);
     assert.equal(sourcesB.body.sources[0].friend_id, actors.A.id);
+    assert.equal(sourcesB.body.sources[0].sharing_status, 'not_shared');
     const sourcesA = await api(actors.A, '/api/friend-sharing/sources', { expected: 200 });
-    assert.equal(sourcesA.body.sources.length, 0);
-    pass('FR-03.author-policy', 'A standing author policy provisions only A→B; no reciprocal grant appears');
+    assert.equal(sourcesA.body.sources.length, 1);
+    assert.equal(sourcesA.body.sources[0].sharing_status, 'not_shared');
+    await api(actors.A, `/api/friend-sharing/grants/${actors.B.id}`, {
+      method: 'PUT', body: { enabled: true }, expected: 200,
+    });
+    pass('FR-03.explicit-directional-grant', 'a pre-existing global preference does not grant a new friend; A explicitly grants full delayed history to B without reciprocal access');
 
     await api(actors.B, '/api/memory-subscriptions', {
       method: 'POST', body: { friend_id: Number(actors.A.id) }, expected: 201,
@@ -263,6 +297,21 @@ async function main() {
     await api(actors.A, '/api/memory/points', {
       method: 'POST', body: { presence_witnesses: activityA.witnesses }, expected: 200,
     });
+    // Make only the older uploaded Activity delay-eligible. The new revisit
+    // remains fresh, proving that one viewport can contain old eligible and
+    // recent withheld evidence without exporting the recent contribution.
+    await admin.execute(
+      `UPDATE memory_points SET received_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 31 MINUTE)
+        WHERE user_id=? AND source_activity_client_id=?`,
+      [actors.A.id, preGrantActivityA.clientActivityId],
+    );
+    await admin.execute(
+      `UPDATE memory_presence_witnesses
+          SET received_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 31 MINUTE),
+              updated_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 31 MINUTE)
+        WHERE user_id=? AND source_activity_client_id=?`,
+      [actors.A.id, preGrantActivityA.clientActivityId],
+    );
     const [[postRevisitEvidence]] = await admin.execute(
       `SELECT
          (SELECT COUNT(*) FROM memory_points WHERE user_id=?) AS coverage_n,
@@ -349,9 +398,47 @@ async function main() {
     assert.equal(JSON.stringify(projection.body).includes('historical_unknown'), false);
     assert.equal(JSON.stringify(projection.body).includes('passive_real'), false);
     assert.equal(JSON.stringify(projection.body).includes('source_activity_client_id'), false);
-    pass('R03-SHARE/PJ-06/FR-03.provenance-projection', `pre-grant coverage from ${preGrantActivityA.clientActivityId} stayed unchanged; finalized post-grant revisit ${activityA.clientActivityId} contributed deduplicated presence-backed coarse cells without raw source/times`);
+    pass('R03-SHARE/PJ-06/FR-03.provenance-projection', `explicit full-history authority released only the delay-eligible Activity ${preGrantActivityA.clientActivityId}; fresh revisit ${activityA.clientActivityId} remained withheld and raw source/times stayed absent`);
 
-    const cellsBeforeMask = projection.body.projections[0].cells.length;
+    const passiveDelaySegment = `passive-delay-${crypto.randomUUID()}`;
+    const passiveDelayTs = Date.now() - 60 * 60 * 1000;
+    for (const [index, lng] of [174.0, 174.01, 174.02].entries()) {
+      await admin.execute(
+        `INSERT INTO memory_points
+           (user_id,lat,lng,ts,client_id,evidence_source,source_segment_id,
+            horizontal_accuracy_m,continuity_state,received_at)
+         VALUES (?,-40,?,?,?,'passive_real',?,8,'accepted',
+                 DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1799 SECOND))`,
+        [actors.A.id, lng, passiveDelayTs + index * 1000,
+          crypto.randomUUID(), passiveDelaySegment],
+      );
+    }
+    const middlePassiveCell = cellFor(-40, 174.01).id;
+    const justBeforeDelay = await api(actors.B, '/api/friend-sharing/projections', {
+      method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
+    });
+    assert.equal(justBeforeDelay.body.projections[0].cells.some(cell => cell.id === middlePassiveCell), false);
+    await admin.execute(
+      `UPDATE memory_points SET received_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1800 SECOND)
+        WHERE user_id=? AND source_segment_id=?`,
+      [actors.A.id, passiveDelaySegment],
+    );
+    const exactlyAtDelay = await api(actors.B, '/api/friend-sharing/projections', {
+      method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
+    });
+    assert.equal(exactlyAtDelay.body.projections[0].cells.some(cell => cell.id === middlePassiveCell), true);
+    await admin.execute(
+      `UPDATE memory_points SET received_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1801 SECOND)
+        WHERE user_id=? AND source_segment_id=?`,
+      [actors.A.id, passiveDelaySegment],
+    );
+    const justAfterDelay = await api(actors.B, '/api/friend-sharing/projections', {
+      method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
+    });
+    assert.equal(justAfterDelay.body.projections[0].cells.some(cell => cell.id === middlePassiveCell), true);
+    pass('FR-30M.before-at-after', 'server SQL withheld a passive lifecycle at 29:59, released its non-endpoint coarse cell at 30:00, and retained it after 30:00');
+
+    const cellsBeforeMask = justAfterDelay.body.projections[0].cells.length;
     await api(actors.A, '/api/friend-sharing/private-places', {
       method: 'POST', body: { label: 'Synthetic private place', lat: -41.2865, lng: 174.7852, radius_m: 250 }, expected: 201,
     });
@@ -570,7 +657,7 @@ async function main() {
     ]);
     let revokeSettled = false;
     const revokeStartedAt = Date.now();
-    const revokePromise = api(actors.A, '/api/friend-sharing/policy', {
+    const revokePromise = api(actors.A, `/api/friend-sharing/grants/${actors.B.id}`, {
       method: 'PUT', body: { enabled: false }, expected: 200,
     }).finally(() => { revokeSettled = true; });
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -597,9 +684,16 @@ async function main() {
       'SELECT COUNT(*) AS n FROM memory_subscriptions WHERE user_id=? AND friend_id=?', [actors.B.id, actors.A.id],
     );
     assert.equal(Number(subscriptionCount.n), 0);
-    await api(actors.A, '/api/friend-sharing/policy', { method: 'PUT', body: { enabled: true }, expected: 200 });
+    await api(actors.A, `/api/friend-sharing/grants/${actors.B.id}`, {
+      method: 'PUT', body: { enabled: true }, expected: 200,
+    });
     await api(actors.B, `/api/friends/${actors.A.id}`, { method: 'DELETE', expected: 200 });
     await becomeFriends(actors.B, actors.A);
+    const noAutomaticRegrant = await api(actors.B, '/api/friend-sharing/sources', { expected: 200 });
+    assert.equal(noAutomaticRegrant.body.sources[0].sharing_status, 'not_shared');
+    await api(actors.A, `/api/friend-sharing/grants/${actors.B.id}`, {
+      method: 'PUT', body: { enabled: true }, expected: 200,
+    });
     const [[latestGrant]] = await admin.execute(
       `SELECT grant_epoch,effective_at FROM memory_share_grants
         WHERE owner_id=? AND viewer_id=? AND status='active' ORDER BY id DESC LIMIT 1`,
@@ -612,12 +706,17 @@ async function main() {
     const newEpochProjection = await api(actors.B, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
-    assert.equal(newEpochProjection.body.projections[0].cells.length, 0);
-    pass('FR-07.re-friend', 'unfriend revokes selection; re-friend under standing policy creates a fresh empty prospective grant epoch');
+    assert.equal(newEpochProjection.body.projections.length, 1);
+    assert.equal(newEpochProjection.body.projections[0].coverage_scope, 'full_history_delayed_v1');
+    pass('FR-07.re-friend', 'unfriend revokes selection; re-friend creates no automatic authority, while a later explicit full-history grant uses a fresh epoch and recomputes delay/mask-eligible coverage');
 
     await becomeFriends(actors.C, actors.A);
     const sourcesC = await api(actors.C, '/api/friend-sharing/sources', { expected: 200 });
     assert.equal(sourcesC.body.sources[0].friend_id, actors.A.id);
+    assert.equal(sourcesC.body.sources[0].sharing_status, 'not_shared');
+    await api(actors.A, `/api/friend-sharing/grants/${actors.C.id}`, {
+      method: 'PUT', body: { enabled: true }, expected: 200,
+    });
     const transitiveD = await api(actors.D, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });

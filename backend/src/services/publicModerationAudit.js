@@ -88,7 +88,7 @@ async function appendPublicModerationAudit(conn, event) {
     `INSERT INTO public_cairn_moderation_audit
        (event_type,actor_user_id,owner_user_id,marker_id,publication_id,report_id,
         publication_epoch,content_revision,from_state,to_state,reason,metadata_json)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,CAST(? AS CHAR CHARACTER SET utf8mb4))`,
     [event.eventType, event.actorUserId ?? null, event.ownerUserId ?? null,
       event.markerId ?? null, event.publicationId ?? null, event.reportId ?? null,
       event.publicationEpoch ?? null, event.contentRevision ?? null,

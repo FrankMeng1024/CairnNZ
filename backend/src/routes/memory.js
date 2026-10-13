@@ -116,7 +116,8 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
     const sourceActivityClientId = evidenceSource === 'activity_real' && typeof p.source_activity_client_id === 'string'
       ? p.source_activity_client_id
       : null;
-    const sourceSegmentId = evidenceSource === 'activity_real' && typeof p.source_segment_id === 'string'
+    const sourceSegmentId = ['activity_real', 'passive_real'].includes(evidenceSource)
+      && typeof p.source_segment_id === 'string'
       ? p.source_segment_id.slice(0, 80)
       : null;
     const horizontalAccuracyM = Number.isFinite(p.horizontal_accuracy_m) ? p.horizontal_accuracy_m : null;
@@ -140,7 +141,7 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       && typeof witness?.source_activity_client_id === 'string'
       ? witness.source_activity_client_id
       : null;
-    const sourceSegmentId = source === 'activity_real'
+    const sourceSegmentId = ['activity_real', 'passive_real'].includes(source)
       && typeof witness?.source_segment_id === 'string'
       ? witness.source_segment_id.slice(0, 80)
       : null;

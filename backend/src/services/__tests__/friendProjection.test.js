@@ -110,10 +110,10 @@ test('privacy mask handles an NZ-adjacent antimeridian wrap conservatively', () 
 
 test('server projection excludes whole endpoint/private cells and emits no source rows', async () => {
   const rows = [
-    { id: 1, lat: -41.2865, lng: 174.7762, ts: 1000, source_activity_client_id: 'activity-a', session_id: 9 },
-    { id: 2, lat: -41.2865, lng: 174.7830, ts: 2000, source_activity_client_id: 'activity-a', session_id: 9 },
-    { id: 3, lat: -41.2865, lng: 174.7900, ts: 3000, source_activity_client_id: 'activity-a', session_id: 9 },
-    { id: 4, lat: -41.2865, lng: 174.7970, ts: 4000, source_activity_client_id: 'activity-a', session_id: 9 },
+    { id: 1, lat: -41.2865, lng: 174.7762, ts: 1000, evidence_source: 'activity_real', source_activity_client_id: 'activity-a', session_id: 9 },
+    { id: 2, lat: -41.2865, lng: 174.7830, ts: 2000, evidence_source: 'activity_real', source_activity_client_id: 'activity-a', session_id: 9 },
+    { id: 3, lat: -41.2865, lng: 174.7900, ts: 3000, evidence_source: 'activity_real', source_activity_client_id: 'activity-a', session_id: 9 },
+    { id: 4, lat: -41.2865, lng: 174.7970, ts: 4000, evidence_source: 'activity_real', source_activity_client_id: 'activity-a', session_id: 9 },
   ];
   const calls = [];
   const db = {
@@ -123,6 +123,7 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
       if (sql.includes('FROM memory_private_places')) {
         return [[{ lat: -41.2865, lng: 174.7900, radius_m: 250, version: 4 }]];
       }
+      if (sql.includes('FROM JSON_TABLE')) return [[]];
       throw new Error(`unexpected query: ${sql}`);
     },
   };
@@ -152,7 +153,40 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
   assert.match(calls[0].sql, /FROM memory_presence_witnesses witness/);
   assert.match(calls[0].sql, /witness\.first_observed_at_ms AS ts/);
   assert.match(calls[0].sql, /witness\.observed_at_ms AS ts/);
+  assert.match(calls[0].sql, /GREATEST\(FROM_UNIXTIME\(evidence\.ts \/ 1000\), evidence\.received_at\)/);
+  assert.match(calls[0].sql, /INTERVAL 1800 SECOND/);
   assert.deepEqual(calls[0].params.slice(0, 4), [7, 7, 7, 7]);
+});
+
+test('passive acquisition lifecycles mask their own endpoints without collapsing into one lifetime', async () => {
+  const rows = [
+    { id: 1, lat: -40, lng: 174, ts: 1000, evidence_source: 'passive_real', source_segment_id: 'passive-a' },
+    { id: 2, lat: -40, lng: 174.01, ts: 2000, evidence_source: 'passive_real', source_segment_id: 'passive-a' },
+    { id: 3, lat: -40, lng: 174.02, ts: 3000, evidence_source: 'passive_real', source_segment_id: 'passive-a' },
+    { id: 4, lat: -40.1, lng: 174, ts: 4000, evidence_source: 'passive_real', source_segment_id: 'passive-b' },
+    { id: 5, lat: -40.1, lng: 174.01, ts: 5000, evidence_source: 'passive_real', source_segment_id: 'passive-b' },
+    { id: 6, lat: -40.1, lng: 174.02, ts: 6000, evidence_source: 'passive_real', source_segment_id: 'passive-b' },
+  ];
+  const db = {
+    async execute(sql) {
+      if (sql.includes('FROM memory_points')) return [rows];
+      if (sql.includes('FROM memory_private_places')) return [[]];
+      if (sql.includes('FROM JSON_TABLE')) return [[]];
+      throw new Error(`unexpected query: ${sql}`);
+    },
+  };
+  const projection = await deriveFriendProjection(db, 7, 8, {
+    id: 17,
+    grant_epoch: 'grant-passive',
+    coverage_scope: 'full_history_delayed_v1',
+    authorization_version: 1,
+    policy_epoch: 0,
+  });
+  const ids = new Set(projection.cells.map(cell => cell.id));
+  assert.equal(ids.has(cellFor(-40, 174.01).id), true);
+  assert.equal(ids.has(cellFor(-40.1, 174.01).id), true);
+  assert.equal(ids.has(cellFor(-40, 174).id), false);
+  assert.equal(ids.has(cellFor(-40.1, 174.02).id), false);
 });
 
 test('friendship active uniqueness does not derive a generated column from cascading FK inputs', () => {
