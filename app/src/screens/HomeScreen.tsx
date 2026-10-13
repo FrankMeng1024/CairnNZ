@@ -40,7 +40,7 @@ import {
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useDistance } from '../utils/distanceFormat';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
-import { hasPersonalMemoryEvidence, resolveHomeStateWindow } from '../features/cairns/homeStateWindow';
+import { buildDiscoveryHomeCopy, hasPersonalMemoryEvidence, resolveHomeStateWindow } from '../features/cairns/homeStateWindow';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -344,18 +344,16 @@ export function HomeScreen() {
     })
     : showUnfinished ? 'recovery' : 'stopped';
   const displayedStateCopy = activityStateCopy(displayedOperationalState, displayedMode);
+  const discoveryHomeCopy = presentationGroup
+    ? buildDiscoveryHomeCopy(presentationGroup, formatRelativeDay(presentationGroup.mergeStartedAt))
+    : null;
   const lastCompletedMode = lastHike?.activityMode === 'running' ? 'running' as const : 'hiking' as const;
   const lastHikeTitle = showSaveRecovery
     ? 'Activity needs saving'
     : showUnfinished
       ? displayedStateCopy.title
     : showDiscovery
-      ? (presentationGroup!.cairnCount === 1
-        ? (presentationGroup!.eventCount > 0
-          && presentationGroup!.updatedEventCount === presentationGroup!.eventCount
-          ? 'A Cairn story was updated'
-          : 'A Cairn is now in Memory')
-        : `${presentationGroup!.cairnCount} Cairns are now in Memory`)
+      ? discoveryHomeCopy!.title
     : showMemoryReturn
       ? (memoryPointCount > 0 ? 'Your Memory is growing' : 'Your Cairns are in Memory')
     : (lastHike?.name || (lastCompletedMode === 'running' ? 'Recent run' : 'Recent hike'));
@@ -364,7 +362,7 @@ export function HomeScreen() {
     : showUnfinished
       ? `${formatActivityDistance(displayedDistanceM)} · ${formatDuration(displayedDurationS)} · ${formatRelativeDay(displayedStartedAt)}`
     : showDiscovery
-      ? `Saved in Memory · ${formatRelativeDay(presentationGroup!.mergeStartedAt)}`
+      ? discoveryHomeCopy!.meta
     : showMemoryReturn
       ? (memoryPointCount > 0 ? `${Math.max(0.01, exploredKm2).toFixed(2)} km² explored` : `${memoryCairnCount} ${memoryCairnCount === 1 ? 'Cairn' : 'Cairns'} in Memory`)
     : (lastHike
@@ -375,7 +373,7 @@ export function HomeScreen() {
     : showUnfinished
       ? [formatActivityDistance(displayedDistanceM), formatDuration(displayedDurationS), formatRelativeDay(displayedStartedAt)]
     : showDiscovery
-      ? ['Saved in Memory', formatRelativeDay(presentationGroup!.mergeStartedAt)]
+      ? discoveryHomeCopy!.details
     : showMemoryReturn
       ? (memoryPointCount > 0
         ? [`${Math.max(0.01, exploredKm2).toFixed(2)} km² explored`, 'View Memory']

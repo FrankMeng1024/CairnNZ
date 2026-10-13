@@ -12,6 +12,24 @@ export function hasPersonalMemoryEvidence(input: {
     || input.unreadAcquiredGroupCount > 0;
 }
 
+export function buildDiscoveryHomeCopy(group: {
+  cairnCount: number;
+  eventCount: number;
+  updatedEventCount: number;
+  mergeStartedAt: number;
+}, relativeTime: string): { title: string; meta: string; details: string[] } {
+  const title = group.cairnCount === 1
+    ? (group.eventCount > 0 && group.updatedEventCount === group.eventCount
+      ? 'A Cairn story was updated'
+      : 'A Cairn is now in Memory')
+    : `${group.cairnCount} Cairns are now in Memory`;
+  return {
+    title,
+    meta: `Saved in Memory · ${relativeTime}`,
+    details: ['Saved in Memory', relativeTime],
+  };
+}
+
 /** The single Home middle window has one deterministic, non-cycling owner. */
 export function resolveHomeStateWindow(input: {
   saveRecovery: boolean;

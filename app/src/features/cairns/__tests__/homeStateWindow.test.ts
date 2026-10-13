@@ -1,4 +1,4 @@
-import { hasPersonalMemoryEvidence, resolveHomeStateWindow } from '../homeStateWindow';
+import { buildDiscoveryHomeCopy, hasPersonalMemoryEvidence, resolveHomeStateWindow } from '../homeStateWindow';
 
 describe('Home state window priority', () => {
   test.each([
@@ -10,6 +10,19 @@ describe('Home state window priority', () => {
     [{ saveRecovery: false, activeOrRecoverable: false, unannouncedDiscovery: false, recentActivity: false, personalMemory: false }, 'first-use'],
   ] as const)('selects exactly one stable state %#', (input, expected) => {
     expect(resolveHomeStateWindow(input)).toBe(expected);
+  });
+});
+
+describe('Home discovery copy', () => {
+  test.each([
+    [{ cairnCount: 1, eventCount: 1, updatedEventCount: 0, mergeStartedAt: 1 }, 'A Cairn is now in Memory'],
+    [{ cairnCount: 1, eventCount: 1, updatedEventCount: 1, mergeStartedAt: 1 }, 'A Cairn story was updated'],
+    [{ cairnCount: 3, eventCount: 3, updatedEventCount: 0, mergeStartedAt: 1 }, '3 Cairns are now in Memory'],
+    [{ cairnCount: 10, eventCount: 10, updatedEventCount: 2, mergeStartedAt: 1 }, '10 Cairns are now in Memory'],
+  ] as const)('summarizes durable discovery state without repeated cards %#', (group, title) => {
+    expect(buildDiscoveryHomeCopy(group, 'Just now')).toEqual({
+      title, meta: 'Saved in Memory · Just now', details: ['Saved in Memory', 'Just now'],
+    });
   });
 });
 
