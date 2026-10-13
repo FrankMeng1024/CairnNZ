@@ -164,6 +164,24 @@ describe('Cairn presentation coordinator', () => {
     expect(useCairnPresentationStore.getState()).toMatchObject({ activeSurface: null, activeGroup: null });
   });
 
+  test('an expired active group uses the backend-retained authoritative count after partial removal', async () => {
+    mockFetch.mockResolvedValueOnce(pending('11', 3)).mockResolvedValueOnce(response(200));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+
+    const retained = pending('11', 2);
+    const body = await retained.json();
+    body.groups[0].unannounced_event_count = 0;
+    body.withdrawn_group_ids = [];
+    body.acquired_cairn_count = 2;
+    mockFetch.mockResolvedValueOnce(response(200, body));
+    await useCairnPresentationStore.getState().refresh();
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeSurface: 'home', activeGroup: { token: 'visit:alpha', cairnCount: 2 }, acquiredCount: 2,
+    });
+  });
+
   test('pending authority hydrates the acquired count needed by Home on cold start', async () => {
     mockFetch.mockResolvedValueOnce(response(200, {
       groups: [], unread_count: 0, acquired_cairn_count: 4, withdrawn_group_ids: [],

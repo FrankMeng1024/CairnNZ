@@ -135,6 +135,7 @@ test('presentation polling distinguishes ordinary expiry from explicit safety wi
   );
   assert.match(pending, /active_group_ids/);
   assert.match(pending, /presentation\.id IN \(/);
+  assert.match(pending, /HAVING[\s\S]*?activeGroupIds\.length[\s\S]*?presentation\.id IN/);
   assert.match(pending, /NOT EXISTS \([\s\S]*?revision\.availability='available'/);
   assert.match(pending, /withdrawn_group_ids/);
   assert.match(pending, /acquired_cairn_count/);

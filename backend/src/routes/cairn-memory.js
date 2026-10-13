@@ -640,8 +640,9 @@ router.get('/presentation/pending', async (req, res) => {
                  presentation.merge_until,presentation.haptic_eligible,presentation.sound_eligible
        HAVING SUM(CASE WHEN event.announced_at IS NULL THEN 1 ELSE 0 END)>0
            OR presentation.merge_until>=UTC_TIMESTAMP(3)
+           ${activeGroupIds.length ? `OR presentation.id IN (${activeGroupIds.map(() => '?').join(',')})` : ''}
         ORDER BY presentation.merge_started_at ASC`,
-      [req.user.userId],
+      [req.user.userId, ...activeGroupIds],
     );
     const [[unread]] = await pool.execute(
       `SELECT COUNT(DISTINCT CASE WHEN EXISTS (
