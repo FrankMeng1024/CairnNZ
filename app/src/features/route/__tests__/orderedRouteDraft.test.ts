@@ -157,6 +157,42 @@ describe('ordered interval replacement', () => {
     );
     expect(result).toEqual({ ok: false, code: 'DISCONNECTED', draft: base.draft });
   });
+
+  test('R2 Point then Draw replacements may repeatedly span connected provenance boundaries with exact Undo', () => {
+    const first = appendOrderedSegment(empty(), [p(0, 0), p(40, 0), p(80, 0)], 'point');
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const second = appendOrderedSegment(first.draft, [p(80, 0), p(120, 0), p(160, 0)], 'draw-manual');
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+
+    const pointReplacement = replaceOrderedInterval(
+      second.draft,
+      { partId: second.draft.parts[0].id, pointIndex: 1 },
+      { partId: second.draft.parts[1].id, pointIndex: 1 },
+      [p(40, 0), p(80, 20), p(120, 0)],
+      'point',
+    );
+    expect(pointReplacement.ok).toBe(true);
+    if (!pointReplacement.ok) return;
+    expect(pointReplacement.draft.parts.map(part => part.resolution)).toEqual(['point', 'point', 'draw-manual']);
+
+    const history0: RouteDraftHistory = { present: second.draft, past: [] };
+    const history1 = commitRouteHistory(history0, pointReplacement, 'replace-point');
+    const drawReplacement = replaceOrderedInterval(
+      history1.present,
+      { partId: history1.present.parts[0].id, pointIndex: history1.present.parts[0].points.length - 1 },
+      { partId: history1.present.parts.at(-1)!.id, pointIndex: 0 },
+      [p(40, 0), p(80, -25), p(120, 0)],
+      'draw-manual',
+    );
+    expect(drawReplacement.ok).toBe(true);
+    if (!drawReplacement.ok) return;
+    const history2 = commitRouteHistory(history1, drawReplacement, 'replace-draw');
+    expect(history2.present.parts.map(part => part.resolution)).toEqual(['point', 'draw-manual', 'draw-manual']);
+    expect(undoRouteHistory(history2).present).toEqual(history1.present);
+    expect(undoRouteHistory(undoRouteHistory(history2)).present).toEqual(history0.present);
+  });
 });
 
 describe('multipart Activity repair', () => {

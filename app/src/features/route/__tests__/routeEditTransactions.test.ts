@@ -151,6 +151,23 @@ describe('Route edit transaction classification', () => {
     expect(applied.draft.parts.at(-1)?.points[0]).toEqual(p(300, 0));
   });
 
+  test('R3 projection handles bends and short edges while rejecting a geographically remote anchor', () => {
+    const base = appendOrderedSegment(
+      empty(),
+      [p(0, 0), p(100, 100), p(200, 0), p(201, 0), p(300, 0)],
+      'draw-manual',
+    );
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const bend = nearestOrderedPositions(base.draft, p(50, 50.5));
+    expect(bend.some(anchor => anchor.pointIndex === 0 && (anchor.fraction ?? 0) > 0.45 && (anchor.fraction ?? 0) < 0.55)).toBe(true);
+    // One metre is short relative to the editor scale but remains outside the
+    // intentional 0.35 m endpoint-normalization tolerance on both ends.
+    const shortEdge = nearestOrderedPositions(base.draft, p(200.5, 0.05));
+    expect(shortEdge.some(anchor => anchor.pointIndex === 2 && (anchor.fraction ?? 0) > 0)).toBe(true);
+    expect(nearestOrderedPositions(base.draft, p(150, 200))).toEqual([]);
+  });
+
   test('R4 a bridge can remain pending after one bounded connected stroke', () => {
     const imported = createImportedOrderedDraft({
       draftId: 'pending-bridge', ownerId: 'owner-a',
@@ -176,6 +193,28 @@ describe('Route edit transaction classification', () => {
       [...intent.points, p(125, 15), p(160, 0)],
       'draw-manual',
     );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.gaps).toEqual([]);
+  });
+
+  test('R4 three connected strokes remain pending until the final adjacent gap endpoint', () => {
+    const imported = createImportedOrderedDraft({
+      draftId: 'pending-bridge-three', ownerId: 'owner-a',
+      segments: [[p(0, 0), p(20, 0)], [p(180, 0), p(200, 0)]],
+    });
+    const first = classifyDrawTransaction(imported, [p(20, 0), p(60, 10)], imported.gaps[0].id);
+    expect(first.kind).toBe('pending-bridge');
+    if (first.kind !== 'pending-bridge') return;
+    const second = continueDrawTransaction(imported, first, [p(60.1, 10), p(110, 15)]);
+    expect(second.kind).toBe('pending-bridge');
+    if (second.kind !== 'pending-bridge') return;
+    const thirdStroke = [p(110.1, 15), p(145, 8), p(180, 0)];
+    const completed = continueDrawTransaction(imported, second, thirdStroke);
+    expect(completed.kind).toBe('bridge');
+    if (completed.kind !== 'bridge') return;
+    const candidate = [...second.points, ...thirdStroke.slice(1)];
+    const result = applyDrawTransaction(imported, completed, candidate, 'draw-manual');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.draft.gaps).toEqual([]);
