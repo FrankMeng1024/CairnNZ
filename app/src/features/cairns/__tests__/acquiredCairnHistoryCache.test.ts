@@ -7,6 +7,7 @@ jest.mock('../../../store/storage', () => ({ storage: {
 
 import {
   __acquiredCairnHistoryCacheTest,
+  beginAcquiredCairnHistoryRequest,
   cacheAcquiredCairnHistory,
   loadCachedAcquiredCairnHistory,
   markAcquiredCairnKnownUnavailable,
@@ -32,7 +33,8 @@ describe('account-scoped acquired Cairn history cache', () => {
   });
 
   test('offline restart restores only exact versions acquired by the same account', async () => {
-    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(5), revision(2, 'available', 0)]);
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(5), revision(2, 'available', 0)], request);
     __acquiredCairnHistoryCacheTest.reset();
     expect((await loadCachedAcquiredCairnHistory('owner-a', 'marker-1'))?.map(row => [row.revision_id, row.content_revision])).toEqual([[5, 5], [2, 0]]);
     expect(await loadCachedAcquiredCairnHistory('owner-b', 'marker-1')).toBeNull();
@@ -40,22 +42,26 @@ describe('account-scoped acquired Cairn history cache', () => {
   });
 
   test('known removal fails closed and cannot resurrect cached content', async () => {
-    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)]);
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)], request);
     await markAcquiredCairnKnownUnavailable('owner-a', 'marker-1');
     __acquiredCairnHistoryCacheTest.reset();
     expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
   });
 
   test('moderation states never retain text; read/thanks metadata remains independent', async () => {
-    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(2, 'under_review')]);
+    const request1 = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(2, 'under_review')], request1);
     expect((await loadCachedAcquiredCairnHistory('owner-a', 'marker-1'))?.[0].text).toBeNull();
-    await cacheAcquiredCairnHistory('owner-a', 'marker-2', [revision(3)]);
+    const request2 = beginAcquiredCairnHistoryRequest('owner-a', 'marker-2');
+    await cacheAcquiredCairnHistory('owner-a', 'marker-2', [revision(3)], request2);
     await updateCachedAcquiredRevision('owner-a', 'marker-2', 3, { opened_at: 'opened' });
     expect((await loadCachedAcquiredCairnHistory('owner-a', 'marker-2'))?.[0]).toMatchObject({ opened_at: 'opened', thanked_at: null });
   });
 
   test('owner purge removes durable and memory copies', async () => {
-    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)]);
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    await cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)], request);
     await purgeAcquiredCairnHistoryForOwner('owner-a');
     expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
     expect([...mockMemory.keys()].some(key => key.includes('owner-a'))).toBe(false);
@@ -64,7 +70,8 @@ describe('account-scoped acquired Cairn history cache', () => {
   test('owner purge invalidates an in-flight cache fill before it can resurrect content', async () => {
     let release!: (value: string | null) => void;
     mockStorage.getItemStrict.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
-    const staleWrite = cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)]);
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    const staleWrite = cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)], request);
     while (mockStorage.getItemStrict.mock.calls.length < 1) await Promise.resolve();
     const purge = purgeAcquiredCairnHistoryForOwner('owner-a');
     release(null);
@@ -72,5 +79,13 @@ describe('account-scoped acquired Cairn history cache', () => {
     await purge;
     expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
     expect([...mockMemory.keys()].some(key => key.includes('owner-a'))).toBe(false);
+  });
+
+  test('a late history response cannot overwrite a newer tombstone for the same owner and Cairn', async () => {
+    const request = beginAcquiredCairnHistoryRequest('owner-a', 'marker-1');
+    await markAcquiredCairnKnownUnavailable('owner-a', 'marker-1');
+    await expect(cacheAcquiredCairnHistory('owner-a', 'marker-1', [revision(1)], request))
+      .rejects.toThrow('acquired_cache_marker_invalidated');
+    expect(await loadCachedAcquiredCairnHistory('owner-a', 'marker-1')).toBeNull();
   });
 });

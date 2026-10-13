@@ -33,6 +33,10 @@ const snapshots = new Map<string, OwnerCache>();
 const loads = new Map<string, Promise<OwnerCache>>();
 const writeTails = new Map<string, Promise<void>>();
 const generations = new Map<string, number>();
+// Owner generation protects account deletion/switches. This narrower epoch
+// protects one marker when an older history request finishes after a newer
+// remove/moderation tombstone in the same authenticated account.
+const markerEpochs = new Map<string, number>();
 
 function exactOwner(ownerId: string): string {
   const owner = String(ownerId ?? '');
@@ -47,6 +51,17 @@ function exactMarker(markerId: string): string {
 }
 
 function key(ownerId: string): string { return `${PREFIX}${encodeURIComponent(ownerId)}`; }
+
+function markerEpochKey(ownerId: string, markerId: string): string {
+  return `${ownerId}\u0000${markerId}`;
+}
+
+function advanceMarkerEpoch(ownerId: string, markerId: string): number {
+  const epochKey = markerEpochKey(ownerId, markerId);
+  const next = (markerEpochs.get(epochKey) ?? 0) + 1;
+  markerEpochs.set(epochKey, next);
+  return next;
+}
 
 function empty(ownerId: string): OwnerCache { return { version: 1, ownerId, markers: {} }; }
 
@@ -125,20 +140,34 @@ export async function cacheAcquiredCairnHistory(
   ownerId: string,
   markerId: string,
   rawRevisions: unknown[],
+  requestEpoch: number,
 ): Promise<CachedAcquiredCairnRevision[]> {
   const owner = exactOwner(ownerId);
   const marker = exactMarker(markerId);
+  if (!Number.isSafeInteger(requestEpoch)
+    || markerEpochs.get(markerEpochKey(owner, marker)) !== requestEpoch) {
+    throw new Error('acquired_cache_marker_invalidated');
+  }
   const revisions = rawRevisions.map(normalizeRevision).filter(Boolean)
     .slice(0, MAX_REVISIONS_PER_MARKER) as CachedAcquiredCairnRevision[];
   if (revisions.length === 0) throw new Error('acquired_cache_empty_history');
   const generation = generations.get(owner) ?? 0;
   const cache = await loadOwner(owner);
   if ((generations.get(owner) ?? 0) !== generation) throw new Error('acquired_cache_owner_invalidated');
+  if (markerEpochs.get(markerEpochKey(owner, marker)) !== requestEpoch) {
+    throw new Error('acquired_cache_marker_invalidated');
+  }
   cache.markers[marker] = { markerId: marker, state: 'active', revisions, updatedAt: Date.now() };
   const ordered = Object.values(cache.markers).sort((a, b) => b.updatedAt - a.updatedAt);
   for (const evicted of ordered.slice(MAX_MARKERS_PER_OWNER)) delete cache.markers[evicted.markerId];
   await persist(owner, cache, generation);
   return cloneRevisions(revisions);
+}
+
+/** Capture before starting the authenticated history GET. Newer requests and
+ * safety tombstones invalidate the returned epoch. */
+export function beginAcquiredCairnHistoryRequest(ownerId: string, markerId: string): number {
+  return advanceMarkerEpoch(exactOwner(ownerId), exactMarker(markerId));
 }
 
 export async function loadCachedAcquiredCairnHistory(
@@ -154,6 +183,7 @@ export async function loadCachedAcquiredCairnHistory(
 export async function markAcquiredCairnKnownUnavailable(ownerId: string, markerId: string): Promise<void> {
   const owner = exactOwner(ownerId);
   const marker = exactMarker(markerId);
+  advanceMarkerEpoch(owner, marker);
   const generation = generations.get(owner) ?? 0;
   const cache = await loadOwner(owner);
   if ((generations.get(owner) ?? 0) !== generation) return;
@@ -196,5 +226,5 @@ export async function purgeAcquiredCairnHistoryForOwner(ownerId: string): Promis
 
 export const __acquiredCairnHistoryCacheTest = {
   keyPrefix: PREFIX,
-  reset() { snapshots.clear(); loads.clear(); writeTails.clear(); generations.clear(); },
+  reset() { snapshots.clear(); loads.clear(); writeTails.clear(); generations.clear(); markerEpochs.clear(); },
 };

@@ -600,6 +600,8 @@ router.put('/cairns/:marker_id/collection', mutationLimiter, async (req, res) =>
 
 router.get('/presentation/pending', async (req, res) => {
   try {
+    const activeGroupIds = [...new Set(String(req.query?.active_group_ids ?? '')
+      .split(',').map(positiveId).filter(Boolean))].slice(0, 50);
     const [rows] = await pool.execute(
       `SELECT presentation.id,presentation.group_token,presentation.merge_started_at,
               presentation.merge_until,presentation.haptic_eligible,presentation.sound_eligible,
@@ -642,23 +644,55 @@ router.get('/presentation/pending', async (req, res) => {
       [req.user.userId],
     );
     const [[unread]] = await pool.execute(
-      `SELECT COUNT(DISTINCT collection.marker_id) AS unread_count
+      `SELECT COUNT(DISTINCT CASE WHEN EXISTS (
+              SELECT 1 FROM cairn_acquisitions acquisition
+              JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+              LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+               WHERE acquisition.viewer_id=collection.viewer_id
+                 AND acquisition.marker_id=collection.marker_id
+                 AND acquisition.removed_at IS NULL
+                 AND revision.availability='available'
+                 AND COALESCE(moderation.state,'available')='available'
+            ) THEN collection.marker_id END) AS acquired_cairn_count,
+              COUNT(DISTINCT CASE WHEN EXISTS (
+              SELECT 1 FROM cairn_acquisitions acquisition
+              JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+              LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+               WHERE acquisition.viewer_id=collection.viewer_id
+                 AND acquisition.marker_id=collection.marker_id
+                 AND acquisition.removed_at IS NULL AND acquisition.opened_at IS NULL
+                 AND revision.availability='available'
+                 AND COALESCE(moderation.state,'available')='available'
+            ) THEN collection.marker_id END) AS unread_count
          FROM cairn_collections collection
         WHERE collection.viewer_id=? AND collection.relationship='found'
-          AND collection.archived_at IS NULL AND collection.removed_at IS NULL
-          AND EXISTS (
-            SELECT 1 FROM cairn_acquisitions acquisition
-            JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
-            LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
-             WHERE acquisition.viewer_id=collection.viewer_id
-               AND acquisition.marker_id=collection.marker_id
-               AND acquisition.removed_at IS NULL AND acquisition.opened_at IS NULL
-               AND revision.availability='available'
-               AND COALESCE(moderation.state,'available')='available'
-          )`,
+          AND collection.archived_at IS NULL AND collection.removed_at IS NULL`,
       [req.user.userId],
     );
-    return res.json({ groups: rows, unread_count: Number(unread?.unread_count ?? 0) });
+    const [withdrawn] = activeGroupIds.length ? await pool.execute(
+      `SELECT presentation.id
+         FROM cairn_presentation_groups presentation
+        WHERE presentation.viewer_id=? AND presentation.id IN (${activeGroupIds.map(() => '?').join(',')})
+          AND NOT EXISTS (
+            SELECT 1 FROM cairn_acquisition_events event
+            JOIN cairn_acquisitions acquisition ON acquisition.id=event.acquisition_id
+            JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+            JOIN cairn_collections collection
+              ON collection.viewer_id=acquisition.viewer_id AND collection.marker_id=acquisition.marker_id
+            LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+             WHERE event.presentation_group_id=presentation.id
+               AND acquisition.removed_at IS NULL AND collection.archived_at IS NULL
+               AND collection.removed_at IS NULL AND revision.availability='available'
+               AND COALESCE(moderation.state,'available')='available'
+          )`,
+      [req.user.userId, ...activeGroupIds],
+    ) : [[]];
+    return res.json({
+      groups: rows,
+      unread_count: Number(unread?.unread_count ?? 0),
+      acquired_cairn_count: Number(unread?.acquired_cairn_count ?? 0),
+      withdrawn_group_ids: withdrawn.map(row => String(row.id)),
+    });
   } catch (error) {
     console.error('[cairn-memory/presentation:pending]', error.message);
     return res.status(500).json({ error: 'Server error' });

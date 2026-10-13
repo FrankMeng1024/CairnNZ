@@ -126,3 +126,17 @@ test('presentation acknowledgement is event-watermarked while an announced group
   assert.match(cadence, /viewer_id = \? AND merge_until >= UTC_TIMESTAMP\(3\)/);
   assert.doesNotMatch(cadence, /viewer_id = \? AND announced_at IS NULL\s+AND merge_until/);
 });
+
+test('presentation polling distinguishes ordinary expiry from explicit safety withdrawal and returns acquired truth', () => {
+  const route = read('routes/cairn-memory.js');
+  const pending = route.slice(
+    route.indexOf("router.get('/presentation/pending'"),
+    route.indexOf("router.post('/presentation/:group_id/announced'"),
+  );
+  assert.match(pending, /active_group_ids/);
+  assert.match(pending, /presentation\.id IN \(/);
+  assert.match(pending, /NOT EXISTS \([\s\S]*?revision\.availability='available'/);
+  assert.match(pending, /withdrawn_group_ids/);
+  assert.match(pending, /acquired_cairn_count/);
+  assert.match(pending, /COUNT\(DISTINCT CASE WHEN EXISTS/);
+});

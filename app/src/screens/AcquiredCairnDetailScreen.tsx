@@ -15,6 +15,7 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
 import * as Crypto from 'expo-crypto';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import {
+  beginAcquiredCairnHistoryRequest,
   cacheAcquiredCairnHistory,
   loadCachedAcquiredCairnHistory,
   markAcquiredCairnKnownUnavailable,
@@ -47,6 +48,7 @@ export function AcquiredCairnDetailScreen() {
     setError('');
     setShowingOfflineCopy(false);
     try {
+      const requestEpoch = beginAcquiredCairnHistoryRequest(ownerId, route.params.markerId);
       const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/history`, {
         expectedUserId: ownerId,
         skipLogoutOn401: true,
@@ -69,7 +71,7 @@ export function AcquiredCairnDetailScreen() {
       }
       let next: CachedAcquiredCairnRevision[];
       try {
-        next = await cacheAcquiredCairnHistory(ownerId, route.params.markerId, networkRevisions);
+        next = await cacheAcquiredCairnHistory(ownerId, route.params.markerId, networkRevisions, requestEpoch);
       } catch {
         throw new Error('AUTHORIZATION_UNCONFIRMED');
       }

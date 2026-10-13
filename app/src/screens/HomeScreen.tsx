@@ -132,7 +132,7 @@ export function HomeScreen() {
   const presentationSurface = useCairnPresentationStore(s => s.activeSurface);
   const presentationBlocked = useCairnPresentationStore(s => s.presentationBlocked);
   const memoryUnreadCount = useCairnPresentationStore(s => s.unreadCount);
-  const acquiredCairnCount = useCairnPresentationStore(s => s.acquiredMarkers.length);
+  const acquiredCairnCount = useCairnPresentationStore(s => Math.max(s.acquiredCount, s.acquiredMarkers.length));
   const memoryCairnCount = ownedCairnCount + acquiredCairnCount;
   const weatherCondition = useWeatherStore(s => s.condition);
   const conditionOverride = useWeatherStore(s => s.conditionOverride);

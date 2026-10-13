@@ -133,6 +133,45 @@ describe('Cairn presentation coordinator', () => {
     });
   });
 
+  test('an acknowledged expired group omitted by SQL remains visible until the foreground surface releases it', async () => {
+    mockFetch.mockResolvedValueOnce(pending('11', 3)).mockResolvedValueOnce(response(200));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+
+    mockFetch.mockResolvedValueOnce(response(200, {
+      groups: [], unread_count: 3, acquired_cairn_count: 3, withdrawn_group_ids: [],
+    }));
+    await useCairnPresentationStore.getState().refresh();
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeSurface: 'home', activeGroup: { token: 'visit:alpha', cairnCount: 3 },
+    });
+
+    useCairnPresentationStore.getState().release('home');
+    expect(useCairnPresentationStore.getState()).toMatchObject({ activeSurface: null, activeGroup: null, pendingGroups: [] });
+  });
+
+  test('an explicit withdrawn group id removes the active summary immediately', async () => {
+    mockFetch.mockResolvedValueOnce(pending('11', 3)).mockResolvedValueOnce(response(200));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+
+    mockFetch.mockResolvedValueOnce(response(200, {
+      groups: [], unread_count: 0, acquired_cairn_count: 0, withdrawn_group_ids: ['31'],
+    }));
+    await useCairnPresentationStore.getState().refresh();
+    expect(useCairnPresentationStore.getState()).toMatchObject({ activeSurface: null, activeGroup: null });
+  });
+
+  test('pending authority hydrates the acquired count needed by Home on cold start', async () => {
+    mockFetch.mockResolvedValueOnce(response(200, {
+      groups: [], unread_count: 0, acquired_cairn_count: 4, withdrawn_group_ids: [],
+    }));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    expect(useCairnPresentationStore.getState()).toMatchObject({ acquiredCount: 4, acquiredMarkers: [] });
+  });
+
   test('multiple background groups become one restrained Home summary and ACK each exact watermark', async () => {
     mockFetch.mockResolvedValueOnce(pendingGroups([1, 3, 2]));
     await useCairnPresentationStore.getState().initialize('viewer-a');

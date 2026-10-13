@@ -4,6 +4,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockFetch = jest.fn();
 const mockLoadCache = jest.fn();
 const mockCacheHistory = jest.fn();
+const mockBeginHistoryRequest = jest.fn((_ownerId: string, _markerId: string) => 1);
 const mockMarkUnavailable = jest.fn();
 const mockUpdateCache = jest.fn();
 const mockGoBack = jest.fn();
@@ -57,6 +58,7 @@ jest.mock('../../store/useAppStore', () => {
 });
 jest.mock('../../services/apiService', () => ({ authenticatedFetch: (...args: any[]) => mockFetch(...args) }));
 jest.mock('../../features/cairns/acquiredCairnHistoryCache', () => ({
+  beginAcquiredCairnHistoryRequest: (ownerId: string, markerId: string) => mockBeginHistoryRequest(ownerId, markerId),
   loadCachedAcquiredCairnHistory: (...args: any[]) => mockLoadCache(...args),
   cacheAcquiredCairnHistory: (...args: any[]) => mockCacheHistory(...args),
   markAcquiredCairnKnownUnavailable: (...args: any[]) => mockMarkUnavailable(...args),
@@ -127,7 +129,7 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
       await Promise.resolve();
     });
 
-    expect(mockCacheHistory).not.toHaveBeenCalledWith('owner-a', 'marker-1', expect.anything());
+    expect(mockCacheHistory).not.toHaveBeenCalled();
     expect(screen.queryByText('Already found page')).toBeNull();
   });
 });
