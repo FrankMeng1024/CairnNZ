@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '../components/BackButton';
 import { Icon } from '../components/Icon';
@@ -51,11 +52,13 @@ import {
   orderedDraftCanUseOrShare,
   orderedDraftDistanceM,
   orderedDraftPoints,
+  orderedIntervalPoints,
   orderedIntervalCrossesGap,
   orderedPositionAtDistanceFraction,
   orderedPositionPoint,
   replaceOrderedInterval,
   routeOperationIsCurrent,
+  routePointDistanceM,
   setOrderedDraftStart,
   trimOrderedDraft,
   undoRouteHistory,
@@ -70,6 +73,7 @@ import {
   removeRoutePlannerDraft,
   saveRoutePlannerDraft,
 } from '../features/route/routePlannerDraftPersistence';
+import { searchRoutePlaces, type RoutePlaceSearchResult } from '../features/route/routePlaceSearch';
 import {
   resolveDrawPlan,
   resolvePointPlan,
@@ -89,6 +93,7 @@ let Camera: any = null;
 let ShapeSource: any = null;
 let LineLayer: any = null;
 let CircleLayer: any = null;
+let SymbolLayer: any = null;
 let StyleImport: any = null;
 if (Platform.OS !== 'web') {
   try {
@@ -99,6 +104,7 @@ if (Platform.OS !== 'web') {
     ShapeSource = Mapbox.ShapeSource;
     LineLayer = Mapbox.LineLayer;
     CircleLayer = Mapbox.CircleLayer;
+    SymbolLayer = Mapbox.SymbolLayer;
     StyleImport = Mapbox.StyleImport ?? null;
   } catch { /* explicit fallback below */ }
 }
@@ -248,7 +254,12 @@ export function OrderedRouteEditorScreen() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [planningMemoryScope, setPlanningMemoryScope] = useState<'self' | 'combined'>('self');
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<RoutePlaceSearchResult[]>([]);
+  const [searchBusy, setSearchBusy] = useState(false);
   const mapViewRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
   const cameraCenterRef = useRef<RoutePoint | null>(null);
   const initialBoundsRef = useRef<ReturnType<typeof initialBounds>>(null);
   const operationAbortRef = useRef<AbortController | null>(null);
@@ -475,6 +486,54 @@ export function OrderedRouteEditorScreen() {
   const lightPreset = themeToStandardPreset(mapTheme);
   const region = getCurrentRegion();
   const fallbackCenter: [number, number] = [region.centerLng, region.centerLat];
+
+  const moveCamera = useCallback((point: RoutePoint, zoomLevel = 13.5) => {
+    cameraRef.current?.setCamera?.({
+      centerCoordinate: [point.lng, point.lat],
+      zoomLevel,
+      animationDuration: reduceMotion ? 0 : 550,
+    });
+  }, [reduceMotion]);
+
+  const showRouteOverview = useCallback(() => {
+    const points = historyRef.current?.present.parts.flatMap(part => part.points) ?? [];
+    if (points.length < 2) { setError('Add a Route section before showing its overview.'); return; }
+    const ne: [number, number] = [Math.max(...points.map(point => point.lng)), Math.max(...points.map(point => point.lat))];
+    const sw: [number, number] = [Math.min(...points.map(point => point.lng)), Math.min(...points.map(point => point.lat))];
+    cameraRef.current?.fitBounds?.(ne, sw, [insets.top + 110, 36, insets.bottom + 330, 36], reduceMotion ? 0 : 550);
+  }, [insets.bottom, insets.top, reduceMotion]);
+
+  const showCurrentLocation = useCallback(async () => {
+    try {
+      const permissionState = await Location.getForegroundPermissionsAsync();
+      if (permissionState.status !== 'granted') {
+        setError('Location permission is needed to center the planning map. You can still search or browse another city.');
+        return;
+      }
+      const fix = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60_000, requiredAccuracy: 500 })
+        ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      moveCamera({ lat: fix.coords.latitude, lng: fix.coords.longitude }, 14);
+      setError(null);
+    } catch {
+      setError('Current location is unavailable. Search for a place or browse the map instead.');
+    }
+  }, [moveCamera]);
+
+  const runPlaceSearch = useCallback(async () => {
+    if (searchBusy) return;
+    setSearchBusy(true);
+    try {
+      const results = await searchRoutePlaces(searchQuery);
+      setSearchResults(results);
+      if (results.length === 0) setError('No matching place was found. Try a city or a more specific name.');
+      else setError(null);
+    } catch {
+      setSearchResults([]);
+      setError('Place search is unavailable. Your Route is unchanged; browse the map or try again later.');
+    } finally {
+      setSearchBusy(false);
+    }
+  }, [searchBusy, searchQuery]);
 
   const applyResolvedDraw = useCallback((
     points: RoutePoint[],
@@ -859,6 +918,41 @@ export function OrderedRouteEditorScreen() {
       geometry: { type: 'LineString' as const, coordinates: [[a.lng, a.lat], [b.lng, b.lat]] },
     }] : [];
   });
+  const routeEndpoints = (() => {
+    const start = draft.parts[0]?.points[0] ?? draft.startPoint;
+    const end = draft.parts.at(-1)?.points.at(-1);
+    if (!start) return [];
+    const same = end && routePointDistanceM(start, end) <= 0.35;
+    return [{
+      type: 'Feature' as const,
+      properties: { role: same ? 'Start / End' : 'Start' },
+      geometry: { type: 'Point' as const, coordinates: [start.lng, start.lat] },
+    }, ...(end && !same ? [{
+      type: 'Feature' as const,
+      properties: { role: 'End' },
+      geometry: { type: 'Point' as const, coordinates: [end.lng, end.lat] },
+    }] : [])];
+  })();
+  const reviewPoints = pendingReview?.points ?? pendingPointReview?.points ?? pendingDrawChoice?.points ?? [];
+  const reviewInterval = (() => {
+    if (pendingPointReview?.intent.kind === 'replace') {
+      return orderedIntervalPoints(draft, pendingPointReview.intent.start, pendingPointReview.intent.end);
+    }
+    if (pendingReview?.intent.kind === 'replace' && pendingReview.intent.options.length === 1) {
+      return orderedIntervalPoints(draft, pendingReview.intent.options[0].start, pendingReview.intent.options[0].end);
+    }
+    return [];
+  })();
+  const previewFeature = reviewPoints.length >= 2 ? {
+    type: 'Feature' as const,
+    properties: {},
+    geometry: { type: 'LineString' as const, coordinates: reviewPoints.map(point => [point.lng, point.lat]) },
+  } : null;
+  const originalIntervalFeature = reviewInterval.length >= 2 ? {
+    type: 'Feature' as const,
+    properties: {},
+    geometry: { type: 'LineString' as const, coordinates: reviewInterval.map(point => [point.lng, point.lat]) },
+  } : null;
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]} testID="ordered-route-editor">
@@ -889,6 +983,7 @@ export function OrderedRouteEditorScreen() {
           {StyleImport ? <StyleImport key={lightPreset} id="basemap" existing config={buildStandardConfig(mapTheme) as any} /> : null}
           {Camera ? initialBoundsRef.current ? (
             <Camera
+              ref={cameraRef}
               bounds={{
                 ...initialBoundsRef.current,
                 paddingTop: insets.top + 100,
@@ -898,11 +993,17 @@ export function OrderedRouteEditorScreen() {
               }}
               animationDuration={0}
             />
-          ) : <Camera centerCoordinate={fallbackCenter} zoomLevel={region.defaultZoom} animationDuration={0} /> : null}
+          ) : <Camera ref={cameraRef} centerCoordinate={fallbackCenter} zoomLevel={region.defaultZoom} animationDuration={0} /> : null}
           <FogLayer scopeOverride={planningMemoryScope} opacityScale={0.42} />
           {ShapeSource && LineLayer && mapParts.length ? (
             <ShapeSource id="ordered-route-parts" shape={{ type: 'FeatureCollection', features: mapParts }}>
-              <LineLayer id="ordered-route-parts-line" style={{ lineColor: theme.primary, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
+              <LineLayer id="ordered-route-parts-line" style={{
+                lineColor: ['match', ['get', 'resolution'], 'draw-manual', theme.accent, theme.primary] as any,
+                lineWidth: 6,
+                lineCap: 'round',
+                lineJoin: 'round',
+                lineDasharray: ['match', ['get', 'resolution'], 'draw-manual', ['literal', [2, 1.4]], ['literal', [1, 0]]] as any,
+              }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && LineLayer && animationFeature ? (
@@ -913,6 +1014,22 @@ export function OrderedRouteEditorScreen() {
           {ShapeSource && LineLayer && gapFeatures.length ? (
             <ShapeSource id="ordered-route-gaps" shape={{ type: 'FeatureCollection', features: gapFeatures }}>
               <LineLayer id="ordered-route-gap-line" style={{ lineColor: theme.destructive, lineWidth: 3, lineDasharray: [2, 2], lineOpacity: 0.85 }} />
+            </ShapeSource>
+          ) : null}
+          {ShapeSource && LineLayer && originalIntervalFeature ? (
+            <ShapeSource id="ordered-route-review-original" shape={originalIntervalFeature}>
+              <LineLayer id="ordered-route-review-original-line" style={{ lineColor: theme.foregroundSecondary, lineWidth: 8, lineOpacity: 0.48, lineDasharray: [2, 1.5] }} />
+            </ShapeSource>
+          ) : null}
+          {ShapeSource && LineLayer && previewFeature ? (
+            <ShapeSource id="ordered-route-review-candidate" shape={previewFeature}>
+              <LineLayer id="ordered-route-review-candidate-line" style={{ lineColor: theme.accent, lineWidth: 7, lineOpacity: 0.95, lineCap: 'round', lineJoin: 'round' }} />
+            </ShapeSource>
+          ) : null}
+          {ShapeSource && CircleLayer && routeEndpoints.length ? (
+            <ShapeSource id="ordered-route-endpoints" shape={{ type: 'FeatureCollection', features: routeEndpoints }}>
+              <CircleLayer id="ordered-route-endpoint-circles" style={{ circleRadius: 7, circleColor: theme.surfaceElevated, circleStrokeColor: theme.primary, circleStrokeWidth: 3 }} />
+              {SymbolLayer ? <SymbolLayer id="ordered-route-endpoint-labels" style={{ textField: ['get', 'role'], textSize: 11, textOffset: [0, 1.55], textColor: theme.foreground, textHaloColor: theme.surfaceElevated, textHaloWidth: 1.5, textAllowOverlap: true }} /> : null}
             </ShapeSource>
           ) : null}
           {ShapeSource && CircleLayer && draft.startPoint && draft.parts.length === 0 ? (
@@ -933,6 +1050,30 @@ export function OrderedRouteEditorScreen() {
           testID="ordered-route-map-load-overlay"
         />
       ) : null}
+
+      <View style={[styles.mapTools, { top: insets.top + 128 }]}>
+        <TouchableOpacity
+          style={[styles.mapToolButton, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          onPress={() => setSearchOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Search for a place or city"
+          testID="route-place-search"
+        ><Icon name="Search" size={19} color={theme.iconActive} /></TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mapToolButton, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          onPress={() => { void showCurrentLocation(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Center map on current location"
+          testID="route-current-location"
+        ><Icon name="Target" size={19} color={theme.iconActive} /></TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mapToolButton, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          onPress={showRouteOverview}
+          accessibilityRole="button"
+          accessibilityLabel="Show Route overview"
+          testID="route-overview"
+        ><Icon name="Route" size={19} color={theme.iconActive} /></TouchableOpacity>
+      </View>
 
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]} pointerEvents="box-none">
         <BackButton variant="inline" onPress={() => nav.goBack()} />
@@ -1072,6 +1213,37 @@ export function OrderedRouteEditorScreen() {
         </View>
       </KeyboardAvoidingView>
 
+      <ModalCard visible={searchOpen} onDismiss={() => setSearchOpen(false)} testID="route-place-search-modal">
+        <ModalCardHeader title="Find a place" body="Search moves only the planning camera. It never adds or relocates Route points." />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmitEditing={() => { void runPlaceSearch(); }}
+          returnKeyType="search"
+          autoCapitalize="words"
+          placeholder="City, park, trail or address"
+          placeholderTextColor={theme.muted}
+          accessibilityLabel="Place or city search"
+          style={[styles.searchInput, { color: theme.foreground, backgroundColor: theme.surface, borderColor: theme.border }]}
+        />
+        <PrimaryButton label="Search" onPress={() => { void runPlaceSearch(); }} loading={searchBusy} disabled={searchQuery.trim().length < 2} style={styles.modalButton} />
+        <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
+          {searchResults.map(result => (
+            <PrimaryButton
+              key={result.id}
+              label={result.label}
+              variant="secondary"
+              onPress={() => {
+                moveCamera(result.center);
+                setSearchOpen(false);
+                setSearchResults([]);
+              }}
+              style={styles.modalButton}
+            />
+          ))}
+        </ScrollView>
+      </ModalCard>
+
       <ModalCard visible={Boolean(pendingDrawChoice)} onDismiss={() => setPendingDrawChoice(null)} testID="route-interval-choice">
         <ModalCardHeader title="Choose which section to replace" body="Repeated or crossing coordinates can refer to different moments in the ordered Route." />
         <ScrollView style={styles.modalScroll}>
@@ -1194,6 +1366,8 @@ const styles = StyleSheet.create({
   topSubtitle: { marginTop: 2, fontSize: FontSize.tiny, fontWeight: '600' },
   topUtility: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   topUtilityPlaceholder: { width: 44, height: 44 },
+  mapTools: { position: 'absolute', right: Spacing.md, zIndex: 9, gap: Spacing.sm },
+  mapToolButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   // This target deliberately matches Mapbox's camera center. The bottom card
   // does not change the camera coordinate; camera padding is only used for the
   // one-time initial fit, so the visual target and confirmed coordinate agree.
@@ -1225,4 +1399,5 @@ const styles = StyleSheet.create({
   flexButton: { flex: 1 },
   modalButton: { marginTop: Spacing.sm },
   modalScroll: { maxHeight: 320 },
+  searchInput: { minHeight: 48, borderWidth: 1, borderRadius: RadiusRole.input, paddingHorizontal: Spacing.md, fontSize: FontSize.body },
 });

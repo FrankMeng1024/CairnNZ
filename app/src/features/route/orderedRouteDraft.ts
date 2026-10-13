@@ -366,6 +366,31 @@ export function orderedIntervalCrossesGap(
   return false;
 }
 
+export function orderedIntervalPoints(
+  draft: OrderedRouteDraft,
+  start: OrderedPosition,
+  end: OrderedPosition,
+): RoutePoint[] {
+  const order = compareOrderedPositions(draft, start, end);
+  const startPartIndex = orderedPositionIndex(draft, start);
+  const endPartIndex = orderedPositionIndex(draft, end);
+  if (order == null || order >= 0 || startPartIndex < 0 || endPartIndex < startPartIndex
+    || orderedIntervalCrossesGap(draft, start, end)) return [];
+  const startPoint = orderedPositionPoint(draft, start)!;
+  const endPoint = orderedPositionPoint(draft, end)!;
+  if (startPartIndex === endPartIndex) {
+    return pointsBetweenPositions(draft.parts[startPartIndex], start, end, startPoint, endPoint);
+  }
+  const points = suffixFromPosition(draft.parts[startPartIndex], start, startPoint);
+  for (let index = startPartIndex + 1; index < endPartIndex; index += 1) {
+    const partPoints = draft.parts[index].points;
+    points.push(...partPoints.slice(routePointDistanceM(points.at(-1)!, partPoints[0]) <= ROUTE_COORDINATE_EQUALITY_M ? 1 : 0).map(clonePoint));
+  }
+  const finalPoints = prefixThroughPosition(draft.parts[endPartIndex], end, endPoint);
+  points.push(...finalPoints.slice(routePointDistanceM(points.at(-1)!, finalPoints[0]) <= ROUTE_COORDINATE_EQUALITY_M ? 1 : 0));
+  return points;
+}
+
 function prefixThroughPosition(part: OrderedRoutePart, position: OrderedPosition, point: RoutePoint): RoutePoint[] {
   const prefix = part.points.slice(0, position.pointIndex + 1).map(clonePoint);
   if (normalizedPositionFraction(position) > 0) prefix.push(clonePoint(point));
