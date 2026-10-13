@@ -366,10 +366,14 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         await persist(snapshot, generation);
         if (!current(viewerId, generation)) return;
         const activeMembers = get().activeGroupMembers;
+        // Acknowledgement records that this presentation was shown; it must
+        // not make the currently visible summary disappear on the next poll.
+        // Keep active members while the authoritative response still carries
+        // them, including an acknowledged (unannounced=0) group. A moderation
+        // or removal response omits the group and therefore withdraws it.
         const activeUpdates = activeMembers.flatMap(member => {
           const update = snapshot.groups.find(group => group.token === member.token);
-          return update && update.unannouncedEventCount > 0
-            && snapshot.acknowledged[update.token] !== update.eventThroughId ? [update] : [];
+          return update ? [update] : [];
         });
         const activeTokens = new Set(activeUpdates.map(group => group.token));
         const activeUpdate = aggregateGroups(activeUpdates);

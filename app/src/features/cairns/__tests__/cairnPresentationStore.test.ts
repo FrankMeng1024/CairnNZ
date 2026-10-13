@@ -114,6 +114,25 @@ describe('Cairn presentation coordinator', () => {
     expect(useCairnPresentationStore.getState().pendingGroups).toEqual([]);
   });
 
+  test('acknowledgement does not erase the currently rendered summary on refresh', async () => {
+    mockFetch.mockResolvedValueOnce(pending('11', 3)).mockResolvedValueOnce(response(200));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+
+    const acknowledged = pending('11', 3);
+    const body = await acknowledged.json();
+    body.groups[0].unannounced_event_count = 0;
+    mockFetch.mockResolvedValueOnce(response(200, body));
+    await useCairnPresentationStore.getState().refresh();
+
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeSurface: 'home',
+      activeGroup: { token: 'visit:alpha', cairnCount: 3 },
+      pendingGroups: [],
+    });
+  });
+
   test('multiple background groups become one restrained Home summary and ACK each exact watermark', async () => {
     mockFetch.mockResolvedValueOnce(pendingGroups([1, 3, 2]));
     await useCairnPresentationStore.getState().initialize('viewer-a');
