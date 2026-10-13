@@ -299,6 +299,12 @@ interface CameraRef {
     zoomLevel?: number;
     animationDuration?: number;
   }) => void;
+  fitBounds: (
+    northEast: [number, number],
+    southWest: [number, number],
+    padding?: number | [number, number, number, number],
+    animationDuration?: number,
+  ) => void;
 }
 
 export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(props, ref) {
@@ -338,6 +344,19 @@ export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(p
         });
       }
     },
+    fitBounds: (northEast, southWest, padding = 0, animationDuration = 0) => {
+      const m = mapCtx?.current;
+      if (!m) return;
+      const inner = (m as any).getMap?.() ?? m;
+      if (!inner?.fitBounds) return;
+      const [top, right, bottom, left] = Array.isArray(padding)
+        ? padding
+        : [padding, padding, padding, padding];
+      inner.fitBounds([southWest, northEast], {
+        padding: { top, right, bottom, left },
+        duration: animationDuration,
+      });
+    },
   }), [mapCtx]);
 
   // Declarative centerCoordinate prop (rarely used now that callers
@@ -360,9 +379,21 @@ interface ShapeSourceProps {
   id: string;
   shape: any;
   children?: React.ReactNode;
+  cluster?: boolean;
+  clusterRadius?: number;
+  clusterMaxZoomLevel?: number;
+  clusterProperties?: Record<string, any>;
 }
 
-export function ShapeSource({ id, shape, children }: ShapeSourceProps) {
+export function ShapeSource({
+  id,
+  shape,
+  children,
+  cluster,
+  clusterRadius,
+  clusterMaxZoomLevel,
+  clusterProperties,
+}: ShapeSourceProps) {
   // react-map-gl handles `data` prop diffing internally and calls
   // mapbox-gl's source.setData when the prop changes. We do NOT manually
   // call setData here — doing so causes the source to enter a permanent
@@ -376,8 +407,19 @@ export function ShapeSource({ id, shape, children }: ShapeSourceProps) {
     if (!React.isValidElement(child)) return child;
     return React.cloneElement(child as any, { __sourceId: id });
   });
+  const clusteringProps = {
+    ...(typeof cluster === 'boolean' ? { cluster } : {}),
+    ...(typeof clusterRadius === 'number' ? { clusterRadius } : {}),
+    ...(typeof clusterMaxZoomLevel === 'number' ? { clusterMaxZoom: clusterMaxZoomLevel } : {}),
+    ...(clusterProperties ? { clusterProperties } : {}),
+  };
   return (
-    <Source id={id} type="geojson" data={shape}>
+    <Source
+      id={id}
+      type="geojson"
+      data={shape}
+      {...clusteringProps}
+    >
       {enriched}
     </Source>
   );
@@ -388,21 +430,24 @@ interface LayerProps {
   id: string;
   style?: Record<string, any>;
   __sourceId?: string;
+  filter?: any[];
 }
 
-export function FillLayer({ id, style, __sourceId }: LayerProps) {
+export function FillLayer({ id, style, __sourceId, filter }: LayerProps) {
+  const filterProps = filter ? { filter: filter as any } : {};
   return (
     <Layer
       id={id}
       type="fill"
       source={__sourceId}
+      {...filterProps}
       paint={paintToKebab(style) as any}
     />
   );
 }
 
 // ── LineLayer ─────────────────────────────────────────────────────────
-export function LineLayer({ id, style, __sourceId }: LayerProps) {
+export function LineLayer({ id, style, __sourceId, filter }: LayerProps) {
   const lineLayoutKeys = new Set([
     'lineCap',
     'lineJoin',
@@ -414,35 +459,45 @@ export function LineLayer({ id, style, __sourceId }: LayerProps) {
   const layoutStyle: Record<string, any> = {};
   const paintStyle: Record<string, any> = {};
   for (const [key, value] of Object.entries(style ?? {})) {
+    // Mapbox GL JS v2 (the current Web QA renderer) predates the Standard
+    // style's emissive paint properties. Native RNMapbox v11 still receives
+    // them through its own adapter; omitting them here avoids rejecting an
+    // otherwise valid line layer during browser evidence capture.
+    if (key === 'lineEmissiveStrength') continue;
     (lineLayoutKeys.has(key) ? layoutStyle : paintStyle)[key] = value;
   }
+  const filterProps = filter ? { filter: filter as any } : {};
   return (
     <Layer
       id={id}
       type="line"
       source={__sourceId}
+      {...filterProps}
       layout={paintToKebab(layoutStyle) as any}
       paint={paintToKebab(paintStyle) as any}
     />
   );
 }
 
-export function CircleLayer({ id, style, __sourceId }: LayerProps) {
-  return <Layer id={id} type="circle" source={__sourceId} paint={paintToKebab(style) as any} />;
+export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
+  const filterProps = filter ? { filter: filter as any } : {};
+  return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(style) as any} />;
 }
 
-export function SymbolLayer({ id, style, __sourceId }: LayerProps) {
+export function SymbolLayer({ id, style, __sourceId, filter }: LayerProps) {
   const paintStyle: Record<string, any> = {};
   const layoutStyle: Record<string, any> = {};
   for (const [key, value] of Object.entries(style ?? {})) {
     const isPaint = /^(icon|text)(Color|Halo|Opacity|Translate)/.test(key);
     (isPaint ? paintStyle : layoutStyle)[key] = value;
   }
+  const filterProps = filter ? { filter: filter as any } : {};
   return (
     <Layer
       id={id}
       type="symbol"
       source={__sourceId}
+      {...filterProps}
       layout={paintToKebab(layoutStyle) as any}
       paint={paintToKebab(paintStyle) as any}
     />
@@ -493,6 +548,22 @@ export function PointAnnotation({ coordinate, children }: PointAnnotationProps) 
   );
 }
 
+interface MarkerViewProps extends PointAnnotationProps {
+  anchor?: { x: number; y: number };
+  allowOverlap?: boolean;
+}
+
+// RNMapbox MarkerView is a native view annotation. react-map-gl's Marker is
+// the equivalent real Web Mapbox primitive, so Cairn pins remain observable
+// in browser QA instead of silently disappearing behind a no-op component.
+export function MarkerView({ coordinate, children }: MarkerViewProps) {
+  return (
+    <Marker longitude={coordinate[0]} latitude={coordinate[1]} anchor="center">
+      <>{children}</>
+    </Marker>
+  );
+}
+
 // ── adapter export ────────────────────────────────────────────────────
 // O1 (2026-07-26) fix: 老代码 CircleLayer/SymbolLayer/Images/Image/
 // MarkerView 返回 null,但 MemoryMap.tsx 无条件 <CircleLayer .../> 渲染,
@@ -515,7 +586,7 @@ export function makeWebMapboxAdapter() {
     SymbolLayer,
     Images: NoopComponent,
     Image: NoopComponent,
-    MarkerView: NoopComponent,
+    MarkerView,
     // R21-v3 (2026-08-30): StyleImport is native-only (Mapbox v11 API);
     // web shim renders nothing so callers can still `<Mapbox.StyleImport>`
     // unconditionally.

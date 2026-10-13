@@ -64,8 +64,10 @@ import { recordActivityStageEvent } from '../features/activity/activityStageLedg
 let activityMapHasRendered = false;
 
 // ── Mapbox conditional import ────────────────────────────────────────────
-// @rnmapbox/maps components are native-only — on web they may be undefined.
-// Force fallback on web to avoid "Element type is invalid" crash.
+// Keep native on @rnmapbox/maps and use Cairn's real Mapbox GL adapter on
+// Web. The adapter implements the same source/layer surface for visual QA and
+// browser use; animation-only native helpers remain absent so Web falls back
+// to the stable static confirmed-route layer.
 let MapView: any = null;
 let CameraComponent: any = null;
 let PointAnnotation: any = null;
@@ -78,9 +80,11 @@ let StyleImport: any = null;
 let AnimatedShapeSource: any = null;
 let AnimatedCoordinatesArrayClass: any = null;
 let AnimatedShapeClass: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    const Mapbox = require('@rnmapbox/maps');
+try {
+  const Mapbox = Platform.OS === 'web'
+    ? require('../features/memory/services/mapboxAdapter.web').makeWebMapboxAdapter()
+    : require('@rnmapbox/maps');
+  if (Mapbox?.available !== false) {
     MapView = Mapbox.MapView;
     CameraComponent = Mapbox.Camera;
     PointAnnotation = Mapbox.PointAnnotation;
@@ -93,9 +97,10 @@ if (Platform.OS !== 'web') {
     AnimatedShapeSource = Mapbox.Animated?.ShapeSource;
     AnimatedCoordinatesArrayClass = Mapbox.AnimatedCoordinatesArray;
     AnimatedShapeClass = Mapbox.AnimatedShape;
-  } catch {
-    // Mapbox native not available
   }
+} catch {
+  // Explicit unavailable state below keeps recording usable if the renderer
+  // cannot be loaded on this platform.
 }
 
 function createContinuousRouteNodes(coordinatesValue: [number, number][]) {

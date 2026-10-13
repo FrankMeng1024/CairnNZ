@@ -20,7 +20,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -238,7 +238,6 @@ function currentOwnerId(): string | null {
 
 export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
   const theme = useVisualTheme();
   const scenicTime = useScenicTimeState();
   const condition = useWeatherStore((state) => state.condition);
@@ -641,9 +640,14 @@ export function SettingsScreen() {
 
   const scrollContentStyle = useMemo(() => [
     styles.scroll,
-    { paddingBottom: Spacing.xxl + Spacing.xl + Math.max(insets.bottom, Spacing.md) },
-  ], [insets.bottom]);
-  const scrollIndicatorInsets = useMemo(() => ({ bottom: insets.bottom }), [insets.bottom]);
+    { paddingBottom: Spacing.xxl + Spacing.xl + Spacing.md },
+  ], []);
+  const subpageScrollContentStyle = useMemo(() => [
+    styles.scroll,
+    styles.subpageScroll,
+    { paddingBottom: Spacing.xxl + Spacing.xl + Spacing.md },
+  ], []);
+  const scrollIndicatorInsets = useMemo(() => ({ bottom: 0 }), []);
 
   const latestExport = visibleExports[0] ?? null;
   const exportExpired = latestExport?.expires_at
@@ -658,7 +662,7 @@ export function SettingsScreen() {
         onPress={() => page === 'root' ? navigation.goBack() : setPage('root')}
         testID="settings-back"
       />
-      <Text style={[styles.pageTitle, { color: background.textColor, textShadowColor: background.textShadowColor }]}>{title}</Text>
+      <Text style={[styles.pageTitle, { color: theme.foreground, textShadowColor: theme.surfaceElevated }]}>{title}</Text>
       <View style={styles.headerSpacer} />
     </View>
   );
@@ -667,7 +671,7 @@ export function SettingsScreen() {
     <>
       {renderHeader('Settings')}
       <ScrollView style={styles.pageScroll} testID="settings-root" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Account</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Account</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="User"
@@ -679,7 +683,7 @@ export function SettingsScreen() {
           />
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Preferences</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Preferences</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-preferences">
           <View style={styles.preferenceBlock}>
             <View style={styles.preferenceHeading}>
@@ -743,7 +747,7 @@ export function SettingsScreen() {
           />
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy & Data</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Privacy & Data</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="Shield" title="Privacy & Data" detail="Location, export and exploration history" value="Review" onPress={() => openPage('privacy')} testID="settings-privacy-row" />
           <Divider color={background.settingsCardBorderColor} />
@@ -756,7 +760,7 @@ export function SettingsScreen() {
           ) : null}
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Help & About</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Help & About</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="MessageSquare" title="Help & About" detail="Feedback, support, terms and app information" value="Open" onPress={() => openPage('help')} testID="settings-help-row" />
         </ContentSurface>
@@ -766,7 +770,7 @@ export function SettingsScreen() {
           testID="settings-owner-qa-unlock"
           style={styles.footerPressable}
         >
-          <Text style={[styles.footer, { color: background.textColor }]}>Ngā mihi nui — thanks for using Cairn.</Text>
+          <Text style={[styles.footer, { color: theme.foreground }]}>Ngā mihi nui — thanks for using Cairn.</Text>
         </Pressable>
       </ScrollView>
     </>
@@ -776,7 +780,7 @@ export function SettingsScreen() {
     <>
       {renderHeader('Account')}
       <ScrollView style={styles.pageScroll} testID="settings-account" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
-        <Text style={[styles.intro, { color: background.textColor, textShadowColor: background.textShadowColor }]}>Your identity and account actions.</Text>
+        <Text style={[styles.intro, { color: theme.foreground, textShadowColor: theme.surfaceElevated }]}>Your identity and account actions.</Text>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="User" title={user?.name || 'Cairn user'} detail="Name" />
           <Divider color={background.settingsCardBorderColor} />
@@ -790,7 +794,7 @@ export function SettingsScreen() {
           />
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Account actions</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Account actions</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="Pencil"
@@ -836,7 +840,7 @@ export function SettingsScreen() {
           <Row icon="LogOut" title="Sign out" detail="Keep this account and its saved data" onPress={handleSignOut} testID="settings-sign-out" />
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Delete account</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Delete account</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="Trash2"
@@ -897,7 +901,7 @@ export function SettingsScreen() {
   const renderPrivacy = () => (
     <>
       {renderHeader('Privacy & Data')}
-      <ScrollView style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
+      <ScrollView style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -906,7 +910,7 @@ export function SettingsScreen() {
           </View>
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Location</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Location</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="MapPin"
@@ -944,7 +948,7 @@ export function SettingsScreen() {
           />
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Your data</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Your data</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-export-card">
           <View style={styles.cardHeading}>
             <Icon name="Download" size={IconSize.md} color={theme.icon} />
@@ -1021,7 +1025,7 @@ export function SettingsScreen() {
           {memoryDeleteResult ? <Text accessibilityLiveRegion="polite" style={[styles.deleteResult, { color: memoryDeleteResult.startsWith('Deleted') ? theme.textSecondary : theme.destructive }]}>{memoryDeleteResult}</Text> : null}
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Privacy</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Privacy</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="Info"
@@ -1038,7 +1042,7 @@ export function SettingsScreen() {
   const renderHelp = () => (
     <>
       {renderHeader('Help & About')}
-      <ScrollView style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle} keyboardShouldPersistTaps="handled">
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="MessageSquare" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -1047,7 +1051,7 @@ export function SettingsScreen() {
           </View>
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Feedback</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Feedback</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-feedback-card">
           <SegmentedControl<FeedbackKind>
             value={feedbackKind}
@@ -1126,7 +1130,7 @@ export function SettingsScreen() {
           <Text style={[styles.body, { color: theme.textMuted }]}>Feedback is not an emergency or monitored safety service.</Text>
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Support & legal</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Support & legal</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="Mail" title="Contact support" detail="support@cairnapp.nz" external onPress={() => void Linking.openURL('mailto:support@cairnapp.nz')} testID="settings-support" />
           <Divider color={background.settingsCardBorderColor} />
@@ -1135,7 +1139,7 @@ export function SettingsScreen() {
           <Row icon="FileText" title="Terms" detail="Apple Standard EULA" external onPress={() => void Linking.openURL(TERMS_URL)} testID="settings-terms" />
         </ContentSurface>
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>About</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>About</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-about">
           <Row
             icon="Info"
@@ -1179,7 +1183,7 @@ export function SettingsScreen() {
   const renderContentReview = () => (
     <>
       {renderHeader('Content issue / appeal')}
-      <ScrollView style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
+      <ScrollView style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -1191,7 +1195,7 @@ export function SettingsScreen() {
         {reviewLoading ? <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Checking content review status…</Text></View> : null}
         {reviewError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{reviewError}</Text> : null}
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Affected Cairns</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Affected Cairns</SectionTitle>
         {affectedRevisions.length === 0 && !reviewLoading ? (
           <ContentSurface style={[styles.surface, surfaceStyle]}>
             <Row icon="CircleCheck" title="No affected Cairn revisions" detail="Nothing on this account currently needs an author appeal." />
@@ -1220,7 +1224,7 @@ export function SettingsScreen() {
           </ContentSurface>
         ))}
 
-        <SectionTitle color={background.textColor} shadowColor={background.textShadowColor}>Your submitted cases</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Your submitted cases</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           {reviewCases.length === 0 && !reviewLoading ? (
             <Row icon="FileText" title="No submitted cases" detail="Reports can be sent from acquired Cairn details." />
@@ -1248,7 +1252,7 @@ export function SettingsScreen() {
     <View style={[styles.root, { backgroundColor: background.settingsBackgroundColor }]}>
       <Image source={background.bgAsset} style={[styles.backgroundImage, backgroundLayout]} resizeMode="cover" />
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: background.settingsVeilColor }]} />
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         {page === 'root'
           ? renderRoot()
           : page === 'account'
@@ -1529,6 +1533,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xxl + Spacing.xl,
   },
+  subpageScroll: { paddingTop: Spacing.md },
   sectionTitle: {
     marginTop: Spacing.xl,
     marginBottom: Spacing.sm,
@@ -1584,7 +1589,7 @@ const styles = StyleSheet.create({
   passwordRuleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   passwordRuleText: { fontSize: FontSize.caption, fontWeight: '600' },
   cardHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, padding: Spacing.base, paddingBottom: Spacing.sm },
-  infoHero: { marginTop: Spacing.md, padding: Spacing.lg, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+  infoHero: { padding: Spacing.lg, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
   heroIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: FontSize.h3, fontWeight: '700', lineHeight: 23 },
   body: { fontSize: FontSize.caption, lineHeight: 19 },

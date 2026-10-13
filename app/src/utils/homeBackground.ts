@@ -255,10 +255,14 @@ const LEGACY_SUNSET_COMPAT_UI_PALETTE: ScenicUiPalette = {
   actionIconColor: '#EFE5D9',
   navIconColor: '#DDD4CA',
   invertIcons: true,
-  settingsBackgroundColor: '#554E59',
-  settingsVeilColor: 'rgba(69,63,72,0.58)',
-  settingsCardBackgroundColor: 'rgba(76,70,78,0.82)',
-  settingsCardBorderColor: 'rgba(242,229,211,0.22)',
+  // Settings consumes the centralized Sunset foreground tokens (dark
+  // mineral ink). Keep its scenic shell warm and translucent, but use an
+  // illuminated material behind copy instead of the legacy Night-like slate
+  // that produced dark-on-dark rows and inputs.
+  settingsBackgroundColor: '#D8CEC5',
+  settingsVeilColor: 'rgba(221,205,193,0.38)',
+  settingsCardBackgroundColor: 'rgba(239,229,217,0.90)',
+  settingsCardBorderColor: 'rgba(255,244,228,0.54)',
 };
 
 // Home Sunset authority: retained golden-hour light. The scenery still carries

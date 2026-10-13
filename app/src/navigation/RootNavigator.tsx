@@ -294,6 +294,13 @@ export function RootNavigator() {
               stores.useFriendStore = require('../store/useFriendStore').useFriendStore;
               stores.useMemoryStore = require('../features/memory/store/useMemoryStore').useMemoryStore;
               stores.useMemorySettingsStore = require('../features/memory/store/useMemorySettingsStore').useMemorySettingsStore;
+              // O78 visual acceptance needs to prove the Mine/Friends union
+              // with deterministic, account-scoped fixtures while still
+              // rendering through the production Fog sources and layers.
+              // These handles remain Web-only like the surrounding QA bridge.
+              stores.useMemorySubscriptionsStore = require('../features/memory/store/useMemorySubscriptionsStore').useMemorySubscriptionsStore;
+              stores.useFriendMemoryStore = require('../features/memory/store/useFriendMemoryStore').useFriendMemoryStore;
+              stores.useMemoryScopeStore = require('../features/memory/store/useMemoryScopeStore').useMemoryScopeStore;
               stores.useMarkerStore = require('../store/useMarkerStore').useMarkerStore;
               stores.usePublicCairnStore = require('../features/public/services/publicCairns').usePublicCairnStore;
               stores.useCairnPresentationStore = useCairnPresentationStore;

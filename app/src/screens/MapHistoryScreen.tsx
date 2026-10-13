@@ -91,27 +91,30 @@ import {
 } from '../features/activitySimulator/snapLabActivityStore';
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
-// Native: render the track on top of a real Mapbox map. Web / Expo Go:
-// fall back to the existing SVG-on-coloured-panel rendering.
+// Native uses @rnmapbox/maps; Web uses Cairn's real Mapbox GL adapter so the
+// same Activity/Route sources and layers can be visually reviewed in browser
+// QA. Expo Go or a missing renderer still gets the explicit SVG fallback.
 let MapView: any = null;
 let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
 let PointAnnotation: any = null;
 let StyleImport: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Mapbox = require('@rnmapbox/maps');
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Mapbox = Platform.OS === 'web'
+    ? require('../features/memory/services/mapboxAdapter.web').makeWebMapboxAdapter()
+    : require('@rnmapbox/maps');
+  if (Mapbox?.available !== false) {
     MapView = Mapbox.MapView;
     CameraComponent = Mapbox.Camera;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
     PointAnnotation = Mapbox.PointAnnotation;
     StyleImport = Mapbox.StyleImport;
-  } catch {
-    // @rnmapbox/maps not in this build — fallback panel will render.
   }
+} catch {
+  // Map renderer not in this build — fallback panel will render.
 }
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -145,8 +148,8 @@ function PressRow({
 
 // ── Native track map (Mapbox) ─────────────────────────────────────────────
 // Renders the session track as a polyline on top of a real Mapbox map.
-// Used in place of the SVG-on-coloured-panel TrackPolyline when
-// @rnmapbox/maps is available (i.e. on a real device, not web).
+// Used in place of the SVG-on-coloured-panel TrackPolyline when a real
+// platform renderer is available (native RNMapbox or the Web GL adapter).
 function detailRouteBounds(points: TrackingSession['trackPoints']): {
   minLat: number;
   maxLat: number;
@@ -1625,9 +1628,9 @@ function MapHistoryObjectScreen() {
     <View style={[styles.container, { backgroundColor: visualTheme.background }]}>
       {/* Map area */}
       <View style={[styles.mapArea, { backgroundColor: visualTheme.background }]}>
-        {/* Track polyline when session selected. Native (iOS/Android with
-            @rnmapbox/maps available) renders the track on a real Mapbox
-            map; web/Expo Go falls back to the SVG-on-panel rendering. */}
+        {/* Track polyline when session selected. Native RNMapbox and the Web
+            GL adapter render the same source/layer contract; only a missing
+            renderer falls back to the SVG-on-panel presentation. */}
         {routePreviewSession ? (
           MapView
             ? <NativeTrackMap session={routePreviewSession} markers={[]} plannedRouteGeometry={routePreviewGeometry ?? undefined} />
@@ -2556,7 +2559,12 @@ function TrailsIndexRedirect() {
 
 export function MapHistoryScreen() {
   const route = useRoute<any>();
-  const hasObjectTarget = Boolean(route.params?.sessionId || route.params?.routeId || route.params?.qaReviewClone);
+  const hasObjectTarget = Boolean(
+    route.params?.sessionId
+    || route.params?.routeId
+    || route.params?.sharedDeliveryId
+    || route.params?.qaReviewClone,
+  );
   return hasObjectTarget ? <MapHistoryObjectScreen /> : <TrailsIndexRedirect />;
 }
 

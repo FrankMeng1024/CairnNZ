@@ -2,6 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { buildAcquiredCairnFeatureCollection } from './acquiredCairnClusters';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 /**
  * One map point per acquired Cairn. Mapbox performs screen-space clustering,
@@ -15,6 +16,7 @@ export function AcquiredCairnClusterLayer({
   onOpenSingle: (markerId: string) => void;
   onOpenGroup: (markerIds: string[]) => void;
 }) {
+  const theme = useVisualTheme();
   const markers = useCairnPresentationStore(state => state.acquiredMarkers);
   const sourceRef = useRef<any>(null);
   const featureCollection = useMemo(() => buildAcquiredCairnFeatureCollection(markers), [markers]);
@@ -64,9 +66,9 @@ export function AcquiredCairnClusterLayer({
           id="acquired-cairn-cluster-circles"
           filter={['has', 'point_count']}
           style={{
-            circleColor: '#315B4E',
+            circleColor: theme.primary,
             circleRadius: ['step', ['get', 'point_count'], 18, 10, 22, 50, 27],
-            circleStrokeColor: '#F5F1E8',
+            circleStrokeColor: theme.surfaceElevated,
             circleStrokeWidth: 2,
           }}
         />
@@ -75,7 +77,7 @@ export function AcquiredCairnClusterLayer({
           filter={['has', 'point_count']}
           style={{
             textField: ['get', 'point_count_abbreviated'],
-            textColor: '#FFFFFF',
+            textColor: theme.onPrimary,
             textSize: 12,
             textAllowOverlap: true,
           }}
@@ -85,8 +87,8 @@ export function AcquiredCairnClusterLayer({
           filter={['all', ['has', 'point_count'], ['>', ['get', 'unread_total'], 0]]}
           style={{
             circleRadius: 4,
-            circleColor: '#315B4E',
-            circleStrokeColor: '#FFFFFF',
+            circleColor: theme.primary,
+            circleStrokeColor: theme.surfaceElevated,
             circleStrokeWidth: 1.5,
             circleTranslate: [14, -14],
           }}
@@ -106,8 +108,8 @@ export function AcquiredCairnClusterLayer({
           filter={['all', ['!', ['has', 'point_count']], ['==', ['get', 'unread'], 1]]}
           style={{
             circleRadius: 4,
-            circleColor: '#315B4E',
-            circleStrokeColor: '#FFFFFF',
+            circleColor: theme.primary,
+            circleStrokeColor: theme.surfaceElevated,
             circleStrokeWidth: 1.5,
             circleTranslate: [9, -10],
           }}

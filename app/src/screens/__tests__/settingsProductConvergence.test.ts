@@ -69,6 +69,21 @@ describe('Settings product and correctness convergence', () => {
     expect(settings).toContain('getHomeBackground(');
     expect(settings).toContain('background.settingsCardBackgroundColor');
     expect(settings).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(settings).toContain("edges={['top', 'bottom']}");
+    expect(settings).toContain('subpageScrollContentStyle');
+    expect(settings).toContain('color: theme.foreground, textShadowColor: theme.surfaceElevated');
+    expect(settings).not.toContain('color={background.textColor} shadowColor={background.textShadowColor}');
+  });
+
+  test('Sunset Settings uses an illuminated material behind dark semantic copy', () => {
+    const background = read('src/utils/homeBackground.ts');
+    const sunset = background.slice(
+      background.indexOf('const LEGACY_SUNSET_COMPAT_UI_PALETTE'),
+      background.indexOf('const SUNNY_HOME_SUNSET_UI_PALETTE'),
+    );
+    expect(sunset).toContain("settingsBackgroundColor: '#D8CEC5'");
+    expect(sunset).toContain("settingsCardBackgroundColor: 'rgba(239,229,217,0.90)'");
+    expect(sunset).not.toContain("settingsCardBackgroundColor: 'rgba(76,70,78,0.82)'");
   });
 
   test('legacy Settings keys have migration-only presence and no runtime authority', () => {
