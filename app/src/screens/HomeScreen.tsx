@@ -40,7 +40,7 @@ import {
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useDistance } from '../utils/distanceFormat';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
-import { resolveHomeStateWindow } from '../features/cairns/homeStateWindow';
+import { hasPersonalMemoryEvidence, resolveHomeStateWindow } from '../features/cairns/homeStateWindow';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -127,6 +127,8 @@ export function HomeScreen() {
   const presentationSurface = useCairnPresentationStore(s => s.activeSurface);
   const presentationBlocked = useCairnPresentationStore(s => s.presentationBlocked);
   const memoryUnreadCount = useCairnPresentationStore(s => s.unreadCount);
+  const acquiredCairnCount = useCairnPresentationStore(s => s.acquiredMarkers.length);
+  const memoryCairnCount = ownedCairnCount + acquiredCairnCount;
   const weatherCondition = useWeatherStore(s => s.condition);
   const conditionOverride = useWeatherStore(s => s.conditionOverride);
   const locationOverride = useWeatherStore(s => s.locationOverride);
@@ -292,7 +294,12 @@ export function HomeScreen() {
     activeOrRecoverable: showUnfinished,
     unannouncedDiscovery: hasDiscoverySurface,
     recentActivity: Boolean(lastHike),
-    personalMemory: memoryPointCount > 0 || ownedCairnCount > 0,
+    personalMemory: hasPersonalMemoryEvidence({
+      memoryPointCount,
+      ownedCairnCount,
+      acquiredCairnCount,
+      unreadAcquiredGroupCount: memoryUnreadCount,
+    }),
   });
   const showPriorityActivity = homeWindow === 'save-recovery' || homeWindow === 'active-or-recoverable';
   const showDiscovery = homeWindow === 'discovery';
@@ -359,7 +366,7 @@ export function HomeScreen() {
     : showDiscovery
       ? `Saved in Memory · ${formatRelativeDay(presentationGroup!.mergeStartedAt)}`
     : showMemoryReturn
-      ? (memoryPointCount > 0 ? `${Math.max(0.01, exploredKm2).toFixed(2)} km² explored` : `${ownedCairnCount} ${ownedCairnCount === 1 ? 'Cairn' : 'Cairns'} saved`)
+      ? (memoryPointCount > 0 ? `${Math.max(0.01, exploredKm2).toFixed(2)} km² explored` : `${memoryCairnCount} ${memoryCairnCount === 1 ? 'Cairn' : 'Cairns'} in Memory`)
     : (lastHike
     ? `${formatActivityDistance(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
     : '');
@@ -372,7 +379,7 @@ export function HomeScreen() {
     : showMemoryReturn
       ? (memoryPointCount > 0
         ? [`${Math.max(0.01, exploredKm2).toFixed(2)} km² explored`, 'View Memory']
-        : [`${ownedCairnCount} ${ownedCairnCount === 1 ? 'Cairn' : 'Cairns'}`, 'View Memory'])
+        : [`${memoryCairnCount} ${memoryCairnCount === 1 ? 'Cairn' : 'Cairns'}`, 'View Memory'])
     : (lastHike
       ? [formatActivityDistance(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
       : []);

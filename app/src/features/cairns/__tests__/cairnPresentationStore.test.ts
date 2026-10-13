@@ -51,6 +51,25 @@ function pending(eventThroughId = '11', cairnCount = 1): any {
   });
 }
 
+function pendingGroups(counts: number[]): any {
+  return response(200, {
+    unread_count: counts.reduce((total, count) => total + count, 0),
+    groups: counts.map((cairnCount, index) => ({
+      id: String(31 + index),
+      group_token: `visit:${index}`,
+      merge_started_at: `2026-10-13T00:0${index}:00.000Z`,
+      merge_until: `2026-10-13T00:0${index}:20.000Z`,
+      cairn_count: cairnCount,
+      single_marker_id: cairnCount === 1 ? `marker-${index}` : null,
+      event_through_id: String(11 + index),
+      unannounced_event_count: 1,
+      unannounced_updated_event_count: 0,
+      event_count: cairnCount,
+      updated_event_count: 0,
+    })),
+  });
+}
+
 describe('Cairn presentation coordinator', () => {
   beforeEach(() => {
     mockValues.clear();
@@ -93,6 +112,39 @@ describe('Cairn presentation coordinator', () => {
       activeGroup: { token: 'visit:alpha', eventThroughId: '19', cairnCount: 3 },
     });
     expect(useCairnPresentationStore.getState().pendingGroups).toEqual([]);
+  });
+
+  test('multiple background groups become one restrained Home summary and ACK each exact watermark', async () => {
+    mockFetch.mockResolvedValueOnce(pendingGroups([1, 3, 2]));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeSurface: 'home',
+      activeGroup: { cairnCount: 6, singleMarkerId: null, eventCount: 6 },
+      activeGroupMembers: [
+        { token: 'visit:0', eventThroughId: '11' },
+        { token: 'visit:1', eventThroughId: '12' },
+        { token: 'visit:2', eventThroughId: '13' },
+      ],
+      pendingGroups: [],
+    });
+    mockFetch.mockResolvedValue(response(200));
+    await expect(useCairnPresentationStore.getState().acknowledgeActive('home')).resolves.toBe(true);
+    const posts = mockFetch.mock.calls.filter(([url]) => String(url).includes('/announced'));
+    expect(posts.map(([url, options]) => [url, JSON.parse(options.body).event_through_id])).toEqual([
+      ['/api/cairn-memory/presentation/31/announced', '11'],
+      ['/api/cairn-memory/presentation/32/announced', '12'],
+      ['/api/cairn-memory/presentation/33/announced', '13'],
+    ]);
+  });
+
+  test('leaving Home before announcement returns every member without replaying acknowledged members', async () => {
+    mockFetch.mockResolvedValueOnce(pendingGroups([1, 2]));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    useCairnPresentationStore.getState().release('home');
+    expect(useCairnPresentationStore.getState()).toMatchObject({ activeGroup: null, activeGroupMembers: [] });
+    expect(useCairnPresentationStore.getState().pendingGroups.map(group => group.token)).toEqual(['visit:0', 'visit:1']);
   });
 
   test('modal/onboarding blockers defer the cue without losing its durable group', async () => {

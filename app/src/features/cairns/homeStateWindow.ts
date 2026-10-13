@@ -1,5 +1,17 @@
 export type HomeStateWindow = 'save-recovery' | 'active-or-recoverable' | 'discovery' | 'recent' | 'memory' | 'first-use';
 
+export function hasPersonalMemoryEvidence(input: {
+  memoryPointCount: number;
+  ownedCairnCount: number;
+  acquiredCairnCount: number;
+  unreadAcquiredGroupCount: number;
+}): boolean {
+  return input.memoryPointCount > 0
+    || input.ownedCairnCount > 0
+    || input.acquiredCairnCount > 0
+    || input.unreadAcquiredGroupCount > 0;
+}
+
 /** The single Home middle window has one deterministic, non-cycling owner. */
 export function resolveHomeStateWindow(input: {
   saveRecovery: boolean;

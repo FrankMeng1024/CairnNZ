@@ -50,6 +50,7 @@ interface CairnPresentationState {
   viewerId: string | null;
   pendingGroups: CairnPresentationGroup[];
   activeGroup: CairnPresentationGroup | null;
+  activeGroupMembers: CairnPresentationGroup[];
   activeSurface: string | null;
   unreadCount: number;
   acquiredMarkers: AcquiredCairnMapMarker[];
@@ -206,10 +207,29 @@ function availableGroups(snapshot: Snapshot): CairnPresentationGroup[] {
     && snapshot.acknowledged[group.token] !== group.eventThroughId);
 }
 
+function aggregateGroups(groups: CairnPresentationGroup[]): CairnPresentationGroup | null {
+  if (groups.length === 0) return null;
+  if (groups.length === 1) return groups[0];
+  return {
+    id: `summary:${groups.map(group => group.id).join(',')}`,
+    token: `summary:${groups.map(group => `${group.token}@${group.eventThroughId}`).join(',')}`,
+    mergeStartedAt: Math.min(...groups.map(group => group.mergeStartedAt)),
+    mergeUntil: Math.max(...groups.map(group => group.mergeUntil)),
+    cairnCount: groups.reduce((total, group) => total + group.cairnCount, 0),
+    singleMarkerId: null,
+    eventThroughId: groups.map(group => group.eventThroughId).join(','),
+    unannouncedEventCount: groups.reduce((total, group) => total + group.unannouncedEventCount, 0),
+    unannouncedUpdatedEventCount: groups.reduce((total, group) => total + group.unannouncedUpdatedEventCount, 0),
+    eventCount: groups.reduce((total, group) => total + group.eventCount, 0),
+    updatedEventCount: groups.reduce((total, group) => total + group.updatedEventCount, 0),
+  };
+}
+
 export const useCairnPresentationStore = create<CairnPresentationState>((set, get) => ({
   viewerId: null,
   pendingGroups: [],
   activeGroup: null,
+  activeGroupMembers: [],
   activeSurface: null,
   unreadCount: 0,
   acquiredMarkers: [],
@@ -233,6 +253,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         viewerId: null,
         pendingGroups: [],
         activeGroup: null,
+        activeGroupMembers: [],
         activeSurface: null,
         unreadCount: 0,
         acquiredMarkers: [],
@@ -247,6 +268,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
       viewerId,
       pendingGroups: [],
       activeGroup: null,
+      activeGroupMembers: [],
       activeSurface: null,
       unreadCount: 0,
       acquiredMarkers: [],
@@ -343,19 +365,26 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         snapshot.unreadCount = Math.max(0, Number(body?.unread_count) || 0);
         await persist(snapshot, generation);
         if (!current(viewerId, generation)) return;
-        const active = get().activeGroup;
-        const activeUpdate = active ? snapshot.groups.find(group => group.token === active.token) : null;
+        const activeMembers = get().activeGroupMembers;
+        const activeUpdates = activeMembers.flatMap(member => {
+          const update = snapshot.groups.find(group => group.token === member.token);
+          return update && update.unannouncedEventCount > 0
+            && snapshot.acknowledged[update.token] !== update.eventThroughId ? [update] : [];
+        });
+        const activeTokens = new Set(activeUpdates.map(group => group.token));
+        const activeUpdate = aggregateGroups(activeUpdates);
         set({
-          pendingGroups: availableGroups(snapshot).filter(group => group.token !== active?.token),
-          activeGroup: active ? (activeUpdate ?? null) : null,
-          activeSurface: active && !activeUpdate ? null : get().activeSurface,
+          pendingGroups: availableGroups(snapshot).filter(group => !activeTokens.has(group.token)),
+          activeGroup: activeUpdate,
+          activeGroupMembers: activeUpdates,
+          activeSurface: activeUpdate ? get().activeSurface : null,
           unreadCount: snapshot.unreadCount,
           loading: false,
           error: null,
         });
       } catch {
         if (!current(viewerId, generation)) return;
-        set({ pendingGroups: [], activeGroup: null, activeSurface: null, unreadCount: 0, acquiredMarkers: [], loading: false, error: 'offline' });
+        set({ pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null, unreadCount: 0, acquiredMarkers: [], loading: false, error: 'offline' });
       }
     })();
     const finalPromise = work.finally(() => { if (refreshPromise === finalPromise) refreshPromise = null; });
@@ -375,37 +404,48 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
   claim: (surface) => {
     const state = get();
     if (state.presentationBlocked || state.activeGroup) return;
-    const [group, ...remaining] = state.pendingGroups;
+    const groups = state.pendingGroups;
+    const group = aggregateGroups(groups);
     if (!group) return;
-    set({ activeGroup: group, activeSurface: surface, pendingGroups: remaining });
+    set({ activeGroup: group, activeGroupMembers: groups, activeSurface: surface, pendingGroups: [] });
   },
 
   acknowledgeActive: async (surface) => {
     const state = get();
     const group = state.activeSurface === surface ? state.activeGroup : null;
+    const members = state.activeSurface === surface ? state.activeGroupMembers : [];
     const viewerId = state.viewerId;
-    if (!group || !viewerId) return false;
+    if (!group || members.length === 0 || !viewerId) return false;
     const generation = bind(viewerId);
     if (generation === null) return false;
     const snapshot = await loadSnapshot(viewerId);
     if (!current(viewerId, generation)
       || get().activeSurface !== surface
       || get().activeGroup?.eventThroughId !== group.eventThroughId) return false;
-    if (snapshot.acknowledged[group.token] === group.eventThroughId) return true;
-    const ack: PendingAck = { groupId: group.id, token: group.token, eventThroughId: group.eventThroughId };
-    snapshot.acknowledged[group.token] = group.eventThroughId;
-    snapshot.pendingAcks[`${group.id}:${group.eventThroughId}`] = ack;
+    const acks = members.flatMap(member => {
+      if (snapshot.acknowledged[member.token] === member.eventThroughId) return [];
+      return [{ groupId: member.id, token: member.token, eventThroughId: member.eventThroughId }];
+    });
+    if (acks.length === 0) return true;
+    for (const ack of acks) {
+      snapshot.acknowledged[ack.token] = ack.eventThroughId;
+      snapshot.pendingAcks[`${ack.groupId}:${ack.eventThroughId}`] = ack;
+    }
     try {
       await persist(snapshot, generation);
     } catch {
-      delete snapshot.acknowledged[group.token];
-      delete snapshot.pendingAcks[`${group.id}:${group.eventThroughId}`];
+      for (const ack of acks) {
+        delete snapshot.acknowledged[ack.token];
+        delete snapshot.pendingAcks[`${ack.groupId}:${ack.eventThroughId}`];
+      }
       return false;
     }
-    if (await sendAck(viewerId, ack)) {
-      delete snapshot.pendingAcks[`${group.id}:${group.eventThroughId}`];
-      await persist(snapshot, generation).catch(() => undefined);
+    for (const ack of acks) {
+      if (await sendAck(viewerId, ack)) {
+        delete snapshot.pendingAcks[`${ack.groupId}:${ack.eventThroughId}`];
+      }
     }
+    await persist(snapshot, generation).catch(() => undefined);
     return current(viewerId, generation);
   },
 
@@ -414,13 +454,14 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
     if (state.activeSurface !== surface || !state.activeGroup) return;
     const viewerId = state.viewerId;
     const snapshot = viewerId ? snapshots.get(viewerId) : null;
-    const wasAcknowledged = snapshot?.acknowledged[state.activeGroup.token] === state.activeGroup.eventThroughId;
+    const unacknowledgedMembers = state.activeGroupMembers.filter(member => (
+      snapshot?.acknowledged[member.token] !== member.eventThroughId
+    ));
     set({
       activeGroup: null,
+      activeGroupMembers: [],
       activeSurface: null,
-      pendingGroups: wasAcknowledged
-        ? state.pendingGroups
-        : [state.activeGroup, ...state.pendingGroups],
+      pendingGroups: [...unacknowledgedMembers, ...state.pendingGroups],
     });
   },
 
@@ -430,7 +471,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
     refreshPromise = null;
     mapRefreshPromise = null;
     presentationBlockers.clear();
-    set({ viewerId: null, pendingGroups: [], activeGroup: null, activeSurface: null, unreadCount: 0, acquiredMarkers: [], presentationBlocked: false, loading: false, error: null });
+    set({ viewerId: null, pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null, unreadCount: 0, acquiredMarkers: [], presentationBlocked: false, loading: false, error: null });
   },
 }));
 
@@ -440,7 +481,7 @@ export const __cairnPresentationTest = {
     snapshots.clear(); loads.clear(); writeTails.clear(); refreshPromise = null; mapRefreshPromise = null; presentationBlockers.clear();
     observedViewerId = ''; accountGeneration += 1;
     useCairnPresentationStore.setState({
-      viewerId: null, pendingGroups: [], activeGroup: null, activeSurface: null,
+      viewerId: null, pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null,
       unreadCount: 0, acquiredMarkers: [], presentationBlocked: false, loading: false, error: null,
     });
   },
