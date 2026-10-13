@@ -10,7 +10,7 @@ import {
   Dimensions, Animated, Easing, Platform, TextInput, Keyboard, AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommonActions, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -53,6 +53,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { SyncBadge } from '../components/SyncBadge';
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
+import { CanonicalRouteLayer } from '../components/map/CanonicalRouteLayer';
 import {
   deriveActivityRouteState,
 } from '../features/activity/activityRouteState';
@@ -65,6 +66,12 @@ import {
   linkedCairnsForActivity,
 } from '../features/activity/activityDetailPresentation';
 import { routeCanBeUsed, routeMatchesIdentity, routeOriginLines } from '../features/route/routeContracts';
+import {
+  canonicalRouteBounds,
+  canonicalRouteGeometry,
+  canonicalRouteGeometryFingerprint,
+  type CanonicalRouteGeometry,
+} from '../features/route/canonicalRouteGeometry';
 import { shareRouteSnapshot } from '../services/routeService';
 import { uuidv4 } from '../services/offlineQueue';
 import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
@@ -166,8 +173,23 @@ function detailRouteBounds(points: TrackingSession['trackPoints']): {
   return { minLat, maxLat, minLng, maxLng };
 }
 
-function NativeTrackMap({ session, markers }: { session: TrackingSession; markers: Marker[] }) {
-  const pts = session.trackPoints;
+function NativeTrackMap({
+  session,
+  markers,
+  plannedRouteGeometry,
+}: {
+  session: TrackingSession;
+  markers: Marker[];
+  plannedRouteGeometry?: CanonicalRouteGeometry;
+}) {
+  const pts = useMemo(() => plannedRouteGeometry
+    ? plannedRouteGeometry.parts.flatMap(part => part.points.map((point, index) => ({
+        ...point,
+        t: index,
+        segmentId: part.id,
+      })))
+    : session.trackPoints, [plannedRouteGeometry, session.trackPoints]);
+  const visualTheme = useVisualTheme();
   const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
   // O18 MAP-01: react to user's saved map layer preference.
   const mapLayer = useSettingsStore((s) => s.mapLayer);
@@ -185,8 +207,16 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
   const [detailStyleGeneration, setDetailStyleGeneration] = useState(0);
   const cameraRef = useRef<any>(null);
   const lastCameraFitRef = useRef<string | null>(null);
-  const bounds = useMemo(() => detailRouteBounds(pts), [pts]);
-  const geometryIdentity = useMemo(() => activityGeometryFingerprint(pts), [pts]);
+  const bounds = useMemo(
+    () => plannedRouteGeometry ? canonicalRouteBounds(plannedRouteGeometry) : detailRouteBounds(pts),
+    [plannedRouteGeometry, pts],
+  );
+  const geometryIdentity = useMemo(
+    () => plannedRouteGeometry
+      ? canonicalRouteGeometryFingerprint(plannedRouteGeometry)
+      : activityGeometryFingerprint(pts),
+    [plannedRouteGeometry, pts],
+  );
   const mapBindingIdentity = activityDetailMapBindingIdentity(geometryIdentity, detailStyleGeneration);
 
   useEffect(() => {
@@ -287,7 +317,15 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
           animationDuration={0}
         />
       )}
-      {ShapeSource && LineLayer && (() => {
+      {plannedRouteGeometry ? (
+        <CanonicalRouteLayer
+          geometry={plannedRouteGeometry}
+          theme={visualTheme}
+          ShapeSource={ShapeSource}
+          LineLayer={LineLayer}
+          idPrefix={`route-detail-${geometryIdentity}`}
+        />
+      ) : ShapeSource && LineLayer && (() => {
         const trace = segmentTrace(pts);
         const solidFeatures = trace.segments.filter(segment => segment.length >= 2).map((segment, i) => ({
           type: 'Feature' as const,
@@ -325,10 +363,10 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
       {PointAnnotation && (
         <>
           <PointAnnotation id="track-start" coordinate={[start.lng, start.lat]}>
-            <View style={[trackStyles.nativeStartDot, { backgroundColor: color }]} />
+            <View style={[trackStyles.nativeStartDot, { backgroundColor: plannedRouteGeometry ? visualTheme.mapRouteLine : color }]} />
           </PointAnnotation>
           <PointAnnotation id="track-end" coordinate={[end.lng, end.lat]}>
-            <View style={[trackStyles.nativeEndDot, { borderColor: color }]} />
+            <View style={[trackStyles.nativeEndDot, { borderColor: plannedRouteGeometry ? visualTheme.mapRouteLine : color }]} />
           </PointAnnotation>
           {/* Real marker pins anchored to GPS coords. Each pin is
               positioned by the map at its true lat/lng so it pans/
@@ -391,10 +429,12 @@ function NativeTrackMap({ session, markers }: { session: TrackingSession; marker
 // ── Track polyline ────────────────────────────────────────────────────────────
 // Converts trackPoints lat/lng to pixel positions within the map area.
 // If no trackPoints, renders a dashed "No GPS" placeholder line.
-function TrackPolyline({ session }: { session: TrackingSession }) {
+function TrackPolyline({ session, planned = false }: { session: TrackingSession; planned?: boolean }) {
   const theme = useVisualTheme();
   const pts = session.trackPoints;
-  const color = session.activityMode === 'running' ? Colors.running : Colors.primary;
+  const color = planned
+    ? theme.mapRouteLine
+    : session.activityMode === 'running' ? Colors.running : Colors.primary;
 
   if (pts.length < 2) {
     // v450 + O6: TrackPolyline is only rendered when isLoadingTrackPoints
@@ -843,6 +883,7 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
 // ── Main ────────────────────────────────────────────────────────────────────
 function MapHistoryObjectScreen() {
   const visualTheme = useVisualTheme();
+  const insets = useSafeAreaInsets();
   const nav = useNavigation<Nav>();
   const route = useRoute<any>();
   const targetQaReviewClone = route.params?.qaReviewClone as 'almost-done-v1' | undefined;
@@ -1537,17 +1578,15 @@ function MapHistoryObjectScreen() {
   const mapMarkers: Marker[] = sessionForDisplay
     ? routeFlags
     : markers.slice(0, 8);
-  const routePreviewPoints = selectedRoute?.orderedDraft?.parts.length
-    ? selectedRoute.orderedDraft.parts.flatMap((part, partIndex) => part.points.map((point, pointIndex) => ({
-        ...point,
-        t: selectedRoute.createdAt + partIndex * 1_000_000 + pointIndex,
-        segmentId: part.id,
-      })))
-    : selectedRoute?.points.map((point, index) => ({
-        ...point,
-        t: selectedRoute.createdAt + index,
-        segmentId: 'route-reference',
-      })) ?? [];
+  const routePreviewGeometry = useMemo(
+    () => selectedRoute ? canonicalRouteGeometry(selectedRoute) : null,
+    [selectedRoute],
+  );
+  const routePreviewPoints = routePreviewGeometry?.parts.flatMap((part, partIndex) => part.points.map((point, pointIndex) => ({
+    ...point,
+    t: (selectedRoute?.createdAt ?? 0) + partIndex * 1_000_000 + pointIndex,
+    segmentId: part.id,
+  }))) ?? [];
   const routePreviewSession = selectedRoute && routePreviewPoints.length >= 2
     ? ({
         id: `route-preview-${selectedRoute.id}`,
@@ -1565,8 +1604,8 @@ function MapHistoryObjectScreen() {
             map; web/Expo Go falls back to the SVG-on-panel rendering. */}
         {routePreviewSession ? (
           MapView
-            ? <NativeTrackMap session={routePreviewSession} markers={[]} />
-            : <TrackPolyline session={routePreviewSession} />
+            ? <NativeTrackMap session={routePreviewSession} markers={[]} plannedRouteGeometry={routePreviewGeometry ?? undefined} />
+            : <TrackPolyline session={routePreviewSession} planned />
         ) : targetRouteId ? (
           <View style={trackStyles.noGpsWrap} testID="route-map-unavailable">
             {routeDetailState === 'loading' ? <ActivityIndicator color={visualTheme.primary} /> : null}
@@ -1683,7 +1722,7 @@ function MapHistoryObjectScreen() {
           submit style. */}
       {targetRouteId && selectedRoute ? (
         <>
-        <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+        <View style={[styles.singleSessionPanel, { paddingBottom: Math.max(insets.bottom, Spacing.base) + Spacing.md, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
           <View style={{ marginBottom: Spacing.md }}>
             {renameEditing ? (
               <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
@@ -1819,19 +1858,19 @@ function MapHistoryObjectScreen() {
                 <Icon name="Share2" size={IconSize.sm} color={routeCanBeUsed(selectedRoute) ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2} />
                 <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>Share</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
-                onPress={() => setRouteDeleteConfirm(true)}
-                disabled={deleteSaving}
-                accessibilityRole="button"
-                accessibilityLabel="Delete route"
-              >
-                {deleteSaving
-                  ? <ActivityIndicator size="small" color={visualTheme.iconInactive} />
-                  : <Icon name="Trash2" size={IconSize.sm} color={visualTheme.iconInactive} strokeWidth={2} />}
-                <Text style={[styles.routeMaintenanceText, { color: visualTheme.foregroundSecondary }]}>Delete</Text>
-              </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              style={[styles.routeDeleteAction, { backgroundColor: visualTheme.destructiveSurface }]}
+              onPress={() => setRouteDeleteConfirm(true)}
+              disabled={deleteSaving}
+              accessibilityRole="button"
+              accessibilityLabel="Delete route"
+            >
+              {deleteSaving
+                ? <ActivityIndicator size="small" color={visualTheme.destructive} />
+                : <Icon name="Trash2" size={16} color={visualTheme.destructive} strokeWidth={2} />}
+              <Text style={[styles.routeDeleteText, { color: visualTheme.destructive }]}>Delete Route</Text>
+            </TouchableOpacity>
           </View>
         </View>
         <ModalCard
@@ -2814,6 +2853,15 @@ const styles = StyleSheet.create({
     borderRadius: Radius.button,
   },
   routeMaintenanceText: { fontSize: FontSize.caption, fontWeight: '700' },
+  routeDeleteAction: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    borderRadius: Radius.button,
+  },
+  routeDeleteText: { fontSize: FontSize.caption, fontWeight: '700' },
   routeShareFriend: {
     minHeight: 48,
     marginBottom: Spacing.sm,

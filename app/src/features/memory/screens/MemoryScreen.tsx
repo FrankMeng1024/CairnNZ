@@ -59,6 +59,11 @@ import { pullMemoryFromServer } from '../../../services/memorySync';
 import { publishInitialMemoryReconcile } from '../services/memoryPersistence';
 // v427: async hierarchy from /api/hierarchy (world-wide data)
 import { fetchDeepest } from '../services/hierarchyService';
+import {
+  resolveCurrentCityViewport,
+  resolveMemoryEntryCameraAuthority,
+  type MemoryCityViewport,
+} from '../services/memoryEntryCameraPolicy';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
 // v427: hierarchy migrated to async /api/hierarchy — legacy static store deleted.
@@ -250,21 +255,13 @@ export function MemoryScreen() {
   // network requests that caused the "weak signal" timeout banner.
   const lastFriendLoadRef = useRef<number>(0);
   const restoredManualCityRef = useRef<string | null>(null);
+  const manualBrowseThisMountRef = useRef(false);
+  const currentCityAppliedRef = useRef<string | null>(null);
+  const currentCityViewportRef = useRef<MemoryCityViewport | null>(null);
   useEffect(() => {
     if (!activeOwnerId || cameraOwnerId === activeOwnerId) return;
     void hydrateMemoryCamera(activeOwnerId);
   }, [activeOwnerId, cameraOwnerId, hydrateMemoryCamera]);
-  useEffect(() => {
-    if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId || !manualCity) return;
-    const restorationKey = `${activeOwnerId}:${manualCity.cityId}:${manualCity.center.join(',')}`;
-    if (restoredManualCityRef.current === restorationKey) return;
-    restoredManualCityRef.current = restorationKey;
-    flyTokenRef.current += 1;
-    setFlyToTarget({ center: manualCity.center, zoom: manualCity.zoom, token: flyTokenRef.current });
-    setHierarchyCurrentCityId(manualCity.cityId);
-    setHierarchyCurrentCountryId(manualCity.countryId);
-    setMapMoved(true);
-  }, [activeOwnerId, cameraHydrated, cameraOwnerId, manualCity]);
   useEffect(() => {
     // Bug-5: load friends once per mount if not already loaded this session
     if (!friendsLoadedRef.current) {
@@ -522,6 +519,8 @@ export function MemoryScreen() {
         settingsHydrated: settingsHydratedLatest,
         mountKey: mountKeyLatest,
       });
+      manualBrowseThisMountRef.current = false;
+      currentCityAppliedRef.current = null;
       const now = Date.now();
       // Reset scope to 'mine' on every focus — per product spec, social
       // view is a deliberate switch, not a persistent default.
@@ -653,11 +652,11 @@ export function MemoryScreen() {
         ? { lat: watcherFix.lat, lng: watcherFix.lng }
         : null;
 
-  const ownedEvidenceCenter = useMemo<FixState | null>(() => {
+  const ownedEvidenceForCamera = useMemo(() => {
     if (!activeOwnerId
       || localHydration.ownerUserId !== activeOwnerId
-      || localHydration.status !== 'ready') return null;
-    const candidates = syntheticQaAuthority
+      || localHydration.status !== 'ready') return [];
+    return syntheticQaAuthority
       ? syntheticTestPoints.map(point => ({ lat: point.lat, lng: point.lng, ts: point.ts }))
       : [
           ...memoryPoints.map(point => ({ lat: point.lat, lng: point.lng, ts: point.ts })),
@@ -667,13 +666,6 @@ export function MemoryScreen() {
             ts: witness.observedAtMs,
           })),
         ];
-    let latest: { lat: number; lng: number; ts: number } | null = null;
-    for (const candidate of candidates) {
-      if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lng)
-        || !Number.isFinite(candidate.ts)) continue;
-      if (!latest || candidate.ts > latest.ts) latest = candidate;
-    }
-    return latest ? { lat: latest.lat, lng: latest.lng } : null;
   }, [
     activeOwnerId,
     localHydration.ownerUserId,
@@ -683,6 +675,16 @@ export function MemoryScreen() {
     syntheticQaAuthority,
     syntheticTestPoints,
   ]);
+
+  const ownedEvidenceCenter = useMemo<FixState | null>(() => {
+    let latest: { lat: number; lng: number; ts: number } | null = null;
+    for (const candidate of ownedEvidenceForCamera) {
+      if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lng)
+        || !Number.isFinite(candidate.ts)) continue;
+      if (!latest || candidate.ts > latest.ts) latest = candidate;
+    }
+    return latest ? { lat: latest.lat, lng: latest.lng } : null;
+  }, [ownedEvidenceForCamera]);
 
   // v333: stableCoord — fix the "Looking for your position…" flicker
   // (Spike L true root cause). When the Zustand selectors briefly
@@ -736,6 +738,70 @@ export function MemoryScreen() {
     ? lastRenderedCoordRef.current.coord
     : null;
 
+  const freshCurrentEvidence = watcherFresh || Boolean(oneShot) || syntheticQaAuthority;
+  useEffect(() => {
+    if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId) return undefined;
+    const authority = resolveMemoryEntryCameraAuthority({
+      hasFreshCurrentEvidence: freshCurrentEvidence,
+      locationAttemptFailed: Boolean(failReason),
+      hasManualCity: Boolean(manualCity),
+      manualBrowseThisMount: manualBrowseThisMountRef.current,
+    });
+    if (manualBrowseThisMountRef.current) return undefined;
+    let cancelled = false;
+
+    if (authority === 'current' && stableCoord) {
+      const applicationKey = `${activeOwnerId}:${stableCoord.lat.toFixed(5)},${stableCoord.lng.toFixed(5)}:${refetchToken}`;
+      if (currentCityAppliedRef.current === applicationKey) return undefined;
+      currentCityAppliedRef.current = applicationKey;
+      void (async () => {
+        const { city, country } = await fetchDeepest(stableCoord.lat, stableCoord.lng);
+        if (cancelled || manualBrowseThisMountRef.current) return;
+        const viewport = resolveCurrentCityViewport(
+          stableCoord,
+          city?.bbox ?? null,
+          ownedEvidenceForCamera,
+        );
+        currentCityViewportRef.current = viewport;
+        flyTokenRef.current += 1;
+        setFlyToTarget({ ...viewport, token: flyTokenRef.current });
+        setHierarchyCurrentCityId(city?.id ?? null);
+        setHierarchyCurrentCountryId(country?.id ?? city?.country_id ?? null);
+        setMapMoved(false);
+        restoredManualCityRef.current = null;
+        if (manualCity) void clearManualMemoryCity();
+      })();
+      return () => { cancelled = true; };
+    }
+
+    // Do not restore a historical city while a fresh-location attempt is
+    // unresolved. A stored manual city is only the fallback after that
+    // attempt has explicitly failed.
+    if (authority !== 'manual-fallback' || !manualCity) return undefined;
+    const restorationKey = `${activeOwnerId}:${manualCity.cityId}:${manualCity.center.join(',')}`;
+    if (restoredManualCityRef.current === restorationKey) return undefined;
+    restoredManualCityRef.current = restorationKey;
+    currentCityViewportRef.current = null;
+    flyTokenRef.current += 1;
+    setFlyToTarget({ center: manualCity.center, zoom: manualCity.zoom, token: flyTokenRef.current });
+    setHierarchyCurrentCityId(manualCity.cityId);
+    setHierarchyCurrentCountryId(manualCity.countryId);
+    setMapMoved(true);
+    return undefined;
+  }, [
+    activeOwnerId,
+    cameraHydrated,
+    cameraOwnerId,
+    clearManualMemoryCity,
+    failReason,
+    freshCurrentEvidence,
+    manualCity,
+    oneShot,
+    ownedEvidenceForCamera,
+    refetchToken,
+    stableCoord,
+  ]);
+
   // v357 diagnostic: log every render of MemoryScreen body. ctx tells us
   // (a) which render index this is, (b) whether we have a coord to draw
   // the map with, (c) how many points exist in store at this instant.
@@ -787,7 +853,18 @@ export function MemoryScreen() {
 
   const onRecenter = () => {
     log('memory.recenter_tap');
-    setRecenterToken((n) => n + 1);
+    manualBrowseThisMountRef.current = false;
+    const currentCityViewport = currentCityViewportRef.current;
+    if (currentCityViewport) {
+      flyTokenRef.current += 1;
+      setFlyToTarget({
+        center: currentCityViewport.center,
+        zoom: currentCityViewport.zoom,
+        token: flyTokenRef.current,
+      });
+    } else {
+      setRecenterToken((n) => n + 1);
+    }
     restoredManualCityRef.current = null;
     void clearManualMemoryCity();
     // v445 fix: eagerly update cameraCenterRef to real GPS location so
@@ -796,7 +873,9 @@ export function MemoryScreen() {
     // onCameraChanged should also fire later, but relying on it alone
     // was unreliable for imperative camera moves.
     if (persistentCoord) {
-      const target = stableCoord ?? persistentCoord;
+      const target = currentCityViewport
+        ? { lat: currentCityViewport.center[1], lng: currentCityViewport.center[0] }
+        : stableCoord ?? persistentCoord;
       cameraCenterRef.current = { lat: target.lat, lng: target.lng };
       log('v445.recenter_camera_ref_set', { lat: target.lat, lng: target.lng });
     }
@@ -1210,6 +1289,7 @@ export function MemoryScreen() {
               return;
             }
             // Country layer → tap city: fly + refetch panel with new here_city_id.
+            manualBrowseThisMountRef.current = true;
             const [minLng, minLat, maxLng, maxLat] = bbox;
             const bboxCenterLng = (minLng + maxLng) / 2;
             const bboxCenterLat = (minLat + maxLat) / 2;

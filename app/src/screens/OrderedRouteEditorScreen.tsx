@@ -20,6 +20,7 @@ import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay'
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { RouteDrawOverlay } from '../components/map/RouteDrawOverlay';
+import { CanonicalRouteLayer } from '../components/map/CanonicalRouteLayer';
 import { FogLayer } from '../features/memory/components/FogLayer';
 import { useFriendMemoryStore } from '../features/memory/store/useFriendMemoryStore';
 import { TrimSlider } from '../components/map/TrimSlider';
@@ -80,6 +81,8 @@ import {
   type RouteProviderReason,
 } from '../features/route/routePlanningProvider';
 import { routeMatchesIdentity } from '../features/route/routeContracts';
+import { selectActivityRouteImportPoints } from '../features/route/activityRouteImport';
+import { canonicalRouteGeometry } from '../features/route/canonicalRouteGeometry';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { uuidv4 } from '../services/offlineQueue';
@@ -258,6 +261,7 @@ export function OrderedRouteEditorScreen() {
   const [initializing, setInitializing] = useState(true);
   const [saving, setSaving] = useState(false);
   const [providerBusy, setProviderBusy] = useState(false);
+  const [resolvingDrawPoints, setResolvingDrawPoints] = useState<RoutePoint[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
   const [mapEpoch, setMapEpoch] = useState(0);
@@ -280,6 +284,8 @@ export function OrderedRouteEditorScreen() {
   const routeAnimationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initializedKeyRef = useRef('');
   const initializingKeyRef = useRef('');
+  const initialLocationAttemptedRef = useRef(false);
+  const userMovedCameraRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -301,6 +307,7 @@ export function OrderedRouteEditorScreen() {
     providerTransactionRef.current = false;
     finishRouteAnimation();
     setProviderBusy(false);
+    setResolvingDrawPoints([]);
     setPendingReview(null);
     setPendingPointReview(null);
     setPendingIntervalReview(null);
@@ -316,7 +323,7 @@ export function OrderedRouteEditorScreen() {
   const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
     finishRouteAnimation();
     if (reduceMotion || points.length < 3) return;
-    const durationMs = 800;
+    const durationMs = 1150;
     const tickMs = 32;
     const startedAt = Date.now();
     const key = uuidv4();
@@ -403,8 +410,15 @@ export function OrderedRouteEditorScreen() {
         const session = useSessionStore.getState().sessions.find(item => item.id === fromSessionId);
         if (!session) throw new Error('This Activity is no longer available.');
         const clientActivityId = session.clientActivityId ?? session.id;
-        const artifact = await loadActivityFinalArtifact(ownerId, clientActivityId);
-        const points = artifact?.points?.length ? artifact.points : await loadActivityTrackPoints(session);
+        // Canonical accepted observations preserve the Activity's complete
+        // turns and physical segment boundaries. The selected Final remains a
+        // cross-device fallback only; it must not collapse a locally available
+        // track to a start/end preview.
+        const [artifact, canonicalPoints] = await Promise.all([
+          loadActivityFinalArtifact(ownerId, clientActivityId),
+          loadActivityTrackPoints(session),
+        ]);
+        const points = selectActivityRouteImportPoints(canonicalPoints, artifact?.points ?? []);
         const segments = segmentTrace(points).segments
           .filter(segment => segment.length >= 2)
           .map(segment => segment.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt ?? null })));
@@ -499,7 +513,6 @@ export function OrderedRouteEditorScreen() {
   }, [fromSessionId, history, initializing, name, ownerId, pendingMultiStroke, permission, readOnlyShared, routeId]);
 
   const draft = history?.present ?? null;
-  const routeParts = draft?.parts ?? [];
   const selectedGap = draft?.gaps.find(gap => gap.id === selectedGapId);
   const mapStyle = getMapStyleForTheme('outdoors', mapTheme);
   const lightPreset = themeToStandardPreset(mapTheme);
@@ -513,6 +526,31 @@ export function OrderedRouteEditorScreen() {
       animationDuration: reduceMotion ? 0 : 550,
     });
   }, [reduceMotion]);
+
+  useEffect(() => {
+    if (initializing || !draft || initialBoundsRef.current || initialLocationAttemptedRef.current) return;
+    initialLocationAttemptedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const permissionState = await Location.getForegroundPermissionsAsync();
+        if (permissionState.status !== 'granted') {
+          if (!cancelled) setError('Location is unavailable. Search for a place or browse the map to start planning.');
+          return;
+        }
+        const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 2 * 60_000, requiredAccuracy: 200 });
+        const fix = lastKnown ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (cancelled || userMovedCameraRef.current) return;
+        moveCamera({ lat: fix.coords.latitude, lng: fix.coords.longitude }, 14);
+        setError(null);
+      } catch {
+        if (!cancelled && !userMovedCameraRef.current) {
+          setError('Current location is unavailable. Search for a place or browse the map instead.');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [draft, initializing, moveCamera]);
 
   const showRouteOverview = useCallback(() => {
     const points = historyRef.current?.present.parts.flatMap(part => part.points) ?? [];
@@ -644,6 +682,7 @@ export function OrderedRouteEditorScreen() {
     operationAbortRef.current = controller;
     activeOperationIdRef.current = operationId;
     setProviderBusy(true);
+    setResolvingDrawPoints(transactionPoints);
     setError(null);
     try {
       const resolved = await resolveDrawPlan(transactionPoints, { signal: controller.signal });
@@ -679,6 +718,7 @@ export function OrderedRouteEditorScreen() {
         if (activeOperationIdRef.current === operationId) activeOperationIdRef.current = null;
         providerTransactionRef.current = false;
       }
+      setResolvingDrawPoints([]);
       if (!controller.signal.aborted) setProviderBusy(false);
     }
   }, [applyResolvedDraw, ownerId, pendingMultiStroke, selectedGapId]);
@@ -748,7 +788,7 @@ export function OrderedRouteEditorScreen() {
       if (!live || controller.signal.aborted
         || !routeOperationIsCurrent(live.present, ownerId, token, activeOperationIdRef.current)) return;
       if (result.outcome === 'accepted') {
-        setPendingPointReview({ kind: 'point', points: result.points, intent, reason: null, baseRevision });
+        applyResolvedPoint(result.points, intent, baseRevision);
       }
       else if (result.outcome === 'review') {
         setPendingPointReview({ kind: 'point', points: result.points, intent, reason: result.reason, baseRevision });
@@ -978,12 +1018,7 @@ export function OrderedRouteEditorScreen() {
         : pointIntent === 'replace-end'
           ? 'Set replacement end'
           : 'Add destination';
-  const mapParts = routeParts.filter(part => part.id !== routeGrowthAnimation?.hiddenPartId).map(part => ({
-    type: 'Feature' as const,
-    id: part.id,
-    properties: { resolution: part.resolution },
-    geometry: { type: 'LineString' as const, coordinates: part.points.map(point => [point.lng, point.lat]) },
-  }));
+  const routeGeometry = canonicalRouteGeometry({ orderedDraft: draft });
   const animationFeature = routeGrowthAnimation ? {
     type: 'Feature' as const,
     properties: {},
@@ -994,17 +1029,6 @@ export function OrderedRouteEditorScreen() {
         .map(point => [point.lng, point.lat]),
     },
   } : null;
-  const gapFeatures = draft.gaps.flatMap(gap => {
-    const left = draft.parts.findIndex(part => part.id === gap.afterPartId);
-    const a = draft.parts[left]?.points.at(-1);
-    const b = draft.parts[left + 1]?.points[0];
-    return a && b ? [{
-      type: 'Feature' as const,
-      id: gap.id,
-      properties: {},
-      geometry: { type: 'LineString' as const, coordinates: [[a.lng, a.lat], [b.lng, b.lat]] },
-    }] : [];
-  });
   const routeEndpoints = (() => {
     const start = draft.parts[0]?.points[0] ?? draft.startPoint;
     const end = draft.parts.at(-1)?.points.at(-1);
@@ -1042,17 +1066,21 @@ export function OrderedRouteEditorScreen() {
     properties: {},
     geometry: { type: 'LineString' as const, coordinates: points.map(point => [point.lng, point.lat]) },
   }] : []);
-  const pendingFeature = pendingMultiStroke && pendingMultiStroke.points.length >= 2 ? {
+  const visiblePendingPoints = resolvingDrawPoints.length >= 2
+    ? resolvingDrawPoints
+    : pendingMultiStroke?.points ?? [];
+  const pendingFeature = visiblePendingPoints.length >= 2 ? {
     type: 'Feature' as const,
     properties: {},
-    geometry: { type: 'LineString' as const, coordinates: pendingMultiStroke.points.map(point => [point.lng, point.lat]) },
+    geometry: { type: 'LineString' as const, coordinates: visiblePendingPoints.map(point => [point.lng, point.lat]) },
   } : null;
-  const pendingEndpointFeature = pendingMultiStroke?.points.at(-1) ? {
+  const pendingEndpoint = visiblePendingPoints.at(-1);
+  const pendingEndpointFeature = pendingEndpoint ? {
     type: 'Feature' as const,
     properties: {},
     geometry: {
       type: 'Point' as const,
-      coordinates: [pendingMultiStroke.points.at(-1)!.lng, pendingMultiStroke.points.at(-1)!.lat],
+      coordinates: [pendingEndpoint.lng, pendingEndpoint.lat],
     },
   } : null;
   const previewFeature = reviewPoints.length >= 2 ? {
@@ -1085,6 +1113,7 @@ export function OrderedRouteEditorScreen() {
           onCameraChanged={(event: any) => {
             const center = event?.properties?.center;
             if (Array.isArray(center) && center.length >= 2) cameraCenterRef.current = { lng: Number(center[0]), lat: Number(center[1]) };
+            if (event?.properties?.isUserInteraction) userMovedCameraRef.current = true;
           }}
         >
           {StyleImport ? <StyleImport key={lightPreset} id="basemap" existing config={buildStandardConfig(mapTheme) as any} /> : null}
@@ -1100,58 +1129,50 @@ export function OrderedRouteEditorScreen() {
               }}
               animationDuration={0}
             />
-          ) : <Camera ref={cameraRef} centerCoordinate={fallbackCenter} zoomLevel={region.defaultZoom} animationDuration={0} /> : null}
+          ) : <Camera ref={cameraRef} centerCoordinate={fallbackCenter} zoomLevel={Math.max(region.defaultZoom, 10)} animationDuration={0} /> : null}
           <FogLayer scopeOverride={planningMemoryScope} opacityScale={0.42} />
-          {ShapeSource && LineLayer && mapParts.length ? (
-            <ShapeSource id="ordered-route-parts" shape={{ type: 'FeatureCollection', features: mapParts }}>
-              <LineLayer id="ordered-route-parts-line" style={{
-                lineColor: ['match', ['get', 'resolution'], 'draw-manual', theme.accent, theme.primary] as any,
-                lineWidth: 6,
-                lineCap: 'round',
-                lineJoin: 'round',
-                lineDasharray: ['match', ['get', 'resolution'], 'draw-manual', ['literal', [2, 1.4]], ['literal', [1, 0]]] as any,
-              }} />
-            </ShapeSource>
-          ) : null}
+          <CanonicalRouteLayer
+            geometry={routeGeometry}
+            theme={theme}
+            ShapeSource={ShapeSource}
+            LineLayer={LineLayer}
+            idPrefix="ordered-route"
+            hiddenPartId={routeGrowthAnimation?.hiddenPartId}
+          />
           {ShapeSource && LineLayer && animationFeature ? (
             <ShapeSource id="ordered-route-growth" shape={animationFeature}>
-              <LineLayer id="ordered-route-growth-line" style={{ lineColor: theme.primary, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
-            </ShapeSource>
-          ) : null}
-          {ShapeSource && LineLayer && gapFeatures.length ? (
-            <ShapeSource id="ordered-route-gaps" shape={{ type: 'FeatureCollection', features: gapFeatures }}>
-              <LineLayer id="ordered-route-gap-line" style={{ lineColor: theme.destructive, lineWidth: 3, lineDasharray: [2, 2], lineOpacity: 0.85 }} />
+              <LineLayer id="ordered-route-growth-line" slot="top" style={{ lineColor: theme.mapRouteLine, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && LineLayer && pendingFeature ? (
             <ShapeSource id="ordered-route-pending" shape={pendingFeature}>
-              <LineLayer id="ordered-route-pending-line" style={{ lineColor: theme.accent, lineWidth: 5, lineDasharray: [1.5, 1.2], lineOpacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
+              <LineLayer id="ordered-route-pending-line" slot="top" style={{ lineColor: theme.mapRoutePending, lineWidth: 5, lineDasharray: [1.5, 1.2], lineOpacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && CircleLayer && pendingEndpointFeature ? (
             <ShapeSource id="ordered-route-pending-endpoint" shape={pendingEndpointFeature}>
-              <CircleLayer id="ordered-route-pending-endpoint-circle" style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.accent, circleStrokeWidth: 3 }} />
+              <CircleLayer id="ordered-route-pending-endpoint-circle" slot="top" style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRoutePending, circleStrokeWidth: 3 }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && LineLayer && originalIntervalFeatures.length ? (
             <ShapeSource id="ordered-route-review-original" shape={{ type: 'FeatureCollection', features: originalIntervalFeatures }}>
-              <LineLayer id="ordered-route-review-original-line" style={{ lineColor: theme.foregroundSecondary, lineWidth: 8, lineOpacity: 0.48, lineDasharray: [2, 1.5] }} />
+              <LineLayer id="ordered-route-review-original-line" slot="top" style={{ lineColor: theme.foregroundSecondary, lineWidth: 8, lineOpacity: 0.48, lineDasharray: [2, 1.5] }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && LineLayer && previewFeature ? (
             <ShapeSource id="ordered-route-review-candidate" shape={previewFeature}>
-              <LineLayer id="ordered-route-review-candidate-line" style={{ lineColor: theme.accent, lineWidth: 7, lineOpacity: 0.95, lineCap: 'round', lineJoin: 'round' }} />
+              <LineLayer id="ordered-route-review-candidate-line" slot="top" style={{ lineColor: theme.mapRoutePending, lineWidth: 7, lineOpacity: 0.95, lineCap: 'round', lineJoin: 'round' }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && CircleLayer && routeEndpoints.length ? (
             <ShapeSource id="ordered-route-endpoints" shape={{ type: 'FeatureCollection', features: routeEndpoints }}>
-              <CircleLayer id="ordered-route-endpoint-circles" style={{ circleRadius: 7, circleColor: theme.surfaceElevated, circleStrokeColor: theme.primary, circleStrokeWidth: 3 }} />
-              {SymbolLayer ? <SymbolLayer id="ordered-route-endpoint-labels" style={{ textField: ['get', 'role'], textSize: 11, textOffset: [0, 1.55], textColor: theme.foreground, textHaloColor: theme.surfaceElevated, textHaloWidth: 1.5, textAllowOverlap: true }} /> : null}
+              <CircleLayer id="ordered-route-endpoint-circles" slot="top" style={{ circleRadius: 7, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRouteLine, circleStrokeWidth: 3 }} />
+              {SymbolLayer ? <SymbolLayer id="ordered-route-endpoint-labels" slot="top" style={{ textField: ['get', 'role'], textSize: 11, textOffset: [0, 1.55], textColor: theme.foreground, textHaloColor: theme.surfaceElevated, textHaloWidth: 1.5, textAllowOverlap: true }} /> : null}
             </ShapeSource>
           ) : null}
           {ShapeSource && CircleLayer && draft.startPoint && draft.parts.length === 0 ? (
             <ShapeSource id="ordered-route-start" shape={{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [draft.startPoint.lng, draft.startPoint.lat] } }}>
-              <CircleLayer id="ordered-route-start-ring" style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.primary, circleStrokeWidth: 3 }} />
+              <CircleLayer id="ordered-route-start-ring" slot="top" style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRouteLine, circleStrokeWidth: 3 }} />
             </ShapeSource>
           ) : null}
         </MapView>

@@ -70,13 +70,22 @@ describe('Trails personal journey library screen contracts', () => {
 
   test('Activity conversion is reachable only from Routes and saves an independent Route', () => {
     const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
-    expect(trails).toContain('testID="route-create-source"');
+    expect(trails).toContain("createStep === 'source' ? 'route-create-source' : 'route-activity-picker'");
     expect(trails).toContain('testID="route-create-activity"');
     expect(trails).toContain("nav.navigate('RouteEditor', { creationSource: 'activity', fromSessionId: session.id })");
     expect(detail).not.toContain('activity-save-as-route');
     expect(detail).not.toContain('Save as Route');
     expect(editor).toContain('createImportedOrderedDraft');
-    expect(editor).toContain("routes: [{ name: 'Home' }, { name: 'MapHistory', params: { routeId: savedId } }]");
+    expect(editor).toContain("nav.replace('MapHistory', { routeId: savedId })");
+  });
+
+  test('Routes use one All/Mine/Received collection and a distinct inline Create action', () => {
+    expect(trails).toContain("useState<'all' | 'mine' | 'received'>('all')");
+    expect(trails).toContain("{ key: 'received', label: 'Received' }");
+    expect(trails).toContain('testID="route-ownership-filter"');
+    expect(trails).toContain('style={[styles.inlineCreateButton');
+    expect(trails).not.toContain('My Routes');
+    expect(trails).not.toContain('Shared Routes');
   });
 
   test('Activity deletion does not cascade into Memory, Cairns, or independent Routes', () => {

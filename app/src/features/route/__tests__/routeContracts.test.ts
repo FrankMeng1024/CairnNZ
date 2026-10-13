@@ -161,5 +161,9 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(run).toContain('useVisualTheme()');
     expect(detail).toContain('visualTheme.surfaceElevated');
     expect(editor).toContain('theme.surfaceElevated');
+    expect(detail).toContain('<CanonicalRouteLayer');
+    expect(editor).toContain('<CanonicalRouteLayer');
+    expect(detail).toContain('canonicalRouteGeometry(selectedRoute)');
+    expect(editor).toContain('canonicalRouteGeometry({ orderedDraft: draft })');
   });
 });

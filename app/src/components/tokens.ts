@@ -136,6 +136,10 @@ export interface VisualThemeTokens {
   mapFriendMemoryOpacity: number;
   mapMemoryOverlapFill: string;
   mapMemoryOverlapOpacity: number;
+  mapRouteLine: string;
+  mapRouteCasing: string;
+  mapRoutePending: string;
+  mapRouteGap: string;
 }
 
 export const DAY_VISUAL_THEME: VisualThemeTokens = {
@@ -201,6 +205,10 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   mapFriendMemoryOpacity: 0.22,
   mapMemoryOverlapFill: '#C98E58',
   mapMemoryOverlapOpacity: 0.24,
+  mapRouteLine: '#2F684F',
+  mapRouteCasing: 'rgba(248,246,239,0.92)',
+  mapRoutePending: '#72A34B',
+  mapRouteGap: '#AE392F',
 };
 
 /**
@@ -270,6 +278,10 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   mapFriendMemoryOpacity: 0.24,
   mapMemoryOverlapFill: '#C58562',
   mapMemoryOverlapOpacity: 0.25,
+  mapRouteLine: '#675F45',
+  mapRouteCasing: 'rgba(255,248,239,0.90)',
+  mapRoutePending: '#8B7C58',
+  mapRouteGap: '#873230',
 };
 
 export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
@@ -337,6 +349,10 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   mapFriendMemoryOpacity: 0.25,
   mapMemoryOverlapFill: '#C98C66',
   mapMemoryOverlapOpacity: 0.27,
+  mapRouteLine: '#B7C9AA',
+  mapRouteCasing: 'rgba(18,27,38,0.92)',
+  mapRoutePending: '#D0B879',
+  mapRouteGap: '#FFACA4',
 };
 
 export function getVisualTheme(mode: boolean | VisualThemeTokens['mode']): VisualThemeTokens {

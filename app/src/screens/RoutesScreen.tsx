@@ -9,7 +9,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -262,7 +261,7 @@ function RouteRecord({ route, onOpen, onRetry }: { route: Route; onOpen: () => v
         <View style={styles.recordContent}>
           <View style={styles.recordTitleRow}>
             <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{route.name || 'Saved route'}</Text>
-            <Text style={[styles.objectKind, { color: theme.textMuted }]}>ROUTE</Text>
+            <Text style={[styles.objectKind, { color: theme.textMuted }]}>{route.isSharedDelivery ? 'RECEIVED' : 'ROUTE'}</Text>
           </View>
           <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>
             {routeModeLabel(route)} · {dist.format(route.distanceM, 1)} {dist.unit}
@@ -368,14 +367,18 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
   const loading = useRouteStore(state => state.routesLoading);
   const loadError = useRouteStore(state => state.routesLoadError);
   const [query, setQuery] = useState('');
-  const [library, setLibrary] = useState<'mine' | 'shared'>('mine');
-  const sourceRoutes = library === 'mine' ? routes : sharedRoutes;
+  const [ownership, setOwnership] = useState<'all' | 'mine' | 'received'>('all');
+  const sourceRoutes = useMemo(() => ownership === 'mine'
+    ? routes
+    : ownership === 'received'
+      ? sharedRoutes
+      : [...routes, ...sharedRoutes], [ownership, routes, sharedRoutes]);
   const visible = useMemo(() => filterRoutes(sourceRoutes, query), [sourceRoutes, query]);
   const retryLoad = () => { void loadRoutes(); };
 
   useEffect(() => { void loadSharedRoutes(); }, [loadSharedRoutes]);
 
-  if (loading && routes.length === 0) {
+  if (loading && routes.length === 0 && sharedRoutes.length === 0) {
     return (
       <View style={styles.loadingState} testID="trails-routes-loading">
         <ActivityIndicator color={theme.primary} />
@@ -384,7 +387,7 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
     );
   }
 
-  if (loadError && routes.length === 0) {
+  if (loadError && routes.length === 0 && sharedRoutes.length === 0) {
     return (
       <View style={styles.emptyState} testID="trails-routes-unavailable">
         <View style={[styles.emptyTrace, { backgroundColor: theme.recordSurface, borderColor: theme.borderSubtle }]}>
@@ -402,7 +405,7 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
   return (
     <FlatList
       data={visible}
-      keyExtractor={item => item.id}
+      keyExtractor={item => `${item.isSharedDelivery ? 'received' : 'mine'}:${item.id}`}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.listContent}
       initialNumToRender={14}
@@ -412,12 +415,25 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
         <View>
           <LibraryIntro tab="routes" count={sourceRoutes.length} />
           {loadError ? <RouteLoadNotice onRetry={retryLoad} /> : null}
-          <SegmentedControl
-            value={library}
-            segments={[{ key: 'mine', label: 'My Routes' }, { key: 'shared', label: 'Shared Routes' }]}
-            onChange={setLibrary}
-            testID="route-library-tabs"
-          />
+          <View style={styles.routeFilterRow}>
+            <SegmentedControl
+              value={ownership}
+              segments={[{ key: 'all', label: 'All' }, { key: 'mine', label: 'Mine' }, { key: 'received', label: 'Received' }]}
+              onChange={setOwnership}
+              containerStyle={styles.routeOwnershipFilter}
+              testID="route-ownership-filter"
+            />
+            <TouchableOpacity
+              style={[styles.inlineCreateButton, { backgroundColor: theme.primaryAction }]}
+              onPress={onCreate}
+              accessibilityRole="button"
+              accessibilityLabel="Create Route"
+              testID="routes-create"
+            >
+              <Icon name="Plus" size={16} color={theme.onPrimary} strokeWidth={2.4} />
+              <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>Create</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.discoveryTools}>
             <SearchField
               value={query}
@@ -438,7 +454,7 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
           onRetry={() => { if (!item.isSharedDelivery) void retryRouteSync(item.id); }}
         />
       )}
-      ListEmptyComponent={<NoResults kind="routes" onClear={() => setQuery('')} />}
+      ListEmptyComponent={<NoResults kind="routes" onClear={() => { setQuery(''); setOwnership('all'); }} />}
       testID="trails-routes-list"
     />
   );
@@ -451,7 +467,7 @@ export function RoutesScreen() {
   const initialTab: TrailsTab = route.params?.initialTab === 'routes' ? 'routes' : 'activities';
   const [tab, setTab] = useState<TrailsTab>(initialTab);
   const [createOpen, setCreateOpen] = useState(false);
-  const [activityPickerOpen, setActivityPickerOpen] = useState(false);
+  const [createStep, setCreateStep] = useState<'source' | 'activity'>('source');
   const sessions = useSessionStore(state => state.sessions);
   const loadRoutes = useRouteStore(state => state.loadRoutes);
 
@@ -477,17 +493,7 @@ export function RoutesScreen() {
           <Text style={[styles.title, { color: theme.textPrimary }]}>Trails</Text>
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Your journeys, ready to revisit</Text>
         </View>
-        {tab === 'routes' ? (
-          <TouchableOpacity
-            style={[styles.createButton, { backgroundColor: theme.primaryAction }]}
-            onPress={() => setCreateOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Create Route"
-            testID="routes-create"
-          >
-            <Icon name="Plus" size={18} color={theme.onPrimary} strokeWidth={2.4} />
-          </TouchableOpacity>
-        ) : <View style={styles.headerBalance} />}
+        <View style={styles.headerBalance} />
       </View>
       <SegmentedControl
         value={tab}
@@ -499,63 +505,88 @@ export function RoutesScreen() {
       <View style={styles.libraryBody}>
         {tab === 'activities'
           ? <ActivitiesLibrary />
-          : <RoutesLibrary onCreate={() => setCreateOpen(true)} />}
+          : <RoutesLibrary onCreate={() => { setCreateStep('source'); setCreateOpen(true); }} />}
       </View>
     </SafeAreaView>
-    <ModalCard visible={createOpen} onDismiss={() => setCreateOpen(false)} testID="route-create-source">
-      <ModalCardHeader
-        title="Create Route"
-        body="Choose one starting source. Both open the same editor with Draw and Point."
-      />
-      <PrimaryButton
-        label="Plan a route"
-        onPress={() => {
-          setCreateOpen(false);
-          nav.navigate('RouteEditor', { creationSource: 'plan' });
-        }}
-        renderIcon={color => <Icon name="Map" size={18} color={color} strokeWidth={2} />}
-        testID="route-create-plan"
-      />
-      <PrimaryButton
-        label="Use an Activity"
-        variant="secondary"
-        onPress={() => { setCreateOpen(false); setActivityPickerOpen(true); }}
-        renderIcon={color => <Icon name="Footprints" size={18} color={color} strokeWidth={2} />}
-        style={styles.modalAction}
-        testID="route-create-activity"
-      />
-    </ModalCard>
-    <ModalCard visible={activityPickerOpen} onDismiss={() => setActivityPickerOpen(false)} testID="route-activity-picker">
-      <ModalCardHeader
-        title="Use an Activity"
-        body="The factual Activity stays read-only. Cairn creates a separate editable Route draft with its recorded section order."
-      />
-      {sessions.length === 0 ? (
-        <Text style={[styles.pickerEmpty, { color: theme.textSecondary }]}>No saved Activities are available yet.</Text>
+    <ModalCard
+      visible={createOpen}
+      onDismiss={() => { setCreateOpen(false); setCreateStep('source'); }}
+      testID={createStep === 'source' ? 'route-create-source' : 'route-activity-picker'}
+    >
+      {createStep === 'source' ? (
+        <>
+          <ModalCardHeader
+            title="Create Route"
+            body="Choose one starting source. Both open the same editor with Draw and Point."
+          />
+          <PrimaryButton
+            label="Plan a route"
+            onPress={() => {
+              setCreateOpen(false);
+              nav.navigate('RouteEditor', { creationSource: 'plan' });
+            }}
+            renderIcon={color => <Icon name="Map" size={18} color={color} strokeWidth={2} />}
+            testID="route-create-plan"
+          />
+          <PrimaryButton
+            label="Use an Activity"
+            variant="secondary"
+            onPress={() => setCreateStep('activity')}
+            renderIcon={color => <Icon name="Footprints" size={18} color={color} strokeWidth={2} />}
+            style={styles.modalAction}
+            testID="route-create-activity"
+          />
+        </>
       ) : (
-        <ScrollView style={styles.pickerList}>
-          {sessions.map(session => (
-            <TouchableOpacity
-              key={session.id}
-              style={[styles.pickerRow, { borderColor: theme.borderSubtle }]}
-              onPress={() => {
-                setActivityPickerOpen(false);
-                nav.navigate('RouteEditor', { creationSource: 'activity', fromSessionId: session.id });
-              }}
-              accessibilityRole="button"
-              testID={`route-activity-${session.id}`}
-            >
-              {session.activityMode === 'running'
-                ? <RunningIcon size={19} color={theme.iconActive} />
-                : <HikingIcon size={19} color={theme.iconActive} />}
-              <View style={styles.pickerCopy}>
-                <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{activityDisplayName(session)}</Text>
-                <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>{activityDateLabel(session.startedAt)}</Text>
-              </View>
-              <Icon name="ChevronRight" size={16} color={theme.iconInactive} strokeWidth={2} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <>
+          <ModalCardHeader
+            title="Use an Activity"
+            body="The factual Activity stays read-only. Cairn creates a separate editable Route draft with its recorded section order."
+          />
+          <TouchableOpacity
+            style={styles.pickerBack}
+            onPress={() => setCreateStep('source')}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Route sources"
+          >
+            <Icon name="ChevronLeft" size={16} color={theme.iconActive} strokeWidth={2} />
+            <Text style={[styles.pickerBackLabel, { color: theme.primary }]}>Sources</Text>
+          </TouchableOpacity>
+          {sessions.length === 0 ? (
+            <Text style={[styles.pickerEmpty, { color: theme.textSecondary }]}>No saved Activities are available yet.</Text>
+          ) : (
+            <FlatList
+              data={sessions}
+              keyExtractor={session => session.id}
+              style={styles.pickerList}
+              contentContainerStyle={styles.pickerListContent}
+              scrollIndicatorInsets={{ right: -2 }}
+              initialNumToRender={10}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item: session }) => (
+                <TouchableOpacity
+                  style={[styles.pickerRow, { borderColor: theme.borderSubtle }]}
+                  onPress={() => {
+                    setCreateOpen(false);
+                    setCreateStep('source');
+                    nav.navigate('RouteEditor', { creationSource: 'activity', fromSessionId: session.id });
+                  }}
+                  accessibilityRole="button"
+                  testID={`route-activity-${session.id}`}
+                >
+                  {session.activityMode === 'running'
+                    ? <RunningIcon size={19} color={theme.iconActive} />
+                    : <HikingIcon size={19} color={theme.iconActive} />}
+                  <View style={styles.pickerCopy}>
+                    <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{activityDisplayName(session)}</Text>
+                    <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>{activityDateLabel(session.startedAt)}</Text>
+                  </View>
+                  <Icon name="ChevronRight" size={16} color={theme.iconInactive} strokeWidth={2} />
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </>
       )}
     </ModalCard>
     </>
@@ -573,15 +604,17 @@ const styles = StyleSheet.create({
   },
   headerCopy: { flex: 1, alignItems: 'center', paddingHorizontal: Spacing.sm },
   headerBalance: { width: 60 },
-  createButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: FontSize.h2, fontWeight: '700', letterSpacing: -0.2 },
   subtitle: { marginTop: 2, fontSize: FontSize.small, fontWeight: '500', textAlign: 'center' },
   tabs: { marginHorizontal: Spacing.base, marginTop: Spacing.xs },
   libraryBody: { flex: 1 },
   modalAction: { marginTop: Spacing.sm },
   pickerList: { maxHeight: 420 },
+  pickerListContent: { paddingRight: Spacing.sm },
+  pickerBack: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.xs },
+  pickerBackLabel: { fontSize: FontSize.caption, fontWeight: '700' },
   pickerEmpty: { paddingVertical: Spacing.xl, textAlign: 'center', fontSize: FontSize.body },
-  pickerRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: Spacing.sm },
+  pickerRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: Spacing.sm, paddingRight: Spacing.md },
   pickerCopy: { flex: 1, minWidth: 0 },
   listContent: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.xxl },
   libraryIntro: {
@@ -596,6 +629,10 @@ const styles = StyleSheet.create({
   libraryEyebrow: { flex: 1, fontSize: FontSize.tiny, fontWeight: '800', letterSpacing: 1.05 },
   libraryCount: { fontSize: FontSize.small, fontWeight: '600' },
   discoveryTools: { gap: Spacing.sm, paddingBottom: Spacing.md },
+  routeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingBottom: Spacing.md },
+  routeOwnershipFilter: { flex: 1 },
+  inlineCreateButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.md, borderRadius: RadiusRole.button },
+  inlineCreateLabel: { fontSize: FontSize.caption, fontWeight: '800' },
   searchField: {
     minHeight: 44,
     flexDirection: 'row',
