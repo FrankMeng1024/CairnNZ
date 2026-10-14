@@ -216,6 +216,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     await waitFor(() => expect(mockCameraSet).toHaveBeenCalledWith(expect.objectContaining({ centerCoordinate: [174.79, -41.29] })));
     fireEvent.press(screen.getByTestId('route-overview'));
     expect(mockCameraFit).toHaveBeenCalledTimes(1);
+    expect(mockCameraFit.mock.calls[0][2][1]).toBeGreaterThanOrEqual(80);
     expect(mockDraft.parts[0].points).toHaveLength(3);
   });
 
@@ -343,6 +344,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByTestId('mock-camera').props.bounds).toEqual(expect.objectContaining({
       ne: [121.4754, 31.2328],
       sw: [121.4737, 31.2304],
+      paddingRight: 88,
     }));
   });
 
@@ -434,7 +436,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.press(screen.getByText('Point'));
     expect(screen.getByTestId('route-point-context')).toBeTruthy();
     expect(screen.getByTestId('route-point-confirm')).toBeTruthy();
-    expect(screen.getByText('Move the map so the crosshair marks your next point.')).toBeTruthy();
+    expect(screen.getByText('Move the map to choose your next point.')).toBeTruthy();
     expect(screen.getByText('Add point')).toBeTruthy();
     expect(screen.queryByTestId('route-point-add-here')).toBeNull();
     expect(screen.queryByText('Add destination')).toBeNull();
@@ -447,7 +449,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByTestId('route-tool-draw'));
-    expect(screen.getByText('Start near an end to extend, or connect two points to reshape.')).toBeTruthy();
+    expect(screen.getByText('Draw to extend or reshape your route.')).toBeTruthy();
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
     await waitFor(() => expect(screen.queryByTestId('emit-route-stroke')).toBeNull());
     expect(screen.getByText('Line added. Move the map, or tap Draw to continue.')).toBeTruthy();
@@ -463,7 +465,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.press(screen.getByTestId('route-tool-draw'));
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
     expect(await screen.findByTestId('route-freehand-choice')).toBeTruthy();
-    expect(screen.getByText('No mapped path fits your drawing. Keep the line you drew?')).toBeTruthy();
+    expect(screen.getByText('Keep the line you drew?')).toBeTruthy();
     expect(screen.getByText('Redraw')).toBeTruthy();
     expect(screen.getByText('Use drawing')).toBeTruthy();
     expect(screen.queryByText(/provider|disconnected pieces/i)).toBeNull();
@@ -533,7 +535,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     mockResolvePoint.mockReturnValueOnce(new Promise(resolve => { resolveSlow = resolve; }));
     fireEvent.press(screen.getByText('Point'));
     fireEvent.press(screen.getByTestId('route-point-confirm'));
-    expect(await screen.findByText('Matching your drawing to nearby paths…')).toBeTruthy();
+    expect(await screen.findByText('Finding a path…')).toBeTruthy();
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(true);
     fireEvent.press(screen.getByText('Cancel'));
     await act(async () => {
@@ -552,7 +554,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByText('Draw'));
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
-    expect(await screen.findByText('Matching your drawing to nearby paths…')).toBeTruthy();
+    expect(await screen.findByText('Finding a path…')).toBeTruthy();
     expect(screen.getByTestId('source-ordered-route-pending').props.shape.geometry.coordinates).toEqual(
       mockStroke.map(point => [point.lng, point.lat]),
     );

@@ -6723,7 +6723,7 @@ function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Prom
         intentEpoch === realLocationLifecycleIntentEpoch
         && AppState.currentState === 'background'
         && !active
-      ) await markRecordingContinuityUnavailable('background-provider-unavailable');
+      ) await markRecordingContinuityUncertain('background-provider-unavailable');
     }
   });
 }
@@ -6990,7 +6990,7 @@ function deactivateRealForegroundSource(): void {
  * Start the background TaskManager updates if permission was granted.
  * Idempotent — safe to call repeatedly.
  */
-async function markRecordingContinuityUnavailable(reason: string): Promise<void> {
+async function markRecordingContinuityUncertain(reason: string): Promise<void> {
   const state = useTrackingStore.getState();
   if (
     state.status !== 'tracking'
@@ -7004,47 +7004,28 @@ async function markRecordingContinuityUnavailable(reason: string): Promise<void>
     useTrackingStore.setState({ locationAvailable: false });
     return;
   }
-  if (
-    state.pendingSegmentStartReason === 'gps-reacquired'
-    && state.currentSegmentId
-    && state.currentSegmentId !== tail.segmentId
-  ) return;
-
-  const nextSegmentId = newSegmentId(state.sessionId, Date.now());
-  // A known recording loss is a hard continuity boundary. The next trustworthy
-  // fix starts fresh; neither route filtering, elevation nor Memory may infer a
-  // connector from the old segment.
-  if (realGpsCandidateTimer) clearTimeout(realGpsCandidateTimer);
-  realGpsCandidateTimer = null;
-  realGpsContinuityState = createRealGpsContinuityState();
-  realElevationState = createElevationQualityState(state.elevationGainM);
-  useTrackingStore.setState({
-    currentSegmentId: nextSegmentId,
-    pendingSegmentStartReason: 'gps-reacquired',
-    // The old accepted coordinate cannot participate in teleport, distance,
-    // elevation, or stationary checks after a known recording loss.
-    lastCoordinate: null,
-    locationAvailable: false,
-  });
-  await updateUnfinishedActivity(state.ownerUserId, state.sessionId, {
-    currentSegmentId: nextSegmentId,
-    nextSegmentStartReason: 'gps-reacquired',
-  }).catch(() => false);
-  appendSimulatorLog('ACTIVITY_STATE', 'activity_recording_gap_opened', {
-    gapReason: reason,
+  // Provider unavailability is not itself proof that movement continuity was
+  // lost. O79's real `break` Activity had a 4 s / 5 m / good-accuracy handoff,
+  // yet this path allocated a new segment before the next observation existed.
+  // Keep the trusted tail and let the normal physical-continuity classifier
+  // decide when a real sample arrives. Long, displaced or implausible recovery
+  // still opens a gps-reacquired segment; no unsupported distance is credited.
+  useTrackingStore.setState({ locationAvailable: false });
+  appendSimulatorLog('ACTIVITY_STATE', 'activity_recording_continuity_uncertain', {
+    uncertaintyReason: reason,
     previousSegmentId: tail.segmentId,
-    nextSegmentId,
+    decision: 'defer-until-next-observation',
   }, {
     userId: state.ownerUserId,
     clientActivityId: state.sessionId,
     coordinateSource: 'real',
   });
   appendSimulatorLog('GPS_SEGMENT', 'activity_segment_decision_v2', {
-    decision: 'new-segment',
+    decision: 'deferred',
     trigger: reason,
     previousSegmentId: tail.segmentId,
-    nextSegmentId,
-    continuityAllowed: false,
+    nextSegmentId: null,
+    continuityAllowed: 'pending-physical-classification',
     distanceContributionM: 0,
     elevationContributionM: 0,
     memoryBridgeAllowed: false,

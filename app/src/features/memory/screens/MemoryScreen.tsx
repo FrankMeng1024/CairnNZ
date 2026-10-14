@@ -60,7 +60,8 @@ import { publishInitialMemoryReconcile } from '../services/memoryPersistence';
 // v427: async hierarchy from /api/hierarchy (world-wide data)
 import { fetchDeepest } from '../services/hierarchyService';
 import {
-  resolveCurrentCityViewport,
+  resolveCachedMemoryCenter,
+  resolveCurrentLocationViewport,
   resolveMemoryEntryCameraAuthority,
   resolveMemoryInitialMapCenter,
   type MemoryCityViewport,
@@ -258,7 +259,7 @@ export function MemoryScreen() {
   const restoredManualCityRef = useRef<string | null>(null);
   const manualBrowseThisMountRef = useRef(false);
   const currentCityAppliedRef = useRef<string | null>(null);
-  const currentCityViewportRef = useRef<MemoryCityViewport | null>(null);
+  const currentLocationViewportRef = useRef<MemoryCityViewport | null>(null);
   useEffect(() => {
     if (!activeOwnerId || cameraOwnerId === activeOwnerId) return;
     void hydrateMemoryCamera(activeOwnerId);
@@ -722,10 +723,15 @@ export function MemoryScreen() {
     ownerUserId: string;
     coord: { lat: number; lng: number };
   } | null>(null);
+  const cachedMemoryCenter = useMemo(
+    () => resolveCachedMemoryCenter(ownedEvidenceForCamera),
+    [ownedEvidenceForCamera],
+  );
   const nextMapCenter = resolveMemoryInitialMapCenter({
     authority: entryCameraAuthority,
     current: stableCoord,
     manualCenter: manualCity?.center ?? null,
+    cachedMemoryCenter,
   });
   if (activeOwnerId && nextMapCenter) {
     lastRenderedCoordRef.current = {
@@ -738,8 +744,7 @@ export function MemoryScreen() {
     ? lastRenderedCoordRef.current.coord
     : null;
 
-  const mapMayBeShown = Boolean(persistentCoord)
-    && entryCameraAuthority !== 'wait-for-location';
+  const mapMayBeShown = Boolean(persistentCoord);
   useEffect(() => {
     if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId) return undefined;
     if (manualBrowseThisMountRef.current) return undefined;
@@ -749,22 +754,28 @@ export function MemoryScreen() {
       const applicationKey = `${activeOwnerId}:${stableCoord.lat.toFixed(5)},${stableCoord.lng.toFixed(5)}:${refetchToken}`;
       if (currentCityAppliedRef.current === applicationKey) return undefined;
       currentCityAppliedRef.current = applicationKey;
+      const viewport = resolveCurrentLocationViewport(stableCoord);
+      currentLocationViewportRef.current = viewport;
+      flyTokenRef.current += 1;
+      log('memory.camera_command', {
+        intent: 'current-location-entry',
+        token: flyTokenRef.current,
+        center_lat: stableCoord.lat,
+        center_lng: stableCoord.lng,
+        zoom: viewport.zoom,
+      });
+      setFlyToTarget({ ...viewport, token: flyTokenRef.current });
+      setMapMoved(false);
+      restoredManualCityRef.current = null;
+      if (manualCity) void clearManualMemoryCity();
       void (async () => {
         const { city, country } = await fetchDeepest(stableCoord.lat, stableCoord.lng);
         if (cancelled || manualBrowseThisMountRef.current) return;
-        const viewport = resolveCurrentCityViewport(
-          stableCoord,
-          city?.bbox ?? null,
-          ownedEvidenceForCamera,
-        );
-        currentCityViewportRef.current = viewport;
-        flyTokenRef.current += 1;
-        setFlyToTarget({ ...viewport, token: flyTokenRef.current });
+        // Hierarchy metadata is deliberately not camera authority. A delayed
+        // city response can update labels, but cannot pull the camera away
+        // from the live puck or override an explicit Recenter.
         setHierarchyCurrentCityId(city?.id ?? null);
         setHierarchyCurrentCountryId(country?.id ?? city?.country_id ?? null);
-        setMapMoved(false);
-        restoredManualCityRef.current = null;
-        if (manualCity) void clearManualMemoryCity();
       })();
       return () => { cancelled = true; };
     }
@@ -776,8 +787,15 @@ export function MemoryScreen() {
     const restorationKey = `${activeOwnerId}:${manualCity.cityId}:${manualCity.center.join(',')}`;
     if (restoredManualCityRef.current === restorationKey) return undefined;
     restoredManualCityRef.current = restorationKey;
-    currentCityViewportRef.current = null;
+    currentLocationViewportRef.current = null;
     flyTokenRef.current += 1;
+    log('memory.camera_command', {
+      intent: 'manual-city-fallback',
+      token: flyTokenRef.current,
+      center_lat: manualCity.center[1],
+      center_lng: manualCity.center[0],
+      zoom: manualCity.zoom,
+    });
     setFlyToTarget({ center: manualCity.center, zoom: manualCity.zoom, token: flyTokenRef.current });
     setHierarchyCurrentCityId(manualCity.cityId);
     setHierarchyCurrentCountryId(manualCity.countryId);
@@ -791,7 +809,6 @@ export function MemoryScreen() {
     entryCameraAuthority,
     manualCity,
     oneShot,
-    ownedEvidenceForCamera,
     refetchToken,
     stableCoord,
   ]);
@@ -848,12 +865,21 @@ export function MemoryScreen() {
   const onRecenter = () => {
     log('memory.recenter_tap');
     manualBrowseThisMountRef.current = false;
-    const currentCityViewport = currentCityViewportRef.current;
-    if (currentCityViewport) {
+    const currentLocationViewport = stableCoord
+      ? resolveCurrentLocationViewport(stableCoord)
+      : currentLocationViewportRef.current;
+    if (currentLocationViewport) {
       flyTokenRef.current += 1;
+      log('memory.camera_command', {
+        intent: 'explicit-recenter',
+        token: flyTokenRef.current,
+        center_lat: currentLocationViewport.center[1],
+        center_lng: currentLocationViewport.center[0],
+        zoom: currentLocationViewport.zoom,
+      });
       setFlyToTarget({
-        center: currentCityViewport.center,
-        zoom: currentCityViewport.zoom,
+        center: currentLocationViewport.center,
+        zoom: currentLocationViewport.zoom,
         token: flyTokenRef.current,
       });
     } else {
@@ -867,8 +893,8 @@ export function MemoryScreen() {
     // onCameraChanged should also fire later, but relying on it alone
     // was unreliable for imperative camera moves.
     if (persistentCoord) {
-      const target = currentCityViewport
-        ? { lat: currentCityViewport.center[1], lng: currentCityViewport.center[0] }
+      const target = currentLocationViewport
+        ? { lat: currentLocationViewport.center[1], lng: currentLocationViewport.center[0] }
         : stableCoord ?? persistentCoord;
       cameraCenterRef.current = { lat: target.lat, lng: target.lng };
       log('v445.recenter_camera_ref_set', { lat: target.lat, lng: target.lng });
@@ -1020,13 +1046,9 @@ export function MemoryScreen() {
       ) : failReason === 'timeout' || failReason === 'error' ? (
         <View style={styles.emptyState}>
           <MemoryStateMark label="MEMORY MAP" />
-          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>
-            {failReason === 'timeout' ? 'Could not get a GPS fix' : 'Location unavailable'}
-          </Text>
+          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>We couldn't find your location.</Text>
           <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
-            {failReason === 'timeout'
-              ? 'GPS signal is weak. Move outside or near a window and try again.'
-              : 'We could not read your location. Check that location services are on.'}
+            Check that Location Services are on, then try again.
           </Text>
           <TouchableOpacity
             style={[styles.emptyPrimaryBtn, { backgroundColor: theme.primary }]}
@@ -1040,12 +1062,36 @@ export function MemoryScreen() {
         <View style={styles.emptyState}>
           <MemoryStateMark label="PREPARING YOUR MAP" />
           <ActivityIndicator color={theme.primary} size="large" />
-          <Text style={[styles.emptyTitle, { marginTop: 14, color: theme.foreground }]}>Looking for your position…</Text>
+          <Text style={[styles.emptyTitle, { marginTop: 14, color: theme.foreground }]}>Finding your location…</Text>
           <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
-            We need a GPS fix to draw your memory map.
+            Your saved Memory will appear as soon as it is available.
           </Text>
         </View>
       )}
+
+      {mapMayBeShown && persistentCoord && !freshCurrentEvidence && !failReason ? (
+        <View
+          style={[styles.locationStatusBanner, { top: insets.top + (syntheticQaAuthority ? 174 : 120), backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          pointerEvents="none"
+          testID="memory-finding-location"
+        >
+          <ActivityIndicator color={theme.primary} size="small" />
+          <Text style={[styles.locationStatusText, { color: theme.foreground }]}>Finding your location…</Text>
+        </View>
+      ) : null}
+
+      {mapMayBeShown && persistentCoord && !freshCurrentEvidence && failReason ? (
+        <TouchableOpacity
+          style={[styles.locationStatusBanner, { top: insets.top + (syntheticQaAuthority ? 174 : 120), backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          onPress={() => setRefetchToken((n) => n + 1)}
+          accessibilityRole="button"
+          accessibilityLabel="Try finding your location again"
+          testID="memory-location-unavailable"
+        >
+          <Icon name="Target" size={16} color={theme.iconInactive} strokeWidth={2} />
+          <Text style={[styles.locationStatusText, { color: theme.foreground }]}>We couldn't find your location. Tap to try again.</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {mapMayBeShown && persistentCoord && stableCoord && mapMoved && (
         <TouchableOpacity
@@ -1055,6 +1101,9 @@ export function MemoryScreen() {
             setMapMoved(false);
           }}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Recenter on current location"
+          testID="memory-recenter"
         >
           {/* v334: Target icon to match HikingScreen.tsx recenter pill
               (decision E: "and an icon like Hiking, ..."). */}
@@ -1425,6 +1474,20 @@ const styles = StyleSheet.create({
   },
   evidenceContextTitle: { fontSize: 12, fontWeight: '700' },
   evidenceContextText: { fontSize: 11, lineHeight: 16, marginTop: 2 },
+  locationStatusBanner: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    zIndex: 13,
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  locationStatusText: { flex: 1, fontSize: FontSize.small, lineHeight: 18, fontWeight: '600' },
   // Concept-aligned empty state (2026-08-16 sleep-run redesign):
   //   - Centered vertically on paper background
   //   - Title: 18px, dark textPrimary, weight 500

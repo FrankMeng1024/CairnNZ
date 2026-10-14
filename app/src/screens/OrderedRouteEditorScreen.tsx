@@ -11,11 +11,11 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { BackButton } from '../components/BackButton';
 import { Icon } from '../components/Icon';
 import { MapLoadOverlay, type MapLoadState } from '../components/MapLoadOverlay';
@@ -231,7 +231,6 @@ export function OrderedRouteEditorScreen() {
   const [name, setName] = useState('');
   const [permission, setPermission] = useState<'personal' | 'friend'>('personal');
   const [mode, setMode] = useState<EditorMode>('Browse');
-  const [selectedGapId, setSelectedGapId] = useState<string | undefined>();
   const [pendingReview, setPendingReview] = useState<PendingCandidateReview | null>(null);
   const [pendingPointReview, setPendingPointReview] = useState<PendingPointReview | null>(null);
   const [manualRecovery, setManualRecovery] = useState<PendingCandidateReview | null>(null);
@@ -256,6 +255,7 @@ export function OrderedRouteEditorScreen() {
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [initialLocation, setInitialLocation] = useState<InitialLocationState>({ status: 'idle' });
   const [briefStatus, setBriefStatus] = useState<string | null>(null);
+  const [bottomWorkspaceHeight, setBottomWorkspaceHeight] = useState(0);
   const mapViewRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const cameraCenterRef = useRef<RoutePoint | null>(null);
@@ -273,7 +273,6 @@ export function OrderedRouteEditorScreen() {
   const initialLocationAttemptedRef = useRef(false);
   const userMovedCameraRef = useRef(false);
   const cameraZoomRef = useRef(14);
-  const nativeMapGesture = useMemo(() => Gesture.Native(), []);
   const tool: PlannerTool = mode === 'DrawArmed' || mode === 'Drawing'
     ? 'draw'
     : mode === 'PointTargeting'
@@ -313,7 +312,6 @@ export function OrderedRouteEditorScreen() {
     setPendingReview(null);
     setPendingPointReview(null);
     setManualRecovery(null);
-    setSelectedGapId(undefined);
   }, [finishRouteAnimation]);
 
   const selectEditorTool = useCallback((next: PlannerTool) => {
@@ -523,7 +521,6 @@ export function OrderedRouteEditorScreen() {
   }, [fromSessionId, history, initializing, name, ownerId, permission, readOnlyShared, routeId]);
 
   const draft = history?.present ?? null;
-  const selectedGap = draft?.gaps.find(gap => gap.id === selectedGapId);
   const mapStyle = getMapStyleForTheme('outdoors', mapTheme);
   const lightPreset = themeToStandardPreset(mapTheme);
   const region = getCurrentRegion();
@@ -534,13 +531,18 @@ export function OrderedRouteEditorScreen() {
   const showPlannerMap = Boolean(initialBoundsRef.current)
     || initialLocation.status === 'ready'
     || initialLocation.status === 'unavailable';
-  const routeOrnaments = mapOrnamentsAbove(insets.bottom + (compactViewport ? 246 : 254));
+  const bottomClearance = bottomWorkspaceHeight || insets.bottom + (compactViewport ? 126 : 138);
+  const routeOrnaments = mapOrnamentsAbove(bottomClearance + Spacing.sm);
+  const handleBottomWorkspaceLayout = useCallback((event: LayoutChangeEvent) => {
+    const measured = Math.ceil(event.nativeEvent.layout.height);
+    setBottomWorkspaceHeight(current => current === measured ? current : measured);
+  }, []);
 
   const moveCamera = useCallback((point: RoutePoint, zoomLevel = 13.5) => {
     cameraRef.current?.setCamera?.({
       centerCoordinate: [point.lng, point.lat],
       zoomLevel,
-      animationDuration: reduceMotion ? 0 : 550,
+      animationDuration: reduceMotion ? 0 : 420,
     });
   }, [reduceMotion]);
 
@@ -584,15 +586,15 @@ export function OrderedRouteEditorScreen() {
     if (points.length < 2) { setError('Add a path before showing its overview.'); return; }
     const ne: [number, number] = [Math.max(...points.map(point => point.lng)), Math.max(...points.map(point => point.lat))];
     const sw: [number, number] = [Math.min(...points.map(point => point.lng)), Math.min(...points.map(point => point.lat))];
-    cameraRef.current?.fitBounds?.(ne, sw, [insets.top + 110, 36, insets.bottom + 330, 36], reduceMotion ? 0 : 550);
-  }, [insets.bottom, insets.top, reduceMotion]);
+    cameraRef.current?.fitBounds?.(ne, sw, [insets.top + 110, 88, bottomClearance + 30, 36], reduceMotion ? 0 : 420);
+  }, [bottomClearance, insets.top, reduceMotion]);
 
   const fitReviewPoints = useCallback((points: RoutePoint[]) => {
     if (points.length < 2) return;
     const ne: [number, number] = [Math.max(...points.map(point => point.lng)), Math.max(...points.map(point => point.lat))];
     const sw: [number, number] = [Math.min(...points.map(point => point.lng)), Math.min(...points.map(point => point.lat))];
-    cameraRef.current?.fitBounds?.(ne, sw, [insets.top + 110, 36, insets.bottom + 330, 36], reduceMotion ? 0 : 450);
-  }, [insets.bottom, insets.top, reduceMotion]);
+    cameraRef.current?.fitBounds?.(ne, sw, [insets.top + 110, 88, bottomClearance + 30, 36], reduceMotion ? 0 : 420);
+  }, [bottomClearance, insets.top, reduceMotion]);
 
   useEffect(() => {
     const current = historyRef.current?.present;
@@ -715,7 +717,6 @@ export function OrderedRouteEditorScreen() {
       setMode('Browse');
       setBriefStatus('Line added. Move the map, or tap Draw to continue.');
     }
-    if (intent.kind === 'bridge') setSelectedGapId(undefined);
   }, [commitResult]);
 
   const handleDrawStroke = useCallback(async (raw: RoutePoint[]) => {
@@ -729,7 +730,7 @@ export function OrderedRouteEditorScreen() {
     const latitude = raw[0]?.lat ?? cameraCenterRef.current?.lat ?? 0;
     const metresPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / (2 ** cameraZoomRef.current);
     const attachmentToleranceM = Math.max(4, Math.min(20, metresPerPixel * 24));
-    const intent = classifyDrawTransaction(current.present, raw, selectedGapId, attachmentToleranceM);
+    const intent = classifyDrawTransaction(current.present, raw, undefined, attachmentToleranceM);
     if (intent.kind === 'reject') {
       setError(editFailure(intent.code));
       setMode('Browse');
@@ -793,7 +794,7 @@ export function OrderedRouteEditorScreen() {
       setResolvingDrawPoints([]);
       if (!controller.signal.aborted) setProviderBusy(false);
     }
-  }, [applyResolvedDraw, ownerId, selectedGapId]);
+  }, [applyResolvedDraw, ownerId]);
 
   useEffect(() => {
     if (!__DEV__ || Platform.OS !== 'web') return undefined;
@@ -832,7 +833,6 @@ export function OrderedRouteEditorScreen() {
       if (commitResult(result, 'bridge-point')) {
         const addedPart = result.ok ? result.draft.parts.find(part => !previousPartIds.has(part.id)) : undefined;
         animateAcceptedPoint(points, addedPart?.id);
-        setSelectedGapId(undefined);
         setTool('browse');
       }
       return;
@@ -888,14 +888,6 @@ export function OrderedRouteEditorScreen() {
     const current = historyRef.current;
     const target = cameraCenterRef.current;
     if (!current || !target || providerBusy) return;
-    if (selectedGap) {
-      const leftIndex = current.present.parts.findIndex(part => part.id === selectedGap.afterPartId);
-      const left = current.present.parts[leftIndex]?.points.at(-1);
-      const right = current.present.parts[leftIndex + 1]?.points[0];
-      if (!left || !right) return;
-      void runPointRequest(left, right, { kind: 'bridge', gapId: selectedGap.id });
-      return;
-    }
     if (current.present.parts.length === 0 && !current.present.startPoint) {
       if (commitResult(setOrderedDraftStart(current.present, target), 'set-start')) {
         setError(null);
@@ -906,7 +898,7 @@ export function OrderedRouteEditorScreen() {
     const start = current.present.parts.at(-1)?.points.at(-1) ?? current.present.startPoint;
     if (!start) return;
     void runPointRequest(start, target, { kind: 'append' });
-  }, [commitResult, providerBusy, runPointRequest, selectedGap]);
+  }, [commitResult, providerBusy, runPointRequest]);
 
   const hasUncommittedRouteEdit = providerBusy
     || providerTransactionRef.current
@@ -1015,11 +1007,9 @@ export function OrderedRouteEditorScreen() {
     );
   }
 
-  const pointActionLabel = selectedGap
-    ? 'Add point'
-    : draft.parts.length === 0 && !draft.startPoint
-      ? 'Set start'
-      : 'Add point';
+  const pointActionLabel = draft.parts.length === 0 && !draft.startPoint
+    ? 'Set start'
+    : 'Add point';
   const trimPreviewResult = (() => {
     if (!trimOpen || draft.parts.length === 0) return null;
     const start = orderedPositionAtDistanceFraction(draft, trimStart);
@@ -1096,6 +1086,58 @@ export function OrderedRouteEditorScreen() {
     properties: {},
     geometry: { type: 'LineString' as const, coordinates: reviewPoints.map(point => [point.lng, point.lat]) },
   } : null;
+  const routeContextContent = readOnlyShared ? null : trimOpen ? (
+    <View style={styles.contextContent} testID="route-trim-strip">
+      <Text style={[styles.contextText, { color: theme.foreground }]}>Drag the handles to shorten your route.</Text>
+      <TrimSlider trimStartFrac={trimStart} trimEndFrac={trimEnd} onTrimStartChange={setTrimStart} onTrimEndChange={setTrimEnd} totalLengthM={orderedDraftDistanceM(draft)} />
+      <View style={styles.compactActionRow}>
+        <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => selectEditorTool('browse')}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Cancel</Text></TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }, trimStart <= 0.001 && trimEnd >= 0.999 && styles.disabled]}
+          onPress={applyTrim}
+          disabled={trimStart <= 0.001 && trimEnd >= 0.999}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: trimStart <= 0.001 && trimEnd >= 0.999 }}
+          testID="route-trim-apply"
+        ><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Apply</Text></TouchableOpacity>
+      </View>
+    </View>
+  ) : manualRecovery ? (
+    <View style={styles.contextContent} testID="route-freehand-choice">
+      <Text style={[styles.contextText, { color: theme.foreground }]}>Keep the line you drew?</Text>
+      <View style={styles.compactActionRow}>
+        <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setManualRecovery(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => { const pending = manualRecovery; setManualRecovery(null); applyResolvedDraw(pending.points, 'draw-manual', pending.intent); }} testID="route-use-drawing"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use drawing</Text></TouchableOpacity>
+      </View>
+    </View>
+  ) : pendingReview || pendingPointReview ? (
+    <View style={styles.contextContent} testID="route-inline-review">
+      <Text style={[styles.contextText, { color: theme.foreground }]}>{pendingPointReview ? 'Keep this walking path?' : 'Keep this path?'}</Text>
+      <View style={styles.compactActionRow}>
+        <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setPendingReview(null); setPendingPointReview(null); setMode(pendingPointReview ? 'PointTargeting' : 'DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>{pendingPointReview ? 'Cancel' : 'Redraw'}</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
+          if (pendingReview) { const pending = pendingReview; setPendingReview(null); applyResolvedDraw(pending.points, pending.resolution, pending.intent); }
+          else if (pendingPointReview) { const pending = pendingPointReview; setPendingPointReview(null); applyResolvedPoint(pending.points, pending.intent, pending.baseRevision); }
+        }}><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use path</Text></TouchableOpacity>
+      </View>
+    </View>
+  ) : mode === 'MatchPending' || providerBusy ? (
+    <View style={[styles.contextContent, styles.contextProgress]}>
+      <View style={styles.busyRow}><ActivityIndicator size="small" color={theme.primary} /><Text style={[styles.contextText, { color: theme.foreground }]}>Finding a path…</Text></View>
+      <TouchableOpacity onPress={() => { invalidatePendingOperation(); setMode('Browse'); }} accessibilityRole="button"><Text style={[styles.linkText, { color: theme.primary }]}>Cancel</Text></TouchableOpacity>
+    </View>
+  ) : tool === 'point' ? (
+    <View style={styles.contextContent} testID="route-point-context">
+      <Text style={[styles.contextText, { color: theme.foreground }]}>Move the map to choose your next point.</Text>
+      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={confirmPointTarget} disabled={providerBusy} accessibilityRole="button" accessibilityLabel={pointActionLabel} testID="route-point-confirm"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{pointActionLabel}</Text></TouchableOpacity>
+    </View>
+  ) : tool === 'draw' ? (
+    <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: theme.foreground }]}>{draft.gaps.length > 0 ? 'Draw across the dotted line to join the route.' : 'Draw to extend or reshape your route.'}</Text></View>
+  ) : error ? (
+    <TouchableOpacity style={styles.contextContent} onPress={() => setError(null)} accessibilityRole="button" testID="route-context-message"><Text style={[styles.contextText, { color: theme.foreground }]}>{error}</Text></TouchableOpacity>
+  ) : briefStatus ? (
+    <View style={styles.contextContent} testID="route-brief-status"><Text style={[styles.contextText, { color: theme.foregroundSecondary }]}>{briefStatus}</Text></View>
+  ) : null;
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]} testID="ordered-route-editor">
@@ -1104,7 +1146,6 @@ export function OrderedRouteEditorScreen() {
           <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Map unavailable</Text>
         </View>
       ) : showPlannerMap ? (
-        <GestureDetector gesture={nativeMapGesture}>
         <MapView
           key={`ordered-route-map-${mapEpoch}`}
           ref={mapViewRef}
@@ -1116,10 +1157,13 @@ export function OrderedRouteEditorScreen() {
           attributionPosition={routeOrnaments.attributionPosition}
           scaleBarEnabled={false}
           compassEnabled={false}
-          scrollEnabled
-          zoomEnabled
-          rotateEnabled
-          pitchEnabled
+          // Draw owns the one-finger surface while armed. Disabling Mapbox's
+          // recognizers removes the native arbitration race that swallowed
+          // RNGH strokes on iPhone; Browse restores all map gestures.
+          scrollEnabled={tool !== 'draw'}
+          zoomEnabled={tool !== 'draw'}
+          rotateEnabled={tool !== 'draw'}
+          pitchEnabled={tool !== 'draw'}
           onDidFinishLoadingMap={() => setMapReady(true)}
           onDidFinishRenderingMapFully={() => setMapReady(true)}
           onMapLoadingError={() => setMapLoadState('error')}
@@ -1138,9 +1182,11 @@ export function OrderedRouteEditorScreen() {
               bounds={{
                 ...initialBoundsRef.current,
                 paddingTop: insets.top + 100,
-                paddingBottom: insets.bottom + 300,
+                paddingBottom: bottomClearance + 30,
                 paddingLeft: 40,
-                paddingRight: 40,
+                // Keep Route endpoints and labels clear of the four 44pt map
+                // controls anchored 16pt from the right edge.
+                paddingRight: 88,
               }}
               animationDuration={0}
             />
@@ -1196,7 +1242,6 @@ export function OrderedRouteEditorScreen() {
             </ShapeSource>
           ) : null}
         </MapView>
-        </GestureDetector>
       ) : null}
       {MapView && showPlannerMap && !mapReady ? (
         <MapLoadOverlay
@@ -1288,13 +1333,11 @@ export function OrderedRouteEditorScreen() {
 
       <View style={[
         styles.topBar,
-        { paddingTop: insets.top + Spacing.sm },
-        compactViewport && { paddingBottom: Spacing.sm, backgroundColor: theme.mapOverlay, borderBottomColor: theme.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth },
+        { paddingTop: insets.top + Spacing.sm, paddingBottom: Spacing.sm, backgroundColor: theme.mapOverlay, borderBottomColor: theme.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth },
       ]} pointerEvents="box-none">
         <BackButton variant="inline" onPress={() => nav.goBack()} />
         <View style={styles.topTitleWrap}>
           <Text testID="route-editor-title" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
-          <Text style={[styles.topSubtitle, { color: theme.foregroundSecondary }]}>Plan only · not walking evidence</Text>
         </View>
         <View style={styles.topUtilityPlaceholder} />
       </View>
@@ -1311,14 +1354,13 @@ export function OrderedRouteEditorScreen() {
         mapViewRef={mapViewRef}
         onDrawingStart={() => setMode('Drawing')}
         onStroke={points => { void handleDrawStroke(points); }}
-        nativeMapGesture={nativeMapGesture}
         onCancel={reason => {
           setMode('Browse');
           setError(reason === 'gesture-interrupted'
             ? 'Stroke cancelled. Move the map, then tap Draw to try again.'
             : 'The map could not read that stroke. Your Route is unchanged.');
         }}
-        bottomInset={(compactViewport ? 246 : 254) + insets.bottom}
+        bottomInset={bottomClearance}
         strokeColor={theme.primary}
       />
 
@@ -1327,7 +1369,7 @@ export function OrderedRouteEditorScreen() {
           styles.bottomCard,
           compactViewport && styles.bottomCardCompact,
           { paddingBottom: insets.bottom + (compactViewport ? Spacing.sm : Spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow },
-        ]}>
+        ]} onLayout={handleBottomWorkspaceLayout}>
           {readOnlyShared ? (
             <>
               {error ? <Text style={[styles.helper, { color: theme.destructive }]}>{error}</Text> : null}
@@ -1346,6 +1388,11 @@ export function OrderedRouteEditorScreen() {
             </>
           ) : (
             <>
+              {routeContextContent ? (
+                <View style={[styles.contextPanel, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]} testID="route-context-slot">
+                  {routeContextContent}
+                </View>
+              ) : null}
               <View style={styles.toolRow}>
                 <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'draw' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'draw' ? theme.controlSelected : theme.surface }]} onPress={() => selectEditorTool(tool === 'draw' ? 'browse' : 'draw')} accessibilityRole="button" accessibilityState={{ selected: tool === 'draw' }} testID="route-tool-draw">
                   <Icon name="Pencil" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Draw</Text>
@@ -1367,65 +1414,6 @@ export function OrderedRouteEditorScreen() {
                 >
                   <Icon name="Undo2" size={18} color={!history || history.past.length === 0 || hasUncommittedRouteEdit ? theme.iconInactive : theme.iconActive} strokeWidth={2.2} />
                 </TouchableOpacity>
-              </View>
-              <View style={[styles.contextSlot, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]} testID="route-context-slot">
-                {trimOpen ? (
-                  <View style={styles.contextContent} testID="route-trim-strip">
-                    <Text style={[styles.contextText, { color: theme.foreground }]}>Drag either end of the route to shorten it.</Text>
-                  <TrimSlider trimStartFrac={trimStart} trimEndFrac={trimEnd} onTrimStartChange={setTrimStart} onTrimEndChange={setTrimEnd} totalLengthM={orderedDraftDistanceM(draft)} />
-                  <View style={styles.compactActionRow}>
-                      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => selectEditorTool('browse')}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Cancel</Text></TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }, trimStart <= 0.001 && trimEnd >= 0.999 && styles.disabled]}
-                      onPress={applyTrim}
-                      disabled={trimStart <= 0.001 && trimEnd >= 0.999}
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: trimStart <= 0.001 && trimEnd >= 0.999 }}
-                      testID="route-trim-apply"
-                      ><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Apply</Text></TouchableOpacity>
-                    </View>
-                  </View>
-                ) : manualRecovery ? (
-                  <View style={styles.contextContent} testID="route-freehand-choice">
-                    <Text style={[styles.contextText, { color: theme.foreground }]}>No mapped path fits your drawing. Keep the line you drew?</Text>
-                    <View style={styles.compactActionRow}>
-                      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setManualRecovery(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
-                      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => { const pending = manualRecovery; setManualRecovery(null); applyResolvedDraw(pending.points, 'draw-manual', pending.intent); }} testID="route-use-drawing"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use drawing</Text></TouchableOpacity>
-                    </View>
-                  </View>
-                ) : pendingReview || pendingPointReview ? (
-                  <View style={styles.contextContent} testID="route-inline-review">
-                    <Text style={[styles.contextText, { color: theme.foreground }]}>{pendingPointReview ? 'This walking path differs from the target. Use this path?' : 'The mapped path differs from your drawing. Use this path?'}</Text>
-                    <View style={styles.compactActionRow}>
-                      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setPendingReview(null); setPendingPointReview(null); setMode(pendingPointReview ? 'PointTargeting' : 'DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>{pendingPointReview ? 'Cancel' : 'Redraw'}</Text></TouchableOpacity>
-                      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
-                        if (pendingReview) { const pending = pendingReview; setPendingReview(null); applyResolvedDraw(pending.points, pending.resolution, pending.intent); }
-                        else if (pendingPointReview) { const pending = pendingPointReview; setPendingPointReview(null); applyResolvedPoint(pending.points, pending.intent, pending.baseRevision); }
-                      }}><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use path</Text></TouchableOpacity>
-                    </View>
-                  </View>
-                ) : mode === 'MatchPending' || providerBusy ? (
-                  <View style={[styles.contextContent, styles.contextProgress]}>
-                    <View style={styles.busyRow}><ActivityIndicator size="small" color={theme.primary} /><Text style={[styles.contextText, { color: theme.foreground }]}>Matching your drawing to nearby paths…</Text></View>
-                    <TouchableOpacity onPress={() => { invalidatePendingOperation(); setMode('Browse'); }} accessibilityRole="button"><Text style={[styles.linkText, { color: theme.primary }]}>Cancel</Text></TouchableOpacity>
-                  </View>
-                ) : tool === 'point' ? (
-                  <View style={styles.contextContent} testID="route-point-context">
-                    <Text style={[styles.contextText, { color: theme.foreground }]}>Move the map so the crosshair marks your next point.</Text>
-                    <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={confirmPointTarget} disabled={providerBusy} accessibilityRole="button" accessibilityLabel={pointActionLabel} testID="route-point-confirm"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{pointActionLabel}</Text></TouchableOpacity>
-                  </View>
-                ) : tool === 'draw' ? (
-                  <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: theme.foreground }]}>Start near an end to extend, or connect two points to reshape.</Text></View>
-                ) : error ? (
-                  <TouchableOpacity style={styles.contextContent} onPress={() => setError(null)} accessibilityRole="button" testID="route-context-message"><Text style={[styles.contextText, { color: theme.foreground }]}>{error}</Text></TouchableOpacity>
-                ) : briefStatus ? (
-                  <View style={styles.contextContent} testID="route-brief-status"><Text style={[styles.contextText, { color: theme.foregroundSecondary }]}>{briefStatus}</Text></View>
-                ) : draft.gaps.length > 0 ? (
-                  <View style={styles.contextContent}>
-                    <Text style={[styles.contextText, { color: theme.foreground }]}>{draft.gaps.length} factual Activity {draft.gaps.length === 1 ? 'gap needs' : 'gaps need'} repair before Save.</Text>
-                    <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { selectEditorTool('draw'); setSelectedGapId(draft.gaps[0]?.id); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Connect next gap</Text></TouchableOpacity>
-                  </View>
-                ) : null}
               </View>
               <View style={styles.nameSaveRow} testID="route-name-save-row">
                 <View style={[styles.nameInputFrame, { backgroundColor: theme.inputSurface, borderColor: theme.borderSubtle }]}>
@@ -1555,13 +1543,13 @@ const styles = StyleSheet.create({
   linkText: { fontSize: FontSize.small, fontWeight: '700', padding: Spacing.xs },
   trimStrip: { borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.sm, paddingTop: Spacing.sm, paddingBottom: Spacing.xs },
   trimHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
-  contextSlot: { height: 116, borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.sm, paddingVertical: 6, justifyContent: 'center' },
-  contextContent: { flex: 1, justifyContent: 'center', gap: 6 },
+  contextPanel: { minHeight: 52, borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.sm, paddingVertical: 8, justifyContent: 'center' },
+  contextContent: { justifyContent: 'center', gap: 8 },
   contextProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   contextText: { flexShrink: 1, fontSize: FontSize.small, lineHeight: 18, fontWeight: '600' },
   compactActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.sm },
-  compactSecondaryAction: { minHeight: 36, alignSelf: 'flex-end', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
-  compactPrimaryAction: { minHeight: 36, alignSelf: 'flex-end', borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  compactSecondaryAction: { minHeight: 44, alignSelf: 'flex-end', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  compactPrimaryAction: { minHeight: 44, alignSelf: 'flex-end', borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
   compactActionText: { fontSize: FontSize.caption, fontWeight: '800' },
   inlineReview: { borderWidth: 1, borderRadius: RadiusRole.card, padding: Spacing.sm, gap: Spacing.sm },
   editorFooterRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },

@@ -353,7 +353,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // editing, durable Activity origin, and explicit Hike/Run pre-start handoff.
 // O79 (2026-10-14): Owner 13-issue root-cause UI closure: trustworthy
 // location authority, shared libraries, stable Route workspace and ornaments.
-export const OTA_VERSION = 'O79';
+// O80 (2026-10-15): Owner iPhone regression candidate: exact Memory camera,
+// evidence-driven Activity continuity, native Draw ownership and compact tools.
+export const OTA_VERSION = 'O80';
 
 
 type OtaState =

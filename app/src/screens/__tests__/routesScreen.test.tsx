@@ -106,7 +106,7 @@ describe('RoutesScreen final creation and sibling-list flow', () => {
     expect(screen.getByText('All')).toBeTruthy();
     expect(screen.getAllByText('Mine').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Received')).toBeTruthy();
-    expect(screen.getByText('New')).toBeTruthy();
+    expect(screen.getByText('+ Create')).toBeTruthy();
     expect(screen.getByText('October 2026')).toBeTruthy();
     expect(screen.getByText('September 2026')).toBeTruthy();
     expect(screen.getByText('Shared by Aroha')).toBeTruthy();

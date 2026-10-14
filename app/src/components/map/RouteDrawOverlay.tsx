@@ -13,7 +13,6 @@ interface Props {
   onStroke: (points: RoutePoint[]) => void;
   onDrawingStart?: () => void;
   onCancel: (reason: 'gesture-interrupted' | 'coordinate-unavailable') => void;
-  nativeMapGesture?: ReturnType<typeof Gesture.Native>;
   bottomInset?: number;
   strokeColor?: string;
 }
@@ -29,7 +28,6 @@ export function RouteDrawOverlay({
   onStroke,
   onDrawingStart,
   onCancel,
-  nativeMapGesture,
   bottomInset = 250,
   strokeColor = '#245C43',
 }: Props): React.JSX.Element | null {
@@ -122,7 +120,7 @@ export function RouteDrawOverlay({
     onCancel('gesture-interrupted');
   }
 
-  let draw = Gesture.Pan()
+  const draw = Gesture.Pan()
     .minDistance(0)
     .minPointers(1)
     .maxPointers(1)
@@ -138,11 +136,13 @@ export function RouteDrawOverlay({
       'worklet';
       runOnJS(finish)(event.absoluteX, event.absoluteY);
     })
-    .onFinalize(() => {
+    .onFinalize((_event, success) => {
       'worklet';
-      runOnJS(finalizeWithoutEnd)();
+      // RNGH always finalizes after a successful onEnd. Calling the cancel
+      // path unconditionally queued a competing JS transition; on a loaded
+      // iPhone it could clear the stroke before async projection completed.
+      if (!success) runOnJS(finalizeWithoutEnd)();
     });
-  if (nativeMapGesture) draw = draw.blocksExternalGesture(nativeMapGesture);
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>

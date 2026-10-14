@@ -240,19 +240,20 @@ export function classifyDrawTransaction(
   if (raw.length < 2) return { kind: 'reject', code: 'ZERO_LENGTH' };
   const first = raw[0];
   const last = raw[raw.length - 1];
+  const toleranceM = Math.max(4, Math.min(ROUTE_ATTACHMENT_TOLERANCE_M, attachmentToleranceM));
   if (selectedGapId) {
     const gap = draft.gaps.find(item => item.id === selectedGapId);
     const leftIndex = gap ? draft.parts.findIndex(part => part.id === gap.afterPartId) : -1;
     const left = leftIndex >= 0 ? draft.parts[leftIndex] : undefined;
     const right = leftIndex >= 0 ? draft.parts[leftIndex + 1] : undefined;
     if (!gap || !left || !right) return { kind: 'reject', code: 'DISCONNECTED' };
-    const forward = routePointDistanceM(first, left.points.at(-1)!) <= ROUTE_ATTACHMENT_TOLERANCE_M
-      && routePointDistanceM(last, right.points[0]) <= ROUTE_ATTACHMENT_TOLERANCE_M;
-    const reverse = routePointDistanceM(last, left.points.at(-1)!) <= ROUTE_ATTACHMENT_TOLERANCE_M
-      && routePointDistanceM(first, right.points[0]) <= ROUTE_ATTACHMENT_TOLERANCE_M;
+    const forward = routePointDistanceM(first, left.points.at(-1)!) <= toleranceM
+      && routePointDistanceM(last, right.points[0]) <= toleranceM;
+    const reverse = routePointDistanceM(last, left.points.at(-1)!) <= toleranceM
+      && routePointDistanceM(first, right.points[0]) <= toleranceM;
     if (!forward && !reverse) {
-      const startsAtLeft = routePointDistanceM(first, left.points.at(-1)!) <= ROUTE_ATTACHMENT_TOLERANCE_M;
-      const startsAtRight = routePointDistanceM(first, right.points[0]) <= ROUTE_ATTACHMENT_TOLERANCE_M;
+      const startsAtLeft = routePointDistanceM(first, left.points.at(-1)!) <= toleranceM;
+      const startsAtRight = routePointDistanceM(first, right.points[0]) <= toleranceM;
       if ((startsAtLeft || startsAtRight) && normalizeOrderedPoints(raw).length >= 2) {
         return {
           kind: 'pending-bridge', gapId: selectedGapId, points: normalizeOrderedPoints(raw),
@@ -264,7 +265,28 @@ export function classifyDrawTransaction(
     return { kind: 'bridge', gapId: selectedGapId, reverseCandidate: reverse && !forward };
   }
   if (draft.parts.length === 0 && !draft.startPoint) return { kind: 'new' };
-  const toleranceM = Math.max(4, Math.min(ROUTE_ATTACHMENT_TOLERANCE_M, attachmentToleranceM));
+
+  // A dotted imported-Activity gap is already an explicit pair of adjacent
+  // anchors. Drawing from one side to the other is the user's bridge intent;
+  // requiring a separate "Connect next gap" selection hid that ownership in
+  // UI state and made ordinary Draw reject the same valid stroke. Resolve only
+  // one exact adjacent gap, never guess when multiple gaps overlap.
+  const gapBridges = draft.gaps.flatMap(gap => {
+    const leftIndex = draft.parts.findIndex(part => part.id === gap.afterPartId);
+    const left = leftIndex >= 0 ? draft.parts[leftIndex] : undefined;
+    const right = leftIndex >= 0 ? draft.parts[leftIndex + 1] : undefined;
+    if (!left || !right) return [];
+    const forward = routePointDistanceM(first, left.points.at(-1)!) <= toleranceM
+      && routePointDistanceM(last, right.points[0]) <= toleranceM;
+    const reverse = routePointDistanceM(last, left.points.at(-1)!) <= toleranceM
+      && routePointDistanceM(first, right.points[0]) <= toleranceM;
+    return forward || reverse
+      ? [{ kind: 'bridge' as const, gapId: gap.id, reverseCandidate: reverse && !forward }]
+      : [];
+  });
+  if (gapBridges.length === 1) return gapBridges[0];
+  if (gapBridges.length > 1) return { kind: 'reject', code: 'AMBIGUOUS_INTERVAL' };
+
   const starts = nearestOrderedPositions(draft, first, toleranceM);
   const ends = nearestOrderedPositions(draft, last, toleranceM);
   const options: RouteIntervalCandidate[] = [];

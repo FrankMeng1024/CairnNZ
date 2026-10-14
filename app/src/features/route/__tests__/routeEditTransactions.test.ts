@@ -157,6 +157,26 @@ describe('Route edit transaction classification', () => {
     expect(result.draft.parts[1].points).toEqual([p(20, 0), p(35, 10), p(50, 0)]);
   });
 
+  test('ordinary Draw across one imported Activity gap infers the adjacent bridge without a compulsory selection step', () => {
+    const imported = createImportedOrderedDraft({
+      draftId: 'activity-auto-gap', ownerId: 'owner-a',
+      segments: [[p(0, 0), p(20, 0)], [p(50, 0), p(70, 0)]],
+    });
+    const raw = [p(20, 0), p(34, 8), p(50, 0)];
+    const intent = classifyDrawTransaction(imported, raw);
+    expect(intent).toEqual({
+      kind: 'bridge', gapId: imported.gaps[0].id, reverseCandidate: false,
+    });
+    if (intent.kind !== 'bridge') return;
+    const result = applyDrawTransaction(imported, intent, raw, 'draw-manual');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.gaps).toEqual([]);
+    expect(result.draft.parts[0].resolution).toBe('recorded');
+    expect(result.draft.parts[1].resolution).toBe('draw-manual');
+    expect(result.draft.parts[2].resolution).toBe('recorded');
+  });
+
   test('a disconnected stroke rejects the transaction without changing the draft', () => {
     const base = appendOrderedSegment(empty(), [p(0, 0), p(30, 0)], 'point');
     expect(base.ok).toBe(true);

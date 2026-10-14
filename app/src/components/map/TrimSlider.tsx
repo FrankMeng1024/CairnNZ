@@ -41,6 +41,13 @@ function clamp(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x;
 }
 
+/** Fine control close to pen-down, then one-to-one travel for larger trims. */
+export function precisionTrimDeltaPx(translationX: number): number {
+  const sign = Math.sign(translationX);
+  const magnitude = Math.abs(translationX);
+  return sign * (magnitude <= 32 ? magnitude * 0.5 : 16 + (magnitude - 32));
+}
+
 export function TrimSlider({
   trimStartFrac,
   trimEndFrac,
@@ -74,14 +81,11 @@ export function TrimSlider({
   const endRef = React.useRef(localEnd);
   const draggingHandleRef = React.useRef<'start' | 'end' | null>(null);
   const grantXRef = React.useRef(0);
+  const grantFractionRef = React.useRef(0);
   React.useEffect(() => { startRef.current = localStart; }, [localStart]);
   React.useEffect(() => { endRef.current = localEnd; }, [localEnd]);
 
   const usable = Math.max(1, trackW - HANDLE_W);
-
-  function fracFromTrackX(x: number): number {
-    return clamp((x - HANDLE_W / 2) / usable, 0, 1);
-  }
 
   function handleBegin(touchX: number) {
     grantXRef.current = touchX;
@@ -90,24 +94,35 @@ export function TrimSlider({
     const distToStart = Math.abs(touchX - startPx);
     const distToEnd = Math.abs(touchX - endPx);
     draggingHandleRef.current = distToStart <= distToEnd ? 'start' : 'end';
+    grantFractionRef.current = draggingHandleRef.current === 'start' ? startRef.current : endRef.current;
     setIsDragging(true);
     // v244: push undo snapshot once at drag start (not every frame).
     onTrimDragBegin?.();
   }
 
-  function handleUpdate(touchX: number) {
-    const f = fracFromTrackX(touchX);
+  function applyFraction(f: number) {
     if (draggingHandleRef.current === 'start') {
       const next = Math.min(f, endRef.current - TRIM_MIN_FRACTION);
+      startRef.current = next;
       setLocalStart(next);
       // v243: real-time update — push to store every frame so the
       // route line redraws while the user is still dragging. PO request.
       onTrimStartChange(next);
     } else if (draggingHandleRef.current === 'end') {
       const next = Math.max(f, startRef.current + TRIM_MIN_FRACTION);
+      endRef.current = next;
       setLocalEnd(next);
       onTrimEndChange(next);
     }
+  }
+
+  function handleUpdateTranslation(translationX: number) {
+    const f = clamp(grantFractionRef.current + precisionTrimDeltaPx(translationX) / usable, 0, 1);
+    applyFraction(f);
+  }
+
+  function handleUpdateAbsolute(touchX: number) {
+    handleUpdateTranslation(touchX - grantXRef.current);
   }
 
   function handleEnd() {
@@ -129,7 +144,7 @@ export function TrimSlider({
     })
     .onUpdate((e) => {
       'worklet';
-      runOnJS(handleUpdate)(e.x);
+      runOnJS(handleUpdateTranslation)(e.translationX);
     })
     .onEnd(() => {
       'worklet';
@@ -153,7 +168,7 @@ export function TrimSlider({
         onStartShouldSetResponder: () => true,
         onMoveShouldSetResponder: () => true,
         onResponderGrant: (event: any) => handleBegin(event.nativeEvent.locationX),
-        onResponderMove: (event: any) => handleUpdate(event.nativeEvent.locationX),
+        onResponderMove: (event: any) => handleUpdateAbsolute(event.nativeEvent.locationX),
         onResponderRelease: handleEnd,
         onResponderTerminate: handleEnd,
       } : {})}

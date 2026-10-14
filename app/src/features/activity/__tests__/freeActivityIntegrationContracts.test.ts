@@ -297,15 +297,21 @@ describe('Free Activity integration contracts', () => {
     expect(handoff).toContain('await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)');
   });
 
-  test('known background unavailability opens a new truth segment instead of a connector', () => {
+  test('temporary background provider unavailability defers truth segmentation to the next observation', () => {
     const source = read('src/store/useTrackingStore.ts');
-    const unavailable = source.slice(
-      source.indexOf('async function markRecordingContinuityUnavailable'),
+    const uncertain = source.slice(
+      source.indexOf('async function markRecordingContinuityUncertain'),
       source.indexOf('async function drainCommittedBackgroundLocations'),
     );
-    expect(unavailable).toContain("pendingSegmentStartReason: 'gps-reacquired'");
-    expect(unavailable).toContain('lastCoordinate: null');
-    expect(source).toContain("markRecordingContinuityUnavailable('background-provider-unavailable')");
+    // The provider lifecycle alone is not movement evidence. Preserve the
+    // trusted tail so a short, plausible reacquisition remains continuous;
+    // the shared physical classifier still opens real long/displaced gaps.
+    expect(uncertain).toContain('locationAvailable: false');
+    expect(uncertain).toContain("decision: 'defer-until-next-observation'");
+    expect(uncertain).not.toContain("pendingSegmentStartReason: 'gps-reacquired'");
+    expect(uncertain).not.toContain('lastCoordinate: null');
+    expect(source).toContain('const physicalGap = shouldStartNewSegment({');
+    expect(source).toContain("markRecordingContinuityUncertain('background-provider-unavailable')");
   });
 
   test('Finish uses one versioned Final artifact for local and server detail', () => {

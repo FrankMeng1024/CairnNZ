@@ -342,9 +342,11 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   scenicImageOpacity: 0.74,
   scenicBackdropOverlay: ['rgba(10,17,20,0.18)', 'rgba(18,27,29,0.26)', 'rgba(20,29,30,0.42)', 'rgba(18,26,27,0.58)'],
   scenicHeroOverlay: ['rgba(8,18,15,0.02)', 'rgba(8,18,15,0.32)'],
-  mapFogFill: 'rgba(16,23,29,0.74)',
-  mapFogEdgeOuter: 'rgba(183,207,204,0.28)',
-  mapFogEdgeInner: 'rgba(183,213,204,0.64)',
+  // Native Mapbox Standard already applies its night light preset. The fog
+  // is a cool mineral veil, not a second near-black dimmer over roads/labels.
+  mapFogFill: 'rgba(54,65,76,0.54)',
+  mapFogEdgeOuter: 'rgba(197,218,217,0.46)',
+  mapFogEdgeInner: 'rgba(204,229,221,0.82)',
   mapFriendMemoryFill: '#8CA2B4',
   mapFriendMemoryOpacity: 0.25,
   mapMemoryOverlapFill: '#C98C66',

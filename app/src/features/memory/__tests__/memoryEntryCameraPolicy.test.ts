@@ -1,6 +1,4 @@
-import { resolveCurrentCityViewport, resolveMemoryEntryCameraAuthority, resolveMemoryInitialMapCenter } from '../services/memoryEntryCameraPolicy';
-
-const shanghai: [number, number, number, number] = [120.85, 30.67, 122.2, 31.88];
+import { resolveCachedMemoryCenter, resolveCurrentLocationViewport, resolveMemoryEntryCameraAuthority, resolveMemoryInitialMapCenter } from '../services/memoryEntryCameraPolicy';
 
 describe('Memory current-city-first camera policy', () => {
   test('fresh current-city evidence outranks a cached historical city', () => {
@@ -27,12 +25,13 @@ describe('Memory current-city-first camera policy', () => {
     })).toBe('manual-fallback');
   });
 
-  test('never mounts current entry from stale history while fresh location is unresolved', () => {
+  test('paints cached account Memory while locating without treating it as current', () => {
     expect(resolveMemoryInitialMapCenter({
       authority: 'wait-for-location',
       current: null,
       manualCenter: [116.4074, 39.9042],
-    })).toBeNull();
+      cachedMemoryCenter: { lat: 31.22, lng: 121.46, ts: 20 },
+    })).toEqual({ lat: 31.22, lng: 121.46, ts: 20 });
     expect(resolveMemoryInitialMapCenter({
       authority: 'current',
       current: { lat: 31.2304, lng: 121.4737 },
@@ -54,36 +53,16 @@ describe('Memory current-city-first camera policy', () => {
     })).toBe('preserve-manual-browse');
   });
 
-  test('frames own current-city Fog and excludes historical evidence in another city', () => {
-    const result = resolveCurrentCityViewport(
-      { lat: 31.2304, lng: 121.4737 },
-      shanghai,
-      [
-        { lat: 31.2200, lng: 121.4600 },
-        { lat: 31.2450, lng: 121.4900 },
-        { lat: 39.9042, lng: 116.4074 },
-      ],
-    );
-    expect(result.usedOwnEvidence).toBe(true);
-    expect(result.center[0]).toBeGreaterThan(121.45);
-    expect(result.center[0]).toBeLessThan(121.50);
-    expect(result.center[1]).toBeGreaterThan(31.21);
-    expect(result.center[1]).toBeLessThan(31.25);
+  test('chooses the newest cached personal evidence without combining cities', () => {
+    expect(resolveCachedMemoryCenter([
+      { lat: 39.9042, lng: 116.4074, ts: 10 },
+      { lat: 31.2200, lng: 121.4600, ts: 30 },
+      { lat: 31.2450, lng: 121.4900, ts: 20 },
+    ])).toEqual({ lat: 31.2200, lng: 121.4600, ts: 30 });
   });
 
-  test('uses actual current location when current city has no personal Fog', () => {
-    expect(resolveCurrentCityViewport(
-      { lat: 31.2304, lng: 121.4737 },
-      shanghai,
-      [{ lat: 39.9042, lng: 116.4074 }],
-    )).toEqual({ center: [121.4737, 31.2304], zoom: 14, usedOwnEvidence: false });
-  });
-
-  test('has a location-first fallback when city resolution is delayed or unavailable', () => {
-    expect(resolveCurrentCityViewport(
-      { lat: 31.2304, lng: 121.4737 },
-      null,
-      [{ lat: 39.9042, lng: 116.4074 }],
-    )).toEqual({ center: [121.4737, 31.2304], zoom: 14, usedOwnEvidence: false });
+  test('entry and Recenter target the live dot rather than a history bounding box', () => {
+    expect(resolveCurrentLocationViewport({ lat: 31.2304, lng: 121.4737 }))
+      .toEqual({ center: [121.4737, 31.2304], zoom: 16.5, usedOwnEvidence: false });
   });
 });

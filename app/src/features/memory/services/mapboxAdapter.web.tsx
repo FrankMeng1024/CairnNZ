@@ -37,7 +37,7 @@
  *     conversion in the layer components below.
  */
 
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -562,31 +562,44 @@ export function SymbolLayer({ id, style, __sourceId, filter }: LayerProps) {
   );
 }
 
-// ── UserLocation — small blue dot at the map's geolocate position ────
-// On web we can't pull the device GPS through Mapbox's UserLocation
-// equivalent without permissions; for Playwright we just render a blue
-// dot at a known location. Cairn's MemoryScreen passes the user coord
-// in as the map center; we use that.
+// ── UserLocation — small blue dot at the browser's geolocate position ─
+// This must remain independent of the camera. The former QA shim rendered
+// the dot at map.getCenter(), so it followed every manual pan and could
+// falsely make a broken Recenter journey look correct in screenshots.
 interface UserLocationProps {
   visible?: boolean;
 }
 
 export function UserLocation({ visible = true }: UserLocationProps) {
   const mapCtx = React.useContext(MapInstanceContext);
-  if (!visible || !mapCtx) return null;
-  // Render at the current map center — close enough to "user location"
-  // for visual regression tests where we mock navigator.geolocation.
-  const m = mapCtx.current;
-  if (!m) return null;
-  const c = m.getCenter();
+  const [coordinate, setCoordinate] = useState<[number, number] | null>(null);
+  useEffect(() => {
+    if (!visible || typeof navigator === 'undefined' || !navigator.geolocation) {
+      setCoordinate(null);
+      return undefined;
+    }
+    const watchId = navigator.geolocation.watchPosition(position => {
+      const longitude = Number(position.coords.longitude);
+      const latitude = Number(position.coords.latitude);
+      if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+        setCoordinate([longitude, latitude]);
+      }
+    }, () => setCoordinate(null), {
+      enableHighAccuracy: true,
+      maximumAge: 15_000,
+      timeout: 20_000,
+    });
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [visible]);
+  if (!visible || !mapCtx || !coordinate) return null;
   return (
-    <Marker longitude={c.lng} latitude={c.lat}>
+    <Marker longitude={coordinate[0]} latitude={coordinate[1]}>
       <div style={{
         width: 14, height: 14, borderRadius: 7,
         backgroundColor: '#1f7be0',
         border: '2px solid #fff',
         boxShadow: '0 0 4px rgba(0,0,0,0.4)',
-      }} />
+      }} data-testid="web-user-location-puck" />
     </Marker>
   );
 }

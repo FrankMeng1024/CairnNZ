@@ -426,9 +426,11 @@ const styles = StyleSheet.create({
   row: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
   rowIcon: {
     width: 34,
-    height: 42,
+    height: 34,
+    alignSelf: 'flex-start',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    marginTop: -2,
   },
   rowCopy: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: FontSize.body, fontWeight: '700' },

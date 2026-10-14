@@ -372,8 +372,7 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
                   testID="routes-create"
                   hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                 >
-                  <Icon name="Plus" size={16} color={theme.onPrimary} strokeWidth={2.4} />
-                  <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>New</Text>
+                  <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>+ Create</Text>
                 </TouchableOpacity>
               )}
             />
@@ -584,7 +583,7 @@ const styles = StyleSheet.create({
   libraryEyebrow: { flex: 1, fontSize: FontSize.tiny, fontWeight: '800', letterSpacing: 1.05 },
   libraryCount: { fontSize: FontSize.small, fontWeight: '600' },
   discoveryTools: { gap: Spacing.sm, paddingBottom: Spacing.md },
-  inlineCreateButton: { minHeight: 34, minWidth: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: Spacing.sm, borderRadius: RadiusRole.button },
+  inlineCreateButton: { minHeight: 34, minWidth: 82, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.sm, borderRadius: RadiusRole.button },
   inlineCreateLabel: { fontSize: FontSize.caption, fontWeight: '800' },
   monthLabel: {
     paddingTop: Spacing.md,

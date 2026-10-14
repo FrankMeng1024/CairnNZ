@@ -3,7 +3,6 @@ import { act, render, waitFor } from '@testing-library/react-native';
 
 let mockPanCallbacks: Record<string, (...args: any[]) => any> = {};
 const mockMaxPointers = jest.fn();
-const mockBlocksExternal = jest.fn();
 
 jest.mock('react-native-gesture-handler', () => {
   const ReactModule = require('react'); const { View } = require('react-native');
@@ -15,10 +14,9 @@ jest.mock('react-native-gesture-handler', () => {
     onUpdate: (fn: any) => { mockPanCallbacks.onUpdate = fn; return builder; },
     onEnd: (fn: any) => { mockPanCallbacks.onEnd = fn; return builder; },
     onFinalize: (fn: any) => { mockPanCallbacks.onFinalize = fn; return builder; },
-    blocksExternalGesture: (gesture: any) => { mockBlocksExternal(gesture); return builder; },
   };
   return {
-    Gesture: { Pan: () => builder, Native: () => ({ kind: 'native' }) },
+    Gesture: { Pan: () => builder },
     GestureDetector: ({ children }: any) => ReactModule.createElement(View, null, children),
   };
 });
@@ -50,6 +48,7 @@ describe('RouteDrawOverlay native gesture handoff', () => {
       mockPanCallbacks.onBegin({ absoluteX: 10, absoluteY: 20 });
       mockPanCallbacks.onUpdate({ absoluteX: 20, absoluteY: 30 });
       mockPanCallbacks.onEnd({ absoluteX: 30, absoluteY: 40 });
+      mockPanCallbacks.onFinalize({}, true);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -64,20 +63,18 @@ describe('RouteDrawOverlay native gesture handoff', () => {
   test('a pointer-count interruption cancels provisional ink and yields to native map navigation', async () => {
     const onStroke = jest.fn();
     const onCancel = jest.fn();
-    const nativeMapGesture = { kind: 'native-map' } as any;
     const mapViewRef = { current: {
       getCoordinateFromView: jest.fn(async ([x, y]: [number, number]) => [121 + x / 1000, 31 + y / 1000]),
     } } as any;
     render(<RouteDrawOverlay
       active mapViewRef={mapViewRef} onStroke={onStroke}
-      onCancel={onCancel} nativeMapGesture={nativeMapGesture}
+      onCancel={onCancel}
     />);
 
-    expect(mockBlocksExternal).toHaveBeenCalledWith(nativeMapGesture);
     await act(async () => {
       mockPanCallbacks.onBegin({ absoluteX: 10, absoluteY: 20 });
       mockPanCallbacks.onUpdate({ absoluteX: 30, absoluteY: 40 });
-      mockPanCallbacks.onFinalize();
+      mockPanCallbacks.onFinalize({}, false);
       await Promise.resolve();
       await Promise.resolve();
     });

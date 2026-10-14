@@ -48,6 +48,12 @@ const requiredStringRoles: Array<keyof VisualThemeTokens> = [
 ];
 
 describe('semantic visual foundation', () => {
+  test('Night Memory fog remains a readable veil over the native night basemap', () => {
+    const alpha = (token: string) => Number(token.match(/rgba\([^,]+,[^,]+,[^,]+,([^)]+)\)/)?.[1]);
+    expect(alpha(NIGHT_VISUAL_THEME.mapFogFill)).toBeLessThanOrEqual(0.56);
+    expect(alpha(NIGHT_VISUAL_THEME.mapFogEdgeInner)).toBeGreaterThan(alpha(NIGHT_VISUAL_THEME.mapFogFill));
+  });
+
   it('provides shared control, focus and disabled roles in every time state', () => {
     for (const theme of themes) {
       for (const role of requiredStringRoles) {

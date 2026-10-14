@@ -87,6 +87,18 @@ describe('segmented Activity truth', () => {
     })).toBe(false);
   });
 
+  test('O79 break handoff does not become a gap before physical evidence is classified', () => {
+    const previous = point(-41, 174, 1_000, 'segment-a', { accuracy: 18 });
+    const next = point(-41.000045, 174, 5_000, 'segment-a', { accuracy: 18 });
+    const physicalGap = shouldStartNewSegment({ previous, next, mode: 'hiking' });
+    expect(physicalGap).toBe(false);
+    expect(resolveSegmentProvenance({
+      tailSegmentId: 'segment-a',
+      currentSegmentId: 'segment-a',
+      physicalGap,
+    })).toMatchObject({ segmentId: 'segment-a', startsNewSegment: false });
+  });
+
   test('long uncertain reacquisition and implausible displacement open gaps', () => {
     expect(shouldStartNewSegment({
       previous: point(-41, 174, 1_000, 'a', { accuracy: 20 }),
