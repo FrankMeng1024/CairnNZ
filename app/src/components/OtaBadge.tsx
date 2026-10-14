@@ -21,6 +21,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   TouchableOpacity, Text, View, StyleSheet, ActivityIndicator,
   Animated, Easing, Modal, Pressable,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -350,12 +351,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // All Cairns retrieval, durable words/delete truth, and stable identity.
 // O59 (2026-09-17): authoritative Own Route Detail, truthful existing-draft
 // editing, durable Activity origin, and explicit Hike/Run pre-start handoff.
-// O78 (2026-10-14): app-wide three-theme convergence, Settings subpage safe
-// areas/contrast, real Web Mapbox evidence paths, and received Route detail.
-export const OTA_VERSION = 'O78';
+// O79 (2026-10-14): Owner 13-issue root-cause UI closure: trustworthy
+// location authority, shared libraries, stable Route workspace and ornaments.
+export const OTA_VERSION = 'O79';
 
 
 type OtaState =
+  | 'preview'       // Web cannot perform an EAS Update check
   | 'idle'          // checked, no update — "Up to date"
   | 'checking'      // initial check in progress
   | 'downloading'   // update found, fetching bundle
@@ -398,7 +400,7 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
   // it stays visible during the R113 QA testing phase so testers can see
   // which OTA is deployed. O21 launch: re-add `if (!__DEV__) return null;`
   // above this line, then remove this comment block.
-  const [state, setState] = useState<OtaState>('checking');
+  const [state, setState] = useState<OtaState>(Platform.OS === 'web' ? 'preview' : 'checking');
   const [modalOpen, setModalOpen] = useState(false);
   const fade = useRef(new Animated.Value(inline ? 1 : 0)).current;
   const pulse = useRef(new Animated.Value(1)).current;
@@ -442,6 +444,13 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
 
   // OTA check + auto-download flow
   useEffect(() => {
+    // Expo Updates does not execute OTA checks on Web. Treat that platform as
+    // a completed local preview instead of surfacing a false network failure.
+    // Native check/download errors still use the honest degraded state below.
+    if (Platform.OS === 'web') {
+      setState('preview');
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       // Hard cap on the check phase — on flaky networks
@@ -552,13 +561,13 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
   };
 
   // Floating mode: hide entirely when nothing actionable
-  if (!inline && (state === 'idle' || state === 'checking' || state === 'error')) {
+  if (!inline && (state === 'preview' || state === 'idle' || state === 'checking' || state === 'error')) {
     return null;
   }
   // Inline + idleHidden: hide when there's no update — prevents the pill
   // from popping in/out of layout flow on screens where its presence
   // would shift surrounding content.
-  if (inline && idleHidden && (state === 'idle' || state === 'error' || state === 'checking')) {
+  if (inline && idleHidden && (state === 'preview' || state === 'idle' || state === 'error' || state === 'checking')) {
     return null;
   }
 
@@ -569,6 +578,10 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
   let interactive = false;
 
   switch (state) {
+    case 'preview':
+      dotColor = COLORS.dotGrey;
+      label = 'Web preview';
+      break;
     case 'checking':
       // Honest checking state — never pretend we already verified.
       dotColor = COLORS.dotGrey;

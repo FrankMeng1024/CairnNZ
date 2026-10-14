@@ -11,6 +11,19 @@ export interface MemoryCityViewport {
 
 export type MemoryEntryCameraAuthority = 'current' | 'manual-fallback' | 'preserve-manual-browse' | 'wait-for-location';
 
+export function resolveMemoryInitialMapCenter(input: {
+  authority: MemoryEntryCameraAuthority;
+  current: MemoryCameraPoint | null;
+  manualCenter: [number, number] | null;
+}): MemoryCameraPoint | null {
+  if (input.authority === 'current' && input.current && valid(input.current)) return { ...input.current };
+  if (input.authority === 'manual-fallback' && input.manualCenter) {
+    const point = { lat: input.manualCenter[1], lng: input.manualCenter[0] };
+    return valid(point) ? point : null;
+  }
+  return null;
+}
+
 export function resolveMemoryEntryCameraAuthority(input: {
   hasFreshCurrentEvidence: boolean;
   locationAttemptFailed: boolean;

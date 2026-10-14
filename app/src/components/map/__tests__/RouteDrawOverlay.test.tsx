@@ -40,11 +40,10 @@ describe('RouteDrawOverlay native gesture handoff', () => {
 
   test('one finger records map coordinates and commits only on normal pen-up', async () => {
     const onStroke = jest.fn();
-    const onPause = jest.fn();
     const mapViewRef = { current: {
       getCoordinateFromView: jest.fn(async ([x, y]: [number, number]) => [174 + x / 1000, -41 + y / 1000]),
     } } as any;
-    render(<RouteDrawOverlay active mapViewRef={mapViewRef} onStroke={onStroke} onPause={onPause} onCancel={jest.fn()} />);
+    render(<RouteDrawOverlay active mapViewRef={mapViewRef} onStroke={onStroke} onCancel={jest.fn()} />);
 
     expect(mockMaxPointers).toHaveBeenCalledWith(1);
     await act(async () => {
@@ -60,19 +59,18 @@ describe('RouteDrawOverlay native gesture handoff', () => {
       { lng: 174.02, lat: -40.97 },
       { lng: 174.03, lat: -40.96 },
     ]);
-    expect(onPause).not.toHaveBeenCalled();
   });
 
-  test('a pointer-count interruption preserves geographic ink for continuation and yields to native map navigation', async () => {
+  test('a pointer-count interruption cancels provisional ink and yields to native map navigation', async () => {
     const onStroke = jest.fn();
-    const onPause = jest.fn();
+    const onCancel = jest.fn();
     const nativeMapGesture = { kind: 'native-map' } as any;
     const mapViewRef = { current: {
       getCoordinateFromView: jest.fn(async ([x, y]: [number, number]) => [121 + x / 1000, 31 + y / 1000]),
     } } as any;
     render(<RouteDrawOverlay
-      active mapViewRef={mapViewRef} onStroke={onStroke} onPause={onPause}
-      onCancel={jest.fn()} nativeMapGesture={nativeMapGesture}
+      active mapViewRef={mapViewRef} onStroke={onStroke}
+      onCancel={onCancel} nativeMapGesture={nativeMapGesture}
     />);
 
     expect(mockBlocksExternal).toHaveBeenCalledWith(nativeMapGesture);
@@ -83,11 +81,7 @@ describe('RouteDrawOverlay native gesture handoff', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    await waitFor(() => expect(onPause).toHaveBeenCalledTimes(1));
-    expect(onPause.mock.calls[0][0]).toEqual([
-      { lng: 121.01, lat: 31.02 },
-      { lng: 121.03, lat: 31.04 },
-    ]);
+    await waitFor(() => expect(onCancel).toHaveBeenCalledWith('gesture-interrupted'));
     expect(onStroke).not.toHaveBeenCalled();
   });
 });

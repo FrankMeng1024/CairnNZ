@@ -62,6 +62,7 @@ import { fetchDeepest } from '../services/hierarchyService';
 import {
   resolveCurrentCityViewport,
   resolveMemoryEntryCameraAuthority,
+  resolveMemoryInitialMapCenter,
   type MemoryCityViewport,
 } from '../services/memoryEntryCameraPolicy';
 // v424 hierarchy panel
@@ -639,18 +640,15 @@ export function MemoryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchToken, simulatorCurrent.lat, simulatorCurrent.lng, syntheticQaAuthority]);
 
-  // S1 fix (v0.2.6.4): prefer fresh watcher → else oneShot → else stale
-  // watcher. The previous `watcherFix ?? oneShot` made oneShot dead code
-  // whenever watcherFix was set, even if stale. Now the user's
-  // recently-fetched one-shot wins over a stale watcher cache.
+  // A stale watcher may be useful diagnostics, but it is not current-entry
+  // camera authority. Showing it while a fresh attempt is unresolved is what
+  // made an old city look like the user's present location.
   const watcherFresh = !!watcherFix && Date.now() - watcherFix.ts < WATCHER_FIX_FRESH_MS;
   const coord: FixState | null = watcherFresh && watcherFix
     ? { lat: watcherFix.lat, lng: watcherFix.lng }
     : oneShot
       ? oneShot
-      : watcherFix
-        ? { lat: watcherFix.lat, lng: watcherFix.lng }
-        : null;
+      : null;
 
   const ownedEvidenceForCamera = useMemo(() => {
     if (!activeOwnerId
@@ -676,16 +674,6 @@ export function MemoryScreen() {
     syntheticTestPoints,
   ]);
 
-  const ownedEvidenceCenter = useMemo<FixState | null>(() => {
-    let latest: { lat: number; lng: number; ts: number } | null = null;
-    for (const candidate of ownedEvidenceForCamera) {
-      if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lng)
-        || !Number.isFinite(candidate.ts)) continue;
-      if (!latest || candidate.ts > latest.ts) latest = candidate;
-    }
-    return latest ? { lat: latest.lat, lng: latest.lng } : null;
-  }, [ownedEvidenceForCamera]);
-
   // v333: stableCoord — fix the "Looking for your position…" flicker
   // (Spike L true root cause). When the Zustand selectors briefly
   // resolve coord to null within a single render commit cycle (e.g.
@@ -709,6 +697,14 @@ export function MemoryScreen() {
       : null
   );
 
+  const freshCurrentEvidence = watcherFresh || Boolean(oneShot) || syntheticQaAuthority;
+  const entryCameraAuthority = resolveMemoryEntryCameraAuthority({
+    hasFreshCurrentEvidence: freshCurrentEvidence,
+    locationAttemptFailed: Boolean(failReason),
+    hasManualCity: Boolean(manualCity),
+    manualBrowseThisMount: manualBrowseThisMountRef.current,
+  });
+
   // v353 emergency fix: v352 placed this block at line 141 (BEFORE
   // stableCoord was declared at line 301). stableCoord was undefined
   // there → lastRenderedCoordRef.current never populated → persistentCoord
@@ -726,7 +722,11 @@ export function MemoryScreen() {
     ownerUserId: string;
     coord: { lat: number; lng: number };
   } | null>(null);
-  const nextMapCenter = stableCoord ?? ownedEvidenceCenter;
+  const nextMapCenter = resolveMemoryInitialMapCenter({
+    authority: entryCameraAuthority,
+    current: stableCoord,
+    manualCenter: manualCity?.center ?? null,
+  });
   if (activeOwnerId && nextMapCenter) {
     lastRenderedCoordRef.current = {
       ownerUserId: activeOwnerId,
@@ -738,19 +738,14 @@ export function MemoryScreen() {
     ? lastRenderedCoordRef.current.coord
     : null;
 
-  const freshCurrentEvidence = watcherFresh || Boolean(oneShot) || syntheticQaAuthority;
+  const mapMayBeShown = Boolean(persistentCoord)
+    && entryCameraAuthority !== 'wait-for-location';
   useEffect(() => {
     if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId) return undefined;
-    const authority = resolveMemoryEntryCameraAuthority({
-      hasFreshCurrentEvidence: freshCurrentEvidence,
-      locationAttemptFailed: Boolean(failReason),
-      hasManualCity: Boolean(manualCity),
-      manualBrowseThisMount: manualBrowseThisMountRef.current,
-    });
     if (manualBrowseThisMountRef.current) return undefined;
     let cancelled = false;
 
-    if (authority === 'current' && stableCoord) {
+    if (entryCameraAuthority === 'current' && stableCoord) {
       const applicationKey = `${activeOwnerId}:${stableCoord.lat.toFixed(5)},${stableCoord.lng.toFixed(5)}:${refetchToken}`;
       if (currentCityAppliedRef.current === applicationKey) return undefined;
       currentCityAppliedRef.current = applicationKey;
@@ -777,7 +772,7 @@ export function MemoryScreen() {
     // Do not restore a historical city while a fresh-location attempt is
     // unresolved. A stored manual city is only the fallback after that
     // attempt has explicitly failed.
-    if (authority !== 'manual-fallback' || !manualCity) return undefined;
+    if (entryCameraAuthority !== 'manual-fallback' || !manualCity) return undefined;
     const restorationKey = `${activeOwnerId}:${manualCity.cityId}:${manualCity.center.join(',')}`;
     if (restoredManualCityRef.current === restorationKey) return undefined;
     restoredManualCityRef.current = restorationKey;
@@ -793,8 +788,7 @@ export function MemoryScreen() {
     cameraHydrated,
     cameraOwnerId,
     clearManualMemoryCity,
-    failReason,
-    freshCurrentEvidence,
+    entryCameraAuthority,
     manualCity,
     oneShot,
     ownedEvidenceForCamera,
@@ -918,11 +912,11 @@ export function MemoryScreen() {
         activeOpacity={0.86}
         accessibilityRole="button"
         accessibilityLabel={acquiredUnreadCount > 0
-          ? `Open All Cairns, ${acquiredUnreadCount} unread Cairn groups`
-          : 'Open All Cairns'}
+          ? `Open Cairn Library, ${acquiredUnreadCount} unread Cairn groups`
+          : 'Open Cairn Library'}
       >
         <Icon name="MapPin" size={16} color={theme.iconActive} strokeWidth={2} />
-        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>All Cairns</Text>
+        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>Cairn Library</Text>
         {acquiredUnreadCount > 0 ? (
           <View style={[styles.allCairnsUnread, { backgroundColor: theme.primary }]}>
             <Text style={[styles.allCairnsUnreadText, { color: theme.onPrimary }]}>
@@ -956,7 +950,7 @@ export function MemoryScreen() {
           renders as an OVERLAY only when we've never seen any coord
           (i.e. persistentCoord is null too). Eliminates the full-screen
           flash that v346-v351 had on every zoom gesture. */}
-      {persistentCoord ? (
+      {mapMayBeShown && persistentCoord ? (
         <MemoryMap
           ref={mapRef}
           centerLat={persistentCoord.lat}
@@ -1053,7 +1047,7 @@ export function MemoryScreen() {
         </View>
       )}
 
-      {persistentCoord && stableCoord && mapMoved && (
+      {mapMayBeShown && persistentCoord && stableCoord && mapMoved && (
         <TouchableOpacity
           style={[styles.recenterBtn, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={() => {
@@ -1071,7 +1065,7 @@ export function MemoryScreen() {
       {/* v424: Hierarchy button (left-bottom, mirrors Recenter position).
           Always visible when we have coords. Tap → toggle popover.
           Layers icon differentiates from Target crosshair on right. */}
-      {persistentCoord && (
+      {mapMayBeShown && persistentCoord && (
         <TouchableOpacity
           style={[
             styles.hierarchyBtn,
@@ -1156,7 +1150,7 @@ export function MemoryScreen() {
         </View>
       )}
 
-      {persistentCoord && restoringMemoryVisible && !fogReady && !initialMemoryOffline ? (
+      {mapMayBeShown && persistentCoord && restoringMemoryVisible && !fogReady && !initialMemoryOffline ? (
         <View
           style={[styles.memoryRestoreBanner, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           pointerEvents="none"
@@ -1167,7 +1161,7 @@ export function MemoryScreen() {
         </View>
       ) : null}
 
-      {persistentCoord && initialMemoryOffline ? (
+      {mapMayBeShown && persistentCoord && initialMemoryOffline ? (
         <TouchableOpacity
           style={[styles.memoryRestoreBanner, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={handleRetryInitialMemory}

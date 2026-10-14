@@ -38,7 +38,7 @@
  */
 
 import React, { useEffect, useRef, useMemo } from 'react';
-import { Map as MapGL, Source, Layer, Marker } from 'react-map-gl/mapbox';
+import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -84,6 +84,8 @@ interface MapViewProps {
   scaleBarEnabled?: boolean;
   attributionEnabled?: boolean;
   logoEnabled?: boolean;
+  logoPosition?: { top?: number; bottom?: number; left?: number; right?: number };
+  attributionPosition?: { top?: number; bottom?: number; left?: number; right?: number };
   // Native-only props. Listed here so TypeScript / consumers
   // (PinAdjustStep, MemoryMap) can pass them on both targets
   // without `Platform.OS=='web'` branches; the web shim ignores
@@ -100,6 +102,43 @@ interface MapViewProps {
   children?: React.ReactNode;
 }
 
+type WebControlPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+export function webControlPosition(
+  position: MapViewProps['logoPosition'],
+  fallback: WebControlPosition,
+): WebControlPosition {
+  if (!position) return fallback;
+  const vertical = position.top != null ? 'top' : 'bottom';
+  const horizontal = position.left != null ? 'left' : 'right';
+  return `${vertical}-${horizontal}` as WebControlPosition;
+}
+
+function controlOffsetStyle(position: MapViewProps['logoPosition']): React.CSSProperties {
+  if (!position) return {};
+  return {
+    position: 'relative',
+    ...(position.top != null ? { top: position.top } : {}),
+    ...(position.bottom != null ? { bottom: position.bottom } : {}),
+    ...(position.left != null ? { left: position.left } : {}),
+    ...(position.right != null ? { right: position.right } : {}),
+  };
+}
+
+function applyLogoOffset(map: any, position: MapViewProps['logoPosition']) {
+  const container = map?.getContainer?.() as HTMLElement | undefined;
+  const logo = container?.querySelector?.('.mapboxgl-ctrl-logo') as HTMLElement | null;
+  if (!logo || !position) return;
+  // Offset the genuine logo control itself, not its shared Mapbox corner.
+  // Moving the corner would also move AttributionControl and double-apply its
+  // own numeric inset whenever both legal controls intentionally share it.
+  logo.style.position = 'relative';
+  logo.style.top = position.top != null ? `${position.top}px` : '';
+  logo.style.bottom = position.bottom != null ? `${position.bottom}px` : '';
+  logo.style.left = position.left != null ? `${position.left}px` : '';
+  logo.style.right = position.right != null ? `${position.right}px` : '';
+}
+
 export function MapView({
   style,
   styleURL,
@@ -110,6 +149,10 @@ export function MapView({
   onDidFinishLoadingMap,
   onDidFinishRenderingMapFully,
   onDidFinishRenderingFrameFully,
+  attributionEnabled = true,
+  logoEnabled = true,
+  logoPosition,
+  attributionPosition,
   children,
 }: MapViewProps) {
   const mapRef = useRef<MapRef | null>(null);
@@ -121,6 +164,11 @@ export function MapView({
       delete (window as any).__cairnMap;
     }
   }, []);
+
+  useEffect(() => {
+    const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (inner && logoEnabled) applyLogoOffset(inner, logoPosition);
+  }, [logoEnabled, logoPosition?.top, logoPosition?.bottom, logoPosition?.left, logoPosition?.right]);
 
   useEffect(() => {
     if (loadingStartedRef.current) return;
@@ -225,6 +273,8 @@ export function MapView({
           }}
           mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
           mapStyle={parsedStyleJSON ?? styleUrl}
+          attributionControl={false}
+          logoPosition={webControlPosition(logoPosition, 'bottom-left')}
           onLoad={(event) => {
             const bounds = firstCamera?.props.bounds;
             if (bounds) {
@@ -238,6 +288,7 @@ export function MapView({
                 duration: 0,
               });
             }
+            if (logoEnabled) applyLogoOffset(event.target, logoPosition);
             onDidFinishLoadingMap?.();
           }}
           initialViewState={
@@ -263,6 +314,13 @@ export function MapView({
           }}
           style={{ width: '100%', height: '100%' }}
         >
+          {attributionEnabled ? (
+            <AttributionControl
+              compact
+              position={webControlPosition(attributionPosition, 'bottom-right')}
+              style={controlOffsetStyle(attributionPosition)}
+            />
+          ) : null}
           {children}
         </MapGL>
       </div>

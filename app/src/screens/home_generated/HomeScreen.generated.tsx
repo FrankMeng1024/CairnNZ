@@ -274,9 +274,11 @@ export function HomeScreen(props: {
               <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>Settings</Text>
             </TouchableOpacity>
           </View>
-          <Text style={[styles.H0__hero_invite_1, heroBigTextOverride]}>{countryName || 'Your world'}</Text>
-          <Text style={[styles.H0__hero_invite_2, heroBigTextOverride]}>{'is waiting.'}</Text>
-          <Text style={[styles.H0__hero_invite_sub, heroSubTextOverride]}>{'Every step becomes your map.'}</Text>
+          <View style={styles.H0__hero_invite_block}>
+            <Text style={[styles.H0__hero_invite_1, heroBigTextOverride]}>{countryName || 'Your world'}</Text>
+            <Text style={[styles.H0__hero_invite_2, heroBigTextOverride]}>{'is waiting.'}</Text>
+            <Text style={[styles.H0__hero_invite_sub, heroSubTextOverride]}>{'Every step becomes your map.'}</Text>
+          </View>
           {props.onLastHikePress ? renderLastHikeCard() : (
             <View style={[styles.H0__first_journey_card, cardContainerOverride]}>
               <Text style={[styles.H0__first_journey_card__first_journey_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{'Your first trail'}</Text>

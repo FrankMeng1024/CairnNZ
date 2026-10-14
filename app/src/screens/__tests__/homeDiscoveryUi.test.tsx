@@ -1,5 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { buildDiscoveryHomeCopy } from '../../features/cairns/homeStateWindow';
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
@@ -15,8 +16,20 @@ jest.mock('../../components/home/SunnyMotionLayer', () => ({ SunnyMotionLayer: (
 jest.mock('../../utils/homeBackground', () => ({ getRegisteredBackgroundLayout: () => ({ width: '100%', height: '100%' }) }));
 
 import { HomeScreen as GeneratedHome } from '../home_generated/HomeScreen.generated';
+import { styles as generatedHomeStyles } from '../home_generated/styles';
 
 describe('production Home discovery rendering', () => {
+  test('a long resolved place keeps the waiting line in document flow', () => {
+    const screen = render(
+      <GeneratedHome state="H0" greetingName="Aroha" countryName="Queenstown-Lakes District" />,
+    );
+    const place = screen.getByText('Queenstown-Lakes District');
+    const waiting = screen.getByText('is waiting.');
+    expect(StyleSheet.flatten(place.props.style).position).toBeUndefined();
+    expect(StyleSheet.flatten(waiting.props.style).position).toBeUndefined();
+    expect(StyleSheet.flatten(generatedHomeStyles.H0__hero_invite_block)).toMatchObject({ top: 137, left: 24, right: 24 });
+  });
+
   test('three acquired Cairns render one H1 summary and never the first-trail card', () => {
     const copy = buildDiscoveryHomeCopy({ cairnCount: 3, eventCount: 3, updatedEventCount: 0, mergeStartedAt: 1 }, 'Just now');
     const screen = render(

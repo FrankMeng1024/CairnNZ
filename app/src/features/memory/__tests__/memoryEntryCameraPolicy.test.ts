@@ -1,4 +1,4 @@
-import { resolveCurrentCityViewport, resolveMemoryEntryCameraAuthority } from '../services/memoryEntryCameraPolicy';
+import { resolveCurrentCityViewport, resolveMemoryEntryCameraAuthority, resolveMemoryInitialMapCenter } from '../services/memoryEntryCameraPolicy';
 
 const shanghai: [number, number, number, number] = [120.85, 30.67, 122.2, 31.88];
 
@@ -25,6 +25,24 @@ describe('Memory current-city-first camera policy', () => {
       hasManualCity: true,
       manualBrowseThisMount: false,
     })).toBe('manual-fallback');
+  });
+
+  test('never mounts current entry from stale history while fresh location is unresolved', () => {
+    expect(resolveMemoryInitialMapCenter({
+      authority: 'wait-for-location',
+      current: null,
+      manualCenter: [116.4074, 39.9042],
+    })).toBeNull();
+    expect(resolveMemoryInitialMapCenter({
+      authority: 'current',
+      current: { lat: 31.2304, lng: 121.4737 },
+      manualCenter: [116.4074, 39.9042],
+    })).toEqual({ lat: 31.2304, lng: 121.4737 });
+    expect(resolveMemoryInitialMapCenter({
+      authority: 'manual-fallback',
+      current: null,
+      manualCenter: [116.4074, 39.9042],
+    })).toEqual({ lat: 39.9042, lng: 116.4074 });
   });
 
   test('does not interrupt intentional manual city browsing on the current mount', () => {

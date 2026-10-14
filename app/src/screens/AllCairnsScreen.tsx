@@ -5,7 +5,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -16,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { BackButton } from '../components/BackButton';
 import { ContentSurface } from '../components/ContentSurface';
+import { LibraryFilterRow, LibraryRecordSurface, LibrarySearchField } from '../components/LibraryControls';
 import { Icon } from '../components/Icon';
 import { SyncBadge } from '../components/SyncBadge';
 import { FontSize, RadiusRole, Spacing } from '../components/tokens';
@@ -74,14 +74,13 @@ function CairnRow({ marker }: { marker: Marker }) {
   const preview = decoded.body.trim();
   const id = cairnStableId(marker);
   return (
-    <ContentSurface
-      level="record"
+    <LibraryRecordSurface
       onPress={() => nav.navigate('MarkerDetail', { markerId: id })}
-      style={styles.rowSurface}
       testID={`all-cairns-row-${id}`}
+      accessibilityLabel={`Cairn: ${title}`}
     >
       <View style={styles.row}>
-        <View style={[styles.rowIcon, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
+        <View style={styles.rowIcon}>
           <CairnPinV10 tier="self" type={marker.type} size="detail" />
         </View>
         <View style={styles.rowCopy}>
@@ -104,7 +103,7 @@ function CairnRow({ marker }: { marker: Marker }) {
           <Icon name="ChevronRight" size={17} color={theme.iconInactive} strokeWidth={2} />
         </View>
       </View>
-    </ContentSurface>
+    </LibraryRecordSurface>
   );
 }
 
@@ -113,14 +112,13 @@ function FoundCairnRow({ cairn, archived, onRestore }: { cairn: FoundCairn; arch
   const nav = useNavigation<Nav>();
   const decoded = splitTitleBody(cairn.text ?? '');
   return (
-    <ContentSurface
-      level="record"
+    <LibraryRecordSurface
       onPress={() => nav.navigate('AcquiredCairnDetail', { markerId: String(cairn.marker_id) })}
-      style={styles.rowSurface}
       testID={`found-cairn-row-${cairn.marker_id}`}
+      accessibilityLabel="Acquired Cairn"
     >
       <View style={styles.row}>
-        <View style={[styles.rowIcon, { backgroundColor: theme.controlSelected }]}>
+        <View style={styles.rowIcon}>
           <CairnPinV10 tier="friend" type={cairn.type} size="detail" />
         </View>
         <View style={styles.rowCopy}>
@@ -142,7 +140,7 @@ function FoundCairnRow({ cairn, archived, onRestore }: { cairn: FoundCairn; arch
         {!archived && cairn.availability === 'available' && !cairn.opened_at ? <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} /> : null}
         <Icon name="ChevronRight" size={17} color={theme.iconInactive} strokeWidth={2} />
       </View>
-    </ContentSurface>
+    </LibraryRecordSurface>
   );
 }
 
@@ -285,48 +283,18 @@ export function AllCairnsScreen() {
         })}
       </View>
 
-      <View style={[styles.searchWrap, { backgroundColor: theme.inputSurface, borderColor: theme.border }]}>
-        <Icon name="Search" size={17} color={theme.iconInactive} strokeWidth={2} />
-        <TextInput
+      <LibrarySearchField
           testID="all-cairns-search"
           value={query}
-          onChangeText={setQuery}
+          onChange={setQuery}
           placeholder={section === 'left' ? 'Search names and notes' : 'Search found Cairns'}
-          placeholderTextColor={theme.muted}
-          style={[styles.searchInput, { color: theme.foreground }]}
-          returnKeyType="search"
-          autoCorrect={false}
-          accessibilityLabel="Search your Cairns"
-        />
-        {query ? (
-          <TouchableOpacity onPress={() => setQuery('')} accessibilityLabel="Clear search" hitSlop={8}>
-            <Icon name="X" size={17} color={theme.iconInactive} strokeWidth={2} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+          label="Search your Cairns"
+          style={styles.searchWrap}
+      />
 
       {section === 'left' ? <View style={styles.controls} testID="all-cairns-controls">
         <Text style={[styles.controlLabel, { color: theme.foregroundSecondary }]}>AUDIENCE</Text>
-        <View style={styles.filterRow}>
-          {AUDIENCE_FILTERS.map(filter => {
-            const selected = audience === filter.key;
-            return (
-              <TouchableOpacity
-                key={filter.key}
-                testID={`all-cairns-filter-${filter.key}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                onPress={() => setAudience(filter.key)}
-                style={[
-                  styles.filterChip,
-                  { borderColor: selected ? theme.borderStrong : theme.border, backgroundColor: selected ? theme.controlSelected : theme.surface },
-                ]}
-              >
-                <Text style={[styles.filterText, { color: selected ? theme.foreground : theme.foregroundSecondary }]}>{filter.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <LibraryFilterRow value={audience} options={AUDIENCE_FILTERS} onChange={setAudience} testID="all-cairns-filter" />
         <TouchableOpacity
           testID="all-cairns-sort"
           accessibilityRole="button"
@@ -342,21 +310,13 @@ export function AllCairnsScreen() {
       </View> : null}
 
       {section === 'found' ? (
-        <View style={styles.foundFilterRow}>
-          {(['active', 'archived'] as const).map(value => {
-            const selected = foundCollectionState === value;
-            return (
-              <TouchableOpacity
-                key={value}
-                onPress={() => setFoundCollectionState(value)}
-                style={[styles.filterChip, { borderColor: selected ? theme.borderStrong : theme.border, backgroundColor: selected ? theme.controlSelected : theme.surface }]}
-                accessibilityState={{ selected }}
-              >
-                <Text style={[styles.filterText, { color: selected ? theme.foreground : theme.foregroundSecondary }]}>{value === 'active' ? 'Current' : 'Archived'}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <LibraryFilterRow
+          value={foundCollectionState}
+          options={[{ key: 'active', label: 'Current' }, { key: 'archived', label: 'Archived' }]}
+          onChange={setFoundCollectionState}
+          testID="found-cairns-filter"
+          style={styles.foundFilterRow}
+        />
       ) : null}
 
       {section === 'left' && incompleteCopy ? (
@@ -448,46 +408,25 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FontSize.body, lineHeight: 20, marginTop: Spacing.xs },
   searchWrap: {
     marginHorizontal: Spacing.xl,
-    minHeight: 48,
-    borderWidth: 1,
-    borderRadius: RadiusRole.input,
-    paddingHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
   },
   sectionTabs: { marginHorizontal: Spacing.xl, marginBottom: Spacing.md, padding: 3, borderWidth: 1, borderRadius: RadiusRole.button, flexDirection: 'row' },
   sectionTab: { flex: 1, minHeight: 38, borderRadius: RadiusRole.button, alignItems: 'center', justifyContent: 'center' },
   sectionTabText: { fontSize: FontSize.small, fontWeight: '700' },
-  searchInput: { flex: 1, fontSize: FontSize.body, paddingVertical: Spacing.sm },
   controls: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, gap: Spacing.sm },
   controlLabel: { fontSize: FontSize.caption, fontWeight: '700', letterSpacing: 0.8 },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
-  filterChip: {
-    minHeight: 36,
-    paddingHorizontal: Spacing.md,
-    borderRadius: RadiusRole.button,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterText: { fontSize: FontSize.small, fontWeight: '700' },
-  foundFilterRow: { flexDirection: 'row', gap: Spacing.xs, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md },
+  foundFilterRow: { marginHorizontal: Spacing.xl, marginTop: Spacing.md },
   sortControl: { minHeight: 32, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   sortText: { fontSize: FontSize.small, fontWeight: '600' },
   coverage: { marginHorizontal: Spacing.xl, marginTop: Spacing.md },
   coverageRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   coverageText: { flex: 1, fontSize: FontSize.small, lineHeight: 18 },
   retryText: { fontSize: FontSize.small, fontWeight: '700' },
-  list: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.xxl, gap: Spacing.sm },
+  list: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.xxl },
   listEmpty: { flexGrow: 1 },
-  rowSurface: { paddingVertical: Spacing.md },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  row: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
   rowIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 0,
+    width: 34,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
   },

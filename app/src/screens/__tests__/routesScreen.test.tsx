@@ -113,6 +113,28 @@ describe('RoutesScreen final creation and sibling-list flow', () => {
     expect(screen.queryByText('Hike route')).toBeNull();
   });
 
+  test('both tabs render Search before their compact semantic filter row', async () => {
+    const screen = render(<RoutesScreen />);
+    await screen.findByTestId('trails-routes-list');
+    const testIds = (node: any, output: string[] = []) => {
+      if (!node) return output;
+      if (Array.isArray(node)) { node.forEach(child => testIds(child, output)); return output; }
+      if (node.props?.testID) output.push(node.props.testID);
+      testIds(node.children, output);
+      return output;
+    };
+    let ids = testIds(screen.toJSON());
+    expect(ids.indexOf('route-search')).toBeGreaterThan(-1);
+    expect(ids.indexOf('route-search')).toBeLessThan(ids.indexOf('route-ownership-filter'));
+    expect(ids.indexOf('routes-create')).toBeGreaterThan(ids.indexOf('route-ownership-filter'));
+
+    fireEvent.press(screen.getByText('Activities'));
+    await screen.findByTestId('trails-activities-list');
+    ids = testIds(screen.toJSON(), []);
+    expect(ids.indexOf('activity-search')).toBeGreaterThan(-1);
+    expect(ids.indexOf('activity-search')).toBeLessThan(ids.indexOf('activity-mode-filter'));
+  });
+
   test('Activity selection closes its one owner modal and navigates exactly once without chooser remount', async () => {
     const screen = render(<RoutesScreen />);
     await screen.findByTestId('trails-routes-list');

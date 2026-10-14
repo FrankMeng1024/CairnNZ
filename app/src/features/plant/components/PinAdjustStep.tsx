@@ -40,7 +40,9 @@ import { PinNudgeConfig } from '../config/plantConfig';
 import { Colors, Spacing, FontSize } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
 import { getPrimaryMapStyle, getStandardStyleURL, themeToStandardPreset, buildStandardConfig, buildStandardSatelliteConfig } from '../../../config/mapbox';
+import { MAP_ORNAMENTS_EDGE } from '../../../config/mapOrnaments';
 import { useMapTheme } from '../../../hooks/useMapTheme';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { BackButton } from '../../../components/BackButton';
@@ -103,6 +105,7 @@ export function PinAdjustStep({
   gpsLat, gpsLng, initialLat, initialLng, onConfirm, onBack,
 }: Props) {
   const Mapbox = getMapbox();
+  const theme = useVisualTheme();
   // Safety: if the supplied initial pin is somehow outside the 50m
   // ring (shouldn't happen — confirm gate is also 50m — but defends
   // against draft persistence migration / future refactors), clamp
@@ -440,8 +443,8 @@ export function PinAdjustStep({
       <View style={styles.backRow}>
         <BackButton variant="ghostRound" onPress={onBack} />
       </View>
-      <Text style={styles.title}>Where's your cairn?</Text>
-      <Text style={styles.sub}>
+      <Text style={[styles.title, { color: theme.foreground }]}>Where's your cairn?</Text>
+      <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>
         Drag the map to fine-tune. Tap Confirm when it feels right.
       </Text>
 
@@ -453,8 +456,8 @@ export function PinAdjustStep({
           scaleBarEnabled={false}
           attributionEnabled
           logoEnabled
-          logoPosition={{ bottom: 8, left: 8 }}
-          attributionPosition={{ bottom: 8, right: 8 }}
+          logoPosition={MAP_ORNAMENTS_EDGE.logoPosition}
+          attributionPosition={MAP_ORNAMENTS_EDGE.attributionPosition}
           // v297: disable ALL native zoom gestures. The +/- buttons
           // are the only zoom path, and they call setCamera with an
           // explicit centerCoordinate locked to the current pin —
@@ -676,14 +679,15 @@ function PinAdjustFallback({
   lat: number; lng: number;
   onConfirm: () => void; onBack: () => void;
 }) {
+  const theme = useVisualTheme();
   return (
     <View style={styles.container}>
       <View style={styles.backRow}>
         {/* R114 (2026-08-07): fallback matches new ghostRound header. */}
         <BackButton variant="ghostRound" onPress={onBack} />
       </View>
-      <Text style={styles.title}>Where's your cairn?</Text>
-      <Text style={styles.sub}>Map preview not available on this platform.</Text>
+      <Text style={[styles.title, { color: theme.foreground }]}>Where's your cairn?</Text>
+      <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>Map preview not available on this platform.</Text>
       <View style={styles.fallbackBox}>
         <Text style={styles.fallbackCoord}>{lat.toFixed(6)}, {lng.toFixed(6)}</Text>
       </View>
@@ -703,13 +707,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: Colors.textPrimary,
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,
   },
   sub: {
     fontSize: FontSize.caption,
-    color: Colors.textSecondary,
     lineHeight: 18,
     marginBottom: Spacing.base,
   },

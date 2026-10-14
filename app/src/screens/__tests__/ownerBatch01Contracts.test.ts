@@ -55,6 +55,26 @@ describe('Owner device Batch 01 source contracts', () => {
     expect(sheet).toContain('showHandle={false}');
   });
 
+  test('Plant pin heading follows the semantic visual theme', () => {
+    const pinAdjust = read('features/plant/components/PinAdjustStep.tsx');
+    expect(pinAdjust).toContain("import { useVisualTheme } from '../../../hooks/useVisualTheme'");
+    expect(pinAdjust).toContain("styles.title, { color: theme.foreground }");
+    expect(pinAdjust).toContain("styles.sub, { color: theme.foregroundSecondary }");
+    expect(pinAdjust).not.toContain('color: Colors.textPrimary,\n    marginTop: Spacing.md');
+  });
+
+  test('narrow Web QA uses the real device viewport instead of cropping the laptop preview shell', () => {
+    const app = read('../App.tsx');
+    const routeEditor = read('screens/OrderedRouteEditorScreen.tsx');
+    expect(app).toContain('const useDeviceViewport = viewportWidth <= 430');
+    expect(app).toContain("width: useDeviceViewport ? '100%' : 430");
+    expect(app).toContain("height: useDeviceViewport ? '100%' : 932");
+    expect(app).toContain("transform: useDeviceViewport ? 'none' : `scale(${SCALE})`");
+    expect(routeEditor).toContain('compactViewport ? Spacing.sm : Spacing.md');
+    expect(routeEditor).toContain('compactSaveAction: { minHeight: 44');
+    expect(routeEditor).toContain('nameSaveRow: { minHeight: 44');
+  });
+
   test('pending Activity discard uses the shared modal inside the live Session card', () => {
     const history = read('screens/MapHistoryScreen.tsx');
     const sessionCard = history.slice(

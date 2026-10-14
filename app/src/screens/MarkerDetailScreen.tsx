@@ -50,6 +50,7 @@ import { MarkForm } from '../features/marks/components/MarkForm';
 // inconsistency between "where I saw it" and "where I tap to read it".
 import { CairnPin, resolveTier } from '../features/memory/components/CairnPinsLayer';
 import { getPrimaryMapStyle, getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
+import { MAP_ORNAMENTS_EDGE } from '../config/mapOrnaments';
 import { formatDate } from '../utils/geo';
 import { log } from '../services/appLog';
 import { ContentConfig } from '../features/plant/config/plantConfig';
@@ -301,8 +302,8 @@ export function MarkerDetailScreen() {
             scaleBarEnabled={false}
             attributionEnabled
             logoEnabled
-            logoPosition={{ bottom: 8, left: 8 }}
-            attributionPosition={{ bottom: 8, right: 8 }}
+            logoPosition={MAP_ORNAMENTS_EDGE.logoPosition}
+            attributionPosition={MAP_ORNAMENTS_EDGE.attributionPosition}
             onDidFinishLoadingMap={() => { setMapReady(true); setMapLoadState('loading'); }}
             onDidFinishRenderingMapFully={() => { setMapReady(true); setMapLoadState('loading'); }}
             onMapLoadingError={() => setMapLoadState('error')}

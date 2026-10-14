@@ -243,10 +243,13 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  H0__hero_invite_1: {
+  H0__hero_invite_block: {
     position: 'absolute',
     left: 24,
+    right: 24,
     top: 137,
+  },
+  H0__hero_invite_1: {
     fontSize: 38,
     color: '#ffffff',
     fontWeight: '700',
@@ -257,9 +260,6 @@ export const styles = StyleSheet.create({
     textShadowRadius: 10,
   },
   H0__hero_invite_2: {
-    position: 'absolute',
-    left: 24,
-    top: 178,
     fontSize: 38,
     color: '#ffffff',
     fontWeight: '700',
@@ -270,9 +270,7 @@ export const styles = StyleSheet.create({
     textShadowRadius: 10,
   },
   H0__hero_invite_sub: {
-    position: 'absolute',
-    left: 24,
-    top: 229,
+    marginTop: 9,
     fontSize: 14,
     color: 'rgba(255,255,255,0.92)',
     fontWeight: '500',

@@ -280,6 +280,52 @@ function connectCandidate(
   return { ok: true, points };
 }
 
+const ROUTE_SEAM_CLEANUP_RADIUS_M = 12;
+const ROUTE_SEAM_DUPLICATE_M = 1.5;
+
+function localVector(a: RoutePoint, b: RoutePoint): { x: number; y: number } {
+  const latitude = ((a.lat + b.lat) / 2) * Math.PI / 180;
+  return {
+    x: (b.lng - a.lng) * Math.cos(latitude),
+    y: b.lat - a.lat,
+  };
+}
+
+function normalizedDot(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const length = Math.hypot(a.x, a.y) * Math.hypot(b.x, b.y);
+  return length > 0 ? (a.x * b.x + a.y * b.y) / length : 1;
+}
+
+/**
+ * Remove only tiny snapped seam folds. A deliberate corner remains because
+ * points outside the bounded 12m seam neighborhood are never touched. A
+ * deliberate U-turn also remains anchored at the junction after its redundant
+ * near-anchor backtracking samples are removed.
+ */
+function normalizeCandidateSeam(
+  candidate: RoutePoint[],
+  reference: RoutePoint | undefined,
+  side: 'start' | 'end',
+): RoutePoint[] {
+  const points = candidate.map(clonePoint);
+  if (!reference || points.length < 3) return points;
+  while (points.length >= 3) {
+    const anchor = side === 'start' ? points[0] : points.at(-1)!;
+    const adjacent = side === 'start' ? points[1] : points.at(-2)!;
+    const distance = routePointDistanceM(anchor, adjacent);
+    if (distance > ROUTE_SEAM_CLEANUP_RADIUS_M) break;
+    const incoming = side === 'start'
+      ? localVector(reference, anchor)
+      : localVector(adjacent, anchor);
+    const outgoing = side === 'start'
+      ? localVector(anchor, adjacent)
+      : localVector(anchor, reference);
+    if (distance > ROUTE_SEAM_DUPLICATE_M && normalizedDot(incoming, outgoing) >= -0.15) break;
+    points.splice(side === 'start' ? 1 : points.length - 2, 1);
+  }
+  return points;
+}
+
 export function appendOrderedSegment(
   draft: OrderedRouteDraft,
   candidate: RoutePoint[],
@@ -296,10 +342,14 @@ export function appendOrderedSegment(
   }
   const connected = terminal ? connectCandidate(candidate, terminal) : { ok: true as const, points: normalized };
   if (!connected.ok) return { ok: false, code: connected.code, draft };
+  const previous = draft.parts.at(-1)?.points.at(-2);
+  const seamSafePoints = terminal
+    ? normalizeCandidateSeam(connected.points, previous, 'start')
+    : connected.points;
   const next = cloneOrderedDraft(draft);
   next.parts.push({
     id: makePartId(draft, `append:${next.parts.length}`),
-    points: connected.points,
+    points: seamSafePoints,
     resolution,
   });
   next.startPoint = undefined;
@@ -325,11 +375,12 @@ export function prependOrderedSegment(
     return { ok: false, code: 'DISCONNECTED', draft };
   }
   normalized[normalized.length - 1] = clonePoint(first);
+  const seamSafePoints = normalizeCandidateSeam(normalized, draft.parts[0]?.points[1], 'end');
   const next = cloneOrderedDraft(draft);
   next.startPoint = undefined;
   next.parts.unshift({
     id: makePartId(draft, 'prepend'),
-    points: normalized,
+    points: seamSafePoints,
     resolution,
   });
   next.revision += 1;
@@ -471,6 +522,8 @@ export function replaceOrderedInterval(
   if (!connected.ok) return { ok: false, code: connected.code, draft };
   const prefix = prefixThroughPosition(startPart, start, startPoint);
   const suffix = suffixFromPosition(endPart, end, endPoint);
+  const startSafe = normalizeCandidateSeam(connected.points, prefix.at(-2), 'start');
+  const seamSafePoints = normalizeCandidateSeam(startSafe, suffix[1], 'end');
   const replacementParts: OrderedRoutePart[] = [];
   if (prefix.length >= 2) replacementParts.push({
     id: makePartId(draft, `replace-prefix:${startPartIndex}`),
@@ -479,7 +532,7 @@ export function replaceOrderedInterval(
   });
   replacementParts.push({
     id: makePartId(draft, `replace:${startPartIndex}`),
-    points: connected.points,
+    points: seamSafePoints,
     resolution,
   });
   if (suffix.length >= 2) replacementParts.push({
@@ -516,10 +569,12 @@ export function bridgeOrderedGap(
   const right = draft.parts[rightIndex];
   const connected = connectCandidate(candidate, left.points.at(-1)!, right.points[0]);
   if (!connected.ok) return { ok: false, code: connected.code, draft };
+  const startSafe = normalizeCandidateSeam(connected.points, left.points.at(-2), 'start');
+  const seamSafePoints = normalizeCandidateSeam(startSafe, right.points[1], 'end');
   const next = cloneOrderedDraft(draft);
   next.parts.splice(rightIndex, 0, {
     id: makePartId(draft, `bridge:${gapId}`),
-    points: connected.points,
+    points: seamSafePoints,
     resolution,
   });
   next.gaps = next.gaps.filter(item => item.id !== gapId);

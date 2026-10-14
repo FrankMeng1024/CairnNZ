@@ -75,6 +75,31 @@ describe('ordered Route draft topology', () => {
     expect(appended.draft.startPoint).toBeUndefined();
   });
 
+  test('removes a bounded snapped fold from an otherwise straight continuation', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(40, 0), p(80, 0)], 'draw-manual');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const extended = appendOrderedSegment(base.draft, [p(80, 0), p(76, 0.4), p(90, 0), p(120, 0)], 'draw-manual');
+    expect(extended.ok).toBe(true);
+    if (!extended.ok) return;
+    expect(extended.draft.parts[1].points).toEqual([p(80, 0), p(90, 0), p(120, 0)]);
+  });
+
+  test('preserves intentional sharp turns and U-turns outside duplicate seam ink', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(40, 0), p(80, 0)], 'draw-manual');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const corner = appendOrderedSegment(base.draft, [p(80, 0), p(80, 8), p(70, 18)], 'draw-manual');
+    expect(corner.ok).toBe(true);
+    if (!corner.ok) return;
+    expect(corner.draft.parts[1].points).toEqual([p(80, 0), p(80, 8), p(70, 18)]);
+
+    const uTurn = appendOrderedSegment(base.draft, [p(80, 0), p(75, 0), p(55, 0)], 'draw-manual');
+    expect(uTurn.ok).toBe(true);
+    if (!uTurn.ok) return;
+    expect(uTurn.draft.parts[1].points).toEqual([p(80, 0), p(55, 0)]);
+  });
+
   test('disconnected append rejects only the edit and preserves draft identity', () => {
     const first = appendOrderedSegment(empty(), [p(0, 0), p(40, 0)], 'point');
     expect(first.ok).toBe(true);

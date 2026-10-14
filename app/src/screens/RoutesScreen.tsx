@@ -14,7 +14,6 @@ import {
   SectionList,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -33,12 +32,12 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { SyncBadge } from '../components/SyncBadge';
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
+import { LibraryFilterRow, LibraryRecordSurface, LibrarySearchField } from '../components/LibraryControls';
 import { FontSize, IconSize, RadiusRole, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useDistance } from '../utils/distanceFormat';
 import { formatDuration } from '../utils/geo';
 import {
-  ACTIVITY_DISCOVERY_THRESHOLD,
   activityDateLabel,
   activityDisplayName,
   filterActivities,
@@ -59,80 +58,6 @@ const TABS = [
   { key: 'activities', label: 'Activities' },
   { key: 'routes', label: 'Routes' },
 ] as const;
-
-function SearchField({
-  value,
-  onChange,
-  placeholder,
-  label,
-  testID,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  label: string;
-  testID: string;
-}) {
-  const theme = useVisualTheme();
-  return (
-    <View style={[styles.searchField, { backgroundColor: theme.inputSurface, borderColor: theme.borderSubtle }]}>
-      <Icon name="Search" size={16} color={theme.iconInactive} strokeWidth={2} />
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textMuted}
-        style={[styles.searchInput, { color: theme.textPrimary }]}
-        accessibilityLabel={label}
-        autoCorrect={false}
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-        testID={testID}
-      />
-      {value.length > 0 ? (
-        <TouchableOpacity
-          onPress={() => onChange('')}
-          accessibilityRole="button"
-          accessibilityLabel={`Clear ${label.toLocaleLowerCase()}`}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Icon name="X" size={15} color={theme.iconInactive} strokeWidth={2} />
-        </TouchableOpacity>
-      ) : null}
-    </View>
-  );
-}
-
-function ActivityModeControl({ value, onChange }: { value: ActivityModeFilter; onChange: (value: ActivityModeFilter) => void }) {
-  const theme = useVisualTheme();
-  const items: Array<{ key: ActivityModeFilter; label: string }> = [
-    { key: 'all', label: 'All' },
-    { key: 'hiking', label: 'Hikes' },
-    { key: 'running', label: 'Runs' },
-  ];
-  return (
-    <View style={styles.modeControl} accessibilityRole="tablist" testID="activity-mode-filter">
-      {items.map(item => {
-        const selected = item.key === value;
-        return (
-          <TouchableOpacity
-            key={item.key}
-            style={[
-              styles.modeOption,
-              { borderColor: selected ? theme.borderStrong : theme.borderSubtle },
-              selected && { backgroundColor: theme.controlSelected },
-            ]}
-            onPress={() => onChange(item.key)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-          >
-            <Text style={[styles.modeOptionText, { color: selected ? theme.tabActive : theme.tabInactive }]}>{item.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
 
 function LibraryIntro({ tab, count }: { tab: TrailsTab; count: number }) {
   const theme = useVisualTheme();
@@ -218,7 +143,7 @@ function ActivityRecord({ session, onOpen, onRetry }: { session: TrackingSession
   const dist = useDistance();
   const isRun = session.activityMode === 'running';
   return (
-    <View style={[styles.recordRow, { backgroundColor: theme.recordSurface, borderColor: theme.borderSubtle }]}>
+    <LibraryRecordSurface>
       <PressBtn
         style={styles.recordTap}
         onPress={onOpen}
@@ -248,7 +173,7 @@ function ActivityRecord({ session, onOpen, onRetry }: { session: TrackingSession
           <SyncBadge state="failed" onPress={onRetry} />
         </View>
       ) : null}
-    </View>
+    </LibraryRecordSurface>
   );
 }
 
@@ -256,7 +181,7 @@ function RouteRecord({ route, onOpen, onRetry }: { route: Route; onOpen: () => v
   const theme = useVisualTheme();
   const dist = useDistance();
   return (
-    <View style={[styles.recordRow, { backgroundColor: theme.recordSurface, borderColor: theme.borderSubtle }]}>
+    <LibraryRecordSurface>
       <PressBtn
         style={styles.recordTap}
         onPress={onOpen}
@@ -287,7 +212,7 @@ function RouteRecord({ route, onOpen, onRetry }: { route: Route; onOpen: () => v
           <SyncBadge state="failed" onPress={onRetry} />
         </View>
       ) : null}
-    </View>
+    </LibraryRecordSurface>
   );
 }
 
@@ -298,7 +223,6 @@ function ActivitiesLibrary() {
   const [mode, setMode] = useState<ActivityModeFilter>('all');
   const filtered = useMemo(() => filterActivities(sessions, query, mode), [sessions, query, mode]);
   const sections = useMemo(() => groupActivitiesByMonth(filtered), [filtered]);
-  const showDiscovery = sessions.length >= ACTIVITY_DISCOVERY_THRESHOLD || query.length > 0 || mode !== 'all';
   const retry = () => { void import('../services/syncDaemon').then(({ drainPending }) => drainPending({ wakeReason: 'manual', force: true })); };
 
   if (sessions.length === 0) {
@@ -318,18 +242,21 @@ function ActivitiesLibrary() {
       ListHeaderComponent={(
         <View>
           <LibraryIntro tab="activities" count={sessions.length} />
-          {showDiscovery ? (
-            <View style={styles.discoveryTools} testID="activity-discovery-tools">
-              <SearchField
-                value={query}
-                onChange={setQuery}
-                placeholder="Find an Activity"
-                label="Search Activities"
-                testID="activity-search"
-              />
-              <ActivityModeControl value={mode} onChange={setMode} />
-            </View>
-          ) : null}
+          <View style={styles.discoveryTools} testID="activity-discovery-tools">
+            <LibrarySearchField
+              value={query}
+              onChange={setQuery}
+              placeholder="Find an Activity"
+              label="Search Activities"
+              testID="activity-search"
+            />
+            <LibraryFilterRow
+              value={mode}
+              options={[{ key: 'all', label: 'All' }, { key: 'hiking', label: 'Hikes' }, { key: 'running', label: 'Runs' }]}
+              onChange={setMode}
+              testID="activity-mode-filter"
+            />
+          </View>
         </View>
       )}
       renderSectionHeader={({ section }) => <DateSectionHeader title={section.title} />}
@@ -423,34 +350,32 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
         <View>
           <LibraryIntro tab="routes" count={sourceRoutes.length} />
           {loadError ? <RouteLoadNotice onRetry={retryLoad} /> : null}
-          <View style={styles.routeFilterRow}>
-            <SegmentedControl
-              value={ownership}
-              segments={[{ key: 'all', label: 'All' }, { key: 'mine', label: 'Mine' }, { key: 'received', label: 'Received' }]}
-              onChange={setOwnership}
-              containerStyle={styles.routeOwnershipFilter}
-              testID="route-ownership-filter"
-              compact
-            />
-            <TouchableOpacity
-              style={[styles.inlineCreateButton, { backgroundColor: theme.primaryAction }]}
-              onPress={onCreate}
-              accessibilityRole="button"
-              accessibilityLabel="Create Route"
-              testID="routes-create"
-              hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-            >
-              <Icon name="Plus" size={16} color={theme.onPrimary} strokeWidth={2.4} />
-              <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>New</Text>
-            </TouchableOpacity>
-          </View>
           <View style={styles.discoveryTools}>
-            <SearchField
+            <LibrarySearchField
               value={query}
               onChange={setQuery}
               placeholder="Find a Route"
               label="Search Routes"
               testID="route-search"
+            />
+            <LibraryFilterRow
+              value={ownership}
+              options={[{ key: 'all', label: 'All' }, { key: 'mine', label: 'Mine' }, { key: 'received', label: 'Received' }]}
+              onChange={setOwnership}
+              testID="route-ownership-filter"
+              trailing={(
+                <TouchableOpacity
+                  style={[styles.inlineCreateButton, { backgroundColor: theme.primaryAction }]}
+                  onPress={onCreate}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create Route"
+                  testID="routes-create"
+                  hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+                >
+                  <Icon name="Plus" size={16} color={theme.onPrimary} strokeWidth={2.4} />
+                  <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>New</Text>
+                </TouchableOpacity>
+              )}
             />
           </View>
         </View>
@@ -659,41 +584,14 @@ const styles = StyleSheet.create({
   libraryEyebrow: { flex: 1, fontSize: FontSize.tiny, fontWeight: '800', letterSpacing: 1.05 },
   libraryCount: { fontSize: FontSize.small, fontWeight: '600' },
   discoveryTools: { gap: Spacing.sm, paddingBottom: Spacing.md },
-  routeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingBottom: Spacing.md, flexWrap: 'wrap' },
-  routeOwnershipFilter: { flexGrow: 1, flexBasis: 220 },
-  inlineCreateButton: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: Spacing.sm, borderRadius: RadiusRole.button },
+  inlineCreateButton: { minHeight: 34, minWidth: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: Spacing.sm, borderRadius: RadiusRole.button },
   inlineCreateLabel: { fontSize: FontSize.caption, fontWeight: '800' },
-  searchField: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    borderRadius: RadiusRole.input,
-  },
-  searchInput: { flex: 1, minHeight: 40, paddingVertical: 0, fontSize: FontSize.body },
-  modeControl: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  modeOption: {
-    minHeight: 32,
-    minWidth: 58,
-    paddingHorizontal: Spacing.md,
-    borderRadius: RadiusRole.button,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeOptionText: { fontSize: FontSize.caption, fontWeight: '600' },
   monthLabel: {
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
     fontSize: FontSize.caption,
     fontWeight: '700',
     letterSpacing: 0.15,
-  },
-  recordRow: {
-    minHeight: 70,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   recordTap: {
     minHeight: 70,

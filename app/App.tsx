@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Platform, AppState, Text as RNText, TextInput as RNTextInput, Image as RNImage } from 'react-native';
+import { View, Platform, AppState, Text as RNText, TextInput as RNTextInput, Image as RNImage, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { useFonts } from 'expo-font';
@@ -958,8 +958,14 @@ export default function App() {
 // you see on iPhone 14 Pro Max, pixel-for-pixel proportional. On iOS/
 // Android this is a pass-through.
 function WebPhoneFrame({ children }: { children: React.ReactNode }) {
+  const { width: viewportWidth } = useWindowDimensions();
   if (Platform.OS !== 'web') return <>{children}</>;
   const SCALE = 0.67;
+  // A narrow browser is already the device viewport. The fixed 430 pt
+  // laptop-preview shell must not be allowed to overflow and masquerade as
+  // 320 x 568 coverage; doing so crops both safe-area actions while RN still
+  // reports the smaller window to responsive screens.
+  const useDeviceViewport = viewportWidth <= 430;
   // R21 (2026-08-17 user "密码输入有 2 个 eyes"): inject global CSS to
   // hide browser-native password reveal button (Chrome/Edge). We render
   // our own eye toggle inside PasswordInput; the browser's second one
@@ -1000,13 +1006,13 @@ function WebPhoneFrame({ children }: { children: React.ReactNode }) {
     >
       <View
         style={{
-          width: 430,
-          height: 932,
+          width: useDeviceViewport ? '100%' : 430,
+          height: useDeviceViewport ? '100%' : 932,
           backgroundColor: '#F4EFE6',
-          borderRadius: 48,
+          borderRadius: useDeviceViewport ? 0 : 48,
           overflow: 'hidden',
-          boxShadow: '0 30px 90px rgba(0,0,0,0.5), 0 0 0 12px #1a1a1a',
-          transform: `scale(${SCALE})`,
+          boxShadow: useDeviceViewport ? 'none' : '0 30px 90px rgba(0,0,0,0.5), 0 0 0 12px #1a1a1a',
+          transform: useDeviceViewport ? 'none' : `scale(${SCALE})`,
           transformOrigin: 'center center',
         } as any}
       >

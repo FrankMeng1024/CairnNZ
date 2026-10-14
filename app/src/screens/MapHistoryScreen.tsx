@@ -24,6 +24,7 @@ import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { crashLogger } from '../services/crashLogger';
 import { getCurrentRegion } from '../config/regions';
 import { getMapStyleForLayer, getMapStyleForTheme, getPrimaryMapStyle, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
+import { mapOrnamentsAbove } from '../config/mapOrnaments';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { formatDuration, formatDate, getRelativeTime, haversineM } from '../utils/geo';
 import { formatProductTime } from '../utils/dateFormat';
@@ -89,6 +90,8 @@ import {
   saveSnapLabRouteSnapshot,
   type SnapLabActivityRecord,
 } from '../features/activitySimulator/snapLabActivityStore';
+
+const HISTORY_ROUTE_ORNAMENT_CLEARANCE = 336;
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native uses @rnmapbox/maps; Web uses Cairn's real Mapbox GL adapter so the
@@ -181,10 +184,12 @@ function NativeTrackMap({
   session,
   markers,
   plannedRouteGeometry,
+  ornamentBottomClearance,
 }: {
   session: TrackingSession;
   markers: Marker[];
   plannedRouteGeometry?: CanonicalRouteGeometry;
+  ornamentBottomClearance: number;
 }) {
   const pts = useMemo(() => plannedRouteGeometry
     ? plannedRouteGeometry.parts.flatMap(part => part.points.map((point, index) => ({
@@ -222,6 +227,7 @@ function NativeTrackMap({
     [plannedRouteGeometry, pts],
   );
   const mapBindingIdentity = activityDetailMapBindingIdentity(geometryIdentity, detailStyleGeneration);
+  const historyMapOrnaments = mapOrnamentsAbove(ornamentBottomClearance);
 
   useEffect(() => {
     if (mapReady || !MapView || pts.length < 2) return undefined;
@@ -273,8 +279,8 @@ function NativeTrackMap({
         : { styleJSON: resolvedMapStyle.json })}
       logoEnabled
       attributionEnabled
-      logoPosition={{ top: 76, right: 8 }}
-      attributionPosition={{ top: 112, right: 8 }}
+      logoPosition={historyMapOrnaments.logoPosition}
+      attributionPosition={historyMapOrnaments.attributionPosition}
       scaleBarEnabled={false}
       compassEnabled={false}
       onWillStartLoadingMap={() => {
@@ -1633,7 +1639,12 @@ function MapHistoryObjectScreen() {
             renderer falls back to the SVG-on-panel presentation. */}
         {routePreviewSession ? (
           MapView
-            ? <NativeTrackMap session={routePreviewSession} markers={[]} plannedRouteGeometry={routePreviewGeometry ?? undefined} />
+            ? <NativeTrackMap
+                session={routePreviewSession}
+                markers={[]}
+                plannedRouteGeometry={routePreviewGeometry ?? undefined}
+                ornamentBottomClearance={HISTORY_ROUTE_ORNAMENT_CLEARANCE}
+              />
             : <TrackPolyline session={routePreviewSession} planned />
         ) : isRouteDetail ? (
           <View style={trackStyles.noGpsWrap} testID="route-map-unavailable">
@@ -1654,7 +1665,11 @@ function MapHistoryObjectScreen() {
             // (km/time/elev) renders unaffected from server summary.
             ? null
             : MapView && sessionRender.trackPoints.length >= 2
-              ? <NativeTrackMap session={sessionRender} markers={routeFlags} />
+              ? <NativeTrackMap
+                  session={sessionRender}
+                  markers={routeFlags}
+                  ornamentBottomClearance={Math.min(H * 0.68, 580) + Spacing.sm}
+                />
               : <TrackPolyline session={sessionRender} />
         ) : (
           // 2026-08-16: 3 decorative lines only render when there are sessions
@@ -1751,7 +1766,10 @@ function MapHistoryObjectScreen() {
           submit style. */}
       {isRouteDetail && selectedRoute ? (
         <>
-        <View style={[styles.singleSessionPanel, { paddingBottom: Math.max(insets.bottom, Spacing.base) + Spacing.md, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+        <View
+          style={[styles.singleSessionPanel, { paddingBottom: Math.max(insets.bottom, Spacing.base) + Spacing.md, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}
+          testID="route-detail-panel"
+        >
           <View style={{ marginBottom: Spacing.md }}>
             {renameEditing ? (
               <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
@@ -2002,7 +2020,10 @@ function MapHistoryObjectScreen() {
         </View>
       ) : targetSessionId && selectedSession ? (
         <>
-          <View style={[styles.singleSessionPanel, styles.activityDetailPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}>
+          <View
+            style={[styles.singleSessionPanel, styles.activityDetailPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}
+            testID="activity-detail-panel"
+          >
             <ScrollView
               style={styles.activityDetailScroll}
               contentContainerStyle={styles.activityDetailContent}

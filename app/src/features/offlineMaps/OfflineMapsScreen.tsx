@@ -8,6 +8,7 @@ import { Icon } from '../../components/Icon';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { FontSize, RadiusRole, Spacing } from '../../components/tokens';
 import { buildStandardConfig, getMapStyleForTheme } from '../../config/mapbox';
+import { MAP_ORNAMENTS_EDGE } from '../../config/mapOrnaments';
 import { useMapTheme } from '../../hooks/useMapTheme';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
 import { getMapbox } from '../memory/services/mapboxAdapter';
@@ -159,8 +160,8 @@ export function OfflineMapsScreen() {
               styleJSON={resolvedMapStyle.kind === 'json' ? resolvedMapStyle.json : undefined}
               logoEnabled
               attributionEnabled
-              logoPosition={{ bottom: 8, left: 8 }}
-              attributionPosition={{ bottom: 8, right: 8 }}
+              logoPosition={MAP_ORNAMENTS_EDGE.logoPosition}
+              attributionPosition={MAP_ORNAMENTS_EDGE.attributionPosition}
               compassEnabled={false}
               scaleBarEnabled={false}
               onMapIdle={(event: any) => {

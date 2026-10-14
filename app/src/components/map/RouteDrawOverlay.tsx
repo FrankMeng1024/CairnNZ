@@ -11,7 +11,7 @@ interface Props {
   active: boolean;
   mapViewRef: React.MutableRefObject<any>;
   onStroke: (points: RoutePoint[]) => void;
-  onPause?: (points: RoutePoint[]) => void;
+  onDrawingStart?: () => void;
   onCancel: (reason: 'gesture-interrupted' | 'coordinate-unavailable') => void;
   nativeMapGesture?: ReturnType<typeof Gesture.Native>;
   bottomInset?: number;
@@ -19,15 +19,15 @@ interface Props {
 }
 
 /**
- * One finger draws. A second finger fails this stroke gesture so the native
- * map gesture can pan/zoom; already sampled geographic ink is handed back as
- * a paused continuation and is never committed as a half-edit.
+ * One finger draws one stroke. Any interruption cancels that provisional
+ * stroke; accepted or cancelled work returns the owning editor to Browse so
+ * ordinary map movement never depends on a paused multi-touch continuation.
  */
 export function RouteDrawOverlay({
   active,
   mapViewRef,
   onStroke,
-  onPause,
+  onDrawingStart,
   onCancel,
   nativeMapGesture,
   bottomInset = 250,
@@ -80,6 +80,7 @@ export function RouteDrawOverlay({
     screenPointsRef.current = [{ x, y }];
     setScreenPoints(screenPointsRef.current);
     chainRef.current = Promise.resolve();
+    onDrawingStart?.();
     queuePoint(x, y, generation);
   }
 
@@ -114,13 +115,11 @@ export function RouteDrawOverlay({
     const generation = generationRef.current;
     await chainRef.current;
     if (generationRef.current !== generation || endedNormallyRef.current) return;
-    const points = pointsRef.current.map(point => ({ ...point }));
     generationRef.current += 1;
     pointsRef.current = [];
     screenPointsRef.current = [];
     setScreenPoints([]);
-    if (points.length >= 2 && onPause) onPause(points);
-    else onCancel('gesture-interrupted');
+    onCancel('gesture-interrupted');
   }
 
   let draw = Gesture.Pan()

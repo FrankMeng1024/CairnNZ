@@ -16,6 +16,7 @@ import { Colors, FontSize, Radius, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../config/mapbox';
+import { MAP_ORNAMENTS_EDGE } from '../config/mapOrnaments';
 import { CairnPin } from '../features/memory/components/CairnPinsLayer';
 import { MARKER_TYPES } from '../config/markerTypes';
 import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
@@ -460,8 +461,8 @@ export function PublicCairnDetailScreen() {
             compassEnabled={false}
             logoEnabled
             attributionEnabled
-            logoPosition={{ bottom: 8, left: 8 }}
-            attributionPosition={{ bottom: 8, right: 8 }}
+            logoPosition={MAP_ORNAMENTS_EDGE.logoPosition}
+            attributionPosition={MAP_ORNAMENTS_EDGE.attributionPosition}
           >
             {StyleImport ? <StyleImport id="basemap" existing config={buildStandardConfig(mapTheme) as any} /> : null}
             <Camera defaultSettings={{ centerCoordinate: [detail.lng, detail.lat], zoomLevel: 15, pitch: 0 }} />

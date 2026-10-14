@@ -33,11 +33,13 @@ import { haversineM } from '../../../utils/geo';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useMapTheme } from '../../../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
+import { mapOrnamentsAbove } from '../../../config/mapOrnaments';
 import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
 import { useAppStore } from '../../../store/useAppStore';
 import { AcquiredCairnClusterLayer } from './AcquiredCairnClusterLayer';
 
 let memoryMapHasRendered = false;
+const MEMORY_MAP_ORNAMENTS = mapOrnamentsAbove(76);
 
 interface Props {
   centerLat: number;
@@ -387,8 +389,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         scaleBarEnabled={false}
         logoEnabled
         attributionEnabled
-        logoPosition={{ bottom: 76, left: 8 }}
-        attributionPosition={{ bottom: 76, right: 8 }}
+        logoPosition={MEMORY_MAP_ORNAMENTS.logoPosition}
+        attributionPosition={MEMORY_MAP_ORNAMENTS.attributionPosition}
         onMapIdle={onMapSettle}
         onCameraChanged={(e: any) => {
           // v386: propagate live zoom to shared value every camera frame
