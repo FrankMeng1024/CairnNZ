@@ -58,6 +58,16 @@ describe('RouteDrawOverlay native gesture handoff', () => {
       { lng: 174.02, lat: -40.97 },
       { lng: 174.03, lat: -40.96 },
     ]);
+    expect(onStroke.mock.calls[0][1]).toMatchObject({
+      strokeId: expect.any(String),
+      startedAtMs: expect.any(Number),
+      endedAtMs: expect.any(Number),
+      samples: [
+        { x: 10, y: 20, geographic: { lng: 174.01, lat: -40.98 } },
+        { x: 20, y: 30, geographic: { lng: 174.02, lat: -40.97 } },
+        { x: 30, y: 40, geographic: { lng: 174.03, lat: -40.96 } },
+      ],
+    });
   });
 
   test('a pointer-count interruption cancels provisional ink and yields to native map navigation', async () => {

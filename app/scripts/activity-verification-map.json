@@ -2,6 +2,45 @@
   "version": 1,
   "groups": [
     {
+      "name": "route-drawing-intent",
+      "minimumGate": "route",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "src/features/routeDrawing/__tests__/routeDrawingIntent.test.ts",
+        "src/store/__tests__/routeDrawingProductionPipeline.test.ts"
+      ]
+    },
+    {
+      "name": "route-drawing-state",
+      "minimumGate": "route",
+      "category": "INCIDENT_REGRESSION",
+      "tests": [
+        "src/store/__tests__/validateStrokes.test.ts",
+        "src/store/__tests__/undoWalkedIndex.test.ts",
+        "src/store/__tests__/runPreviewFinally.test.ts",
+        "src/utils/__tests__/strokeGate.test.ts",
+        "src/utils/__tests__/strokeSimplify.test.ts"
+      ]
+    },
+    {
+      "name": "route-drawing-diagnostics",
+      "minimumGate": "route",
+      "category": "PRODUCT_CONTRACT",
+      "tests": [
+        "src/services/__tests__/editDiagSender.test.ts",
+        "src/components/map/__tests__/EditOverlayV274.accessibility.test.tsx"
+      ]
+    },
+    {
+      "name": "route-drawing-provider",
+      "minimumGate": "route",
+      "integrationOnly": true,
+      "category": "CHARACTERIZATION",
+      "tests": [
+        "src/services/routing/mapmatch/__tests__/mapMatchClient.test.ts"
+      ]
+    },
+    {
       "name": "continuity",
       "minimumGate": "gps",
       "category": "INCIDENT_REGRESSION",
@@ -139,6 +178,12 @@
   ],
   "impactRules": [
     { "pattern": "^app/(package(-lock)?\\.json|app\\.(json|config\\.)|eas\\.json)", "gate": "full" },
+    { "pattern": "^app/src/features/routeDrawing/", "gate": "route" },
+    { "pattern": "^app/src/store/(useRouteEditStore|brush/)", "gate": "route" },
+    { "pattern": "^app/src/components/map/(BrushOverlay|BrushStrokeLayer|EditOverlayV274|DualLineLayer)", "gate": "route" },
+    { "pattern": "^app/src/screens/(RouteEditorScreen|RouteDrawingReplayScreen)\\.tsx$", "gate": "route" },
+    { "pattern": "^app/src/services/editDiagSender\\.ts$", "gate": "route" },
+    { "pattern": "^app/src/(features/routeDrawing|store|services|components/map)/.*(routeDrawing|RouteDrawing|validateStrokes|undoWalkedIndex|strokeGate|strokeSimplify|editDiagSender|EditOverlayV274).*\\.test\\.[jt]sx?$", "gate": "route" },
     { "pattern": "^app/src/store/useTrackingStore\\.ts$", "gate": "core" },
     { "pattern": "^app/src/features/activity/(activityRegistry|activityOperationalState|activityRecovery)", "gate": "core" },
     { "pattern": "^app/src/features/memory/", "gate": "core" },

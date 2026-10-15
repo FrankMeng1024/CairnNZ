@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useNavigation } from '@react-navigation/native';
 
 import { Colors, Spacing, FontSize, Radius } from '../components/tokens';
@@ -40,6 +41,14 @@ import {
   listSnapLabActivities,
   type SnapLabActivityRecord,
 } from '../features/activitySimulator/snapLabActivityStore';
+import {
+  clearRouteDrawingTraces,
+  exportRouteDrawingTrace,
+  isRouteDrawingDiagnosticsEnabled,
+  listRouteDrawingTraces,
+  setRouteDrawingDiagnosticsEnabled,
+  type RouteDrawingTrace,
+} from '../features/routeDrawing/routeDrawingTrace';
 
 export function DebugScreen() {
   const nav = useNavigation();
@@ -60,6 +69,8 @@ export function DebugScreen() {
   const [clearSnapLabOpen, setClearSnapLabOpen] = useState(false);
   const [destructiveBusy, setDestructiveBusy] = useState(false);
   const [snapLabActivities, setSnapLabActivities] = useState<SnapLabActivityRecord[]>([]);
+  const [routeDrawingTraces, setRouteDrawingTraces] = useState<RouteDrawingTrace[]>([]);
+  const [routeDrawingArmed, setRouteDrawingArmed] = useState(isRouteDrawingDiagnosticsEnabled());
   const ownerUserId = String(useAppStore(state => state.user?.id) ?? '');
   const qaToolsAvailable = activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__);
   const activitySimulatorEnabled = useActivitySimulatorStore(state => state.enabled);
@@ -86,10 +97,50 @@ export function DebugScreen() {
       });
       setBufferSize(debugLogger.getBufferSize());
       setSnapLabActivities(ownerUserId ? await listSnapLabActivities(ownerUserId) : []);
+      setRouteDrawingTraces(listRouteDrawingTraces());
     } finally {
       setLoading(false);
     }
   }, [ownerUserId]);
+
+  const setRouteDrawingCapture = useCallback((value: boolean) => {
+    setRouteDrawingDiagnosticsEnabled(value);
+    setRouteDrawingArmed(value);
+  }, []);
+
+  const exportLatestRouteDrawing = useCallback(async () => {
+    const latest = listRouteDrawingTraces()[0];
+    if (!latest) {
+      Alert.alert('No Route drawing trace', 'Arm capture, reproduce one drawing operation, then return here.');
+      return;
+    }
+    const body = exportRouteDrawingTrace(latest.sessionId);
+    if (!body || !FileSystem.documentDirectory) {
+      Alert.alert('Export unavailable', 'The local trace file could not be created on this device.');
+      return;
+    }
+    setBusyId(`route:${latest.sessionId}`);
+    try {
+      const dir = `${FileSystem.documentDirectory}cairn-route-drawing-traces/`;
+      const info = await FileSystem.getInfoAsync(dir);
+      if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+      const path = `${dir}${latest.sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
+      await FileSystem.writeAsStringAsync(path, body, { encoding: FileSystem.EncodingType.UTF8 });
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('Trace saved locally', path);
+        return;
+      }
+      await Sharing.shareAsync(path, {
+        mimeType: 'application/json',
+        dialogTitle: `Cairn Route drawing trace ${latest.sessionId}`,
+      });
+    } catch (error) {
+      Alert.alert('Export failed', String(error));
+    } finally {
+      setBusyId(null);
+      void refresh();
+    }
+  }, [refresh]);
 
   const openSnapLabRecorder = useCallback((mode: 'Hiking' | 'Running') => {
     if (!debugMode || simulatorContinuity.locked) return;
@@ -102,6 +153,10 @@ export function DebugScreen() {
     const interval = setInterval(refresh, 5000);
     return () => clearInterval(interval);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!debugMode && routeDrawingArmed) setRouteDrawingCapture(false);
+  }, [debugMode, routeDrawingArmed, setRouteDrawingCapture]);
 
   async function handleUpload(s: SessionMetadata) {
     setBusyId(s.session_id);
@@ -282,6 +337,48 @@ export function DebugScreen() {
                 </Text>
               </View>
             ) : null}
+
+          <View style={styles.section} testID="route-drawing-diagnostics">
+            <Text style={styles.sectionHeader}>ROUTE DRAWING REPLAY</Text>
+            <Row label="Arm next local trace">
+              <Switch
+                testID="route-drawing-trace-toggle"
+                value={routeDrawingArmed}
+                disabled={!debugMode}
+                onValueChange={setRouteDrawingCapture}
+              />
+            </Row>
+            <View style={styles.statusBox}>
+              <Text style={styles.statusLine}>Local traces: {routeDrawingTraces.length} / 8</Text>
+              <Text style={styles.fieldHint}>
+                Precise finger and Route geometry stays in a bounded local buffer. Cairn never uploads it automatically. Export is always manual.
+              </Text>
+              <View style={styles.actionRow}>
+                <ActionPill
+                  label="Replay latest"
+                  onPress={() => {
+                    const latest = listRouteDrawingTraces()[0];
+                    (nav as any).navigate('RouteDrawingReplay', latest ? { sessionId: latest.sessionId } : { fixtureId: 'flattenV' });
+                  }}
+                />
+                <ActionPill
+                  label="Export latest"
+                  onPress={() => { void exportLatestRouteDrawing(); }}
+                  busy={busyId?.startsWith('route:')}
+                />
+                <ActionPill
+                  label="Clear local"
+                  danger
+                  onPress={() => {
+                    clearRouteDrawingTraces();
+                    setRouteDrawingTraces([]);
+                    setRouteDrawingArmed(false);
+                    setRouteDrawingDiagnosticsEnabled(false);
+                  }}
+                />
+              </View>
+            </View>
+          </View>
 
           {activitySimulatorBuildCapable ? (
             <View style={styles.section} testID="snap-lab-shelf">

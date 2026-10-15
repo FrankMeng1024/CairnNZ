@@ -348,15 +348,17 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     }));
   });
 
-  test('provider exception stays map-visible and never opens a review modal', async () => {
+  test('a clear replacement uses the intent-safe line without opening provider review UI', async () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByText('Draw'));
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
-    expect(await screen.findByTestId('route-inline-review')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByTestId('emit-route-stroke')).toBeNull());
+    expect(screen.queryByTestId('route-inline-review')).toBeNull();
     expect(screen.queryByText('Review this Route edit')).toBeNull();
-    expect(screen.getByTestId('source-ordered-route-review-candidate')).toBeTruthy();
-    expect(screen.getByTestId('source-ordered-route-review-original')).toBeTruthy();
+    expect(screen.queryByTestId('source-ordered-route-review-candidate')).toBeNull();
+    expect(screen.queryByTestId('source-ordered-route-review-original')).toBeNull();
+    expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
     expect(mockDraft.parts[0].points).toHaveLength(3);
   });
 
@@ -458,19 +460,18 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByTestId('emit-route-stroke')).toBeTruthy();
   });
 
-  test('split match offers one neutral exact freehand choice and commits through canonical geometry', async () => {
+  test('split match on a clear replacement falls back to the raw intent without a confirmation dialog', async () => {
     mockResolveDraw.mockResolvedValueOnce({ outcome: 'manual-available', reason: 'split-match', rawPoints: mockStroke });
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByTestId('route-tool-draw'));
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
-    expect(await screen.findByTestId('route-freehand-choice')).toBeTruthy();
-    expect(screen.getByText('Keep the line you drew?')).toBeTruthy();
-    expect(screen.getByText('Redraw')).toBeTruthy();
-    expect(screen.getByText('Use drawing')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByTestId('emit-route-stroke')).toBeNull());
+    expect(screen.queryByTestId('route-freehand-choice')).toBeNull();
+    expect(screen.queryByText('Keep the line you drew?')).toBeNull();
+    expect(screen.queryByText('Redraw')).toBeNull();
+    expect(screen.queryByText('Use drawing')).toBeNull();
     expect(screen.queryByText(/provider|disconnected pieces/i)).toBeNull();
-    fireEvent.press(screen.getByTestId('route-use-drawing'));
-    await waitFor(() => expect(screen.queryByTestId('route-freehand-choice')).toBeNull());
     expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
   });

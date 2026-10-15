@@ -9,9 +9,10 @@ describe('Trails personal journey library screen contracts', () => {
   const detail = read('src/screens/MapHistoryScreen.tsx');
   const navigation = read('src/navigation/RootNavigator.tsx');
   const routeStore = read('src/store/useRouteStore.ts');
+  const libraryControls = read('src/components/LibraryControls.tsx');
 
   test('normal Trails has exactly Activities and Routes as first-class families', () => {
-    const tabs = trails.slice(trails.indexOf('const TABS'), trails.indexOf('function SearchField'));
+    const tabs = trails.slice(trails.indexOf('const TABS'), trails.indexOf('function LibraryIntro'));
     expect(tabs).toContain("{ key: 'activities', label: 'Activities' }");
     expect(tabs).toContain("{ key: 'routes', label: 'Routes' }");
     expect(tabs).not.toMatch(/Friends|Cairns|Flags|Mine/);
@@ -35,10 +36,12 @@ describe('Trails personal journey library screen contracts', () => {
     expect(trails).not.toContain('RouteSheet');
   });
 
-  test('Activities use grouped virtualized history and progressive discovery controls', () => {
+  test('Activities use grouped virtualized history and visible discovery controls', () => {
     expect(trails).toContain('<SectionList');
     expect(trails).toContain('groupActivitiesByMonth(filtered)');
-    expect(trails).toContain('ACTIVITY_DISCOVERY_THRESHOLD');
+    expect(trails).toContain('testID="activity-discovery-tools"');
+    expect(trails).toContain('testID="activity-search"');
+    expect(trails).toContain('testID="activity-mode-filter"');
     expect(trails).toContain('initialNumToRender={16}');
     expect(trails).toContain('windowSize={9}');
     expect(trails).toContain('groupRoutesByMonth(visible)');
@@ -110,8 +113,10 @@ describe('Trails personal journey library screen contracts', () => {
   test('record/page/control colors come from the shared Day/Sunset/Night theme roles', () => {
     expect(trails).toContain('useVisualTheme()');
     expect(trails).toContain('theme.recordSurface');
-    expect(trails).toContain('theme.inputSurface');
+    expect(libraryControls).toContain('theme.inputSurface');
+    expect(libraryControls).toContain('theme.recordSurface');
     expect(trails).toContain('<SegmentedControl');
     expect(trails).not.toMatch(/#[0-9A-Fa-f]{3,8}/);
+    expect(libraryControls).not.toMatch(/#[0-9A-Fa-f]{3,8}/);
   });
 });

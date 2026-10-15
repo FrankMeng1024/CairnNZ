@@ -13,20 +13,23 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   const markerStore = read('src/store/useMarkerStore.ts');
   const deleteDialog = read('src/features/cairns/CairnDeleteDialog.tsx');
   const webMapbox = read('src/features/memory/services/mapboxAdapter.web.tsx');
+  const libraryControls = read('src/components/LibraryControls.tsx');
 
   test('Memory exposes a normal All Cairns route outside map/location branches', () => {
     expect(navigation).toContain("AllCairns: { initialSection?: 'left' | 'found'; markerIds?: string[] } | undefined");
     expect(navigation).toContain('<Stack.Screen name="AllCairns" component={AllCairnsScreen} />');
     expect(memory).toContain('testID="memory-all-cairns-entry"');
     expect(memory).toContain("nav.navigate('AllCairns')");
-    expect(memory.indexOf('memory-all-cairns-entry')).toBeLessThan(memory.indexOf('{persistentCoord ?'));
+    expect(memory.indexOf('memory-all-cairns-entry')).toBeLessThan(memory.indexOf('{mapMayBeShown && persistentCoord ?'));
   });
 
   test('All Cairns is own-only, recent-first, searchable and opens the authoritative Detail', () => {
     expect(library).toContain('markersForVisibleWorkspace(storedMarkers, debugMode)');
     expect(library).toContain('mergeOwnedCairns(markers, remoteMarkers)');
     expect(library).toContain('Search names and notes');
-    expect(library).toContain('testID={`all-cairns-filter-${filter.key}`}');
+    expect(library).toContain('testID="all-cairns-filter"');
+    expect(library).toContain('options={AUDIENCE_FILTERS}');
+    expect(libraryControls).toContain('testID={`${testID}-${option.key}`}');
     expect(library).toContain('all-cairns-sort');
     expect(library).toContain('(b.createdAt ?? 0) - (a.createdAt ?? 0)');
     expect(library).not.toMatch(/updatedAt.*sort|sort.*updatedAt/);

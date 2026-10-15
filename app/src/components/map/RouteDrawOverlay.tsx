@@ -10,11 +10,25 @@ import { routePointDistanceM, validRoutePoint } from '../../features/route/order
 interface Props {
   active: boolean;
   mapViewRef: React.MutableRefObject<any>;
-  onStroke: (points: RoutePoint[]) => void;
+  onStroke: (points: RoutePoint[], capture: RouteDrawStrokeCapture) => void;
   onDrawingStart?: () => void;
   onCancel: (reason: 'gesture-interrupted' | 'coordinate-unavailable') => void;
   bottomInset?: number;
   strokeColor?: string;
+}
+
+export interface RouteDrawSample {
+  timestampMs: number;
+  x: number;
+  y: number;
+  geographic?: RoutePoint;
+}
+
+export interface RouteDrawStrokeCapture {
+  strokeId: string;
+  startedAtMs: number;
+  endedAtMs: number;
+  samples: RouteDrawSample[];
 }
 
 /**
@@ -38,6 +52,9 @@ export function RouteDrawOverlay({
   const endedNormallyRef = useRef(false);
   const coordinateFailureRef = useRef(false);
   const screenPointsRef = useRef<Array<{ x: number; y: number }>>([]);
+  const rawSamplesRef = useRef<RouteDrawSample[]>([]);
+  const strokeIdRef = useRef('');
+  const startedAtMsRef = useRef(0);
   const [screenPoints, setScreenPoints] = useState<Array<{ x: number; y: number }>>([]);
 
   if (!active || Platform.OS === 'web') return null;
@@ -56,7 +73,7 @@ export function RouteDrawOverlay({
     }
   }
 
-  function queuePoint(x: number, y: number, generation: number) {
+  function queuePoint(x: number, y: number, generation: number, sampleIndex: number) {
     chainRef.current = chainRef.current.then(async () => {
       if (generationRef.current !== generation) return;
       const point = await unproject(x, y);
@@ -64,6 +81,8 @@ export function RouteDrawOverlay({
         coordinateFailureRef.current = true;
         return;
       }
+      const sample = rawSamplesRef.current[sampleIndex];
+      if (sample) sample.geographic = { ...point };
       const previous = pointsRef.current.at(-1);
       if (!previous || routePointDistanceM(previous, point) >= 0.75) pointsRef.current.push(point);
     });
@@ -75,37 +94,53 @@ export function RouteDrawOverlay({
     endedNormallyRef.current = false;
     coordinateFailureRef.current = false;
     pointsRef.current = [];
+    startedAtMsRef.current = Date.now();
+    strokeIdRef.current = `${startedAtMsRef.current}-${Math.random().toString(36).slice(2, 10)}`;
+    rawSamplesRef.current = [{ timestampMs: startedAtMsRef.current, x, y }];
     screenPointsRef.current = [{ x, y }];
     setScreenPoints(screenPointsRef.current);
     chainRef.current = Promise.resolve();
     onDrawingStart?.();
-    queuePoint(x, y, generation);
+    queuePoint(x, y, generation, 0);
   }
 
   function update(x: number, y: number) {
+    const sampleIndex = rawSamplesRef.current.push({ timestampMs: Date.now(), x, y }) - 1;
     const previous = screenPointsRef.current.at(-1);
     if (!previous || Math.hypot(previous.x - x, previous.y - y) >= 2) {
       screenPointsRef.current = [...screenPointsRef.current, { x, y }];
       setScreenPoints(screenPointsRef.current);
     }
-    queuePoint(x, y, generationRef.current);
+    queuePoint(x, y, generationRef.current, sampleIndex);
   }
 
   async function finish(x: number, y: number) {
     const generation = generationRef.current;
     endedNormallyRef.current = true;
-    queuePoint(x, y, generation);
+    const endedAtMs = Date.now();
+    const sampleIndex = rawSamplesRef.current.push({ timestampMs: endedAtMs, x, y }) - 1;
+    queuePoint(x, y, generation, sampleIndex);
     await chainRef.current;
     if (generationRef.current !== generation) return;
     const points = pointsRef.current.map(point => ({ ...point }));
+    const capture: RouteDrawStrokeCapture = {
+      strokeId: strokeIdRef.current,
+      startedAtMs: startedAtMsRef.current,
+      endedAtMs,
+      samples: rawSamplesRef.current.map(sample => ({
+        ...sample,
+        geographic: sample.geographic ? { ...sample.geographic } : undefined,
+      })),
+    };
     pointsRef.current = [];
+    rawSamplesRef.current = [];
     screenPointsRef.current = [];
     setScreenPoints([]);
     if (coordinateFailureRef.current && points.length < 2) {
       onCancel('coordinate-unavailable');
       return;
     }
-    onStroke(points);
+    onStroke(points, capture);
   }
 
   async function finalizeWithoutEnd() {
@@ -115,6 +150,7 @@ export function RouteDrawOverlay({
     if (generationRef.current !== generation || endedNormallyRef.current) return;
     generationRef.current += 1;
     pointsRef.current = [];
+    rawSamplesRef.current = [];
     screenPointsRef.current = [];
     setScreenPoints([]);
     onCancel('gesture-interrupted');

@@ -10,6 +10,8 @@
     "test": "jest --watchAll=false",
     "test:watch": "jest",
     "verify:changed": "node scripts/verify-activity.mjs",
+    "verify:route": "node scripts/verify-activity.mjs --gate=route",
+    "verify:route:fast": "node scripts/verify-activity.mjs --gate=route --skip-typecheck",
     "verify:activity:gps": "node scripts/verify-activity.mjs --gate=gps",
     "verify:activity:core": "node scripts/verify-activity.mjs --gate=core",
     "verify:full": "node scripts/verify-activity.mjs --gate=full",

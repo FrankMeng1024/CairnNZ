@@ -14,11 +14,18 @@ The maintainable impact map is `app/scripts/activity-verification-map.json`; the
 | Command | Cost | Purpose |
 |---|---:|---|
 | `npm run verify:changed` | FAST–HEAVY by diff | Select the smallest mapped gate plus scoped TypeScript validation. |
+| `npm run verify:route:fast` | FAST | Route intent, state, and local diagnostic regressions without the deferred static pass. Use during implementation. |
+| `npm run verify:route` | MEDIUM | Route intent, state, local diagnostics, production-pipeline integration, and scoped TypeScript validation. |
 | `npm run verify:activity:gps` | MEDIUM | Continuity/candidate, background, gap, elevation, matching, real-GPS telemetry, Memory gap safety, and server payload/telemetry contracts. |
 | `npm run verify:activity:core` | HEAVY | GPS plus journal, recovery, unfinished ownership, Memory, offline/sync, and shared Simulator-pipeline regression. |
 | `npm run verify:full` | HEAVY | All client Jest and backend `node:test` files. Reserve for major architecture, nightly, or release work. |
 
 Presentation-only Hike/Run changes route to focused screen contracts. GPS/filter/background/elevation/matching/telemetry changes route to GPS. Journal/recovery/Memory/sync/shared Activity state routes to Core. Runtime/package architecture routes to Full. Successful runs print only group counts; failures expand the underlying logs.
+
+Route drawing changes have their own staged loop in
+[`ROUTE_DRAWING_VERIFICATION.md`](./ROUTE_DRAWING_VERIFICATION.md). The fast
+command deliberately reports `static-deferred`; it is an iteration tool, not a
+release verdict. Run the static and broader gates once the candidate is stable.
 
 TypeScript currently has unrelated repository debt, so the router runs the compiler and fails on diagnostics in touched TypeScript files. It does not hide a new touched-file error behind the pre-existing global count.
 

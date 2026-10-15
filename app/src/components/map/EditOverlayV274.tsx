@@ -41,7 +41,7 @@ interface EditOverlayV274Props {
   saveLabel?: string;
 }
 
-type ToolKey = 'pan' | 'brush';
+type ToolKey = 'pan' | 'brush' | 'point';
 
 export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element {
   const { onSave, onPreview, onBeautify, saveLabel = 'Apply to draft' } = props;
@@ -100,8 +100,13 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
     if (hasUnpreviewedStrokes && trimOpen) setTrimOpen(false);
   }, [hasUnpreviewedStrokes, trimOpen]);
 
-  // v276: eraser removed. Active tool can only be pan or brush.
-  const safeTool: ToolKey = activeTool === 'brush' ? 'brush' : 'pan';
+  // Eraser remains legacy-only. The visible input tools are continuous Draw,
+  // deliberate Point, and the implicit pan state between edits.
+  const safeTool: ToolKey = activeTool === 'brush'
+    ? 'brush'
+    : activeTool === 'point'
+      ? 'point'
+      : 'pan';
   const fabIcon = safeTool === 'brush' ? 'Pencil' : 'Navigation2';
   const fabBg = safeTool === 'brush' ? '#c87941' : Colors.primary;
 
@@ -123,11 +128,12 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
     if (inErrorState) return null;          // error has its own red pill
     if (isComputing) return 'Computing…';
     if (hasUnpreviewedStrokes) {
-      return safeTool === 'brush'
-        ? 'Drawing — start and end on the route'
-        : `Drew ${strokeCount} stroke${strokeCount > 1 ? 's' : ''} · tap Preview to snap`;
+      if (safeTool === 'brush') return 'Drawing — start and end on the route';
+      if (safeTool === 'point') return 'Point — tap to continue, then Preview';
+      return `Drew ${strokeCount} stroke${strokeCount > 1 ? 's' : ''} · tap Preview to snap`;
     }
     if (safeTool === 'brush') return 'Drawing — start and end on the route';
+    if (safeTool === 'point') return 'Point — tap the map to add a deliberate vertex';
     if (previewIsCurrent && strokeCount === 0) return null;
     return null;
   })();
@@ -137,7 +143,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
       {/* 2026-08-16 CONCEPT_TRUTH Trails T6-T10 alignment.
           Replaced top-right wheel + 3-button bottom bar with:
           - top-right small Undo + Reset badges (secondary, low profile)
-          - bottom card with 4 tool tabs (Beautify / Trim / Draw / Move)
+          - bottom card with 4 tool tabs (Beautify / Trim / Draw / Point)
           - bottom primary CTA that toggles between Preview / Save based on state
           Wheel + FAB moved to zero-height wrappers so old code paths are
           harmless but nothing renders. */}
@@ -396,6 +402,20 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                     <Icon name="Pencil" size={22} color={safeTool === 'brush' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
                   </View>
                   <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'brush' && { color: theme.primary, fontWeight: '800' }]}>Draw</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[styles.toolTab, safeTool === 'point' && styles.toolTabActive]}
+                  onPress={() => { setTrimOpen(false); setActiveTool('point'); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add deliberate Route points"
+                  accessibilityState={{ selected: safeTool === 'point' }}
+                >
+                  <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'point' && { backgroundColor: theme.primary }]}>
+                    <Icon name="Plus" size={22} color={safeTool === 'point' ? theme.onPrimary : theme.iconActive} strokeWidth={2.4} />
+                  </View>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'point' && { color: theme.primary, fontWeight: '800' }]}>Point</Text>
                 </TouchableOpacity>
 
               </View>

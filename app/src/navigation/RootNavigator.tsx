@@ -32,6 +32,7 @@ import { MapHistoryScreen } from '../screens/MapHistoryScreen';
 import { RoutesScreen } from '../screens/RoutesScreen';
 import { OrderedRouteEditorScreen as RouteEditorScreen } from '../screens/OrderedRouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
+import { RouteDrawingReplayScreen } from '../screens/RouteDrawingReplayScreen';
 import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
 import { FriendContentScreen } from '../screens/FriendContentScreen';
@@ -126,6 +127,11 @@ export type RootStackParamList = {
   OfflineMaps: undefined;
   Memory: undefined;
   Debug: undefined;
+  RouteDrawingReplay: {
+    sessionId?: string;
+    operationId?: string;
+    fixtureId?: string;
+  } | undefined;
   /** Sprint 68 STORY-00532: dev-only preview for MarkDetailSheet 4 forms. */
   MarkDetailDevPreview: undefined;
   /** Batch 2: dev-only shared transient-contract review harness. */
@@ -350,6 +356,7 @@ export function RootNavigator() {
             <Stack.Screen name="OfflineMaps" component={OfflineMapsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
+            {__DEV__ && <Stack.Screen name="RouteDrawingReplay" component={RouteDrawingReplayScreen} />}
             {__DEV__ && <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />}
             {__DEV__ && (
               <Stack.Screen

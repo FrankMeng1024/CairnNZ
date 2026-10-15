@@ -31,9 +31,11 @@ describe('Memory fog readiness authority', () => {
   test('durable Memory can center the map without claiming a live position puck', () => {
     const screen = read('src/features/memory/screens/MemoryScreen.tsx');
     const map = read('src/features/memory/components/MemoryMap.tsx');
-    expect(screen).toContain('const ownedEvidenceCenter = useMemo<FixState | null>');
+    expect(screen).toContain('const ownedEvidenceForCamera = useMemo(() =>');
     expect(screen).toContain('localHydration.ownerUserId !== activeOwnerId');
-    expect(screen).toContain('const nextMapCenter = stableCoord ?? ownedEvidenceCenter');
+    expect(screen).toContain('const cachedMemoryCenter = useMemo(');
+    expect(screen).toContain('const nextMapCenter = resolveMemoryInitialMapCenter({');
+    expect(screen).toContain('cachedMemoryCenter,');
     expect(screen).toContain('showUserLocation={Boolean(stableCoord)}');
     expect(map).toContain('{showUserLocation ? <UserLocation');
   });

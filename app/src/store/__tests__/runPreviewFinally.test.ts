@@ -119,34 +119,36 @@ describe('runPreview finally contract (v6.3 R1v3)', () => {
     expect(useRouteEditStore.getState().isComputing).toBe(false);
   });
 
-  test('isComputing clears after Mapbox NoMatch reject', async () => {
+  test('isComputing clears after Mapbox NoMatch and the clear raw intent falls back locally', async () => {
     matchSegmentMock.mockResolvedValue({
       ok: false,
       reason: 'no-match',
       durationMs: 50,
     });
     const r = await useRouteEditStore.getState().runPreview();
-    expect(r.ok).toBe(false);
+    // Route drawing is stroke-first: a provider no-match must not discard a
+    // clear, safely attached human stroke.
+    expect(r).toEqual({ ok: true });
     expect(useRouteEditStore.getState().isComputing).toBe(false);
   });
 
-  test('isComputing clears after timeout reject', async () => {
+  test('isComputing clears after Mapbox timeout and the clear raw intent falls back locally', async () => {
     matchSegmentMock.mockResolvedValue({
       ok: false,
       reason: 'timeout',
       durationMs: 8000,
     });
     const r = await useRouteEditStore.getState().runPreview();
-    expect(r.ok).toBe(false);
+    expect(r).toEqual({ ok: true });
     expect(useRouteEditStore.getState().isComputing).toBe(false);
   });
 
-  test('isComputing clears even if matchSegment THROWS', async () => {
+  test('isComputing clears and the clear raw intent falls back even if matchSegment THROWS', async () => {
     matchSegmentMock.mockImplementation(() => {
       throw new Error('synchronous boom');
     });
     const r = await useRouteEditStore.getState().runPreview();
-    expect(r.ok).toBe(false);
+    expect(r).toEqual({ ok: true });
     // THIS is the critical assertion: pre-v6.3 a thrown error left the
     // Preview button stuck. v6.3 finally guarantees it clears.
     expect(useRouteEditStore.getState().isComputing).toBe(false);

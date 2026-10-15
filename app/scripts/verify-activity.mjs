@@ -10,10 +10,11 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDir, '..');
 const repoRoot = resolve(appRoot, '..');
 const map = JSON.parse(readFileSync(join(scriptDir, 'activity-verification-map.json'), 'utf8'));
-const gateOrder = ['none', 'presentation', 'gps', 'core', 'full'];
+const gateOrder = ['none', 'presentation', 'route', 'gps', 'core', 'full'];
 const args = process.argv.slice(2);
 const requestedGate = args.find(value => value.startsWith('--gate='))?.split('=')[1] ?? null;
 const explainOnly = args.includes('--explain');
+const skipTypecheck = args.includes('--skip-typecheck');
 const simulatedFiles = args.filter(value => value.startsWith('--file=')).map(value => value.slice(7));
 
 function run(command, commandArgs, options = {}) {
@@ -22,6 +23,7 @@ function run(command, commandArgs, options = {}) {
     encoding: 'utf8',
     env: process.env,
     maxBuffer: 64 * 1024 * 1024,
+    timeout: options.timeout,
   });
 }
 
@@ -55,6 +57,7 @@ function routedGate(files) {
 function selectedGroups(gate) {
   if (gate === 'full') return map.groups;
   if (gate === 'presentation') return map.groups.filter(group => group.minimumGate === 'presentation');
+  if (gate === 'route') return map.groups.filter(group => group.minimumGate === 'route');
   if (gate === 'gps') return map.groups.filter(group => group.minimumGate === 'gps');
   if (gate === 'core') {
     return map.groups.filter(group => group.minimumGate === 'gps' || group.minimumGate === 'core');
@@ -103,7 +106,7 @@ if (!gateOrder.includes(gate)) {
   process.exit(2);
 }
 
-const groups = selectedGroups(gate);
+const groups = selectedGroups(gate).filter(group => !(skipTypecheck && group.integrationOnly));
 if (explainOnly) {
   console.log(`Activity verification route: ${gate.toUpperCase()}`);
   for (const reason of routing.reasons) console.log(`${reason.gate.padEnd(12)} ${reason.file}`);
@@ -126,9 +129,18 @@ try {
     ? []
     : [...new Set(groups.flatMap(group => group.tests ?? []))];
   const jestJson = join(temporary, 'jest.json');
-  const jestArgs = ['jest', '--runInBand', '--silent', '--json', '--outputFile', jestJson, ...jestTests];
-  const jest = run('npx', jestArgs, { cwd: appRoot });
-  if (jest.status !== 0 || !existsSync(jestJson)) {
+  // Some Jest/Expo combinations leave an unreported native FSEvents handle
+  // after the JSON result is complete. `--forceExit` bounds that known runner
+  // leak; the wall-clock timeout separately bounds a genuinely stuck test.
+  const jestArgs = [
+    'jest', '--runInBand', '--silent', '--json', '--forceExit', '--outputFile', jestJson,
+    ...jestTests,
+  ];
+  const jest = run('npx', jestArgs, {
+    cwd: appRoot,
+    timeout: gate === 'full' ? 12 * 60_000 : 5 * 60_000,
+  });
+  if (!existsSync(jestJson)) {
     failed = true;
     printFailure('Activity client verification', jest);
   } else {
@@ -149,13 +161,20 @@ try {
         });
       }
     }
+    if (jest.status !== 0 || report.success === false) {
+      failed = true;
+      printFailure('Activity client verification', jest);
+    }
   }
 
   const backendTests = gate === 'full'
     ? collectBackendTests(resolve(repoRoot, 'backend/src'))
     : [...new Set(groups.flatMap(group => group.backendTests ?? []))];
   if (backendTests.length > 0) {
-    const backend = run('node', ['--test', ...backendTests], { cwd: resolve(repoRoot, 'backend') });
+    const backend = run('node', ['--test', ...backendTests], {
+      cwd: resolve(repoRoot, 'backend'),
+      timeout: gate === 'full' ? 10 * 60_000 : 3 * 60_000,
+    });
     if (backend.status !== 0) {
       failed = true;
       printFailure('Activity backend verification', backend);
@@ -170,13 +189,17 @@ try {
     }
   }
 
-  const typecheck = scopedTypecheck(files, groups, requestedGate);
-  if (!typecheck.ok) {
-    failed = true;
-    process.stderr.write('\nScoped TypeScript validation — FAIL\n');
-    process.stderr.write(typecheck.errors.join('\n') + '\n');
+  if (skipTypecheck) {
+    summaries.push({ name: 'static-deferred', pass: 0, total: 0 });
   } else {
-    summaries.push({ name: 'static', pass: typecheck.checked, total: typecheck.checked });
+    const typecheck = scopedTypecheck(files, groups, requestedGate);
+    if (!typecheck.ok) {
+      failed = true;
+      process.stderr.write('\nScoped TypeScript validation — FAIL\n');
+      process.stderr.write(typecheck.errors.join('\n') + '\n');
+    } else {
+      summaries.push({ name: 'static', pass: typecheck.checked, total: typecheck.checked });
+    }
   }
 } finally {
   rmSync(temporary, { recursive: true, force: true });
@@ -185,6 +208,11 @@ try {
 if (failed) process.exit(1);
 const totalPassed = summaries.reduce((total, item) => total + item.pass, 0);
 const total = summaries.reduce((sum, item) => sum + item.total, 0);
-console.log(`Activity ${gate === 'presentation' ? 'Presentation' : gate.toUpperCase()} Verification — PASS`);
+const gateLabel = gate === 'presentation'
+  ? 'Activity Presentation'
+  : gate === 'route'
+    ? 'Route Drawing'
+    : `Activity ${gate.toUpperCase()}`;
+console.log(`${gateLabel} Verification — PASS`);
 for (const item of summaries) console.log(`${item.name.padEnd(18)} ${String(item.pass).padStart(4)}/${item.total}`);
 console.log(`${'Total'.padEnd(18)} ${String(totalPassed).padStart(4)}/${total}`);

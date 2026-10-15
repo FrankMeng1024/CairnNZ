@@ -48,7 +48,18 @@ import type { MatchSegment } from '../services/routing/mapmatch/types';
 import { matchSegment } from '../services/routing/mapmatch/MapMatchingClient';
 import { simplifyStroke, MAPBOX_MATCHING_MAX_COORDS } from '../utils/strokeSimplify';
 import { checkG0, checkG0PostSimplify, checkG0_5, checkG3 } from '../utils/strokeGate';
-import { sendEditDiag } from '../services/editDiagSender';
+import {
+  beginRouteDrawingTrace,
+  endRouteDrawingTrace,
+  selectRouteDrawingOperation,
+  sendEditDiag,
+} from '../services/editDiagSender';
+import {
+  composeRouteDrawingDecisions,
+  resolveRouteDrawing,
+  type DrawingViewport,
+  type RouteDrawingDecision,
+} from '../features/routeDrawing/routeDrawingIntent';
 // v6.4 Stage D — algorithm-parity note:
 // Brush-edit and Activity-snap share the same primitive operations:
 //   - simplifyStroke (DP ladder + uniform fallback) — used directly here;
@@ -100,11 +111,13 @@ export function preserveBeautifyEndpoints<T extends LngLat>(input: T[], beautifi
   return output;
 }
 
-type EditTool = 'pan' | 'brush' | 'eraser';
+type EditTool = 'pan' | 'brush' | 'point' | 'eraser';
 
 export interface BrushStroke {
   id: string;
   points: LngLat[];
+  /** Finger-derived geographic samples before endpoint magnet display aids. */
+  rawPoints?: LngLat[];
 }
 
 interface UndoEntry {
@@ -181,6 +194,7 @@ interface EditState {
   undoStack: UndoEntry[];
 
   walkedIndex: PointCloudIndex | null;
+  drawingViewport: DrawingViewport;
 
   // UI
   isComputing: boolean;
@@ -200,6 +214,7 @@ interface EditState {
   skipMigration(): void;
 
   setActiveTool(tool: EditTool): void;
+  setDrawingViewport(viewport: DrawingViewport): void;
 
   /** Begin a new stroke (call on gesture begin). Returns id, or null if disallowed. */
   beginStroke(firstPoint: LngLat): string | null;
@@ -207,6 +222,8 @@ interface EditState {
   appendStrokePoint(strokeId: string, point: LngLat): void;
   /** Finish stroke (call on gesture end). */
   endStroke(strokeId: string): void;
+  /** Add one deliberate geographic vertex, continuing the latest stroke. */
+  addPoint(point: LngLat): void;
 
   /** Erase any stroke point within radius of `coord`. */
   eraseAt(coord: LngLat, radiusM?: number): void;
@@ -264,6 +281,7 @@ interface BeginEditArgs {
   routeId: string;
   routePoints: LngLat[];
   routeUpdatedAt?: number;
+  source?: { kind: 'route' | 'activity' | 'draft'; id: string | null };
   resumeFrom?: {
     workingPoints: LngLat[];
     brushStrokes?: BrushStroke[];
@@ -1053,6 +1071,14 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   committedDraft: null,
   undoStack: [],
   walkedIndex: null,
+  drawingViewport: {
+    width: 390,
+    height: 844,
+    center: { lng: 174.764, lat: -36.848 },
+    zoom: 15,
+    bearing: 0,
+    pitch: 0,
+  },
   isComputing: false,
   lastError: null,
   lastWarning: null,
@@ -1155,6 +1181,16 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       previewIsCurrent: initialStrokes.length === 0,
       undoStack: [],
       walkedIndex,
+      drawingViewport: {
+        width: 390,
+        height: 844,
+        center: baseGeometry[0]
+          ? { lng: baseGeometry[0].lng, lat: baseGeometry[0].lat }
+          : { lng: 174.764, lat: -36.848 },
+        zoom: 15,
+        bearing: 0,
+        pitch: 0,
+      },
       isComputing: false,
       lastError: null,
       lastWarning: null,
@@ -1165,6 +1201,15 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       migratorRetry: null,
       pendingBeginArgs: null,
     }));
+
+    beginRouteDrawingTrace({
+      sessionId,
+      routeId,
+      source: args.source ?? { kind: routeId.startsWith('draft_') ? 'draft' : 'route', id: routeId },
+      initialGeometryRevision: routeUpdatedAt ?? null,
+      originalRoute: originalPoints,
+      initialUndoDepth: 0,
+    });
 
     persistSession(get(), sessionId);
 
@@ -1198,6 +1243,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     set(s => ({ activeTool: tool, editOpSeq: s.editOpSeq + 1 }));
   },
 
+  setDrawingViewport(viewport) {
+    set({ drawingViewport: viewport });
+  },
+
   beginStroke(firstPoint) {
     const state = get();
     if (state.isSaving) return null;
@@ -1224,8 +1273,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       return null;
     }
     const id = genStrokeId();
-    // v268: log every begin so the brush gesture lifecycle is observable
-    // server-side without requiring a Preview/Save (key event, immediate flush).
+    selectRouteDrawingOperation(id);
+    // Log every begin into the explicitly armed local trace so the gesture
+    // lifecycle remains observable even before Preview/Save.
     sendEditDiag('brush_begin', {
       strokeId: id,
       firstPoint,
@@ -1239,7 +1289,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         trimEndFrac: s.trimEndFrac,
         matchedPoints: s.matchedPoints,
       }].slice(-20),
-      brushStrokes: [...s.brushStrokes, { id, points: [firstPoint] }],
+      brushStrokes: [...s.brushStrokes, { id, points: [firstPoint], rawPoints: [firstPoint] }],
       activeStrokeId: id,
       previewIsCurrent: false,
       editOpSeq: s.editOpSeq + 1,
@@ -1259,7 +1309,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       const last = stroke.points[stroke.points.length - 1];
       // Skip points too close to the last (downsample to ~5m).
       if (last && haversineMetersLocal(last, point) < 5) return s;
-      const updated = { ...stroke, points: [...stroke.points, point] };
+      const updated = {
+        ...stroke,
+        points: [...stroke.points, point],
+        rawPoints: [...(stroke.rawPoints ?? stroke.points), point],
+      };
       const newStrokes = [...s.brushStrokes];
       newStrokes[idx] = updated;
       // v249: do NOT bump editOpSeq here. Per-frame bump caused the entire
@@ -1296,7 +1350,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const stroke = state.brushStrokes[idx];
     const baseLine = state.originalPoints;
     // v268: dump full raw stroke before ANY processing (magnetism, validation,
-    // discard). KEY_EVENT → flushed immediately. This is the canonical record
+    // discard). This is the canonical local record
     // of what the user actually drew, independent of magnet decisions taken
     // below. If the user reports a kink, this is the ground truth to compare
     // against the rendered stroke.
@@ -1407,10 +1461,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         && last.distM <= ENDPOINT_SNAP_M;
       if (firstMagnet) newPoints.unshift(first.point);
       if (lastMagnet) newPoints.push(last.point);
-      // v268 telemetry — see OtaBadge v268 note. Recorded EVERY endStroke
+      // v268 diagnostic — recorded EVERY endStroke while local capture is armed
       // so we can see, post-hoc, whether the kink corresponds to a magnet
-      // event or to raw user gesture data. KEY_EVENT → flushed immediately
-      // (no Preview/Save needed).
+      // event or to raw user gesture data (no Preview/Save needed).
       sendEditDiag('brush_endpoint_magnet', {
         strokeId,
         rawPointCount: stroke.points.length,
@@ -1429,7 +1482,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         finalPointCount: newPoints.length,
       });
       const newStrokes = [...state.brushStrokes];
-      newStrokes[idx] = { ...stroke, points: newPoints };
+      newStrokes[idx] = { ...stroke, rawPoints: stroke.rawPoints ?? stroke.points, points: newPoints };
       set(s => ({
         ...s,
         brushStrokes: newStrokes,
@@ -1446,8 +1499,62 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         skipped: true,
         reason: stroke.points.length < 3 ? 'too_few_points' : 'no_baseline',
       });
-      set(s => ({ ...s, activeStrokeId: null, editCount: s.editCount + 1, editOpSeq: s.editOpSeq + 1 }));
+      const newStrokes = [...state.brushStrokes];
+      newStrokes[idx] = { ...stroke, rawPoints: stroke.rawPoints ?? stroke.points };
+      set(s => ({
+        ...s,
+        brushStrokes: newStrokes,
+        activeStrokeId: null,
+        editCount: s.editCount + 1,
+        editOpSeq: s.editOpSeq + 1,
+      }));
     }
+    persistSession(get(), get().sessionId ?? undefined);
+  },
+
+  addPoint(point) {
+    const state = get();
+    if (state.isSaving || state.isComputing) return;
+    const latest = state.brushStrokes[state.brushStrokes.length - 1];
+    if (!latest) {
+      const id = get().beginStroke(point);
+      if (id) {
+        sendEditDiag('brush_point_added', { strokeId: id, point, pointIndex: 0, startedStroke: true });
+        set({ activeStrokeId: null, activeTool: 'point' });
+      }
+      return;
+    }
+    const raw = latest.rawPoints ?? latest.points;
+    if (raw.length > 0 && haversineMetersLocal(raw[raw.length - 1], point) < 0.75) return;
+    selectRouteDrawingOperation(latest.id);
+    const updated: BrushStroke = {
+      ...latest,
+      // Drop any prior display-only magnet connector before continuing with
+      // a deliberate Point tap. This prevents a tool-boundary kink.
+      points: [...raw, point],
+      rawPoints: [...raw, point],
+    };
+    sendEditDiag('brush_point_added', {
+      strokeId: latest.id,
+      point,
+      pointIndex: raw.length,
+      startedStroke: false,
+    });
+    set(previous => ({
+      undoStack: [...previous.undoStack, {
+        brushStrokes: previous.brushStrokes,
+        trimStartFrac: previous.trimStartFrac,
+        trimEndFrac: previous.trimEndFrac,
+        matchedPoints: previous.matchedPoints,
+      }].slice(-20),
+      brushStrokes: previous.brushStrokes.map(stroke => stroke.id === latest.id ? updated : stroke),
+      activeStrokeId: null,
+      previewMatchedPoints: null,
+      previewIsCurrent: false,
+      editOpSeq: previous.editOpSeq + 1,
+      editCount: previous.editCount + 1,
+      lastError: null,
+    }));
     persistSession(get(), get().sessionId ?? undefined);
   },
 
@@ -1508,7 +1615,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           if (fpLast && fpLast.dist > MIN && fpLast.dist <= ENDPOINT_SNAP_M) {
             pts = [...pts, fpLast.pt];
           }
-          newStrokes.push({ id: genStrokeId(), points: pts });
+          newStrokes.push({ id: genStrokeId(), points: pts, rawPoints: run });
         } else if (run.length === 1) {
           mutated = true;
         }
@@ -1784,6 +1891,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       brushStrokesAfter: last.brushStrokes.length,
       hadPreviewBefore: state.matchedPoints.length >= 2 && state.previewIsCurrent,
       restoredMatchedPointCount: last.matchedPoints.length,
+      restoredMatchedPoints: last.matchedPoints,
+      restoredBrushStrokes: last.brushStrokes,
+      restoredTrimStartFrac: last.trimStartFrac,
+      restoredTrimEndFrac: last.trimEndFrac,
       noBrushAfter,
     });
     persistSession(get(), get().sessionId ?? undefined);
@@ -1797,6 +1908,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const state = get();
     if (!state.isOpen) return;
     if (state.isSaving) return;
+    endRouteDrawingTrace('detached');
     set(s => ({
       isOpen: false,
       isComputing: false,
@@ -1953,6 +2065,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     // Mapbox HTTP request. Aborting wakes the awaiter with reason 'aborted',
     // saves Mapbox quota, and lets the fence check return cleanly.
     const previewAbort = new AbortController();
+    let fenceLogged = false;
 
     // v6.3 plan §1.2 / §1.6 / R1v3: capture fence + finally contract for
     // multi-stroke serial calls. Any abort path must clear isComputing.
@@ -1964,24 +2077,63 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // burn quota on an answer the user already navigated away from.
         previewAbort.abort();
       }
+      if (tripped && !fenceLogged) {
+        fenceLogged = true;
+        sendEditDiag('brush_cancelled', {
+          reason: 'async-state-fence',
+          expectedSessionId: startSid,
+          actualSessionId: live.sessionId,
+          expectedEditOpSeq: startSeq,
+          actualEditOpSeq: live.editOpSeq,
+        });
+      }
       return tripped;
     };
 
     try {
       const snappedPerStroke: LngLat[][] = [];
-      // v260 BCEF: parallel array of {arcB, arcC, curve}. Same length as
-      // snappedPerStroke / acceptedValidated. spliceBCEF takes this directly.
-      const bcefItems: Array<{ arcB: number; arcC: number; curve: LngLat[] }> = [];
+      const drawingDecisions: RouteDrawingDecision[] = [];
       const acceptedValidated: ValidatedStroke[] = [];
       const rejectedStrokeIds: string[] = [];
       let firstRejectReason: string | null = null;
 
+      const acceptDrawingDecision = (vs: ValidatedStroke, decision: RouteDrawingDecision) => {
+        drawingDecisions.push(decision);
+        snappedPerStroke.push(decision.selectedReplacement);
+        acceptedValidated.push(vs);
+        sendEditDiag('brush_stabilized', {
+          strokeId: vs.stroke.id,
+          intent: decision.intent,
+          stabilizedStroke: decision.stabilizedStroke,
+        });
+        sendEditDiag('brush_intent_decision', {
+          strokeId: vs.stroke.id,
+          intent: decision.intent,
+          status: decision.status,
+          selectionSource: decision.selectionSource,
+          reasons: decision.reasons,
+          divergenceStage: decision.divergenceStage,
+          attachments: decision.attachments,
+          rawStroke: decision.rawStroke,
+          stabilizedStroke: decision.stabilizedStroke,
+          providerGeometry: decision.providerGeometry,
+          selectedReplacement: decision.selectedReplacement,
+          finalGeometry: decision.finalGeometry,
+          metrics: decision.metrics,
+          viewport: state.drawingViewport,
+        });
+      };
+
       for (let strokeIdx = 0; strokeIdx < v.validated.length; strokeIdx++) {
         const vs = v.validated[strokeIdx];
+        selectRouteDrawingOperation(vs.stroke.id);
         // Fence check before each stroke (multi-stroke can take seconds total).
         if (fenceTriggered()) return { ok: false, error: 'state-changed' };
 
-        const pts = vs.stroke.points;
+        // Geometric intent uses the actual finger-derived geographic stroke.
+        // Endpoint magnet points remain a display/validation aid only and may
+        // not create the shape the user ultimately receives.
+        const pts = vs.stroke.rawPoints ?? vs.stroke.points;
         // v260: cache disabled. The cache stored Mapbox snap geometry but
         // not arcB/arcC; reusing it requires re-projecting B/C anyway, at
         // which point we may as well re-call Mapbox (B/C input changes
@@ -2125,6 +2277,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // sent Mapbox. Diagnoses input-side root cause (R-A) — DP-simplify
         // collapse vs. raw kept vs. wide radius giving HMM too much slack.
         sendEditDiag('brush_mapbox_attempt', {
+          strokeId: vs.stroke.id,
           stroke_idx: strokeIdx,
           vertex_count: simRes.points.length,
           raw_vertex_count: pts.length,
@@ -2132,6 +2285,10 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           // First/last 3 coords identify the spatial region without bloating payload.
           input_first3: simRes.points.slice(0, 3).map(p => [p.lng, p.lat]),
           input_last3: simRes.points.slice(-3).map(p => [p.lng, p.lat]),
+          mapbox_input_full: bcefInput.map(p => [p.lng, p.lat]),
+          mapbox_radiuses: radiuses,
+          mapbox_via_indices: seg.viaIndicesInCoords,
+          mapbox_profile: 'walking',
           // Max gap between consecutive simplified inputs — large gap means
           // DP threw away middle so we sent Mapbox a sparse skeleton.
           input_max_gap_m: (() => {
@@ -2148,46 +2305,49 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           r = await matchSegment(seg, { signal: previewAbort.signal });
         } catch (e: any) {
           // Defensive: matchSegment swallows almost every error itself.
-          // Reaching here means an unhandled throw — treat as G2 fail.
+          // Reaching here means an unhandled provider failure. The finger
+          // stroke remains usable when its attachment intent is clear.
           if (fenceTriggered()) return { ok: false, error: 'state-changed' };
-          rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Could not match this route';
           sendEditDiag('brush_mapbox_error', {
+            strokeId: vs.stroke.id,
             reason: 'throw',
             ms_to_error: Date.now() - mapboxT0,
           });
+          const fallbackDecision = resolveRouteDrawing({
+            originalRoute: baseLine,
+            rawStroke: pts,
+            providerGeometry: null,
+            viewport: state.drawingViewport,
+          });
+          if (fallbackDecision.status === 'accepted') acceptDrawingDecision(vs, fallbackDecision);
+          else {
+            rejectedStrokeIds.push(vs.stroke.id);
+            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+          }
           continue;
         }
 
         // Fence after every Mapbox await — silent abort if user backed out.
         if (fenceTriggered()) return { ok: false, error: 'state-changed' };
 
-        // G2 — Mapbox code === 'Ok'. NoMatch / network / 5xx / timeout all reject.
+        // G2 — a failed provider is a recorded alternative, not authority.
         if (!r.ok) {
-          rejectedStrokeIds.push(vs.stroke.id);
           sendEditDiag('brush_mapbox_error', {
+            strokeId: vs.stroke.id,
             reason: r.reason,
             ms_to_error: Date.now() - mapboxT0,
           });
-          if (firstRejectReason === null) {
-            switch (r.reason) {
-              case 'no-match':
-                firstRejectReason = 'Could not match this route';
-                break;
-              case 'timeout':
-                firstRejectReason = 'Network is slow, please retry';
-                break;
-              case 'network':
-              case 'rate-limit':
-              case 'auth':
-                firstRejectReason = 'Network error, please retry';
-                break;
-              case 'invalid-input':
-                firstRejectReason = 'Brush stroke does not meet requirements';
-                break;
-              default:
-                firstRejectReason = 'Could not match this route';
-            }
+          const fallbackDecision = resolveRouteDrawing({
+            originalRoute: baseLine,
+            rawStroke: pts,
+            providerGeometry: null,
+            viewport: state.drawingViewport,
+          });
+          if (fallbackDecision.status === 'accepted') {
+            acceptDrawingDecision(vs, fallbackDecision);
+          } else {
+            rejectedStrokeIds.push(vs.stroke.id);
+            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
           }
           continue;
         }
@@ -2195,9 +2355,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // G0.5 — Mapbox returned Ok but geometry has < 2 points. Rare.
         const g05 = checkG0_5(r.matchedPoints);
         if (!g05.ok) {
-          rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Could not match this route';
           sendEditDiag('brush_gate_failure', {
+            strokeId: vs.stroke.id,
             gate: g05.gate,
             reason: g05.reason,
             stroke_idx: strokeIdx,
@@ -2205,6 +2364,17 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
             metric_value: g05.metric_value,
             threshold: g05.threshold,
           });
+          const fallbackDecision = resolveRouteDrawing({
+            originalRoute: baseLine,
+            rawStroke: pts,
+            providerGeometry: null,
+            viewport: state.drawingViewport,
+          });
+          if (fallbackDecision.status === 'accepted') acceptDrawingDecision(vs, fallbackDecision);
+          else {
+            rejectedStrokeIds.push(vs.stroke.id);
+            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+          }
           continue;
         }
 
@@ -2213,9 +2383,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // (~0.5% urban per spike-corridor-100v).
         const g3 = checkG3({ stroke: pts, snap: r.matchedPoints });
         if (!g3.ok) {
-          rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Drawn too far away — try staying closer to the original route';
           sendEditDiag('brush_gate_failure', {
+            strokeId: vs.stroke.id,
             gate: g3.gate,
             reason: g3.reason,
             stroke_idx: strokeIdx,
@@ -2223,7 +2392,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
             metric_value: g3.metric_value,
             threshold: g3.threshold,
           });
-          continue;
         }
 
         // v263: multi-matching stitch.
@@ -2248,12 +2416,22 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // gate is the safety net.
         const allSegs = r.segments;
         if (allSegs.length === 0) {
-          rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Could not match this route';
           sendEditDiag('brush_mapbox_error', {
+            strokeId: vs.stroke.id,
             reason: 'all-segments-low-conf',
             ms_to_error: Date.now() - mapboxT0,
           });
+          const fallbackDecision = resolveRouteDrawing({
+            originalRoute: baseLine,
+            rawStroke: pts,
+            providerGeometry: null,
+            viewport: state.drawingViewport,
+          });
+          if (fallbackDecision.status === 'accepted') acceptDrawingDecision(vs, fallbackDecision);
+          else {
+            rejectedStrokeIds.push(vs.stroke.id);
+            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+          }
           continue;
         }
         // Project each segment's first/last point onto originalPoints (=baseLine).
@@ -2298,10 +2476,8 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const OUTPUT_CORRIDOR_M = CORRIDOR_M;
         const corridorOut = strokeWithinCorridor(snapped, baseLine);
         if (corridorOut.maxDistM > OUTPUT_CORRIDOR_M) {
-          rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??=
-            `Mapbox-returned route is outside the ${OUTPUT_CORRIDOR_M}m range — redraw closer to the original`;
           sendEditDiag('brush_gate_failure', {
+            strokeId: vs.stroke.id,
             gate: 'output_corridor_v263',
             reason: 'curve_beyond_corridor',
             stroke_idx: strokeIdx,
@@ -2309,7 +2485,6 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
             metric_value: Math.round(corridorOut.maxDistM),
             threshold: OUTPUT_CORRIDOR_M,
           });
-          continue;
         }
         // v258 PO direction: capture Mapbox's actual response shape so we
         // can prove whether "straight line through building" is API-side
@@ -2330,6 +2505,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           return Math.round(mx);
         })();
         sendEditDiag('brush_mapbox_response', {
+          strokeId: vs.stroke.id,
           stroke_idx: strokeIdx,
           response_pts_count: snapped.length,
           response_first3: snapped.slice(0, 3).map(p => [p.lng, p.lat]),
@@ -2352,6 +2528,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // is one diag row; storage is cheap; the alternative is more
         // OTAs to add fields one at a time.
         sendEditDiag('brush_full_dump', {
+          strokeId: vs.stroke.id,
           stroke_idx: strokeIdx,
           baseline_pts_count: baseLine.length,
           baseline_first3: baseLine.slice(0, 3).map(p => [p.lng, p.lat]),
@@ -2371,21 +2548,32 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           projB_dist_to_baseline: projB.dist,
           projC_dist_to_baseline: projC.dist,
         });
+        const decision = resolveRouteDrawing({
+          originalRoute: baseLine,
+          rawStroke: pts,
+          providerGeometry: snapped,
+          viewport: state.drawingViewport,
+        });
+        if (decision.status !== 'accepted') {
+          rejectedStrokeIds.push(vs.stroke.id);
+          firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+          sendEditDiag('brush_gate_failure', {
+            strokeId: vs.stroke.id,
+            gate: 'intent_attachment',
+            reason: decision.reasons.join(' '),
+            stroke_idx: strokeIdx,
+            stroke_vertex_count: pts.length,
+            metric_value: decision.attachments.crossingCount,
+            threshold: 2,
+          });
+          continue;
+        }
         strokeSnapCache.set(fp, snapped);
         if (strokeSnapCache.size > 100) {
           const firstKey = strokeSnapCache.keys().next().value;
           if (firstKey) strokeSnapCache.delete(firstKey);
         }
-        snappedPerStroke.push(snapped);
-        // v260 BCEF: track arcB/arcC alongside the snap so spliceBCEF can
-        // splice without re-projecting (we already projected pts[0], pts[-1]
-        // onto baseline above as projB/projC).
-        bcefItems.push({
-          arcB: projB.arc,
-          arcC: projC.arc,
-          curve: snapped,
-        });
-        acceptedValidated.push(vs);
+        acceptDrawingDecision(vs, decision);
       }
 
       // Fence: bail if state was mutated during await.
@@ -2417,68 +2605,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         return { ok: false, error: firstRejectReason ?? 'rejected' };
       }
 
-      // v265: drop spliceBCEF entirely. PO direction (after empirical
-      // diag analysis showed Mapbox geometry is always valid OSM road
-      // points but our splice was wrongly anchoring): the new flow is
-      //   baseline_prefix (up to Mapbox curve START's projected arc)
-      // + Mapbox curve in full
-      // + baseline_suffix (from Mapbox curve END's projected arc)
-      // No arc-min/max games, no anchor replacement, no segment
-      // stitching gymnastics — Mapbox owns the curve, baseline owns
-      // the prefix/suffix, the cut point is wherever Mapbox's actual
-      // first/last point lands on baseline.
-      //
-      // Multi-stroke is handled stroke-by-stroke in arc order; for
-      // each stroke the Mapbox curve is taken as-is (already stitched
-      // via v263 multi-matching code in bcefItems[i].curve).
-      const newMatched: LngLat[] = (() => {
-        if (bcefItems.length === 0) return [...baseLine];
-        // Sort by min arc (handles user drawing in reverse direction).
-        const items = bcefItems
-          .map(it => {
-            const curve = it.curve;
-            // Project Mapbox curve's actual first/last onto baseline so
-            // the cut points are where Mapbox really lands, not where
-            // brush projected.
-            const first = projectPointOntoBaseline(curve[0], baseLine);
-            const last = projectPointOntoBaseline(curve[curve.length - 1], baseLine);
-            const arcFirst = first?.arc ?? 0;
-            const arcLast = last?.arc ?? 0;
-            const arcMin = Math.min(arcFirst, arcLast);
-            const arcMax = Math.max(arcFirst, arcLast);
-            const reversed = arcFirst > arcLast;
-            return { curve, arcMin, arcMax, reversed };
-          })
-          .sort((a, b) => a.arcMin - b.arcMin);
-
-        const out: LngLat[] = [];
-        let cursor = 0;
-        for (const it of items) {
-          if (it.arcMin < cursor) continue; // overlap → skip
-          // Prefix: baseline from cursor to arcMin.
-          for (const p of baselineSlice(baseLine, cursor, it.arcMin)) out.push(p);
-          // Mapbox curve, reversed if user drew in reverse-arc direction.
-          const curveOriented = it.reversed ? [...it.curve].reverse() : it.curve;
-          for (const p of curveOriented) out.push(p);
-          cursor = it.arcMax;
-        }
-        // Tail.
-        const total = baseLine.reduce((s, _, i) =>
-          i === 0 ? 0 : s + haversineMetersLocal(baseLine[i-1], baseLine[i]), 0);
-        for (const p of baselineSlice(baseLine, cursor, total)) out.push(p);
-
-        // 0.5m dedupe — same as v260 spliceBCEF tail.
-        if (out.length < 2) return out;
-        const deduped: LngLat[] = [out[0]];
-        for (let i = 1; i < out.length; i++) {
-          const prev = deduped[deduped.length - 1];
-          if (haversineMetersLocal(prev, out[i]) > 0.5) deduped.push(out[i]);
-          else if (prev.alt == null && out[i].alt != null) {
-            deduped[deduped.length - 1] = { ...prev, alt: out[i].alt };
-          }
-        }
-        return deduped;
-      })();
+      // O81: raw endpoint projections own the ordered replacement interval.
+      // Provider landing points can influence the selected curve only after
+      // passing intent-fidelity gates; they never decide which old section is
+      // removed. This is the shared production/replay compositor.
+      const newMatched = composeRouteDrawingDecisions(baseLine, drawingDecisions);
 
       // v258 PO direction: post-splice diag to confirm whether the splice
       // step preserved Mapbox's polyline or flattened a multi-vertex match
@@ -2712,6 +2843,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       distance_m: polylineLengthM(newWorking),
       has_alt: newWorking.some(p => p.alt != null),
     });
+    endRouteDrawingTrace('saved');
     if (state.enteredAtTs) {
       logEditExited({
         duration: Date.now() - state.enteredAtTs,
@@ -2772,6 +2904,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       lastError: null,
       editOpSeq: s.editOpSeq + 1,
     }));
+    sendEditDiag('route_draft_committed', {
+      routeId: state.routeId,
+      finalGeometry: newWorking,
+      undoDepth: state.undoStack.length,
+    });
     return { ok: true };
   },
 
@@ -2785,6 +2922,13 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
       set({ lastError: 'Save in progress — please wait before cancelling.' });
       return;
     }
+    sendEditDiag('brush_cancelled', {
+      routeId: state.routeId,
+      keepDraft: opts?.keepDraft === true,
+      undoDepth: state.undoStack.length,
+      pendingStrokeCount: state.brushStrokes.length,
+    });
+    endRouteDrawingTrace('cancelled');
     set(s => ({ sessionId: null, editOpSeq: s.editOpSeq + 1 }));
     chainSessionWrite(() => clearSession()).catch(() => {});
 

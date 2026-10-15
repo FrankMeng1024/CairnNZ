@@ -51,7 +51,7 @@ jest.mock('../../../utils/distanceFormat', () => ({
 jest.mock('../../Icon', () => ({ Icon: () => null }));
 jest.mock('../TrimSlider', () => ({ TrimSlider: () => null }));
 
-describe('EditOverlayV274 Apply control accessibility', () => {
+describe('EditOverlayV274 accessibility', () => {
   beforeEach(() => {
     mockRouteEditState = { ...mockRouteEditState, isComputing: false };
     jest.clearAllMocks();
@@ -93,5 +93,21 @@ describe('EditOverlayV274 Apply control accessibility', () => {
     const apply = screen.getByRole('button', { name: 'Apply to draft' });
     expect(apply).toBeDisabled();
     expect(apply.props.accessibilityState).toEqual({ disabled: true, busy: true });
+  });
+
+  it('exposes Point as a deliberate geometry tool', () => {
+    const screen = render(
+      <EditOverlayV274
+        onCancel={jest.fn()}
+        onSave={jest.fn()}
+        onPreview={jest.fn()}
+        onBeautify={jest.fn()}
+      />,
+    );
+
+    const point = screen.getByRole('button', { name: 'Add deliberate Route points' });
+    expect(point.props.accessibilityState).toEqual({ selected: false });
+    fireEvent.press(point);
+    expect(setActiveTool).toHaveBeenCalledWith('point');
   });
 });

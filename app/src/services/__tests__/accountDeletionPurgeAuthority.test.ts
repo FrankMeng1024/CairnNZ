@@ -8,6 +8,11 @@ let mockFailSecureMarkerWrite = false;
 const mockAppState = { user: null as null | { id: string } };
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+jest.mock('expo-application', () => ({
+  applicationId: 'com.yiiling.cairn',
+  nativeApplicationVersion: '0.2.6',
+  nativeBuildVersion: '65',
+}));
 jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK: 1,
   getItemAsync: jest.fn(async (key: string) => {
@@ -43,6 +48,7 @@ jest.mock('../../store/storage', () => ({
       }
       return mockAsyncValues.get(key) ?? null;
     }),
+    getAllKeysStrict: jest.fn(async () => [...mockAsyncValues.keys()]),
     setItem: jest.fn(async (key: string, value: string) => {
       if (key === '@cairn:account-deletion-local-purge:v1' && mockFailAsyncMarkerWrite) {
         throw new Error('async_write_failed');

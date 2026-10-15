@@ -355,7 +355,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // location authority, shared libraries, stable Route workspace and ornaments.
 // O80 (2026-10-15): Owner iPhone regression candidate: exact Memory camera,
 // evidence-driven Activity continuity, native Draw ownership and compact tools.
-export const OTA_VERSION = 'O80';
+// O81 (2026-10-15): intent-aware Route replacement, Draw-to-Point seam
+// normalization, bounded diagnostics and deterministic drawing replay.
+export const OTA_VERSION = 'O81';
 
 
 type OtaState =

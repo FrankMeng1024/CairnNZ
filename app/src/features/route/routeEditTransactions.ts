@@ -1,5 +1,10 @@
 import type { RoutePoint } from '../../store/useRouteStore';
 import {
+  resolveRouteDrawing,
+  type DrawingViewport,
+  type RouteDrawingDecision,
+} from '../routeDrawing/routeDrawingIntent';
+import {
   ROUTE_ATTACHMENT_TOLERANCE_M,
   appendOrderedSegment,
   bridgeOrderedGap,
@@ -7,6 +12,7 @@ import {
   normalizeOrderedPoints,
   prependOrderedSegment,
   orderedIntervalCrossesGap,
+  orderedDraftPoints,
   orderedPositionPoint,
   replaceOrderedInterval,
   routePointDistanceM,
@@ -15,6 +21,41 @@ import {
   type OrderedRouteDraft,
   type RouteEditResult,
 } from './orderedRouteDraft';
+
+export interface IntentAwareDrawCandidate {
+  points: RoutePoint[] | null;
+  resolution: EditableRouteResolution | null;
+  decision: RouteDrawingDecision;
+}
+
+/**
+ * Apply the O81 human-intent gate only after the ordered editor has selected
+ * one unambiguous replacement interval. The raw stroke remains the shape
+ * authority; provider vertices may refine it only while they stay faithful.
+ */
+export function selectIntentAwareDrawCandidate(input: {
+  draft: OrderedRouteDraft;
+  raw: RoutePoint[];
+  provider: RoutePoint[] | null;
+  intent: DrawTransactionIntent;
+  viewport: DrawingViewport;
+}): IntentAwareDrawCandidate | null {
+  if (input.intent.kind !== 'replace' || input.intent.options.length !== 1) return null;
+  const decision = resolveRouteDrawing({
+    originalRoute: orderedDraftPoints(input.draft),
+    rawStroke: input.raw,
+    providerGeometry: input.provider,
+    viewport: input.viewport,
+  });
+  if (decision.status !== 'accepted' || decision.selectedReplacement.length < 2) {
+    return { points: null, resolution: null, decision };
+  }
+  return {
+    points: decision.selectedReplacement,
+    resolution: decision.selectionSource === 'provider' ? 'draw-matched' : 'draw-manual',
+    decision,
+  };
+}
 
 export interface RouteAnchorCandidate extends OrderedPosition {
   distanceM: number;

@@ -3,6 +3,7 @@ import {
   classifyDrawTransaction,
   continueDrawTransaction,
   nearestOrderedPositions,
+  selectIntentAwareDrawCandidate,
 } from '../routeEditTransactions';
 import {
   appendOrderedSegment,
@@ -19,6 +20,39 @@ const p = (eastM: number, northM: number) => ({
 const empty = () => createEmptyOrderedDraft({ draftId: 'draft-a', ownerId: 'owner-a' });
 
 describe('Route edit transaction classification', () => {
+  test('O81 production path flattens a V before the ordered replacement commit', () => {
+    const apex = p(50, 75);
+    const base = appendOrderedSegment(empty(), [p(0, 0), apex, p(100, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const raw = [p(0, 0), p(25, 1), p(50, -1), p(75, 1), p(100, 0)];
+    const provider = [p(0, 0), p(48, 72), p(100, 0)];
+    const intent = classifyDrawTransaction(base.draft, raw);
+    expect(intent.kind).toBe('replace');
+    if (intent.kind !== 'replace') return;
+    const selected = selectIntentAwareDrawCandidate({
+      draft: base.draft,
+      raw,
+      provider,
+      intent,
+      viewport: { width: 390, height: 844, center: origin, zoom: 17, bearing: 0, pitch: 0 },
+    });
+    expect(selected?.decision).toMatchObject({
+      status: 'accepted', intent: 'straight-replacement', selectionSource: 'drawn-intent',
+    });
+    expect(selected?.points).toHaveLength(2);
+    if (!selected?.points || !selected.resolution) return;
+    const result = applyDrawTransaction(
+      base.draft,
+      { kind: 'replace', option: intent.options[0] },
+      selected.points,
+      selected.resolution,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.parts.flatMap(part => part.points)).not.toContainEqual(apex);
+  });
+
   test('first stroke starts anywhere and later terminal stroke appends', () => {
     const firstRaw = [p(100, 50), p(120, 60), p(140, 50)];
     const firstIntent = classifyDrawTransaction(empty(), firstRaw);

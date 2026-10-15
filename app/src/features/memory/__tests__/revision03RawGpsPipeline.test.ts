@@ -45,6 +45,8 @@ jest.mock('expo-location', () => ({
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null), setItemAsync: jest.fn(async () => undefined),
 }));
+jest.mock('expo-application', () => ({}));
+jest.mock('expo-updates', () => ({}));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {

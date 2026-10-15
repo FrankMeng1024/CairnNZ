@@ -25,13 +25,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useRouteEditStore } from '../../store/useRouteEditStore';
-import { sendEditDiag } from '../../services/editDiagSender';
+import {
+  isRouteDrawingDiagnosticsEnabled,
+  sendEditDiag,
+} from '../../services/editDiagSender';
 import { Colors, FontSize, Spacing } from '../tokens';
 
 // v269: per-stroke raw-sample diagnostic buffer. Module-scope so the
 // gesture handlers can write to it from the JS thread without React
-// state churn. Batched into a single brush_raw_samples telemetry event
-// at gesture end. Used to identify the source of the mid-stroke
+// state churn. Batched into one bounded, local-only brush_raw_samples event
+// at gesture end when capture was explicitly armed. Used to identify the source of the mid-stroke
 // "lng-pinned-to-one-value" pattern observed in v268 brush_end data.
 interface RawSample {
   enterSeq: number;     // order handleUpdate was entered (gesture frame order)
@@ -62,6 +65,12 @@ interface RawSample {
   unprojectFailed: boolean; // mapView.getCoordinateFromView returned bad
 }
 let _rawSamples: RawSample[] = [];
+const MAX_RAW_SAMPLES = 2_000;
+let _rawSampleOverflowCount = 0;
+function pushRawSample(sample: RawSample): void {
+  if (_rawSamples.length < MAX_RAW_SAMPLES) _rawSamples.push(sample);
+  else _rawSampleOverflowCount += 1;
+}
 let _enterSeqCounter = 0;
 let _pushSeqCounter = 0;
 let _strokeStartZoom: number | null = null;
@@ -96,6 +105,14 @@ export function reportBrushOverlayCamera(state: {
   _camZoom = state.zoom;
   _camBearing = state.bearing;
   _camPitch = state.pitch;
+  useRouteEditStore.getState().setDrawingViewport({
+    width: _measuredViewW || 390,
+    height: _measuredViewH || 844,
+    center: { lng: state.centerLng, lat: state.centerLat },
+    zoom: state.zoom,
+    bearing: state.bearing,
+    pitch: state.pitch,
+  });
 }
 
 interface Props {
@@ -128,6 +145,9 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   const updateInFlightRef = useRef(false);
 
   if (activeTool === 'pan') return null;
+  // Point is handled by MapView.onPress so each tap remains a deliberate
+  // vertex and never enters the continuous gesture sampler.
+  if (activeTool === 'point') return null;
   if (Platform.OS === 'web') return null;
 
   // v248: gesture capture region must avoid both the back-button area
@@ -254,40 +274,69 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
   }
 
   async function handleBegin(x: number, y: number) {
+    const diagnosticsEnabled = isRouteDrawingDiagnosticsEnabled();
     endedRef.current = false;
     updateInFlightRef.current = false; // v250: reset for new stroke
     // v269: reset diagnostic buffer for this stroke
-    _rawSamples = [];
+    if (diagnosticsEnabled) _rawSamples = [];
+    _rawSampleOverflowCount = 0;
     _enterSeqCounter = 0;
     _pushSeqCounter = 0;
     _strokeStartTs = Date.now();
     _strokeStartZoom = null;
     _currentStrokeIdForBuffer = null;
-    // Capture zoom level at gesture start (best-effort, doesn't block).
-    try {
-      const map = mapViewRef.current;
-      if (map && typeof map.getZoom === 'function') {
-        _strokeStartZoom = await map.getZoom();
+    // Zoom is already carried by selfRes for normal drawing. The extra bridge
+    // read exists only for an explicitly armed diagnostic trace.
+    if (diagnosticsEnabled) {
+      try {
+        const map = mapViewRef.current;
+        if (map && typeof map.getZoom === 'function') {
+          _strokeStartZoom = await map.getZoom();
+        }
+      } catch {
+        _strokeStartZoom = null;
       }
-    } catch {
-      _strokeStartZoom = null;
     }
-    const coord = await unproject(x, y);
-    if (!coord) return;
-    // v271: use self-mercator as primary at gesture begin too. Native is
-    // queried for telemetry parity but self is the authoritative coord.
+    // Normal drawing performs one projection path. Native+JS parity work and
+    // raw sample allocation happen only after explicit diagnostic opt-in.
     const selfRes = await unprojectSelfMercator(x, y);
-    const beginCoord = selfRes ? { lng: selfRes.lng, lat: selfRes.lat } : coord;
+    const coord = diagnosticsEnabled || !selfRes ? await unproject(x, y) : null;
+    if (!selfRes && !coord) return;
+    const beginCoord = selfRes ? { lng: selfRes.lng, lat: selfRes.lat } : coord!;
+    if (selfRes) {
+      useRouteEditStore.getState().setDrawingViewport({
+        width: _measuredViewW || 390,
+        height: _measuredViewH || 844,
+        center: { lng: selfRes.cLng, lat: selfRes.cLat },
+        zoom: selfRes.zoom,
+        bearing: selfRes.bearing,
+        pitch: selfRes.pitch,
+      });
+    }
     if (activeTool === 'brush') {
       const id = beginStroke(beginCoord);
       currentStrokeIdRef.current = id;
       _currentStrokeIdForBuffer = id;
+      if (diagnosticsEnabled && id) {
+        const now = Date.now();
+        pushRawSample({
+          enterSeq: _enterSeqCounter++, pushSeq: _pushSeqCounter++,
+          enterTs: now, pushTs: now, x, y,
+          lng: coord?.lng ?? null, lat: coord?.lat ?? null,
+          selfLng: selfRes?.lng ?? null, selfLat: selfRes?.lat ?? null,
+          cLng: selfRes?.cLng ?? null, cLat: selfRes?.cLat ?? null,
+          zoom: selfRes?.zoom ?? null,
+          bearing: selfRes?.bearing ?? null, pitch: selfRes?.pitch ?? null,
+          droppedByGuard: false, unprojectFailed: !coord,
+        });
+      }
     } else if (activeTool === 'eraser') {
       eraseAt(beginCoord, 25);
     }
   }
 
   async function handleUpdate(x: number, y: number) {
+    const diagnosticsEnabled = isRouteDrawingDiagnosticsEnabled();
     // v269: count EVERY entry, including ones dropped by the in-flight
     // guard. Without this we can't tell post-hoc whether 60Hz frames
     // were actually arriving — important for distinguishing
@@ -298,37 +347,49 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
     // v250: skip if a previous handleUpdate is still awaiting unproject.
     // Drops frames rather than queuing — keeps gesture responsive.
     if (updateInFlightRef.current) {
-      _rawSamples.push({
-        enterSeq, pushSeq: -1,
-        enterTs, pushTs: enterTs,
-        x, y,
-        lng: null, lat: null,
-        selfLng: null, selfLat: null,
-        cLng: null, cLat: null, zoom: null,
-        bearing: null, pitch: null,
-        droppedByGuard: true, unprojectFailed: false,
-      });
+      if (diagnosticsEnabled) {
+        pushRawSample({
+          enterSeq, pushSeq: -1,
+          enterTs, pushTs: enterTs,
+          x, y,
+          lng: null, lat: null,
+          selfLng: null, selfLat: null,
+          cLng: null, cLat: null, zoom: null,
+          bearing: null, pitch: null,
+          droppedByGuard: true, unprojectFailed: false,
+        });
+      }
       return;
     }
     updateInFlightRef.current = true;
     try {
-      // v270: run native unproject and self-mercator unproject in PARALLEL
-      // so they capture the same camera state. Promise.all means both fire
-      // before either resolves; even if rnmapbox getCenter+getZoom is async
-      // and runs on a different RN frame than getCoordinateFromView, they
-      // start from the same JS tick. Any drift is post-hoc visible.
-      const [coord, selfRes] = await Promise.all([
-        unproject(x, y),
-        unprojectSelfMercator(x, y),
-      ]);
+      // Normal drawing performs only the JS projection. When capture is
+      // explicitly armed, also collect native projection for parity evidence.
+      const selfRes = await unprojectSelfMercator(x, y);
+      const coord = diagnosticsEnabled || !selfRes ? await unproject(x, y) : null;
       const pushSeq = _pushSeqCounter++;
       const pushTs = Date.now();
-      if (!coord) {
-        _rawSamples.push({
+      if (!coord && !selfRes) {
+        if (diagnosticsEnabled) {
+          pushRawSample({
+            enterSeq, pushSeq,
+            enterTs, pushTs,
+            x, y,
+            lng: null, lat: null,
+            selfLng: null, selfLat: null,
+            cLng: null, cLat: null,
+            zoom: null, bearing: null, pitch: null,
+            droppedByGuard: false, unprojectFailed: true,
+          });
+        }
+        return;
+      }
+      if (diagnosticsEnabled) {
+        pushRawSample({
           enterSeq, pushSeq,
           enterTs, pushTs,
           x, y,
-          lng: null, lat: null,
+          lng: coord?.lng ?? null, lat: coord?.lat ?? null,
           selfLng: selfRes ? selfRes.lng : null,
           selfLat: selfRes ? selfRes.lat : null,
           cLng: selfRes ? selfRes.cLng : null,
@@ -336,24 +397,9 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
           zoom: selfRes ? selfRes.zoom : null,
           bearing: selfRes ? selfRes.bearing : null,
           pitch: selfRes ? selfRes.pitch : null,
-          droppedByGuard: false, unprojectFailed: true,
+          droppedByGuard: false, unprojectFailed: !coord,
         });
-        return;
       }
-      _rawSamples.push({
-        enterSeq, pushSeq,
-        enterTs, pushTs,
-        x, y,
-        lng: coord.lng, lat: coord.lat,
-        selfLng: selfRes ? selfRes.lng : null,
-        selfLat: selfRes ? selfRes.lat : null,
-        cLng: selfRes ? selfRes.cLng : null,
-        cLat: selfRes ? selfRes.cLat : null,
-        zoom: selfRes ? selfRes.zoom : null,
-        bearing: selfRes ? selfRes.bearing : null,
-        pitch: selfRes ? selfRes.pitch : null,
-        droppedByGuard: false, unprojectFailed: false,
-      });
       // v271 FIX: use self-mercator as the source of truth for stroke
       // points, fall back to native only when self-mercator can't be
       // computed (rare — center/zoom unavailable). v270 data proved
@@ -362,7 +408,7 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
       // lat/lng drift. Native is kept in telemetry for ongoing comparison.
       const finalCoord = selfRes
         ? { lng: selfRes.lng, lat: selfRes.lat }
-        : coord;
+        : coord!;
       if (activeTool === 'brush') {
         const id = currentStrokeIdRef.current;
         if (!id) return;
@@ -380,22 +426,26 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
     // endStroke (and editCount telemetry) only triggers once per stroke.
     if (endedRef.current) return;
     endedRef.current = true;
-    // v269: capture end-of-stroke zoom and ship the per-frame buffer
+    const diagnosticsEnabled = isRouteDrawingDiagnosticsEnabled();
+    // v269: capture end-of-stroke zoom and retain the per-frame buffer
     // BEFORE endStroke runs, so the diagnostic data is independent of
-    // any magnetism / store mutation. brush_raw_samples is a KEY_EVENT
-    // → flushed immediately by editDiagSender.
+    // any magnetism / store mutation. Nothing is uploaded automatically.
     let endZoom: number | null = null;
-    try {
-      const map = mapViewRef.current;
-      if (map && typeof map.getZoom === 'function') {
-        endZoom = await map.getZoom();
+    if (diagnosticsEnabled) {
+      try {
+        const map = mapViewRef.current;
+        if (map && typeof map.getZoom === 'function') {
+          endZoom = await map.getZoom();
+        }
+      } catch {
+        endZoom = null;
       }
-    } catch {
-      endZoom = null;
     }
-    if (_rawSamples.length > 0 && _currentStrokeIdForBuffer) {
+    if (diagnosticsEnabled && _rawSamples.length > 0 && _currentStrokeIdForBuffer) {
       sendEditDiag('brush_raw_samples', {
         strokeId: _currentStrokeIdForBuffer,
+        viewportWidth: _measuredViewW || 390,
+        viewportHeight: _measuredViewH || 844,
         startZoom: _strokeStartZoom,
         endZoom,
         startTs: _strokeStartTs,
@@ -403,6 +453,7 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         frameCount: _rawSamples.length,
         droppedCount: _rawSamples.filter(s => s.droppedByGuard).length,
         unprojectFailedCount: _rawSamples.filter(s => s.unprojectFailed).length,
+        overflowCount: _rawSampleOverflowCount,
         samples: _rawSamples,
       });
     }
@@ -416,7 +467,7 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
       setActiveTool('pan');
     }
     // v269: clear after upload to free memory
-    _rawSamples = [];
+    if (diagnosticsEnabled) _rawSamples = [];
     _currentStrokeIdForBuffer = null;
   }
 
@@ -464,6 +515,16 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
         if (width > 0 && height > 0) {
           _measuredViewW = width;
           _measuredViewH = height;
+          if (_camCenterLng != null && _camCenterLat != null && _camZoom != null) {
+            useRouteEditStore.getState().setDrawingViewport({
+              width,
+              height,
+              center: { lng: _camCenterLng, lat: _camCenterLat },
+              zoom: _camZoom,
+              bearing: _camBearing,
+              pitch: _camPitch,
+            });
+          }
         }
       }}
     >

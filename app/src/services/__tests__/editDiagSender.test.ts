@@ -1,142 +1,133 @@
-/**
- * editDiagSender.test.ts — verify v6.3 plan §1.7 telemetry contract.
- *
- * Plan §6.1 spec:
- *   "telemetryQueue.test.ts — 队列上限 + 429 + flush fail(R1v3)"
- */
-
-// Set token + isolate the module so AppState subscription doesn't escape tests.
 import {
-  sendEditDiag,
-  flushQueue,
-  _resetForTesting,
   _peekQueueLength,
+  _resetForTesting,
+  beginRouteDrawingTrace,
+  exportRouteDrawingTrace,
+  flushQueue,
+  getLatestRouteDrawingTrace,
+  listRouteDrawingTraces,
+  replayRouteDrawingTrace,
+  selectRouteDrawingOperation,
+  sendEditDiag,
+  setRouteDrawingDiagnosticsEnabled,
 } from '../editDiagSender';
 
-const realFetch = global.fetch;
-let fetchMock: jest.Mock;
+const original = [
+  { lng: 174.764, lat: -36.848 },
+  { lng: 174.765, lat: -36.848 },
+];
 
-beforeEach(() => {
-  fetchMock = jest.fn();
-  (global as any).fetch = fetchMock;
-  (globalThis as any).fetch = fetchMock;
-  _resetForTesting();
-});
-
-afterEach(() => {
-  _resetForTesting();
-  (global as any).fetch = realFetch;
-  (globalThis as any).fetch = realFetch;
-});
-
-describe('editDiagSender — sendEditDiag basic enqueue', () => {
-  test('non-key event enqueues without immediate fetch', async () => {
-    sendEditDiag('brush_preview_started', { stroke_count: 1 });
-    // Debounce is 5s — fetch should not yet have fired.
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(_peekQueueLength()).toBe(1);
+function begin(sessionId = 'session-1') {
+  setRouteDrawingDiagnosticsEnabled(true);
+  beginRouteDrawingTrace({
+    sessionId,
+    routeId: 'route-1',
+    source: { kind: 'route', id: 'route-1' },
+    initialGeometryRevision: 7,
+    originalRoute: original,
+    initialUndoDepth: 0,
   });
+}
 
-  test('key event triggers immediate flush (brush_save_committed)', async () => {
-    fetchMock.mockResolvedValue({ status: 200, json: async () => ({ id: 1, ok: true }) });
-    sendEditDiag('brush_save_committed', { stroke_count: 1, distance_m: 100, has_alt: true });
-    // Microtask flush — yield once to let the immediate flush run.
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(_peekQueueLength()).toBe(0);
-  });
+beforeEach(() => _resetForTesting());
+afterEach(() => _resetForTesting());
 
-  test('key event triggers immediate flush (brush_mapbox_error)', async () => {
-    fetchMock.mockResolvedValue({ status: 200, json: async () => ({}) });
-    sendEditDiag('brush_mapbox_error', { reason: 'timeout', ms_to_error: 8000 });
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('editDiagSender — bounded queue', () => {
-  test('queue caps at 50 events; oldest dropped on overflow', async () => {
-    for (let i = 0; i < 55; i++) {
-      sendEditDiag('brush_preview_started', { stroke_count: i });
-    }
-    expect(_peekQueueLength()).toBe(50);
-  });
-});
-
-describe('editDiagSender — flush behavior', () => {
-  test('flushQueue posts JSON body with events array', async () => {
-    fetchMock.mockResolvedValue({ status: 200, json: async () => ({}) });
-    sendEditDiag('brush_preview_started', { stroke_count: 2 });
+describe('Route drawing diagnostics privacy boundary', () => {
+  test('is disabled by default and never performs a network request', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    sendEditDiag('brush_begin', { strokeId: 'stroke-1' });
     await flushQueue();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const callArgs = fetchMock.mock.calls[0];
-    const body = JSON.parse(callArgs[1].body);
-    expect(body).toHaveProperty('events');
-    expect(Array.isArray(body.events)).toBe(true);
-    expect(body.events).toHaveLength(1);
-    expect(body.events[0]).toMatchObject({
-      kind: 'brush_preview_started',
-      payload: { stroke_count: 2 },
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(_peekQueueLength()).toBe(0);
+    fetchSpy.mockRestore();
+  });
+
+  test('records only after explicit opt-in and includes original revision authority', () => {
+    begin();
+    sendEditDiag('brush_begin', { strokeId: 'stroke-1', firstPoint: original[0] });
+    const trace = getLatestRouteDrawingTrace();
+    expect(trace).not.toBeNull();
+    expect(trace).toMatchObject({
+      sessionId: 'session-1',
+      routeId: 'route-1',
+      initialGeometryRevision: 7,
+      initialUndoDepth: 0,
     });
-    expect(typeof body.events[0].timestamp_ms).toBe('number');
+    expect(trace?.originalRoute).toEqual(original);
   });
 
-  test('429 response puts batch back at head of queue', async () => {
-    fetchMock.mockResolvedValue({ status: 429, json: async () => ({}) });
-    sendEditDiag('brush_preview_started', { stroke_count: 1 });
-    sendEditDiag('brush_preview_started', { stroke_count: 2 });
-    await flushQueue();
-    // Both events should still be in queue after 429.
-    expect(_peekQueueLength()).toBe(2);
+  test('correlates every stage with one session and stable operation id', () => {
+    begin();
+    const operationId = selectRouteDrawingOperation('stroke-9');
+    sendEditDiag('brush_begin', { strokeId: 'stroke-9' });
+    sendEditDiag('brush_end', { strokeId: 'stroke-9', rawPoints: original });
+    sendEditDiag('brush_mapbox_attempt', { strokeId: 'stroke-9' });
+    sendEditDiag('brush_intent_decision', { strokeId: 'stroke-9', finalGeometry: original });
+    const trace = getLatestRouteDrawingTrace()!;
+    const operationEvents = trace.events.filter(event => event.operationId === operationId);
+    expect(operationEvents.map(event => event.stage)).toEqual(expect.arrayContaining([
+      'state', 'geographic-stroke', 'provider-request', 'intent',
+    ]));
+    expect(operationEvents.every(event => event.sessionId === trace.sessionId)).toBe(true);
   });
 
-  test('non-429 failure drops the batch (no retry storm)', async () => {
-    fetchMock.mockResolvedValue({ status: 500, json: async () => ({}) });
-    sendEditDiag('brush_preview_started', { stroke_count: 1 });
-    await flushQueue();
-    expect(_peekQueueLength()).toBe(0); // dropped
-  });
-
-  test('thrown network error drops the batch silently (no UI block)', async () => {
-    fetchMock.mockRejectedValue(new Error('ECONNRESET'));
-    sendEditDiag('brush_preview_started', { stroke_count: 1 });
-    await expect(flushQueue()).resolves.not.toThrow();
-    expect(_peekQueueLength()).toBe(0);
-  });
-
-  test('flushQueue with empty queue does nothing', async () => {
-    await flushQueue();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test('concurrent flushQueue calls do not double-send (inflight guard)', async () => {
-    let resolve1: (v: any) => void = () => {};
-    fetchMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolve1 = resolve;
-        }),
-    );
-    sendEditDiag('brush_preview_started', { stroke_count: 1 });
-    const p1 = flushQueue();
-    const p2 = flushQueue();
-    // Yield so first flush actually picks up the batch.
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    resolve1({ status: 200, json: async () => ({}) });
-    await Promise.all([p1, p2]);
-  });
-});
-
-describe('editDiagSender — batch size cap', () => {
-  test('flushQueue takes at most MAX_BATCH_SIZE per call', async () => {
-    fetchMock.mockResolvedValue({ status: 200, json: async () => ({}) });
-    for (let i = 0; i < 25; i++) {
-      sendEditDiag('brush_preview_started', { stroke_count: i });
+  test('uses a bounded local buffer and reports dropped evidence', () => {
+    begin();
+    for (let index = 0; index < 750; index += 1) {
+      sendEditDiag('brush_preview_started', { index });
     }
-    await flushQueue();
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.events.length).toBeLessThanOrEqual(10);
-    expect(_peekQueueLength()).toBeGreaterThan(0); // remainder still queued
+    const trace = getLatestRouteDrawingTrace()!;
+    expect(trace.events.length).toBeLessThanOrEqual(600);
+    expect(trace.approximateBytes).toBeLessThanOrEqual(2 * 1024 * 1024);
+    expect(trace.droppedEvents).toBeGreaterThan(0);
+  });
+
+  test('keeps at most eight local traces', () => {
+    for (let index = 0; index < 10; index += 1) begin(`session-${index}`);
+    expect(listRouteDrawingTraces()).toHaveLength(8);
+    expect(listRouteDrawingTraces().some(trace => trace.sessionId === 'session-0')).toBe(false);
+  });
+
+  test('exports only when explicitly requested', () => {
+    begin();
+    sendEditDiag('brush_end', { strokeId: 'stroke-1', rawPoints: original });
+    const exported = exportRouteDrawingTrace();
+    expect(exported).not.toBeNull();
+    const parsed = JSON.parse(exported!);
+    expect(parsed.originalRoute).toEqual(original);
+    expect(parsed.events.some((event: any) => event.kind === 'brush_end')).toBe(true);
+  });
+
+  test('replays a captured operation deterministically with its recorded provider response', () => {
+    setRouteDrawingDiagnosticsEnabled(true);
+    const vRoute = [
+      { lng: 174.764, lat: -36.848 },
+      { lng: 174.7645, lat: -36.8473 },
+      { lng: 174.765, lat: -36.848 },
+    ];
+    const raw = [vRoute[0], { lng: 174.7645, lat: -36.848 }, vRoute[2]];
+    beginRouteDrawingTrace({
+      sessionId: 'replay-session', routeId: 'route-v',
+      source: { kind: 'route', id: 'route-v' },
+      initialGeometryRevision: 4, originalRoute: vRoute, initialUndoDepth: 0,
+    });
+    selectRouteDrawingOperation('stroke-v');
+    sendEditDiag('brush_end', { strokeId: 'stroke-v', rawPoints: raw });
+    sendEditDiag('brush_raw_samples', {
+      strokeId: 'stroke-v', viewportWidth: 390, viewportHeight: 844,
+      samples: [{ zoom: 16, cLng: 174.7645, cLat: -36.848, bearing: 0, pitch: 0 }],
+    });
+    sendEditDiag('brush_full_dump', {
+      strokeId: 'stroke-v',
+      stitched_curve_full: vRoute.map(point => [point.lng, point.lat]),
+    });
+    const trace = getLatestRouteDrawingTrace()!;
+    const first = replayRouteDrawingTrace(trace);
+    const second = replayRouteDrawingTrace(trace);
+    expect(first).not.toBeNull();
+    expect(first).toEqual(second);
+    expect(first?.decision.intent).toBe('straight-replacement');
+    expect(first?.decision.selectionSource).toBe('drawn-intent');
+    expect(first?.divergenceStage).toBe('provider');
   });
 });
