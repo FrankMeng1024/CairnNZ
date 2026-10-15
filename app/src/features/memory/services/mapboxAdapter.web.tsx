@@ -43,6 +43,10 @@ import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
+// Non-secret sentinel used only with the source-free development QA style.
+// Its session request is intercepted by the visual harness; it is never used
+// to access Mapbox tiles or emitted by production builds.
+const LOCAL_QA_MAPBOX_TOKEN = 'pk.cairn-local-qa-no-network';
 const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
   && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
 const LOCAL_QA_STYLE = {
@@ -230,6 +234,8 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   const localQaStyleEnabled = process.env.NODE_ENV !== 'production'
     && typeof window !== 'undefined'
     && Boolean((window as any).__cairnMapQaLocalStyle);
+  const localQaTestMode = localQaStyleEnabled
+    && (window as any).__cairnMapQaTestMode !== false;
 
   // react-map-gl needs an initialViewState. We pull it from the first
   // <Camera> child if present. Otherwise default to a sensible center.
@@ -250,7 +256,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
         minHeight: 200,
       }}>
         <MapGL
-          {...(localQaStyleEnabled ? ({ testMode: true } as any) : {})}
+          {...(localQaTestMode ? ({ testMode: true } as any) : {})}
           ref={(r) => {
             mapRef.current = r;
             // Expose underlying mapbox-gl Map on `window.__cairnMap` for
@@ -307,7 +313,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
               }
             }
           }}
-          mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
+          mapboxAccessToken={localQaStyleEnabled ? LOCAL_QA_MAPBOX_TOKEN : MAPBOX_ACCESS_TOKEN}
           mapStyle={localQaStyleEnabled ? LOCAL_QA_STYLE : (parsedStyleJSON ?? styleUrl)}
           attributionControl={false}
           logoPosition={webControlPosition(logoPosition, 'bottom-left')}

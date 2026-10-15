@@ -127,6 +127,18 @@ export interface FriendMutationResult {
   localCleanup?: 'storage-uncertain';
 }
 
+export type FriendRequestLoadResult<T> =
+  | { success: true; items: T[] }
+  | { success: false; error?: string; superseded?: true };
+
+export interface IncomingFriendRequest {
+  id: string | number;
+  from_name: string;
+  from_email: string;
+  requester_memory_share?: number | boolean;
+  sent_at: string | number;
+}
+
 function captureFriendActionAuthority(): FriendActionAuthority | null {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useAppStore } = require('./useAppStore');
@@ -180,18 +192,27 @@ function committedCleanupUncertainResult(action: 'Block' | 'Unfriend'): FriendMu
 export async function sendFriendRequest(
   email: string,
   shareMemory = false,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<FriendMutationResult & { request?: OutboundRequest }> {
+  const authority = captureFriendActionAuthority();
+  if (!authority) return accountChangedResult();
   try {
     const res = await authenticatedFetch('/api/friends/request', {
       method: 'POST',
       body: JSON.stringify({ email, shareMemory }),
+      expectedUserId: authority.viewerId,
     });
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       return { success: false, error: data.error || 'Request failed' };
     }
-    return { success: true };
+    const data = await res.json().catch(() => ({}));
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
+    const request = parseOutboundRequest(data?.request);
+    if (!request) return { success: false, serverCommitted: true, error: 'Request sent, but its server record could not be displayed. Refresh Requests.' };
+    return { success: true, serverCommitted: true, request };
   } catch (err: any) {
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     return { success: false, error: err.message || 'Network error' };
   }
 }
@@ -199,43 +220,65 @@ export async function sendFriendRequest(
 /**
  * Fetch pending friend requests.
  */
-export async function fetchFriendRequests(): Promise<Array<{ id: string; fromUserId: string; fromName: string; fromEmail: string; sentAt: number; status: string }>> {
+export async function fetchFriendRequests(): Promise<FriendRequestLoadResult<IncomingFriendRequest>> {
+  const authority = captureFriendActionAuthority();
+  if (!authority) return { success: false, superseded: true };
   try {
-    const res = await authenticatedFetch('/api/friends/requests');
-    if (!res.ok) return [];
-    return await res.json();
-  } catch {
-    return [];
+    const res = await authenticatedFetch('/api/friends/requests', { expectedUserId: authority.viewerId });
+    if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
+    if (!res.ok) return { success: false, error: `Could not load requests (HTTP ${res.status}).` };
+    const rows = await res.json();
+    if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
+    return { success: true, items: Array.isArray(rows) ? rows : [] };
+  } catch (error: any) {
+    if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
+    return { success: false, error: error?.message || 'Could not load requests.' };
   }
 }
 
 /**
  * Accept a friend request.
  */
-export async function acceptFriendRequestAPI(requestId: string, shareMemory = false): Promise<boolean> {
+export async function acceptFriendRequestAPI(requestId: string, shareMemory = false): Promise<FriendMutationResult & { friendId?: string }> {
+  const authority = captureFriendActionAuthority();
+  if (!authority) return accountChangedResult();
   try {
     const res = await authenticatedFetch('/api/friends/accept', {
       method: 'POST',
       body: JSON.stringify({ requestId, shareMemory }),
+      expectedUserId: authority.viewerId,
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
+    const data = await res.json().catch(() => ({}));
+    return res.ok
+      ? { success: true, serverCommitted: true, friendId: String(data.friend_id ?? '') }
+      : { success: false, error: data.error || 'Could not accept request.' };
+  } catch (error: any) {
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
+    return { success: false, error: error?.message || 'Network error' };
   }
 }
 
 /**
  * Reject a friend request.
  */
-export async function rejectFriendRequestAPI(requestId: string): Promise<boolean> {
+export async function rejectFriendRequestAPI(requestId: string): Promise<FriendMutationResult> {
+  const authority = captureFriendActionAuthority();
+  if (!authority) return accountChangedResult();
   try {
     const res = await authenticatedFetch('/api/friends/reject', {
       method: 'POST',
       body: JSON.stringify({ requestId }),
+      expectedUserId: authority.viewerId,
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
+    const data = await res.json().catch(() => ({}));
+    return res.ok
+      ? { success: true, serverCommitted: true }
+      : { success: false, error: data.error || 'Could not decline request.' };
+  } catch (error: any) {
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
+    return { success: false, error: error?.message || 'Network error' };
   }
 }
 
@@ -247,33 +290,57 @@ export interface OutboundRequest {
   toName: string;
   toEmail: string;
   sentAt: number;
+  status: 'pending' | 'declined';
+  requesterShares: boolean;
 }
 
-export async function fetchOutboundRequests(): Promise<OutboundRequest[]> {
+function parseOutboundRequest(r: any): OutboundRequest | null {
+  const status = r?.status === 'declined' ? 'declined' : r?.status === 'pending' ? 'pending' : null;
+  if (!Number.isSafeInteger(Number(r?.id)) || !Number.isSafeInteger(Number(r?.to_user_id))
+    || typeof r?.to_name !== 'string' || typeof r?.to_email !== 'string' || !status) return null;
+  return {
+    id: Number(r.id),
+    toUserId: Number(r.to_user_id),
+    toName: r.to_name,
+    toEmail: r.to_email,
+    sentAt: r.sent_at ? new Date(r.sent_at).getTime() : Date.now(),
+    status,
+    requesterShares: Boolean(r.requester_memory_share),
+  };
+}
+
+export async function fetchOutboundRequests(): Promise<FriendRequestLoadResult<OutboundRequest>> {
+  const authority = captureFriendActionAuthority();
+  if (!authority) return { success: false, superseded: true };
   try {
-    const res = await authenticatedFetch('/api/friends/requests/outbound');
-    if (!res.ok) return [];
+    const res = await authenticatedFetch('/api/friends/requests/outbound', { expectedUserId: authority.viewerId });
+    if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
+    if (!res.ok) return { success: false, error: `Could not load sent requests (HTTP ${res.status}).` };
     const rows = await res.json();
-    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
-      id: r.id,
-      toUserId: r.to_user_id,
-      toName: r.to_name,
-      toEmail: r.to_email,
-      sentAt: r.sent_at ? new Date(r.sent_at).getTime() : Date.now(),
-    }));
-  } catch {
-    return [];
+    if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
+    return { success: true, items: (Array.isArray(rows) ? rows : []).map(parseOutboundRequest).filter(Boolean) as OutboundRequest[] };
+  } catch (error: any) {
+    if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
+    return { success: false, error: error?.message || 'Could not load sent requests.' };
   }
 }
 
-export async function cancelOutboundRequest(requestId: number): Promise<boolean> {
+export async function cancelOutboundRequest(requestId: number): Promise<FriendMutationResult> {
+  const authority = captureFriendActionAuthority();
+  if (!authority) return accountChangedResult();
   try {
     const res = await authenticatedFetch(`/api/friends/requests/${requestId}`, {
       method: 'DELETE',
+      expectedUserId: authority.viewerId,
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
+    const data = await res.json().catch(() => ({}));
+    return res.ok
+      ? { success: true, serverCommitted: true }
+      : { success: false, error: data.error || 'Could not update this request.' };
+  } catch (error: any) {
+    if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
+    return { success: false, error: error?.message || 'Network error' };
   }
 }
 

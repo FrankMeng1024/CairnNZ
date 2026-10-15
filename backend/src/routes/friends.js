@@ -49,17 +49,18 @@ const friendRequestLimiter = rateLimit({
   message: { error: 'Too many friend requests. Please wait an hour.' },
 });
 
-// O18 FRI-block: helper — returns true if either direction is blocked.
-// Called from /request to prevent messaging blocked users.
-async function isBlocked(userA, userB) {
-  const [rows] = await pool.execute(
-    `SELECT 1 FROM blocked_users
-     WHERE (blocker_id = ? AND blocked_id = ?)
-        OR (blocker_id = ? AND blocked_id = ?)
-     LIMIT 1`,
-    [userA, userB, userB, userA],
+// Every pair-mutating transaction takes the two user rows in numeric order.
+// This is the common serialization point for request/accept/reject/block and
+// prevents opposite-direction sends from acquiring request rows in a cycle.
+async function lockActivePairUsers(conn, userA, userB) {
+  const ids = [Number(userA), Number(userB)].sort((a, b) => a - b);
+  const [rows] = await conn.execute(
+    `SELECT id FROM users
+      WHERE id IN (?, ?) AND deleted_at IS NULL
+      ORDER BY id FOR UPDATE`,
+    ids,
   );
-  return rows.length > 0;
+  return rows.length === 2;
 }
 
 // ── Send friend request ─────────────────────────────────────────────────────
@@ -89,123 +90,75 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
     // (own-marker vote) and R45's block-self check below.
     if (String(toUser.id) === String(fromUserId)) return res.status(400).json({ error: 'Cannot add yourself' });
 
-    // Sprint 6 round-13 R13B3 fix: block check moved INSIDE the tx.
-    // Pre-fix, isBlocked check ran outside — a concurrent /block from
-    // the target could commit AFTER the check but BEFORE our INSERT,
-    // leaving a pending request between blocked users. Now checked
-    // under the same connection with the friend_requests FOR UPDATE
-    // lock; block insert on the target user must wait for the tx.
-
-    // Check if already friends (outside tx OK — friendship is set once
-    // and doesn't race with /request).
-    const [existing] = await pool.execute(
-      'SELECT id FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
-      [fromUserId, toUser.id, toUser.id, fromUserId]
-    );
-    if (existing.length > 0) return res.status(400).json({ error: 'Already friends' });
-
-    // Sprint 6 round-7 review R7B4 fix: check + insert in a serialised
-    // transaction to prevent TOCTOU on rapid double-tap or two-tab
-    // sends. Round-13 R13B3: also block-check inside tx.
     const conn = await pool.getConnection();
-    let reqResult;
+    let createdRequest;
     try {
       await conn.beginTransaction();
-      // Block check inside the tx — read after locking so a concurrent
-      // /block that commits mid-flight is either visible here or waits
-      // for our tx to complete.
-      // Sprint 6 round-14 R14B1 fix: FOR SHARE lock on blocked_users so
-      // a concurrent /block on the same target holds a matching read
-      // lock; the two txs serialise on the blocked_users rows they
-      // both touch instead of interleaving.
+      if (!await lockActivePairUsers(conn, fromUserId, toUser.id)) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'User not found' });
+      }
+
       const [blocks] = await conn.execute(
         `SELECT 1 FROM blocked_users
          WHERE (blocker_id = ? AND blocked_id = ?)
             OR (blocker_id = ? AND blocked_id = ?)
-         LIMIT 1
-         FOR SHARE`,
+         LIMIT 1`,
         [fromUserId, toUser.id, toUser.id, fromUserId],
       );
       if (blocks.length > 0) {
         await conn.rollback();
         return res.status(404).json({ error: 'User not found' });
       }
-      // Lock this user's outgoing-to-this-target row range. Using an
-      // explicit user_id lock prevents the check+insert race.
-      //
-      // Sprint 6 round-36 R36B1+B2:
-      //   B1 — also check REVERSE direction. Pre-fix, if target had a
-      //        pending request TO me, I could still POST /request → two
-      //        pending rows exist (A→B and B→A), producing asymmetric
-      //        audit trails and double push notifications on accept.
-      //   B2 — reject-cooldown. Pre-fix, once target rejected me, I
-      //        could immediately re-request (row flips pending → rejected
-      //        but the guard only stopped on pending). Infinite harassment
-      //        loop. Now: reject a fresh request if a rejected row exists
-      //        in either direction within the last 30 days.
-      // Sprint 6 R84 BUG-6: if there's a stale accepted friend_requests row
-      // (from A→B previously friends, then A unfriended B — friends row
-      // deleted but friend_requests.status stayed 'accepted'), R56's
-      // ON DUPLICATE KEY UPDATE below would silently flip accepted→pending,
-      // destroying the audit trail of the original acceptance. Detect
-      // that case here and DELETE the stale row first so the subsequent
-      // INSERT creates a fresh record for the new request.
-      const [staleAccepted] = await conn.execute(
-        `SELECT id FROM friend_requests
-           WHERE from_user_id = ? AND to_user_id = ? AND status = 'accepted'
-           FOR UPDATE`,
-        [fromUserId, toUser.id]
+
+      // Friendship and request checks are inside the same pair lock as the
+      // insert. Historical accepted/declined/cancelled attempts are audit
+      // records and never block a fresh attempt.
+      const [existing] = await conn.execute(
+        `SELECT 1 FROM friends
+          WHERE (user_id = ? AND friend_id = ?)
+             OR (user_id = ? AND friend_id = ?)
+          LIMIT 1`,
+        [fromUserId, toUser.id, toUser.id, fromUserId],
       );
-      if (staleAccepted.length > 0) {
-        await conn.execute(
-          'DELETE FROM friend_requests WHERE id = ?',
-          [staleAccepted[0].id]
-        );
+      if (existing.length > 0) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Already friends' });
       }
       const [pending] = await conn.execute(
-        `SELECT id, status FROM friend_requests
+        `SELECT id FROM friend_requests
            WHERE ((from_user_id = ? AND to_user_id = ?)
                OR (from_user_id = ? AND to_user_id = ?))
-             AND (status = 'pending'
-                  OR (status = 'rejected'
-                      AND resolved_at IS NOT NULL
-                      AND resolved_at > DATE_SUB(NOW(), INTERVAL 30 DAY)))
+             AND status = 'pending'
            FOR UPDATE`,
         [fromUserId, toUser.id, toUser.id, fromUserId]
       );
       if (pending.length > 0) {
         await conn.rollback();
-        // Uniform 400 message so the client can't distinguish "pending"
-        // from "recently rejected" (rejected leaks a signal about the
-        // target's intent — better UX + privacy to collapse both).
         return res.status(400).json({ error: 'Request already sent' });
       }
-      [reqResult] = await conn.execute(
-        // Sprint 6 round-56 R56: use ON DUPLICATE KEY UPDATE. The
-        // friend_requests table has UNIQUE(from_user_id, to_user_id) —
-        // only one row per (from,to) pair EVER. R36B2's 30-day reject
-        // cooldown allows re-request after 30 days, but the raw INSERT
-        // would then hit ER_DUP_ENTRY on the historical row and the
-        // catch would throw "Server error" to the user. Fix: on
-        // duplicate, reset status='pending' + refresh created_at +
-        // clear resolved_at so a legitimate re-request after cooldown
-        // reuses the historical row instead of failing.
+      const [reqResult] = await conn.execute(
         `INSERT INTO friend_requests
            (from_user_id, to_user_id, status, requester_memory_share,
             accepter_memory_share, created_at)
-         VALUES (?, ?, 'pending', ?, 0, NOW())
-         ON DUPLICATE KEY UPDATE
-           status = 'pending',
-           requester_memory_share = VALUES(requester_memory_share),
-           accepter_memory_share = 0,
-           created_at = NOW(),
-           resolved_at = NULL,
-           id = LAST_INSERT_ID(id)`,
+         VALUES (?, ?, 'pending', ?, 0, UTC_TIMESTAMP(3))`,
         [fromUserId, toUser.id, shareMemory ? 1 : 0]
       );
+      createdRequest = {
+        id: Number(reqResult.insertId),
+        to_user_id: Number(toUser.id),
+        to_name: toUser.name,
+        to_email: toUser.email,
+        status: 'pending',
+        requester_memory_share: Boolean(shareMemory),
+        sent_at: new Date().toISOString(),
+      };
       await conn.commit();
     } catch (txErr) {
       try { await conn.rollback(); } catch (_) {}
+      if (txErr.code === 'ER_DUP_ENTRY') {
+        return res.status(400).json({ error: 'Request already sent' });
+      }
       throw txErr;
     } finally {
       conn.release();
@@ -232,7 +185,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
     //   console.error('[push] friend_request trigger failed:', pushErr.message);
     // }
 
-    res.status(201).json({ message: 'Friend request sent' });
+    res.status(201).json({ message: 'Friend request sent', request: createdRequest });
   } catch (err) {
     console.error('[friends/request]', err.message);
     res.status(500).json({ error: 'Server error' });
@@ -269,17 +222,25 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
     const { requestId, shareMemory = false } = req.body;
     if (!requestId) return res.status(400).json({ error: 'requestId required' });
 
-    // Sprint 6 review B2 fix: wrap accept flow in a transaction so a
-    // failed second INSERT doesn't leave a half-friendship. Also
-    // re-check the request status inside the tx (concurrent double-tap
-    // could race between SELECT and INSERT).
+    // Read only enough to discover the pair, then lock both user rows in the
+    // global order before re-reading the request for authority.
+    const [candidateRows] = await pool.execute(
+      'SELECT from_user_id, to_user_id FROM friend_requests WHERE id = ? AND to_user_id = ? LIMIT 1',
+      [requestId, req.user.userId],
+    );
+    if (candidateRows.length === 0) return res.status(404).json({ error: 'Request not found' });
+
     const conn = await pool.getConnection();
     let request;
+    let alreadyResolved = false;
     try {
       await conn.beginTransaction();
-      // Lock the request row so a concurrent accept can't succeed too.
+      if (!await lockActivePairUsers(conn, candidateRows[0].from_user_id, req.user.userId)) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Request not found' });
+      }
       const [requests] = await conn.execute(
-        'SELECT * FROM friend_requests WHERE id = ? AND to_user_id = ? AND status = "pending" FOR UPDATE',
+        'SELECT * FROM friend_requests WHERE id = ? AND to_user_id = ? FOR UPDATE',
         [requestId, req.user.userId],
       );
       if (requests.length === 0) {
@@ -288,89 +249,69 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
       }
       request = requests[0];
 
-      // Sprint 6 R84 BUG-5: re-verify from_user still exists + not
-      // soft-deleted. Pre-fix, if the requester soft-deleted their
-      // account between /request and /accept, INSERT into friends
-      // succeeded producing a friendship with a ghost user. authSweep
-      // would purge later but /accept created stale rows in the
-      // meantime — and the push notification at line 289+ would fire
-      // to a doomed recipient.
-      const [[fromUser]] = await conn.execute(
-        `SELECT 1 AS ok FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
-        [request.from_user_id],
-      );
-      if (!fromUser) {
+      if (request.status === 'accepted') {
+        const [friendRows] = await conn.execute(
+          `SELECT COUNT(*) AS n FROM friends
+            WHERE (user_id = ? AND friend_id = ?)
+               OR (user_id = ? AND friend_id = ?)`,
+          [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
+        );
+        if (Number(friendRows[0]?.n) === 2) {
+          alreadyResolved = true;
+          await conn.commit();
+        } else {
+          await conn.rollback();
+          return res.status(409).json({ error: 'Request is no longer actionable' });
+        }
+      } else if (request.status !== 'pending') {
         await conn.rollback();
-        return res.status(404).json({ error: 'Request not found' });
-      }
-      // Sprint 6 R84 BUG-2: re-check block state inside the tx. Pre-fix,
-      // a concurrent /block from either side would queue behind our
-      // friend_requests row lock — /accept commits the friendship
-      // first, then /block DELETEs it. Friendship briefly exists +
-      // push notification fires to the requester saying "accepted".
-      // Now: check blocked_users under FOR SHARE (same pattern as
-      // R14B1 in /request path) so /block's INSERT into blocked_users
-      // serializes with our check.
-      const [blocks] = await conn.execute(
-        `SELECT 1 FROM blocked_users
-         WHERE (blocker_id = ? AND blocked_id = ?)
-            OR (blocker_id = ? AND blocked_id = ?)
-         LIMIT 1
-         FOR SHARE`,
-        [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
-      );
-      if (blocks.length > 0) {
-        await conn.rollback();
-        // Same 404 as request-not-found to avoid leaking block state.
         return res.status(404).json({ error: 'Request not found' });
       }
 
-      // Bidirectional insert with ON DUPLICATE KEY UPDATE so a re-accept
-      // (or a legacy half-friendship) heals instead of erroring.
-      await conn.execute(
-        `INSERT INTO friends (user_id, friend_id, created_at)
-         VALUES (?, ?, NOW()), (?, ?, NOW())
-         ON DUPLICATE KEY UPDATE created_at = created_at`,
-        [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
-      );
-      const friendshipEpisode = await ensureFriendshipEpisode(
-        conn,
-        req.user.userId,
-        request.from_user_id,
-      );
-      await provisionFriendshipGrants(
-        conn,
-        req.user.userId,
-        request.from_user_id,
-        friendshipEpisode,
-      );
-      // Pending intent becomes authorization only inside the same transaction
-      // that creates the accepted relationship. Each direction is independent.
-      if (request.requester_memory_share) {
-        await setExplicitMemoryGrant(
-          conn,
-          request.from_user_id,
-          req.user.userId,
-          true,
+      if (!alreadyResolved) {
+        const [blocks] = await conn.execute(
+          `SELECT 1 FROM blocked_users
+           WHERE (blocker_id = ? AND blocked_id = ?)
+              OR (blocker_id = ? AND blocked_id = ?)
+           LIMIT 1`,
+          [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
         );
-      }
-      if (shareMemory) {
-        await setExplicitMemoryGrant(
+        if (blocks.length > 0) {
+          await conn.rollback();
+          return res.status(404).json({ error: 'Request not found' });
+        }
+
+        await conn.execute(
+          `INSERT INTO friends (user_id, friend_id, created_at)
+           VALUES (?, ?, UTC_TIMESTAMP(3)), (?, ?, UTC_TIMESTAMP(3))
+           ON DUPLICATE KEY UPDATE created_at = created_at`,
+          [req.user.userId, request.from_user_id, request.from_user_id, req.user.userId],
+        );
+        const friendshipEpisode = await ensureFriendshipEpisode(
           conn,
           req.user.userId,
           request.from_user_id,
-          true,
         );
+        await provisionFriendshipGrants(
+          conn,
+          req.user.userId,
+          request.from_user_id,
+          friendshipEpisode,
+        );
+        if (request.requester_memory_share) {
+          await setExplicitMemoryGrant(conn, request.from_user_id, req.user.userId, true);
+        }
+        if (shareMemory) {
+          await setExplicitMemoryGrant(conn, req.user.userId, request.from_user_id, true);
+        }
+        await conn.execute(
+          `UPDATE friend_requests
+              SET status = 'accepted', accepter_memory_share = ?, resolved_at = UTC_TIMESTAMP(3)
+            WHERE id = ? AND status = 'pending'`,
+          [shareMemory ? 1 : 0, requestId],
+        );
+        await conn.commit();
       }
-      await conn.execute(
-        // Sprint 6 round-14 R14B7: set resolved_at so authSweep purge
-        // uses the actual resolution time, not creation time.
-        `UPDATE friend_requests
-            SET status = 'accepted', accepter_memory_share = ?, resolved_at = NOW()
-          WHERE id = ?`,
-        [shareMemory ? 1 : 0, requestId],
-      );
-      await conn.commit();
     } catch (txErr) {
       try { await conn.rollback(); } catch (_) {}
       throw txErr;
@@ -384,7 +325,11 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
     // friendship transaction already committed. Result: user sees "Server
     // error" but on refresh their friend is actually added. Now: response
     // ships first, push is best-effort in the background.
-    res.json({ message: 'Friend request accepted' });
+    res.json({
+      message: 'Friend request accepted',
+      already_resolved: alreadyResolved,
+      friend_id: Number(request.from_user_id),
+    });
 
     // O18 batch 6.5: notify the original requester that their request
     // was accepted. Fire-and-forget — do not block the response.
@@ -416,24 +361,46 @@ router.post('/accept', validateBody(schemas.friend.accept), async (req, res) => 
 router.post('/reject', validateBody(schemas.friend.reject), async (req, res) => {
   try {
     const { requestId } = req.body;
-    // Sprint 6 round-29 R29B1: guard on status='pending'. Pre-fix, a
-    // recipient could POST /reject with an already-accepted requestId,
-    // flipping status back to 'rejected' and rewriting resolved_at to
-    // now — while the actual friends table rows from the earlier /accept
-    // remained committed. Result: friend_requests audit lied (says
-    // rejected), users are still friends, authSweep 90-day purge clock
-    // reset on every replay. Now: reject only 'pending' requests; any
-    // other status returns 404 so client shows a stale-state error.
-    const [result] = await pool.execute(
-      'UPDATE friend_requests SET status = "rejected", resolved_at = NOW() WHERE id = ? AND to_user_id = ? AND status = "pending"',
-      [requestId, req.user.userId]
+    if (!requestId) return res.status(400).json({ error: 'requestId required' });
+    const [candidateRows] = await pool.execute(
+      'SELECT from_user_id FROM friend_requests WHERE id = ? AND to_user_id = ? LIMIT 1',
+      [requestId, req.user.userId],
     );
-    if (result.affectedRows === 0) {
-      // Row missing, not owned by caller, or already resolved. Same
-      // 404 for all three so we don't leak which request IDs exist.
-      return res.status(404).json({ error: 'Request not found or not pending' });
+    if (candidateRows.length === 0) return res.status(404).json({ error: 'Request not found' });
+
+    const conn = await pool.getConnection();
+    let alreadyResolved = false;
+    try {
+      await conn.beginTransaction();
+      if (!await lockActivePairUsers(conn, candidateRows[0].from_user_id, req.user.userId)) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Request not found' });
+      }
+      const [rows] = await conn.execute(
+        'SELECT status FROM friend_requests WHERE id = ? AND to_user_id = ? FOR UPDATE',
+        [requestId, req.user.userId],
+      );
+      if (rows.length === 0 || !['pending', 'rejected'].includes(rows[0].status)) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Request not found' });
+      }
+      alreadyResolved = rows[0].status === 'rejected';
+      if (!alreadyResolved) {
+        await conn.execute(
+          `UPDATE friend_requests
+              SET status = 'rejected', resolved_at = UTC_TIMESTAMP(3)
+            WHERE id = ? AND status = 'pending'`,
+          [requestId],
+        );
+      }
+      await conn.commit();
+    } catch (txErr) {
+      try { await conn.rollback(); } catch (_) {}
+      throw txErr;
+    } finally {
+      conn.release();
     }
-    res.json({ message: 'Request rejected' });
+    res.json({ message: 'Request declined', already_resolved: alreadyResolved });
   } catch (err) {
     console.error('[friends/reject]', err.message);
     res.status(500).json({ error: 'Server error' });
@@ -481,10 +448,14 @@ router.get('/requests/outbound', async (req, res) => {
     // Sprint 6 R74: cap at 200 (matches inbound pending cap).
     const [rows] = await pool.execute(
       `SELECT fr.id, fr.to_user_id, u.name AS to_name, u.email AS to_email,
-              fr.status, fr.requester_memory_share, fr.created_at AS sent_at
+              CASE WHEN fr.status = 'rejected' THEN 'declined' ELSE fr.status END AS status,
+              fr.requester_memory_share, fr.created_at AS sent_at,
+              fr.resolved_at
        FROM friend_requests fr
        JOIN users u ON u.id = fr.to_user_id AND u.deleted_at IS NULL
-       WHERE fr.from_user_id = ? AND fr.status = 'pending'
+       WHERE fr.from_user_id = ?
+         AND (fr.status = 'pending'
+           OR (fr.status = 'rejected' AND fr.sender_dismissed_at IS NULL))
        ORDER BY fr.created_at DESC
        LIMIT 200`,
       [req.user.userId],
@@ -496,18 +467,24 @@ router.get('/requests/outbound', async (req, res) => {
   }
 });
 
-// O18 FRI-out: cancel a pending outbound request I sent.
+// Pending requests are cancelled without deleting their identity. A declined
+// request is dismissed only for its sender and otherwise remains durable.
 router.delete('/requests/:id', async (req, res) => {
   try {
     const requestId = Number(req.params.id);
     if (!Number.isInteger(requestId)) return res.status(400).json({ error: 'Invalid request id' });
     const [result] = await pool.execute(
-      `DELETE FROM friend_requests
-       WHERE id = ? AND from_user_id = ? AND status = 'pending'`,
+      `UPDATE friend_requests
+          SET status = CASE WHEN status = 'pending' THEN 'cancelled' ELSE status END,
+              resolved_at = CASE
+                WHEN status = 'pending' THEN UTC_TIMESTAMP(3) ELSE resolved_at END,
+              sender_dismissed_at = CASE
+                WHEN status = 'rejected' THEN UTC_TIMESTAMP(3) ELSE sender_dismissed_at END
+        WHERE id = ? AND from_user_id = ? AND status IN ('pending','rejected')`,
       [requestId, req.user.userId],
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Request not found' });
-    return res.json({ message: 'Request cancelled' });
+    return res.json({ message: 'Request removed from sent history' });
   } catch (err) {
     console.error('[friends/requests/cancel]', err.message);
     return res.status(500).json({ error: 'Server error' });
@@ -677,9 +654,10 @@ router.post('/:id/block', async (req, res) => {
         [req.user.userId, targetId, targetId, req.user.userId],
       );
       await closeFriendshipEpisode(conn, req.user.userId, targetId, 'blocked');
-      // Cancel any pending requests either direction.
+      // A block is distinct from a recipient decline: it must not appear as a
+      // sender-visible Declined outcome or become a re-requestable attempt.
       await conn.execute(
-        `UPDATE friend_requests SET status = 'rejected', resolved_at = NOW()
+        `UPDATE friend_requests SET status = 'blocked', resolved_at = UTC_TIMESTAMP(3)
          WHERE status = 'pending'
            AND ((from_user_id = ? AND to_user_id = ?)
              OR (from_user_id = ? AND to_user_id = ?))`,

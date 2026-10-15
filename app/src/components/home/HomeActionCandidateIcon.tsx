@@ -10,6 +10,7 @@ type Props = {
   candidate?: HikingIconCandidate | RunningIconCandidate;
   size?: number;
   color: string;
+  cairnStrokeWidth?: number;
 };
 
 /**
@@ -20,7 +21,7 @@ type Props = {
  * The Cairn path is a scale-only transcription of the accepted Family B SVG.
  * The source file remains untouched and is the selection authority.
  */
-export function HomeActionCandidateIcon({ kind, candidate, size = 29, color }: Props) {
+export function HomeActionCandidateIcon({ kind, candidate, size = 29, color, cairnStrokeWidth }: Props) {
   const common = {
     fill: 'none',
     stroke: color,
@@ -30,7 +31,7 @@ export function HomeActionCandidateIcon({ kind, candidate, size = 29, color }: P
   };
 
   if (kind === 'cairn') {
-    return <FamilyBCairnIcon size={size} color={color} />;
+    return <FamilyBCairnIcon size={size} color={color} strokeWidth={cairnStrokeWidth} />;
   }
 
   const id = candidate ?? (kind === 'hiking' ? 'H1' : 'R1');

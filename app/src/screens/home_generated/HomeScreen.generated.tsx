@@ -162,11 +162,11 @@ export function HomeScreen(props: {
       return <HomeActionCandidateIcon kind="running" candidate={props.runningIconCandidate} size={29} color={actionIconColor} />;
     }
     if (name === 'leaveCairn' && actionIconReviewActive) {
-      return <HomeActionCandidateIcon kind="cairn" size={29} color={actionIconColor} />;
+      return <HomeActionCandidateIcon kind="cairn" size={29} color={actionIconColor} cairnStrokeWidth={3.1} />;
     }
     return useCorrectedSunnyIcons
-      ? <HomeProductIcon name={name} size={29} color={actionIconColor} />
-      : <CairnIcon name={name} size={29} color={actionIconColor} accent={actionAccent} active={name === 'hiking'} />;
+      ? <HomeProductIcon name={name} size={29} color={actionIconColor} cairnStrokeWidth={name === 'leaveCairn' ? 3.1 : undefined} />
+      : <CairnIcon name={name} size={29} color={actionIconColor} accent={actionAccent} active={name === 'hiking'} cairnStrokeWidth={name === 'leaveCairn' ? 3.1 : undefined} />;
   };
   const renderNavIcon = (name: 'trails' | 'friends' | 'memory' | 'settings') => useCorrectedSunnyIcons
     ? <HomeProductIcon name={name} size={20} color={navIconColor} />

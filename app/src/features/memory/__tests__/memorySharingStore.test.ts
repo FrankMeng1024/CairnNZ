@@ -71,4 +71,39 @@ describe('Memory sharing account and rollback fences', () => {
     });
     expect(useMemorySharingStore.getState().grants.map(item => item.friend_id)).toEqual(['b']);
   });
+
+  test('grant readiness succeeds even when optional private-place metadata fails', async () => {
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ grants: [grant('1', true)], delay_seconds: 1800 }) })
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+
+    await useMemorySharingStore.getState().load('account-a');
+
+    expect(useMemorySharingStore.getState()).toMatchObject({
+      grantsLoading: false,
+      placesLoading: false,
+      loading: false,
+      error: null,
+      placesError: 'Private-place settings are unavailable.',
+    });
+    expect(useMemorySharingStore.getState().grants).toEqual([grant('1', true)]);
+  });
+
+  test('a per-friend failure rolls back only that friend and rejects a rapid duplicate write', async () => {
+    let resolveRequest!: (value: any) => void;
+    mockAuthenticatedFetch.mockReturnValue(new Promise(resolve => { resolveRequest = resolve; }));
+
+    const first = useMemorySharingStore.getState().setGrant('2', true);
+    const duplicate = useMemorySharingStore.getState().setGrant('2', false);
+    expect(useMemorySharingStore.getState().grantPendingIds).toEqual(['2']);
+    await expect(duplicate).resolves.toBe(false);
+    resolveRequest({ ok: false, status: 503 });
+    await expect(first).resolves.toBe(false);
+
+    expect(useMemorySharingStore.getState().grants.map(item => [item.friend_id, item.enabled]))
+      .toEqual([['1', true], ['2', false]]);
+    expect(useMemorySharingStore.getState().grantPendingIds).toEqual([]);
+    expect(useMemorySharingStore.getState().grantErrors['2']).toMatch(/previous choice is unchanged/i);
+    expect(useMemorySharingStore.getState().grantErrors['1']).toBeUndefined();
+  });
 });

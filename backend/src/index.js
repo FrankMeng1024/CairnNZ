@@ -173,6 +173,9 @@ async function start() {
       ['markers', 'content_revision'],
       ['markers', 'content_changed_at'],
       ['routes', 'content_revision'],
+      ['friend_requests', 'sender_dismissed_at'],
+      ['friend_requests', 'pair_key'],
+      ['friend_requests', 'active_pair_slot'],
       ['public_cairn_publications', 'snapshot_location_policy_version'],
       ['public_cairn_encounters', 'evidence_lat'],
       ['public_cairn_encounters', 'evidence_lng'],
@@ -249,12 +252,19 @@ async function start() {
       if (String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1' && public044Missing) {
         throw new Error('public_cairn_migration_044_incomplete');
       }
+      if (missingCols.some(column => column.startsWith('friend_requests.'))) {
+        // O84 routes query these columns on every Requests screen. Starting
+        // against the O83 schema would turn a deployment-order mistake into
+        // live 500s, so fail closed until migration 047 is present.
+        throw new Error('friend_request_migration_047_incomplete');
+      }
     } else {
       console.log('✓ Sprint 6 schema check: all tables + columns + FKs present');
     }
   } catch (schemaErr) {
-    if (String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1') {
-      console.error('[boot] Public schema verification failed:', schemaErr.message);
+    if (schemaErr.message === 'friend_request_migration_047_incomplete'
+      || String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1') {
+      console.error('[boot] Schema verification failed:', schemaErr.message);
       throw schemaErr;
     }
     console.warn('[boot] schema check skipped:', schemaErr.message);

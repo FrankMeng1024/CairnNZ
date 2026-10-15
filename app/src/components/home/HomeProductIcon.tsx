@@ -16,6 +16,7 @@ type Props = {
   name: HomeProductIconName;
   size?: number;
   color: string;
+  cairnStrokeWidth?: number;
 };
 
 /**
@@ -25,11 +26,11 @@ type Props = {
  * custom glyph shares a 24px grid, round 1.85–2px stroke and restrained
  * negative space.
  */
-export function HomeProductIcon({ name, size = 22, color }: Props) {
+export function HomeProductIcon({ name, size = 22, color, cairnStrokeWidth }: Props) {
   const strokeWidth = size >= 26 ? 1.85 : 2;
 
   if (name === 'leaveCairn') {
-    return <FamilyBCairnIcon size={size} color={color} />;
+    return <FamilyBCairnIcon size={size} color={color} strokeWidth={cairnStrokeWidth} />;
   }
 
   if (name === 'trails') {

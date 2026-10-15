@@ -25,6 +25,11 @@ interface State {
   delaySeconds: number;
   privatePlaces: MemoryPrivatePlace[];
   loading: boolean;
+  grantsLoading: boolean;
+  placesLoading: boolean;
+  grantPendingIds: string[];
+  grantErrors: Record<string, string>;
+  placesError: string | null;
   error: string | null;
   load: (ownerId: string) => Promise<void>;
   setGrant: (friendId: string, enabled: boolean) => Promise<boolean>;
@@ -45,52 +50,71 @@ export const useMemorySharingStore = create<State>((set, get) => ({
   delaySeconds: 1800,
   privatePlaces: [],
   loading: false,
+  grantsLoading: false,
+  placesLoading: false,
+  grantPendingIds: [],
+  grantErrors: {},
+  placesError: null,
   error: null,
 
   load: async (ownerId) => {
     const normalizedOwnerId = String(ownerId || '');
     if (!normalizedOwnerId) {
       sessionGeneration += 1;
-      set({ ownerId: null, grants: [], privatePlaces: [], loading: false, error: null });
+      set({ ownerId: null, grants: [], privatePlaces: [], loading: false, grantsLoading: false, placesLoading: false, grantPendingIds: [], grantErrors: {}, placesError: null, error: null });
       return;
     }
     if (get().ownerId !== normalizedOwnerId) {
       sessionGeneration += 1;
-      set({ ownerId: normalizedOwnerId, grants: [], privatePlaces: [], loading: false, error: null });
+      set({ ownerId: normalizedOwnerId, grants: [], privatePlaces: [], loading: false, grantsLoading: false, placesLoading: false, grantPendingIds: [], grantErrors: {}, placesError: null, error: null });
     }
     if (get().loading) return;
     const requestGeneration = sessionGeneration;
-    set({ loading: true, error: null });
-    try {
-      const [grantsResponse, placesResponse] = await Promise.all([
-        authenticatedFetch('/api/friend-sharing/grants', { expectedUserId: normalizedOwnerId }),
-        authenticatedFetch('/api/friend-sharing/private-places', { expectedUserId: normalizedOwnerId }),
-      ]);
-      if (!grantsResponse.ok || !placesResponse.ok) throw new Error('sharing_unavailable');
-      const grants = await grantsResponse.json();
-      const places = await placesResponse.json();
-      if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
-      set({
-        grants: Array.isArray(grants.grants) ? grants.grants : [],
-        delaySeconds: Number(grants.delay_seconds ?? 1800),
-        privatePlaces: Array.isArray(places.private_places) ? places.private_places : [],
-        loading: false,
-      });
-    } catch {
-      if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
-      set({ loading: false, error: 'Connect to manage sharing.' });
-    }
+    set({ loading: true, grantsLoading: true, placesLoading: true, error: null, placesError: null });
+    const grantsTask = (async () => {
+      try {
+        const response = await authenticatedFetch('/api/friend-sharing/grants', { expectedUserId: normalizedOwnerId });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json();
+        if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
+        set({
+          grants: Array.isArray(body.grants) ? body.grants : [],
+          delaySeconds: Number(body.delay_seconds ?? 1800),
+          grantsLoading: false,
+          error: null,
+        });
+      } catch {
+        if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
+        set({ grantsLoading: false, error: 'Connect to manage sharing.' });
+      }
+    })();
+    const placesTask = (async () => {
+      try {
+        const response = await authenticatedFetch('/api/friend-sharing/private-places', { expectedUserId: normalizedOwnerId });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json();
+        if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
+        set({ privatePlaces: Array.isArray(body.private_places) ? body.private_places : [], placesLoading: false, placesError: null });
+      } catch {
+        if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
+        set({ placesLoading: false, placesError: 'Private-place settings are unavailable.' });
+      }
+    })();
+    await Promise.allSettled([grantsTask, placesTask]);
+    if (requestGeneration === sessionGeneration && get().ownerId === normalizedOwnerId) set({ loading: false });
   },
 
   setGrant: async (friendId, enabled) => {
     const ownerId = get().ownerId;
     if (!ownerId) return false;
+    if (get().grantPendingIds.includes(friendId)) return false;
     const requestGeneration = sessionGeneration;
     const previous = get().grants;
+    const previousEnabled = previous.find(grant => grant.friend_id === friendId)?.enabled ?? false;
     set({
       grants: previous.map(grant => grant.friend_id === friendId ? { ...grant, enabled } : grant),
-      loading: true,
-      error: null,
+      grantPendingIds: [...get().grantPendingIds, friendId],
+      grantErrors: Object.fromEntries(Object.entries(get().grantErrors).filter(([id]) => id !== friendId)),
     });
     try {
       const response = await authenticatedFetch(`/api/friend-sharing/grants/${encodeURIComponent(friendId)}`, {
@@ -100,13 +124,21 @@ export const useMemorySharingStore = create<State>((set, get) => ({
       });
       if (!response.ok) throw new Error('sharing_update_failed');
       if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
+      const body = await response.json().catch(() => ({}));
       set({
-        loading: false,
+        grants: get().grants.map(grant => grant.friend_id === friendId
+          ? { ...grant, enabled: Boolean(body.enabled), coverage_scope: body.coverage_scope ?? grant.coverage_scope }
+          : grant),
+        grantPendingIds: get().grantPendingIds.filter(id => id !== friendId),
       });
       return true;
     } catch {
       if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
-      set({ grants: previous, loading: false, error: 'Connect and try again. Your previous sharing choices are unchanged.' });
+      set({
+        grants: get().grants.map(grant => grant.friend_id === friendId ? { ...grant, enabled: previousEnabled } : grant),
+        grantPendingIds: get().grantPendingIds.filter(id => id !== friendId),
+        grantErrors: { ...get().grantErrors, [friendId]: 'Could not update. Your previous choice is unchanged.' },
+      });
       return false;
     }
   },
@@ -184,6 +216,6 @@ export const useMemorySharingStore = create<State>((set, get) => ({
 
   reset: () => {
     sessionGeneration += 1;
-    set({ ownerId: null, grants: [], delaySeconds: 1800, privatePlaces: [], loading: false, error: null });
+    set({ ownerId: null, grants: [], delaySeconds: 1800, privatePlaces: [], loading: false, grantsLoading: false, placesLoading: false, grantPendingIds: [], grantErrors: {}, placesError: null, error: null });
   },
 }));

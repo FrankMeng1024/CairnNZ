@@ -149,16 +149,6 @@ export function HierarchyPanel({
 
   const isWorldLayer = data?.title.id === 'world';
   const itemType: 'city' | 'country' = isWorldLayer ? 'country' : 'city';
-  const sourceLabel = (item: PanelItem) => {
-    const mine = ownIds.has(item.id);
-    const names = friendRegionSources[item.id]?.names ?? [];
-    if (mine && names.length === 0) return 'Mine';
-    if (!mine && names.length === 1) return names[0];
-    if (!mine) return `${names.length} friends`;
-    if (names.length === 1) return `Mine & ${names[0]}`;
-    return `Mine & ${names.length} friends`;
-  };
-
   // Empty state: World layer with no items + no locked = fresh user
   //  (Actually a fresh user has locked_count = ~214 total countries, so
   //   the "empty banner" condition should be: items.length===0 regardless
@@ -242,17 +232,14 @@ export function HierarchyPanel({
                           : styles.dotWalked,
                       ]}
                     />
-                    <View style={styles.rowCopy}>
-                      <Text
-                        style={[styles.rowName, isHere && styles.rowNameHere]}
-                        numberOfLines={2}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.75}
-                      >
-                        {item.name_en}
-                      </Text>
-                      <Text style={styles.rowSources} numberOfLines={1}>{sourceLabel(item)}</Text>
-                    </View>
+                    <Text
+                      style={[styles.rowName, isHere && styles.rowNameHere]}
+                      numberOfLines={2}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
+                      {item.name_en}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -363,8 +350,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   rowNameHere: { color: Colors.primary, fontWeight: '700' },
-  rowCopy: { flex: 1 },
-  rowSources: { fontSize: FontSize.tiny + 0.5, color: Colors.textSecondary, marginTop: 2 },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   dotHere: { backgroundColor: Colors.primary },
   dotMarked: { backgroundColor: MemoryColors.sepia },

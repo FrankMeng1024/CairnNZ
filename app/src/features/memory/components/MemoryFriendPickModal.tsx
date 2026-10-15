@@ -18,6 +18,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
+import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
@@ -30,16 +31,16 @@ interface Props {
 export function MemoryFriendPickModal({ visible, onClose }: Props) {
   const theme = useVisualTheme();
   const sources = useMemorySubscriptionsStore((s) => s.availableSources);
-  const subs = useMemorySubscriptionsStore((s) => s.subscriptions);
   const loading = useMemorySubscriptionsStore((s) => s.loading);
   const load = useMemorySubscriptionsStore((s) => s.load);
   const subscribe = useMemorySubscriptionsStore((s) => s.subscribe);
   const unsubscribe = useMemorySubscriptionsStore((s) => s.unsubscribe);
   const isSubscribed = useMemorySubscriptionsStore((s) => s.isSubscribed);
-  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const setScope = useMemoryScopeStore((s) => s.setScope);
-  const [pendingId, setPendingId] = useState<number | null>(null);
-  const [mutationError, setMutationError] = useState<string | null>(null);
+  const sourceStates = useFriendMemoryStore((s) => s.sourceStates);
+  const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
+  const [pendingIds, setPendingIds] = useState<number[]>([]);
+  const [mutationErrors, setMutationErrors] = useState<Record<number, string>>({});
 
   // UX-E fix: Animated values for smooth slide + backdrop fade matching
   // Hiking choose-a-route. Mount Modal in 'fade' mode (instant) and own
@@ -89,20 +90,23 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
   };
 
   const onTap = async (friendId: number, sharingStatus: 'not_shared' | 'shared_empty' | 'shared') => {
-    if (pendingId !== null) return;
+    if (pendingIds.includes(friendId)) return;
     if (sharingStatus === 'not_shared') return;
     if (isSubscribed(friendId)) {
-      setScope('friend', String(friendId));
-      dismiss();
+      if (sourceStates[String(friendId)]?.status === 'error') {
+        void loadFriendProjections([friendId]);
+        return;
+      }
+      await removeFriend(friendId);
       return;
     }
-    setPendingId(friendId);
-    setMutationError(null);
+    setPendingIds(ids => [...ids, friendId]);
+    setMutationErrors(errors => Object.fromEntries(Object.entries(errors).filter(([id]) => Number(id) !== friendId)));
     const status = await subscribe(friendId);
-    setPendingId(null);
+    setPendingIds(ids => ids.filter(id => id !== friendId));
     if (status >= 200 && status < 300) {
-      setScope('friend', String(friendId));
-      dismiss();
+      setScope('combined');
+      void loadFriendProjections([friendId]);
       return;
     }
     if (status === 409) {
@@ -110,27 +114,27 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
       await load();
       const reconciled = useMemorySubscriptionsStore.getState();
       if (reconciled.isSubscribed(friendId)) {
-        setScope('friend', String(friendId));
-        dismiss();
+        setScope('combined');
+        void loadFriendProjections([friendId]);
       } else {
-        setMutationError('Could not add this friend to Memory. Try again.');
+        setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not select this friend. Try again.' }));
       }
       return;
     }
-    setMutationError('Could not update Memory friends. Check your connection and try again.');
+    setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not update. Check your connection.' }));
   };
 
   const removeFriend = async (friendId: number) => {
-    if (pendingId !== null) return;
-    setPendingId(friendId);
-    setMutationError(null);
+    if (pendingIds.includes(friendId)) return;
+    setPendingIds(ids => [...ids, friendId]);
+    setMutationErrors(errors => Object.fromEntries(Object.entries(errors).filter(([id]) => Number(id) !== friendId)));
     const status = await unsubscribe(friendId);
-    setPendingId(null);
+    setPendingIds(ids => ids.filter(id => id !== friendId));
     if (status < 200 || status >= 300) {
-      setMutationError('Could not remove this friend from Memory. Try again.');
+      setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not deselect this friend. Try again.' }));
       return;
     }
-    if (String(friendId) === selectedFriendId) setScope('combined');
+    setScope('combined');
   };
 
   return (
@@ -143,14 +147,17 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
     >
       <Animated.View style={[styles.backdrop, { opacity: backdropAnim, backgroundColor: theme.readabilityScrim }]}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={dismiss} activeOpacity={1} />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }], backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}>
+        <Animated.View
+          onStartShouldSetResponder={() => true}
+          style={[styles.sheet, { transform: [{ translateY: slideAnim }], backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}
+        >
           {/* Handle */}
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: theme.foreground }]}>Friends in Memory</Text>
               <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
-                Show all shared friends, one person, or Mine only
+                Choose one or more shared exploration areas
               </Text>
             </View>
             <TouchableOpacity onPress={dismiss} testID="memory-friend-pick-close" style={styles.close}>
@@ -158,27 +165,12 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
             </TouchableOpacity>
           </View>
 
-          {loading ? (
+          {loading && sources.length === 0 ? (
             <View style={styles.loadingBox}><ActivityIndicator color={theme.primary} /></View>
           ) : sources.length === 0 ? (
-            <Text style={[styles.emptyHint, { color: theme.muted }]}>No friends yet. Add and accept a friend before choosing a Memory layer.</Text>
+            <Text style={[styles.emptyHint, { color: theme.muted }]}>No shared places yet.</Text>
           ) : (
             <>
-            {subs.length > 0 ? (
-              <TouchableOpacity
-                style={[styles.row, selectedFriendId == null && { backgroundColor: theme.surface }]}
-                onPress={() => { setScope('combined'); dismiss(); }}
-                accessibilityRole="button"
-                accessibilityLabel="Show all available friends in Memory"
-                testID="memory-friend-row-all"
-              >
-                <View style={styles.rowMain}>
-                  <Text style={[styles.rowName, { color: theme.foreground }]}>All available friends</Text>
-                  <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>Your own Memory remains the strongest layer</Text>
-                </View>
-                {selectedFriendId == null ? <Icon name="Check" size={18} color={Colors.success} strokeWidth={2.5} /> : null}
-              </TouchableOpacity>
-            ) : null}
             <FlatList
               data={sources}
               keyExtractor={(f) => String(f.friend_id)}
@@ -186,48 +178,49 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
                 const friendId = Number(item.friend_id);
                 const subscribed = isSubscribed(friendId);
                 const unavailable = item.sharing_status === 'not_shared';
+                const pending = pendingIds.includes(friendId);
+                const projectionState = sourceStates[String(friendId)];
+                const stateCopy = unavailable
+                  ? 'Not shared with you'
+                  : pending || projectionState?.status === 'loading'
+                    ? 'Loading shared area…'
+                    : projectionState?.status === 'error'
+                      ? 'Shared area unavailable · tap to retry'
+                      : projectionState?.status === 'empty' || item.sharing_status === 'shared_empty'
+                        ? 'Shared · no delayed area available yet'
+                        : subscribed && projectionState?.status === 'loaded'
+                          ? `${projectionState.cellCount} delayed ${projectionState.cellCount === 1 ? 'area' : 'areas'} loaded`
+                          : subscribed ? 'Selected' : 'Shared with you';
                 return (
-                  <TouchableOpacity
-                    style={[styles.row, subscribed && { backgroundColor: theme.surface }, unavailable && { opacity: 0.62 }]}
-                    onPress={() => onTap(friendId, item.sharing_status)}
-                    disabled={pendingId !== null || unavailable}
-                    testID={`memory-friend-row-${item.friend_id}`}
-                    accessibilityState={{ disabled: unavailable, selected: subscribed }}
-                  >
-                    <View style={styles.rowMain}>
-                      <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
-                      <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>
-                        {unavailable
-                          ? 'Not shared with you'
-                          : item.sharing_status === 'shared_empty'
-                            ? 'Shared · no delayed area is available yet'
-                            : subscribed ? 'Selected · tap to view this friend only' : 'Shared with you'}
-                      </Text>
-                    </View>
-                    {pendingId === friendId ? (
-                      <ActivityIndicator size="small" color={theme.primary} />
-                    ) : subscribed ? (
-                      <TouchableOpacity
-                        onPress={() => { void removeFriend(friendId); }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${item.friend_name} from Memory`}
-                        style={styles.removeCircle}
-                      >
-                        <Icon name="X" size={14} color={theme.iconInactive} strokeWidth={2.3} />
-                      </TouchableOpacity>
-                    ) : unavailable ? (
-                      <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
-                    ) : (
-                      <View style={styles.addCircle}>
-                        <Icon name="Plus" size={14} color={theme.iconActive} strokeWidth={2.4} />
+                  <View>
+                    <TouchableOpacity
+                      style={[styles.row, subscribed && { backgroundColor: theme.surface }, unavailable && { opacity: 0.62 }]}
+                      onPress={() => onTap(friendId, item.sharing_status)}
+                      disabled={pending || unavailable}
+                      testID={`memory-friend-row-${item.friend_id}`}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ disabled: unavailable, checked: subscribed }}
+                    >
+                      <View style={styles.rowMain}>
+                        <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
+                        <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>{stateCopy}</Text>
                       </View>
-                    )}
-                  </TouchableOpacity>
+                      {pending ? (
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      ) : unavailable ? (
+                        <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
+                      ) : (
+                        <View style={[styles.checkbox, { borderColor: subscribed ? theme.primary : theme.borderStrong, backgroundColor: subscribed ? theme.primary : 'transparent' }]}>
+                          {subscribed ? <Icon name="Check" size={14} color={theme.onPrimary} strokeWidth={2.5} /> : null}
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    {mutationErrors[friendId] ? <Text style={[styles.rowError, { color: theme.destructive }]}>{mutationErrors[friendId]}</Text> : null}
+                  </View>
                 );
               }}
               ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: theme.border }]} />}
             />
-            {mutationError ? <Text style={[styles.mutationError, { color: theme.destructive }]}>{mutationError}</Text> : null}
             </>
           )}
         </Animated.View>
@@ -300,6 +293,11 @@ const styles = StyleSheet.create({
     width: 32, height: 32, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
   },
+  checkbox: {
+    width: 24, height: 24, borderRadius: 7, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rowError: { fontSize: FontSize.small, lineHeight: 17, marginHorizontal: Spacing.sm, marginBottom: Spacing.xs },
   mutationError: { fontSize: FontSize.small, lineHeight: 17, marginTop: Spacing.sm },
   sep: { height: 1, backgroundColor: Colors.border, marginVertical: 2 },
 });

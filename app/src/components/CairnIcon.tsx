@@ -22,6 +22,7 @@ type Props = {
   color?: string;
   accent?: string;
   active?: boolean;
+  cairnStrokeWidth?: number;
 };
 
 /**
@@ -35,9 +36,10 @@ export function CairnIcon({
   color = '#31594A',
   accent = color,
   active = false,
+  cairnStrokeWidth,
 }: Props) {
   if (name === 'leaveCairn') {
-    return <FamilyBCairnIcon size={size} color={color} />;
+    return <FamilyBCairnIcon size={size} color={color} strokeWidth={cairnStrokeWidth} />;
   }
 
   const strokeWidth = size <= 18 ? 1.82 : size >= 24 ? 1.66 : 1.74;

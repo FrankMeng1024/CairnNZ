@@ -363,7 +363,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O83 (2026-10-15): continuity-aware walking Point targets, manual provider
 // retry, multi-stroke Draw joins, traversal lanes, stable camera/Memory entry,
 // and source-reviewable diagnostics on the Build 65 / 0.2.6-o66 runtime.
-export const OTA_VERSION = 'O83';
+// O84 (2026-10-16): durable directional friend-request lifecycle, explicit
+// per-friend Memory grants, multi-friend Fog projection, and nonblocking
+// Memory preparation on the unchanged Build 65 / 0.2.6-o66 runtime.
+export const OTA_VERSION = 'O84';
 
 
 type OtaState =

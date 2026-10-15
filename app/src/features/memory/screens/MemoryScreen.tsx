@@ -178,9 +178,6 @@ export function MemoryScreen() {
   const [mountKey, setMountKey] = useState(0);
   const mountKeyRef = useRef(0);
   const [showHint, setShowHint] = useState(false);
-  // Toast shown after friend fog finishes loading in background.
-  const [friendFogToast, setFriendFogToast] = useState<string | null>(null);
-  const friendFogToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 2026-08-16 Round 5 fix: MemoryScreen is kept mounted by react-navigation
   // (native-stack keeps prev screens alive), and React Native <Modal> is a
   // root-level overlay. Without an isFocused gate the "Walk to unlock" modal
@@ -294,14 +291,9 @@ export function MemoryScreen() {
       await Promise.all([loadFriendProjections(), loadCircleMarkers()]);
     })();
   }, [hydrateFriendProjections, loadCircleMarkers, loadFriendProjections, loadSubs, loadFriendsFromBackend, userId]);
-  // Snapshot exact source identities when the picker opens. Counts alone miss
-  // A→B swaps, while updating a "previous" ref on every mutation compares the
-  // final set to itself and suppresses the required projection refresh.
-  const pickerOpeningIdsRef = useRef<string[]>([]);
   const openFriendPicker = useCallback(() => {
-    pickerOpeningIdsRef.current = subscriptions.map(item => String(item.friend_id)).sort();
     setPickModalOpen(true);
-  }, [subscriptions]);
+  }, []);
   const friendRegionSources = useMemo(() => {
     const result: Record<string, {
       names: string[];
@@ -328,47 +320,9 @@ export function MemoryScreen() {
     return result;
   }, [friendProjections, subscriptions]);
 
-  // Refresh friend fog when pick modal closes and subscriptions changed,
-  // rather than on every individual subscribe/unsubscribe tap. This
-  // prevents the map from re-rendering mid-session while user is still
-  // selecting friends in the picker.
-  //
-  // 2026-08-31: wrap the fog reload in InteractionManager.runAfterInteractions
-  // so the modal-close animation + touch responder queue run first. Previously
-  // the sequence was:
-  //   close → loadFriendFog → set(version++) → FogLayer turf.buffer/union/
-  //   difference on JS thread (200-1000ms) → CairnPinsLayer rebuild →
-  //   Mapbox native source/layer updates
-  // All of which competed with modal close animation + user's next tap on
-  // the back / friends button, starving touch events for 3-5s.
   const handlePickModalClose = useCallback(() => {
-    const currentIds = subscriptions.map(item => String(item.friend_id)).sort();
-    const previousIds = pickerOpeningIdsRef.current;
-    const changed = currentIds.join('|') !== previousIds.join('|');
-    const startTs = Date.now();
-    log('memory.picker_close.start', { subscriptions: currentIds, previous: previousIds });
     setPickModalOpen(false);
-    if (changed) {
-      const added = currentIds.length - previousIds.length;
-      InteractionManager.runAfterInteractions(() => {
-        const fetchStart = Date.now();
-        log('memory.picker_close.fetch_start', { queued_ms: fetchStart - startTs });
-        Promise.all([loadFriendProjections(), loadCircleMarkers()]).then(() => {
-          const fetchDone = Date.now();
-          log('memory.picker_close.fetch_done', { fetch_ms: fetchDone - fetchStart, total_ms: fetchDone - startTs });
-          if (friendFogToastTimerRef.current) clearTimeout(friendFogToastTimerRef.current);
-          const msg = added > 0 ? "Friend's memory added to your map" : "Friend removed from map";
-          setFriendFogToast(msg);
-          friendFogToastTimerRef.current = setTimeout(() => setFriendFogToast(null), 3000);
-          log('memory.picker_close.toast_shown', {});
-        });
-      });
-      log('memory.friend_fog_reload_on_picker_close', {
-        previous: previousIds,
-        current: currentIds,
-      });
-    }
-  }, [subscriptions, loadCircleMarkers, loadFriendProjections]);
+  }, []);
 
   const handleCameraCenter = useCallback(
     (lat: number, lng: number, sourceMountKey: number) => {
@@ -1334,19 +1288,6 @@ export function MemoryScreen() {
         >
           <Icon name="Layers" size={22} color={hierarchyOpen ? theme.onPrimary : theme.iconActive} strokeWidth={2} />
         </TouchableOpacity>
-      )}
-
-      {/* Friend fog loaded toast — brief non-blocking confirmation */}
-      {friendFogToast !== null && (
-        <View
-          style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}
-          pointerEvents="none"
-        >
-          <View style={{ marginRight: 6 }}>
-            <Icon name="Check" size={13} color={Colors.primary} strokeWidth={2.5} />
-          </View>
-          <Text style={styles.slowBannerText} numberOfLines={1}>{friendFogToast}</Text>
-        </View>
       )}
 
       {mapMayBeShown && persistentCoord && initialMemoryOffline ? (

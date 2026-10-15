@@ -9,6 +9,13 @@ const mockLoadFriends = jest.fn(async () => undefined);
 const mockLoadCircleMarkers = jest.fn(async () => undefined);
 const mockBlockUser = jest.fn();
 const mockRemoveFriend = jest.fn();
+const mockSetGrant = jest.fn(async (_friendId: string, _enabled: boolean) => true);
+const mockSendFriendRequest = jest.fn();
+const mockFetchFriendRequests = jest.fn();
+const mockFetchOutboundRequests = jest.fn();
+const mockAcceptFriendRequest = jest.fn();
+const mockRejectFriendRequest = jest.fn();
+const mockCancelOutboundRequest = jest.fn();
 const mockFetchProfileForNavigation = jest.fn();
 const mockProfileAuthorityCurrent = jest.fn();
 const mockViewerState: { user: { id: string } | null } = { user: { id: 'viewer-a' } };
@@ -51,16 +58,27 @@ jest.mock('../../store/useAppStore', () => ({
 
 jest.mock('../../store/useFriendStore', () => ({
   useFriendStore: (selector: any) => selector(mockFriendState),
-  sendFriendRequest: jest.fn(),
-  fetchFriendRequests: jest.fn(async () => []),
-  acceptFriendRequestAPI: jest.fn(),
-  rejectFriendRequestAPI: jest.fn(),
+  sendFriendRequest: (...args: any[]) => mockSendFriendRequest(...args),
+  fetchFriendRequests: (...args: any[]) => mockFetchFriendRequests(...args),
+  acceptFriendRequestAPI: (...args: any[]) => mockAcceptFriendRequest(...args),
+  rejectFriendRequestAPI: (...args: any[]) => mockRejectFriendRequest(...args),
   blockUser: (...args: any[]) => mockBlockUser(...args),
   fetchFriendProfileForNavigation: (...args: any[]) => mockFetchProfileForNavigation(...args),
   friendProfileNavigationAuthorityIsCurrent: (...args: any[]) => mockProfileAuthorityCurrent(...args),
-  fetchOutboundRequests: jest.fn(async () => []),
-  cancelOutboundRequest: jest.fn(),
+  fetchOutboundRequests: (...args: any[]) => mockFetchOutboundRequests(...args),
+  cancelOutboundRequest: (...args: any[]) => mockCancelOutboundRequest(...args),
   removeFriendAPI: (...args: any[]) => mockRemoveFriend(...args),
+}));
+
+jest.mock('../../features/memory/store/useMemorySharingStore', () => ({
+  useMemorySharingStore: (selector: any) => selector({
+    grants: [{ friend_id: 'owner-a', friend_name: 'Alice Example', enabled: false }],
+    grantsLoading: false,
+    grantPendingIds: [],
+    grantErrors: {},
+    load: jest.fn(async () => undefined),
+    setGrant: (friendId: string, enabled: boolean) => mockSetGrant(friendId, enabled),
+  }),
 }));
 
 jest.mock('../../store/useMarkerStore', () => ({
@@ -99,20 +117,26 @@ describe('FriendsScreen mutation result handling', () => {
       addedAt: 1_800_000_000_000, shareMarkers: true,
     }];
     mockLoadFriends.mockResolvedValue(undefined);
+    mockFetchFriendRequests.mockResolvedValue({ success: true, items: [] });
+    mockFetchOutboundRequests.mockResolvedValue({ success: true, items: [] });
+    mockSendFriendRequest.mockResolvedValue({ success: false, error: 'not configured' });
+    mockAcceptFriendRequest.mockResolvedValue({ success: false, error: 'not configured' });
+    mockRejectFriendRequest.mockResolvedValue({ success: false, error: 'not configured' });
+    mockCancelOutboundRequest.mockResolvedValue({ success: false, error: 'not configured' });
     mockFetchProfileForNavigation.mockResolvedValue({
       status: 'online', profile: mockOnlineProfile, authority: mockProfileAuthority,
     });
     mockProfileAuthorityCurrent.mockReturnValue(true);
   });
 
-  test('reopens a current friend card offline and navigates only to the separately authorized shared-content screen', async () => {
+  test('keeps the profile local and never exposes the removed shared-content navigation online or offline', async () => {
     const screen = await renderReady();
     fireEvent.press(screen.getByTestId('friend-card-owner-a'));
-    await waitFor(() => expect(screen.getByText('Open shared content')).toBeTruthy());
-    fireEvent.press(screen.getByText('Open shared content'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('FriendContent', {
-      friendId: 'owner-a', friendName: 'Alice Example',
-    });
+    await waitFor(() => expect(screen.getByTestId('friend-profile-memory-toggle')).toBeTruthy());
+    expect(screen.queryByText('Open shared content')).toBeNull();
+    fireEvent(screen.getByTestId('friend-profile-memory-toggle'), 'valueChange', true);
+    expect(mockSetGrant).toHaveBeenCalledWith('owner-a', true);
+    fireEvent.press(screen.getByTestId('friend-profile-close'));
 
     mockFetchProfileForNavigation.mockResolvedValueOnce({
       status: 'offline-fallback',
@@ -122,13 +146,10 @@ describe('FriendsScreen mutation result handling', () => {
     fireEvent.press(screen.getByTestId('friend-card-owner-a'));
     await waitFor(() => expect(screen.getByTestId('friend-profile-offline-fallback')).toBeTruthy());
     expect(screen.getByText('Profile details unavailable offline')).toBeTruthy();
-    fireEvent.press(screen.getByText('Open shared content'));
+    expect(screen.queryByText('Open shared content')).toBeNull();
 
     expect(mockFetchProfileForNavigation).toHaveBeenCalledTimes(2);
-    expect(mockNavigate).toHaveBeenCalledTimes(2);
-    expect(mockNavigate).toHaveBeenLastCalledWith('FriendContent', {
-      friendId: 'owner-a', friendName: 'Alice Example',
-    });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   test('an account switch clears the modal and discards a delayed account-A fallback completion', async () => {
@@ -154,7 +175,7 @@ describe('FriendsScreen mutation result handling', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('a fallback invalidated by revoke or block cannot navigate', async () => {
+  test('an offline fallback has no route into shared content even if its prior authority becomes stale', async () => {
     mockFetchProfileForNavigation.mockResolvedValueOnce({
       status: 'offline-fallback',
       identity: { id: 'owner-a', name: 'Alice Example', email: 'alice@example.com' },
@@ -165,10 +186,60 @@ describe('FriendsScreen mutation result handling', () => {
     await waitFor(() => expect(screen.getByTestId('friend-profile-offline-fallback')).toBeTruthy());
 
     mockProfileAuthorityCurrent.mockReturnValue(false);
-    fireEvent.press(screen.getByText('Open shared content'));
-
+    expect(screen.queryByText('Open shared content')).toBeNull();
     expect(mockNavigate).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.queryByTestId('friend-profile-modal')).toBeNull());
+    expect(screen.getByTestId('friend-profile-modal')).toBeTruthy();
+  });
+
+  test('a server-confirmed send immediately selects Requests and renders the authoritative outgoing row', async () => {
+    mockSendFriendRequest.mockResolvedValueOnce({
+      success: true,
+      serverCommitted: true,
+      request: {
+        id: 91,
+        toUserId: 92,
+        toName: 'Recipient Example',
+        toEmail: 'recipient@example.com',
+        sentAt: 1_800_000_000_000,
+        status: 'pending',
+        requesterShares: false,
+      },
+    });
+    const screen = await renderReady();
+    fireEvent.press(screen.getByText('Add friend'));
+    await waitFor(() => expect(screen.getByTestId('add-friend-email')).toBeTruthy());
+    fireEvent.changeText(screen.getByTestId('add-friend-email'), 'recipient@example.com');
+    fireEvent.press(screen.getByText('Send request'));
+
+    await waitFor(() => expect(screen.getByTestId('sent-card-91')).toBeTruthy());
+    expect(screen.getByTestId('friends-tabs-active')).toHaveTextContent('Requests');
+    expect(screen.getByText('recipient@example.com')).toBeTruthy();
+    expect(mockSendFriendRequest).toHaveBeenCalledWith('recipient@example.com', false);
+  });
+
+  test('accept uses independent OFF consent, returns to Friends, and marks the authoritative friend New', async () => {
+    mockFetchFriendRequests.mockResolvedValue({
+      success: true,
+      items: [{
+        id: 73,
+        from_name: 'Alice Example',
+        from_email: 'alice@example.com',
+        requester_memory_share: true,
+        sent_at: '2026-10-15T00:00:00.000Z',
+      }],
+    });
+    mockAcceptFriendRequest.mockResolvedValueOnce({ success: true, serverCommitted: true, friendId: 'owner-a' });
+    const screen = await renderReady();
+    fireEvent.press(screen.getByText('Requests'));
+    await waitFor(() => expect(screen.getByTestId('incoming-card-73')).toBeTruthy());
+    expect(screen.getByText('Will share their Memory')).toBeTruthy();
+    expect(screen.getByLabelText('Decline friend request')).toBeTruthy();
+    expect(screen.getByLabelText('Accept friend request')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Accept friend request'));
+
+    await waitFor(() => expect(screen.getByTestId('friends-tabs-active')).toHaveTextContent('Friends'));
+    expect(mockAcceptFriendRequest).toHaveBeenCalledWith('73', false);
+    expect(screen.getByText('New')).toBeTruthy();
   });
 
   test('silently discards a superseded Block without modal, feedback, busy, navigation, or refresh completion effects', async () => {

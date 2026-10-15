@@ -61,7 +61,9 @@ for migration in \
   042_v1_closure_authority.sql \
   043_friend_discovery_marker_location.sql \
   044_public_cairn_moderation_audit.sql \
-  045_memory_friends_cairn_contract.sql; do
+  045_memory_friends_cairn_contract.sql \
+  046_ordered_routes_and_deliveries.sql \
+  047_friend_request_lifecycle.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done
 
@@ -87,9 +89,48 @@ done
 export HARNESS_API_URL="http://127.0.0.1:$API_PORT" HARNESS_RUN_ID="$RUN_ID"
 export DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME"
 export JWT_SECRET="$JWT_SECRET" CAIRN_REALM=isolated_review ALLOW_ISOLATED_QA_SOURCE_CONTRACT=1
+export MYSQL_DOCKER_CONTAINER="$CONTAINER"
+HARNESS_PROGRAM="${HARNESS_PROGRAM:-$SCRIPT_DIR/personal-friends-harness/abcdn-api-mysql.js}"
 if [ -n "${EVIDENCE_DIR:-}" ]; then
   mkdir -p "$EVIDENCE_DIR"
-  node "$SCRIPT_DIR/personal-friends-harness/abcdn-api-mysql.js" | tee "$EVIDENCE_DIR/result.json"
+  "$SCRIPT_DIR/verify-migration-047.sh" | tee "$EVIDENCE_DIR/migration-047.txt"
+  node "$HARNESS_PROGRAM" | tee "$EVIDENCE_DIR/result.json"
 else
-  node "$SCRIPT_DIR/personal-friends-harness/abcdn-api-mysql.js"
+  "$SCRIPT_DIR/verify-migration-047.sh"
+  node "$HARNESS_PROGRAM"
+fi
+
+if [ "${HARNESS_REHEARSE_047_ROLLBACK:-0}" = "1" ]; then
+  rehearse_047_rollback() {
+    local before archive after status lifecycle_columns legacy_unique
+    before="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+      "SELECT COUNT(*) FROM $DB_NAME.friend_requests")"
+    docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" \
+      < "$BACKEND_DIR/src/migrations/rollback/047_friend_request_lifecycle.down.sql" >/dev/null
+    archive="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+      "SELECT COUNT(*) FROM $DB_NAME.friend_requests_o84_rollback_archive")"
+    after="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+      "SELECT COUNT(*) FROM $DB_NAME.friend_requests")"
+    status="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+      "SELECT column_type FROM information_schema.columns WHERE table_schema='$DB_NAME' AND table_name='friend_requests' AND column_name='status'")"
+    lifecycle_columns="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+      "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$DB_NAME' AND table_name='friend_requests' AND column_name IN ('sender_dismissed_at','pair_key','active_pair_slot')")"
+    legacy_unique="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+      "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema='$DB_NAME' AND table_name='friend_requests' AND index_name='unique_request' AND non_unique=0")"
+    [ "$archive" = "$before" ]
+    [ "$after" -le "$before" ]
+    [ "$status" = "enum('pending','accepted','rejected')" ]
+    [ "$lifecycle_columns" = "0" ]
+    [ "$legacy_unique" = "2" ]
+    echo "047 rollback verified: archived=$archive live_before=$before legacy_live=$after"
+    docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" \
+      < "$BACKEND_DIR/src/migrations/047_friend_request_lifecycle.sql" >/dev/null
+    "$SCRIPT_DIR/verify-migration-047.sh"
+    echo "047 forward reapply verified after rollback"
+  }
+  if [ -n "${EVIDENCE_DIR:-}" ]; then
+    rehearse_047_rollback | tee "$EVIDENCE_DIR/migration-047-rollback.txt"
+  else
+    rehearse_047_rollback
+  fi
 fi

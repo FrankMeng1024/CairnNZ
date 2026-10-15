@@ -311,6 +311,7 @@ export function RootNavigator() {
               stores.useMemorySubscriptionsStore = require('../features/memory/store/useMemorySubscriptionsStore').useMemorySubscriptionsStore;
               stores.useFriendMemoryStore = require('../features/memory/store/useFriendMemoryStore').useFriendMemoryStore;
               stores.useMemoryScopeStore = require('../features/memory/store/useMemoryScopeStore').useMemoryScopeStore;
+              stores.useMemoryCameraStore = require('../features/memory/store/useMemoryCameraStore').useMemoryCameraStore;
               stores.useMarkerStore = require('../store/useMarkerStore').useMarkerStore;
               stores.usePublicCairnStore = require('../features/public/services/publicCairns').usePublicCairnStore;
               stores.useCairnPresentationStore = useCairnPresentationStore;

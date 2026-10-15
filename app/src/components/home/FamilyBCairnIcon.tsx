@@ -11,10 +11,11 @@ export const FAMILY_B_CAIRN_PATHS = [
 type Props = {
   size?: number;
   color: string;
+  strokeWidth?: number;
 };
 
 /** Exact React Native transcription of the approved Family B cairn SVG. */
-export function FamilyBCairnIcon({ size = 24, color }: Props) {
+export function FamilyBCairnIcon({ size = 24, color, strokeWidth = FAMILY_B_CAIRN_STROKE_WIDTH }: Props) {
   return (
     <Svg width={size} height={size} viewBox={FAMILY_B_CAIRN_VIEW_BOX}>
       <G
@@ -22,7 +23,7 @@ export function FamilyBCairnIcon({ size = 24, color }: Props) {
         stroke={color}
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth={FAMILY_B_CAIRN_STROKE_WIDTH}
+        strokeWidth={strokeWidth}
       >
         <Path d={FAMILY_B_CAIRN_PATHS[0]} />
         <Path d={FAMILY_B_CAIRN_PATHS[1]} />

@@ -33,6 +33,7 @@ import {
   readFogDisplayCache,
   writeFogDisplayCache,
 } from '../services/fogDisplayCache';
+import { runSharedMemoryFogPreparation } from '../services/memoryFogPreparation';
 
 interface Props {
   /** Current map center. Reserved for future use (e.g. recompute on big pan). */
@@ -1411,13 +1412,18 @@ export function FogLayer({
     const timer = setTimeout(() => {
       void (async () => {
       const startedAt = Date.now();
-      const built = await buildTiledMemoryDisplayEvidence(
-        pointSnapshot,
-        () => !cancelled
-          && generation === buildGenerationRef.current
-          && lastAuthorityRef.current === authority
-          && readinessKeyRef.current === readinessKey,
-        lastDisplayGeometryCacheRef.current,
+      const built = await runSharedMemoryFogPreparation(
+        accountId,
+        selfContentSignature,
+        () => buildTiledMemoryDisplayEvidence(
+          pointSnapshot,
+          () => !cancelled
+            && generation === buildGenerationRef.current
+            && lastAuthorityRef.current === authority
+            && readinessKeyRef.current === readinessKey,
+          lastDisplayGeometryCacheRef.current,
+        ),
+        { retryAfterEmpty: true },
       );
       if (!built || cancelled || generation !== buildGenerationRef.current
         || lastAuthorityRef.current !== authority || readinessKeyRef.current !== readinessKey) return;

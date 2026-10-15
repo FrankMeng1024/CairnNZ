@@ -49,6 +49,8 @@ interface State {
   reset: () => void;
 }
 
+let subscriptionGeneration = 0;
+
 export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   limit: Number.POSITIVE_INFINITY,
   subscriptions: [],
@@ -72,45 +74,51 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     // empty subs slice with A's data, leaking cross-session.
     if (get().loading) return;
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { useMarkerStore } = require('../../../store/useMarkerStore');
-    const viewerAtStart: string | null = useMarkerStore.getState().userId;
+    const { useAppStore } = require('../../../store/useAppStore');
+    const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
+    if (!viewerAtStart) return;
+    const generationAtStart = subscriptionGeneration;
     set({ loading: true, error: null });
     try {
-      const res = await authenticatedFetch('/api/memory-subscriptions');
-      const viewerNow: string | null = useMarkerStore.getState().userId;
-      if (viewerNow !== viewerAtStart) {
-        // User switched during the fetch — drop response, leave reset()'s
-        // empty slice intact. Do not flag as error; this is correct discard.
-        set({ loading: false });
-        return;
-      }
-      if (!res.ok) { set({ loading: false, error: `HTTP ${res.status}` }); return; }
+      const [res, sourcesResponse] = await Promise.all([
+        authenticatedFetch('/api/memory-subscriptions', { expectedUserId: viewerAtStart }),
+        authenticatedFetch('/api/friend-sharing/sources', { expectedUserId: viewerAtStart }),
+      ]);
+      if (generationAtStart !== subscriptionGeneration
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return;
+      if (!res.ok) { set({ loading: false, error: `Could not load Memory friends (HTTP ${res.status}).` }); return; }
       const data = await res.json();
-      const sourcesResponse = await authenticatedFetch('/api/friend-sharing/sources');
-      const sourcesBody = sourcesResponse.ok ? await sourcesResponse.json() : { sources: [] };
-      // Re-check viewer after the json() await — another potential yield point.
-      const viewerAfterJson: string | null = useMarkerStore.getState().userId;
-      if (viewerAfterJson !== viewerAtStart) {
-        set({ loading: false });
-        return;
-      }
+      const sourcesBody = sourcesResponse.ok ? await sourcesResponse.json() : null;
+      if (generationAtStart !== subscriptionGeneration
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return;
       set({
         limit: data.limit == null ? Number.POSITIVE_INFINITY : Number(data.limit),
         subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
-        availableSources: Array.isArray(sourcesBody.sources) ? sourcesBody.sources : [],
+        ...(sourcesBody && Array.isArray(sourcesBody.sources) ? { availableSources: sourcesBody.sources } : {}),
         loading: false,
+        error: sourcesBody ? null : `Could not refresh available friends (HTTP ${sourcesResponse.status}).`,
       });
     } catch (e: any) {
+      if (generationAtStart !== subscriptionGeneration
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return;
       set({ loading: false, error: String(e?.message ?? e).slice(0, 120) });
     }
   },
 
   subscribe: async (friendId) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useAppStore } = require('../../../store/useAppStore');
+    const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
+    if (!viewerAtStart) return 0;
+    const generationAtStart = subscriptionGeneration;
     try {
       const res = await authenticatedFetch('/api/memory-subscriptions', {
         method: 'POST',
         body: JSON.stringify({ friend_id: friendId }),
+        expectedUserId: viewerAtStart,
       });
+      if (generationAtStart !== subscriptionGeneration
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return 0;
       if (res.ok) {
         // Optimistic update: add locally from friendStore instead of
         // re-fetching — avoids an extra round-trip that caused visible
@@ -124,7 +132,9 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
           friend_name: friend?.name ?? String(friendId),
           subscribed_at: new Date().toISOString(),
         };
-        set({ subscriptions: [...get().subscriptions, newSub] });
+        if (!get().subscriptions.some(subscription => Number(subscription.friend_id) === friendId)) {
+          set({ subscriptions: [...get().subscriptions, newSub] });
+        }
         set({
           availableSources: get().availableSources.map(source =>
             Number(source.friend_id) === friendId ? { ...source, selected: true } : source),
@@ -142,18 +152,26 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     // no longer repopulate it; only a deliberate later fresh read may do so.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useFriendMemoryStore } = require('./useFriendMemoryStore');
-    const purge = useFriendMemoryStore.getState().purgeFriend(friendId);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useAppStore } = require('../../../store/useAppStore');
+    const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
+    if (!viewerAtStart) return 0;
+    const generationAtStart = subscriptionGeneration;
+    useFriendMemoryStore.getState().invalidateFriend(friendId);
     try {
       const res = await authenticatedFetch(`/api/memory-subscriptions/${friendId}`, {
         method: 'DELETE',
+        expectedUserId: viewerAtStart,
       });
+      if (generationAtStart !== subscriptionGeneration
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return 0;
       if (res.ok) {
         set({ subscriptions: get().subscriptions.filter((s) => s.friend_id !== friendId) });
         set({
           availableSources: get().availableSources.map(source =>
             Number(source.friend_id) === friendId ? { ...source, selected: false } : source),
         });
-        await purge;
+        await useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart);
       }
       return res.status;
     } catch {
@@ -164,7 +182,8 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   isSubscribed: (friendId) =>
     get().subscriptions.some((s) => s.friend_id === friendId),
 
-  reset: () =>
+  reset: () => {
+    subscriptionGeneration += 1;
     set({
       limit: Number.POSITIVE_INFINITY,
       subscriptions: [],
@@ -172,5 +191,6 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       loading: false,
       error: null,
       // O1 batch 37: lastMutationStatus removed
-    }),
+    });
+  },
 }));

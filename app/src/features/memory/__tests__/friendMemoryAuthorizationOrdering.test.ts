@@ -300,6 +300,57 @@ describe('friend Memory authorization cache ordering', () => {
     expect(JSON.parse(values.get(`${CACHE_PREFIX}viewer-a`) ?? '{}').projections).toEqual({});
   });
 
+  test('one contributor failure is isolated while another contributor remains loaded and visible', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    const subscriptionState = {
+      subscriptions: [{ friend_id: 11 }, { friend_id: 22 }],
+      availableSources: [
+        { friend_id: '11', authorization_version: 4 },
+        { friend_id: '22', authorization_version: 7 },
+      ],
+    };
+    const authenticatedFetch = jest.fn(async (_path: string, init: { body: string }) => {
+      const friendId = JSON.parse(init.body).friend_ids[0];
+      if (friendId === 11) return { ok: false, status: 503, json: async () => ({}) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          revoked_friend_ids: [],
+          projections: [{
+            source_friend_id: 22,
+            authorization_version: 7,
+            projection_version: 'friend-22-ok',
+            cell_size_m: 200,
+            server_authorized_at: new Date(1_000_000).toISOString(),
+            authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
+            cells: projection('22').cells,
+            regions: [],
+          }],
+        }),
+      };
+    });
+    jest.doMock('../../../store/storage', () => ({
+      storage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+    jest.doMock('../store/useMemorySubscriptionsStore', () => ({
+      useMemorySubscriptionsStore: { getState: () => subscriptionState },
+    }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+
+    expect(useFriendMemoryStore.getState().sourceStates).toMatchObject({
+      '11': { status: 'error', cellCount: 0 },
+      '22': { status: 'loaded', cellCount: 1 },
+    });
+    expect(Object.keys(useFriendMemoryStore.getState().projections)).toEqual(['22']);
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+  });
+
   test('a valid deliberate reselection starts a fresh source generation without harming other sources', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
     const appState = { user: { id: 'viewer-a' } };
@@ -327,8 +378,12 @@ describe('friend Memory authorization cache ordering', () => {
         })),
       }),
     });
-    responses.push(makeResponse([{ id: 11, auth: 4, version: 'a-1' }, { id: 22, auth: 7, version: 'b-1' }]));
-    responses.push(makeResponse([{ id: 11, auth: 4, version: 'a-2' }, { id: 22, auth: 7, version: 'b-2' }]));
+    // Projection loads are intentionally isolated per contributor so one
+    // failed friend cannot suppress another. Supply one response per source.
+    responses.push(makeResponse([{ id: 11, auth: 4, version: 'a-1' }]));
+    responses.push(makeResponse([{ id: 22, auth: 7, version: 'b-1' }]));
+    responses.push(makeResponse([{ id: 11, auth: 4, version: 'a-2' }]));
+    responses.push(makeResponse([{ id: 22, auth: 7, version: 'b-2' }]));
     jest.doMock('../../../store/storage', () => ({
       storage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined) },
     }));

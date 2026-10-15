@@ -39,10 +39,8 @@ interface Props {
 export function MemoryScopeToggle({ onPickPress }: Props) {
   const theme = useVisualTheme();
   const scope = useMemoryScopeStore((s) => s.scope);
-  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const setScope = useMemoryScopeStore((s) => s.setScope);
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
-  const sources = useMemorySubscriptionsStore((s) => s.availableSources);
 
   // v376: third-segment expand animation. Width grows from 0→44 and
   // opacity 0→1 when scope flips to friends. Reverses on flip back.
@@ -63,14 +61,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
 
   const opts: { id: MemoryScope; label: string }[] = [
     { id: 'self', label: 'Mine' },
-    {
-      id: 'combined',
-      label: scope === 'friend'
-        ? sources.find(source => source.friend_id === selectedFriendId)?.friend_name || 'Friend'
-        : subscriptions.length === 0
-          ? 'Friends'
-          : `Mine & ${subscriptions.length} ${subscriptions.length === 1 ? 'friend' : 'friends'}`,
-    },
+    { id: 'combined', label: 'Friends' },
   ];
 
   return (
@@ -92,7 +83,14 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
             activeOpacity={0.7}
             testID={`memory-scope-${o.id}`}
           >
-            <Text style={[styles.label, active && styles.labelActive, { color: active ? theme.primary : theme.foregroundSecondary }]}>{o.label}</Text>
+            <View style={styles.labelRow}>
+              <Text style={[styles.label, active && styles.labelActive, { color: active ? theme.primary : theme.foregroundSecondary }]}>{o.label}</Text>
+              {o.id === 'combined' && subscriptions.length > 0 ? (
+                <View style={[styles.countBadge, { backgroundColor: active ? theme.primary : theme.borderStrong }]}>
+                  <Text style={[styles.countText, { color: theme.onPrimary }]}>{subscriptions.length}</Text>
+                </View>
+              ) : null}
+            </View>
           </TouchableOpacity>
         );
       })}
@@ -149,6 +147,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '700',
   },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  countBadge: { minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
+  countText: { fontSize: 10, fontWeight: '700' },
   // v376: Pick segment — same vertical metrics as Mine/Friends so the
   // pill height is unchanged. Width 44 = comfortable tap target while
   // matching the segment padding rhythm.
