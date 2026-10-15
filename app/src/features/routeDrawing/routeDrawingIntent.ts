@@ -411,18 +411,6 @@ export function resolveRouteDrawing(input: ResolveRouteDrawingInput): RouteDrawi
     ? (drawnStart.arcM <= drawnEnd.arcM ? drawnEnd : drawnStart)
     : drawnEnd;
   const crossingCount = countInteriorRouteCrossings(raw, route);
-  const maxRawDistanceToRoute = raw.reduce(
-    (max, point) => Math.max(max, pointToPolylineDistanceM(point, route)),
-    0,
-  );
-  // A finger following the Route can weave across its centerline several
-  // times because of ordinary jitter. Those are not competing attachment
-  // intervals. Crossings are ambiguous only when the stroke also leaves the
-  // local road-following envelope between them.
-  const followsRouteLocally = raw.length >= 3 && maxRawDistanceToRoute <= Math.max(
-    8,
-    Math.min(18, metersPerPixel(input.viewport.center.lat, input.viewport.zoom) * 6),
-  );
   const projectionAmbiguous = raw.length >= 2 && (
     isProjectionAmbiguous(raw[0], route, input.viewport)
       || isProjectionAmbiguous(raw[raw.length - 1], route, input.viewport)
@@ -433,8 +421,11 @@ export function resolveRouteDrawing(input: ResolveRouteDrawingInput): RouteDrawi
   const oneAttached = !!drawnStart && !!drawnEnd
     && (drawnStart.distanceM <= ENDPOINT_LIMIT_M || drawnEnd.distanceM <= ENDPOINT_LIMIT_M);
   const intervalM = orderedStart && orderedEnd ? orderedEnd.arcM - orderedStart.arcM : 0;
+  // Interior crossings are evidence about the shape being replaced, not new
+  // attachment boundaries. Ambiguity belongs to the ordered endpoint
+  // occurrence resolver; once S/T are unique, their complete interval wins.
   const ambiguous = raw.length < 2 || route.length < 2 || projectionAmbiguous
-    || (crossingCount >= 2 && !followsRouteLocally) || (bothAttached && intervalM < 5);
+    || (bothAttached && intervalM < 5);
 
   const rawShape = shapeStats(raw);
   const chord = raw.length >= 2 ? [raw[0], raw[raw.length - 1]] : raw;
@@ -475,7 +466,7 @@ export function resolveRouteDrawing(input: ResolveRouteDrawingInput): RouteDrawi
       intent,
       selectionSource: 'original-preserved',
       reasons,
-      divergenceStage: projectionAmbiguous || (crossingCount >= 2 && !followsRouteLocally) ? 'attachment' : 'projection',
+      divergenceStage: projectionAmbiguous ? 'attachment' : 'projection',
       attachments: { drawnStart, drawnEnd, orderedStart, orderedEnd, crossingCount, ambiguous: true },
       rawStroke: raw,
       stabilizedStroke: raw,

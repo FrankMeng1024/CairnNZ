@@ -101,6 +101,9 @@ interface Props {
   qaWorkspaceActive?: boolean;
   onOpenAcquiredCairn?: (markerId: string) => void;
   onOpenAcquiredGroup?: (markerIds: string[]) => void;
+  /** Parent owns the one stable entry veil for both map and Fog readiness. */
+  presentationOwnedByParent?: boolean;
+  onPresentationState?: (state: MapLoadState) => void;
 }
 
 const INITIAL_ZOOM = 16.5;
@@ -116,7 +119,7 @@ export type MemoryMapHandle = {
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
-  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false, onOpenAcquiredCairn, onOpenAcquiredGroup },
+  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false, onOpenAcquiredCairn, onOpenAcquiredGroup, presentationOwnedByParent = false, onPresentationState },
   ref,
 ) {
   const theme = useVisualTheme();
@@ -303,6 +306,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     const timeout = setTimeout(() => setMapLoadState('slow'), 8000);
     return () => clearTimeout(timeout);
   }, [mapEpoch, mapFirstRender]);
+
+  useEffect(() => {
+    if (presentationOwnedByParent) onPresentationState?.(mapLoadState);
+  }, [mapLoadState, onPresentationState, presentationOwnedByParent]);
 
   useEffect(() => {
     if (!Mapbox.available) onMapUnavailable?.();
@@ -638,7 +645,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           map renderer; pan/zoom signals bubble up via onMapMoved prop. */}
       {/* Tile-loading overlay: same as HikingMap. Hides blank canvas on
           slow CDN / fresh install until Mapbox first-render fires. */}
-      {!mapFirstRender && (
+      {!presentationOwnedByParent && !mapFirstRender && (
         <MapLoadOverlay
           state={mapLoadState}
           delayMs={memoryMapHasRendered ? 280 : 0}

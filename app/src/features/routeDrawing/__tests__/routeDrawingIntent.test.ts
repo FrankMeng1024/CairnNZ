@@ -94,19 +94,19 @@ describe('human Route drawing intent', () => {
     expect(hasPointNear(decision.selectedReplacement, point(55, 55), 5)).toBe(true);
   });
 
-  test('Scenario E — multiple interior crossings preserve the original Route', () => {
+  test('Scenario E — unique endpoint anchors replace across multiple interior crossings', () => {
     const original = [
       point(0, 0), point(30, 30), point(60, -30), point(90, 30), point(120, 0),
     ];
     const raw = [point(0, 0), point(120, 0)];
     const decision = resolveRouteDrawing({ originalRoute: original, rawStroke: raw, providerGeometry: raw, viewport: viewport(15) });
 
-    expect(decision.status).toBe('preserved');
-    expect(decision.intent).toBe('ambiguous');
-    expect(decision.selectionSource).toBe('original-preserved');
+    expect(decision.status).toBe('accepted');
+    expect(decision.intent).toBe('straight-replacement');
+    expect(decision.selectionSource).not.toBe('original-preserved');
     expect(decision.attachments.crossingCount).toBeGreaterThanOrEqual(2);
-    expect(decision.finalGeometry).toEqual(original);
-    expect(decision.metrics.selected.maxDeviationM).toBeGreaterThan(20);
+    expect(decision.finalGeometry).toEqual(raw);
+    expect(decision.metrics.selected.spikes).toBe(0);
   });
 
   test('Scenario F — the same obvious operation is stable across neighborhood and wide zooms', () => {
@@ -127,6 +127,16 @@ describe('human Route drawing intent', () => {
     expect(neighborhoodViewport.zoom).toBe(17);
   });
 
+  test('separate true ambiguity — retraced endpoint occurrences preserve the original safely', () => {
+    const original = [point(0, 0), point(60, 0), point(0, 0), point(60, 0), point(120, 0)];
+    const raw = [point(0, 0), point(30, 30), point(60, 0)];
+    const decision = resolveRouteDrawing({ originalRoute: original, rawStroke: raw, providerGeometry: raw, viewport: viewport(16) });
+    expect(decision.status).toBe('preserved');
+    expect(decision.intent).toBe('ambiguous');
+    expect(decision.attachments.ambiguous).toBe(true);
+    expect(decision.finalGeometry).toEqual(original);
+  });
+
   test('legacy provider-owned attachment reproduces the old sharp-corner defect', () => {
     const apex = point(50, 70);
     const original = [point(0, 0), apex, point(100, 0)];
@@ -142,7 +152,7 @@ describe('human Route drawing intent', () => {
 });
 
 afterAll(() => {
-  const outputDir = process.env.CAIRN_O81_REPLAY_EVIDENCE_DIR;
+  const outputDir = process.env.CAIRN_O82_REPLAY_EVIDENCE_DIR ?? process.env.CAIRN_O81_REPLAY_EVIDENCE_DIR;
   if (!outputDir) return;
   fs.mkdirSync(outputDir, { recursive: true });
   const expectations: Record<string, (replay: ReturnType<typeof replayRouteDrawingFixture>) => boolean> = {
@@ -155,7 +165,10 @@ afterAll(() => {
       && replay.decision.metrics.selected.maxTurnDeg < 20,
     intentionalTurn: replay => replay.decision.intent === 'intentional-turn'
       && replay.decision.metrics.selected.sharpTurns > 0,
-    ambiguousCrossing: replay => replay.decision.status === 'preserved'
+    ambiguousCrossing: replay => replay.decision.status === 'accepted'
+      && replay.decision.selectionSource !== 'original-preserved'
+      && replay.decision.metrics.selected.spikes === 0,
+    trueAmbiguousOccurrences: replay => replay.decision.status === 'preserved'
       && replay.decision.selectionSource === 'original-preserved',
     flattenVWideZoom: replay => replay.decision.intent === 'straight-replacement'
       && replay.decision.metrics.selected.spikes === 0,
@@ -167,7 +180,7 @@ afterAll(() => {
       : null;
     const artifact = {
       schemaVersion: 1,
-      task: 'O81',
+      task: 'O82',
       scenarioKey: key,
       outcome: expectations[key]?.(replay) ? 'PASS' : 'FAIL',
       fixture: replay.fixture,

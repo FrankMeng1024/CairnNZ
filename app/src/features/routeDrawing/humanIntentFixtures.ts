@@ -67,6 +67,15 @@ export const HUMAN_ROUTE_DRAWING_FIXTURES: Record<string, RouteDrawingReplayFixt
     providerGeometry: [point(0, 0), point(120, 0)],
     viewport: { ...viewport, zoom: 15 },
   },
+  trueAmbiguousOccurrences: {
+    fixtureVersion: 1,
+    id: 'scenario-e2-true-overlapping-occurrence-ambiguity',
+    source: 'synthetic',
+    originalRoute: [point(0, 0), point(60, 0), point(0, 0), point(60, 0), point(120, 0)],
+    rawStroke: [point(0, 0), point(30, 30), point(60, 0)],
+    providerGeometry: [point(0, 0), point(30, 30), point(60, 0)],
+    viewport,
+  },
   flattenVWideZoom: {
     fixtureVersion: 1,
     id: 'scenario-f-flatten-v-wide-zoom',

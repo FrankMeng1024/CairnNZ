@@ -6,7 +6,7 @@ import {
   type RouteDrawingDecision,
 } from './routeDrawingIntent';
 
-const TRACE_VERSION = 1;
+const TRACE_VERSION = 2;
 const MAX_TRACES = 8;
 const MAX_EVENTS_PER_TRACE = 600;
 const MAX_TRACE_BYTES = 2 * 1024 * 1024;
@@ -77,6 +77,19 @@ export interface RouteDrawingReplayResult {
     finalGeometry: LngLat[];
     recordedFinalGeometry: LngLat[];
   };
+}
+
+export interface RouteOperationReplayEvidence {
+  operationId: string;
+  kind: 'draw' | 'point' | 'session';
+  outcome: 'committed' | 'rejected' | 'abandoned' | 'incomplete';
+  divergenceStage: RouteDrawingTraceStage | null;
+  reason: string | null;
+  preStateGeometry: LngLat[];
+  inputGeometry: LngLat[];
+  providerGeometry: LngLat[];
+  selectedGeometry: LngLat[];
+  finalGeometry: LngLat[];
 }
 
 let enabled = false;
@@ -222,6 +235,12 @@ export function selectRouteDrawingOperation(strokeId: string, kind: 'draw' | 'po
   return operationId;
 }
 
+export function selectRouteDrawingSessionOperation(): string {
+  const trace = currentTrace();
+  selectedOperationId = trace ? `${trace.sessionId}:session` : null;
+  return selectedOperationId ?? 'disabled:session';
+}
+
 export function recordRouteDrawingTrace(
   kind: string,
   payload: Record<string, unknown>,
@@ -265,6 +284,21 @@ export function exportRouteDrawingTrace(sessionId?: string): string | null {
   return trace ? JSON.stringify(trace, null, 2) : null;
 }
 
+/** Parse an explicitly imported local export without adding it to live capture. */
+export function parseRouteDrawingTrace(serialized: string): RouteDrawingTrace | null {
+  if (serialized.length > MAX_TRACE_BYTES + MAX_ORIGINAL_ROUTE_BYTES + 128 * 1024) return null;
+  try {
+    const value = JSON.parse(serialized) as Partial<RouteDrawingTrace>;
+    if ((value.version !== 1 && value.version !== TRACE_VERSION)
+      || typeof value.sessionId !== 'string'
+      || !Array.isArray(value.originalRoute)
+      || !Array.isArray(value.events)) return null;
+    return value as RouteDrawingTrace;
+  } catch {
+    return null;
+  }
+}
+
 export function clearRouteDrawingTraces(): void {
   traces.clear();
   activeSessionId = null;
@@ -276,6 +310,64 @@ function eventFor(trace: RouteDrawingTrace, kind: string, operationId?: string):
   return [...trace.events].reverse().find(event =>
     event.kind === kind && (!operationId || event.operationId === operationId),
   ) ?? null;
+}
+
+export function listRouteDrawingOperationIds(trace: RouteDrawingTrace): string[] {
+  const grouped = new Map<string, RouteDrawingTraceEvent[]>();
+  for (const event of trace.events) {
+    const current = grouped.get(event.operationId) ?? [];
+    current.push(event);
+    grouped.set(event.operationId, current);
+  }
+  return [...grouped.entries()]
+    .flatMap(([operationId, events]) => {
+      if (!operationId.endsWith(':session')) return [{ operationId, sequence: events[0]?.sequence ?? 0 }];
+      const lifecycle = events.find(event => event.kind === 'route_creation_abandoned');
+      return lifecycle ? [{ operationId, sequence: lifecycle.sequence }] : [];
+    })
+    .sort((a, b) => a.sequence - b.sequence)
+    .map(item => item.operationId);
+}
+
+export function replayRouteOperationEvidence(
+  trace: RouteDrawingTrace,
+  requestedOperationId?: string,
+): RouteOperationReplayEvidence | null {
+  const operationId = requestedOperationId ?? listRouteDrawingOperationIds(trace).at(-1)
+    ?? (trace.events.some(event => event.kind === 'route_creation_abandoned') ? `${trace.sessionId}:session` : null);
+  if (!operationId) return null;
+  const events = trace.events.filter(event => event.operationId === operationId);
+  const find = (kind: string) => [...events].reverse().find(event => event.kind === kind) ?? null;
+  const pointRequest = find('route_point_provider_request');
+  const drawInput = find('route_draw_geographic_stroke') ?? find('brush_end');
+  const drawIntent = find('route_draw_transaction_intent');
+  const provider = find('route_point_provider_response') ?? find('route_draw_provider_response') ?? find('brush_full_dump');
+  const selected = find('route_point_candidate_selected') ?? find('route_draw_intent_decision') ?? find('brush_intent_decision');
+  const rejected = find('route_draw_rejected') ?? find('route_draw_ambiguous');
+  const committed = find('route_draw_commit');
+  const abandoned = find('route_creation_abandoned');
+  const kind = pointRequest ? 'point' : drawInput ? 'draw' : 'session';
+  const outcome = committed ? 'committed' : rejected ? 'rejected' : abandoned ? 'abandoned' : 'incomplete';
+  const reasonValue = rejected?.payload.code ?? rejected?.payload.reason
+    ?? selected?.payload.reason ?? abandoned?.payload.reason ?? null;
+  return {
+    operationId,
+    kind,
+    outcome,
+    divergenceStage: rejected?.stage ?? selected?.stage ?? null,
+    reason: reasonValue == null ? null : String(reasonValue),
+    preStateGeometry: clonePoints(pointRequest?.payload.preStateGeometry
+      ?? drawIntent?.payload.preStateGeometry
+      ?? trace.originalRoute),
+    inputGeometry: clonePoints(pointRequest ? [pointRequest.payload.start, pointRequest.payload.target] : drawInput?.payload.rawPoints),
+    providerGeometry: clonePoints(provider?.payload.providerGeometry ?? provider?.payload.stitched_curve_full),
+    selectedGeometry: clonePoints(selected?.payload.selectedGeometry
+      ?? selected?.payload.selectedReplacement
+      ?? selected?.payload.finalGeometry),
+    finalGeometry: clonePoints(committed?.payload.finalGeometry
+      ?? rejected?.payload.unchangedFinalGeometry
+      ?? abandoned?.payload.finalGeometry),
+  };
 }
 
 function viewportFromSamples(event: RouteDrawingTraceEvent | null): DrawingViewport {
@@ -317,12 +409,14 @@ export function traceToReplayFixture(
     ?? eventFor(trace, 'brush_intent_decision', operation)
     ?? eventFor(trace, 'brush_final_dump', operation);
   const rawStroke = clonePoints(rawEvent?.payload.rawPoints);
-  if (trace.originalRoute.length < 2 || rawStroke.length < 2) return null;
+  const intentEvent = eventFor(trace, 'route_draw_transaction_intent', operation);
+  const operationOriginal = clonePoints(intentEvent?.payload.preStateGeometry ?? trace.originalRoute);
+  if (operationOriginal.length < 2 || rawStroke.length < 2) return null;
   return {
     fixtureVersion: 1,
     id: operation,
     source: 'captured-redacted',
-    originalRoute: trace.originalRoute.map(point => ({ ...point })),
+    originalRoute: operationOriginal,
     rawStroke,
     providerGeometry: clonePoints(
       providerEvent?.payload.providerGeometry

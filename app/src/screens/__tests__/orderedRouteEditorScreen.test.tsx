@@ -6,7 +6,10 @@ const reduceMotionSpy = jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').m
 
 const mockCameraSet = jest.fn();
 const mockCameraFit = jest.fn();
+const mockGetPointInView = jest.fn(async () => [195, 300]);
 const mockNavReplace = jest.fn();
+const mockNavGoBack = jest.fn();
+const mockAbandonDraft = jest.fn(async (_ownerId: string, _draftId: string) => undefined);
 const mockResolveDraw = jest.fn();
 const mockResolvePoint = jest.fn();
 const mockSearchPlaces = jest.fn();
@@ -21,6 +24,7 @@ const mockStroke = [
   { lat: -41.2862, lng: 174.7772 },
   { lat: -41.2865, lng: 174.7777 },
 ];
+let mockEmittedStroke = mockStroke;
 const mockDraft = {
   schemaVersion: 1 as const,
   draftId: 'plan:screen', ownerId: 'owner-a', origin: 'plan' as const, revision: 1,
@@ -38,7 +42,7 @@ let mockLoadedDraft: any = mockDraft;
 let mockRecoveredPast: any[] = [];
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ goBack: jest.fn(), replace: mockNavReplace, navigate: jest.fn() }),
+  useNavigation: () => ({ goBack: mockNavGoBack, replace: mockNavReplace, navigate: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
   useRoute: () => ({ params: mockScreenParams }),
 }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
@@ -50,11 +54,14 @@ jest.mock('@rnmapbox/maps', () => {
     return ReactModule.createElement(View, { testID: 'mock-camera', ...props });
   });
   const MapView = ReactModule.forwardRef(({ children, onCameraChanged, ...props }: any, ref: any) => {
-    ReactModule.useImperativeHandle(ref, () => ({ getCoordinateFromView: jest.fn() }));
+    ReactModule.useImperativeHandle(ref, () => ({
+      getCoordinateFromView: jest.fn(),
+      getPointInView: mockGetPointInView,
+    }));
     ReactModule.useEffect(() => {
       onCameraChanged?.({ properties: { center: [174.7772, -41.2865] } });
     }, [onCameraChanged]);
-    return ReactModule.createElement(View, { testID: 'mock-map', ...props }, children);
+    return ReactModule.createElement(View, { testID: 'mock-map', onCameraChanged, ...props }, children);
   });
   const source = ({ id, shape, children }: any) => ReactModule.createElement(View, { testID: `source-${id}`, shape }, children);
   const layer = ({ id, style, slot }: any) => ReactModule.createElement(View, { testID: `layer-${id}`, style, slot });
@@ -70,7 +77,10 @@ jest.mock('expo-location', () => ({
   getLastKnownPositionAsync: jest.fn(async () => ({ coords: { latitude: -41.29, longitude: 174.79 } })),
   getCurrentPositionAsync: jest.fn(),
 }));
-jest.mock('../../components/BackButton', () => ({ BackButton: () => null }));
+jest.mock('../../components/BackButton', () => {
+  const ReactModule = require('react'); const { Text, TouchableOpacity } = require('react-native');
+  return { BackButton: ({ onPress }: any) => ReactModule.createElement(TouchableOpacity, { onPress, accessibilityLabel: 'Back' }, ReactModule.createElement(Text, null, 'Back')) };
+});
 jest.mock('../../components/Icon', () => {
   const ReactModule = require('react'); const { View } = require('react-native');
   return { Icon: ({ name }: any) => ReactModule.createElement(View, { testID: `icon-${name}` }) };
@@ -94,7 +104,7 @@ jest.mock('../../components/PrimaryButton', () => {
 jest.mock('../../components/map/RouteDrawOverlay', () => {
   const ReactModule = require('react'); const { Text, TouchableOpacity } = require('react-native');
   return { RouteDrawOverlay: ({ active, onStroke, onDrawingStart }: any) => active ? ReactModule.createElement(
-    TouchableOpacity, { testID: 'emit-route-stroke', onPress: () => { onDrawingStart?.(); onStroke(mockStroke); } }, ReactModule.createElement(Text, null, 'Emit stroke'),
+    TouchableOpacity, { testID: 'emit-route-stroke', onPress: () => { onDrawingStart?.(); onStroke(mockEmittedStroke); } }, ReactModule.createElement(Text, null, 'Emit stroke'),
   ) : null };
 });
 jest.mock('../../features/memory/components/FogLayer', () => ({ FogLayer: () => null }));
@@ -132,8 +142,10 @@ jest.mock('../../features/route/routePlannerDraftPersistence', () => ({
   plannerDraftMatchesRequest: () => true,
   saveRoutePlannerDraft: (...args: any[]) => mockSaveDraft(...args),
   removeRoutePlannerDraft: jest.fn(async () => undefined),
+  abandonRoutePlannerDraft: (ownerId: string, draftId: string) => mockAbandonDraft(ownerId, draftId),
 }));
 jest.mock('../../features/route/routePlanningProvider', () => ({
+  orderedShapeDeviationM: jest.requireActual('../../features/route/routePlanningProvider').orderedShapeDeviationM,
   resolveDrawPlan: (...args: any[]) => mockResolveDraw(...args),
   resolvePointPlan: (...args: any[]) => mockResolvePoint(...args),
 }));
@@ -177,6 +189,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     mockScreenParams = {};
     mockLoadedDraft = mockDraft;
     mockRecoveredPast = [];
+    mockEmittedStroke = mockStroke;
     mockSessionState.sessions = [];
     mockLoadActivityTrackPoints.mockResolvedValue([]);
     mockLoadActivityFinalArtifact.mockResolvedValue(null);
@@ -191,6 +204,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
         { lat: -41.2865, lng: 174.7772 },
       ],
     });
+    mockGetPointInView.mockResolvedValue([195, 300]);
   });
 
   test('mounts real editor controls, endpoints and the shared theme line above Standard basemap', async () => {
@@ -260,6 +274,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByText('No shared Friend Fog is available. Mine stays visible.')).toBeTruthy();
     expect(screen.queryByText('Planning context')).toBeNull();
     expect(screen.queryByText('Keep one recorded section')).toBeNull();
+    expect(screen.queryByText('Reset draft')).toBeNull();
+    expect(screen.getByTestId('icon-Layers')).toBeTruthy();
   });
 
   test('Search and More have one exclusive overlay owner', async () => {
@@ -348,6 +364,86 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     }));
   });
 
+  test('R1 explicit Activity Back then Create starts pristine with empty Undo and a new draft identity', async () => {
+    mockRecoveredDraftEnabled = true;
+    mockScreenParams = {
+      creationSource: 'activity', fromSessionId: 'activity-good', creationSessionId: 'create-a',
+    };
+    mockSessionState.sessions = [{
+      id: 'activity-good', clientActivityId: 'client-good', name: 'goood', activityMode: 'hiking',
+    }];
+    const canonical = [
+      { lat: -41.2865, lng: 174.7762, t: 1, segmentId: 'first' },
+      { lat: -41.2865, lng: 174.7772, t: 2, segmentId: 'first' },
+      { lat: -41.2865, lng: 174.7782, t: 3, segmentId: 'first' },
+    ];
+    mockLoadActivityTrackPoints.mockResolvedValue(canonical);
+
+    const first = render(<OrderedRouteEditorScreen />);
+    await first.findByDisplayValue('goood Route');
+    fireEvent.press(first.getByTestId('route-tool-trim'));
+    fireEvent.press(first.getByTestId('trim-start-25'));
+    fireEvent.press(first.getByTestId('route-trim-apply'));
+    expect(first.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
+    fireEvent.press(first.getByLabelText('Back'));
+    expect(mockAbandonDraft).toHaveBeenCalledWith('owner-a', 'activity:activity-good:create-a');
+    first.unmount();
+
+    mockScreenParams = {
+      creationSource: 'activity', fromSessionId: 'activity-good', creationSessionId: 'create-b',
+    };
+    const second = render(<OrderedRouteEditorScreen />);
+    await second.findByDisplayValue('goood Route');
+    expect(second.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(true);
+    expect(second.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates)
+      .toEqual(canonical.map(point => [point.lng, point.lat]));
+  });
+
+  test('R1 two explicit creates from one Activity save independent Route values', async () => {
+    mockRecoveredDraftEnabled = false;
+    mockSessionState.sessions = [{
+      id: 'activity-good', clientActivityId: 'client-good', name: 'goood', activityMode: 'hiking',
+    }];
+    const canonical = [
+      { lat: -41.2865, lng: 174.7762, t: 1, segmentId: 'first' },
+      { lat: -41.2865, lng: 174.7772, t: 2, segmentId: 'first' },
+      { lat: -41.2865, lng: 174.7782, t: 3, segmentId: 'first' },
+    ];
+    mockLoadActivityTrackPoints.mockResolvedValue(canonical);
+    mockRouteState.addRoute.mockResolvedValueOnce('derived-a').mockResolvedValueOnce('derived-b');
+
+    mockScreenParams = {
+      creationSource: 'activity', fromSessionId: 'activity-good', creationSessionId: 'save-a',
+    };
+    const first = render(<OrderedRouteEditorScreen />);
+    await first.findByDisplayValue('goood Route');
+    fireEvent.changeText(first.getByLabelText('Route name'), 'First derived');
+    fireEvent.press(first.getByTestId('ordered-route-save'));
+    await waitFor(() => expect(mockNavReplace).toHaveBeenCalledWith('MapHistory', { routeId: 'derived-a' }));
+    first.unmount();
+
+    mockScreenParams = {
+      creationSource: 'activity', fromSessionId: 'activity-good', creationSessionId: 'save-b',
+    };
+    const second = render(<OrderedRouteEditorScreen />);
+    await second.findByDisplayValue('goood Route');
+    fireEvent.press(second.getByTestId('route-tool-trim'));
+    fireEvent.press(second.getByTestId('trim-start-25'));
+    fireEvent.press(second.getByTestId('route-trim-apply'));
+    fireEvent.changeText(second.getByLabelText('Route name'), 'Second derived');
+    fireEvent.press(second.getByTestId('ordered-route-save'));
+    await waitFor(() => expect(mockNavReplace).toHaveBeenCalledWith('MapHistory', { routeId: 'derived-b' }));
+
+    expect(mockRouteState.addRoute).toHaveBeenCalledTimes(2);
+    const firstSaved = mockRouteState.addRoute.mock.calls[0][0];
+    const secondSaved = mockRouteState.addRoute.mock.calls[1][0];
+    expect(firstSaved.name).toBe('First derived');
+    expect(secondSaved.name).toBe('Second derived');
+    expect(firstSaved.points.map(({ lat, lng }: any) => ({ lat, lng })))
+      .toEqual(canonical.map(({ lat, lng }) => ({ lat, lng })));
+    expect(secondSaved.points).not.toEqual(firstSaved.points);
+  });
+
   test('a clear replacement uses the intent-safe line without opening provider review UI', async () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
@@ -360,6 +456,57 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.queryByTestId('source-ordered-route-review-original')).toBeNull();
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
     expect(mockDraft.parts[0].points).toHaveLength(3);
+  });
+
+  test('R2 old Scenario E now replaces its uniquely anchored zigzag through the active editor', async () => {
+    const { HUMAN_ROUTE_DRAWING_FIXTURES } = require('../../features/routeDrawing/humanIntentFixtures');
+    const fixture = HUMAN_ROUTE_DRAWING_FIXTURES.ambiguousCrossing;
+    mockLoadedDraft = {
+      ...mockDraft,
+      parts: [{
+        id: 'scenario-e-route', resolution: 'point' as const,
+        points: fixture.originalRoute.map(({ lat, lng }: any) => ({ lat, lng })),
+      }],
+    };
+    mockEmittedStroke = fixture.rawStroke.map(({ lat, lng }: any) => ({ lat, lng }));
+    mockResolveDraw.mockResolvedValueOnce({
+      outcome: 'accepted',
+      points: fixture.providerGeometry.map(({ lat, lng }: any) => ({ lat, lng })),
+    });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByTestId('route-tool-draw'));
+    fireEvent.press(screen.getByTestId('emit-route-stroke'));
+    await waitFor(() => expect(screen.queryByTestId('emit-route-stroke')).toBeNull());
+
+    expect(mockResolveDraw).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Redraw from clearer positions so Cairn can preserve the right path.')).toBeNull();
+    const committed = screen.getByTestId('source-ordered-route-parts').props.shape.features
+      .flatMap((feature: any) => feature.geometry.coordinates);
+    expect(committed).toEqual(fixture.rawStroke.map(({ lng, lat }: any) => [lng, lat]));
+    expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
+  });
+
+  test('R2 true competing endpoint occurrences stay unchanged with a specific hint before provider', async () => {
+    const { HUMAN_ROUTE_DRAWING_FIXTURES } = require('../../features/routeDrawing/humanIntentFixtures');
+    const fixture = HUMAN_ROUTE_DRAWING_FIXTURES.trueAmbiguousOccurrences;
+    mockLoadedDraft = {
+      ...mockDraft,
+      parts: [{
+        id: 'scenario-e2-route', resolution: 'point' as const,
+        points: fixture.originalRoute.map(({ lat, lng }: any) => ({ lat, lng })),
+      }],
+    };
+    mockEmittedStroke = fixture.rawStroke.map(({ lat, lng }: any) => ({ lat, lng }));
+    const original = fixture.originalRoute.map(({ lng, lat }: any) => [lng, lat]);
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByTestId('route-tool-draw'));
+    fireEvent.press(screen.getByTestId('emit-route-stroke'));
+    expect(await screen.findByText('Redraw from clearer positions so Cairn can preserve the right path.')).toBeTruthy();
+    expect(mockResolveDraw).not.toHaveBeenCalled();
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates).toEqual(original);
+    expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(true);
   });
 
   test.each([
@@ -402,6 +549,78 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.queryByTestId('source-ordered-route-growth')).toBeNull();
   });
 
+  test('R3/R4 Point retrace selects the ordered known subpath, follows one reveal timeline, and user pan cancels it', async () => {
+    reduceMotionSpy.mockResolvedValueOnce(false);
+    mockLoadedDraft = {
+      ...mockDraft,
+      parts: [{ ...mockDraft.parts[0], resolution: 'draw-matched' as const }],
+    };
+    mockGetPointInView.mockResolvedValue([195, 5_000]);
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    await waitFor(() => expect(screen.getByTestId('source-ordered-route-growth')).toBeTruthy());
+    const growth = screen.getByTestId('source-ordered-route-growth').props.shape.geometry.coordinates;
+    expect(growth[0]).toEqual([174.7782, -41.2865]);
+    expect(growth).not.toContainEqual([174.7777, -41.2858]);
+    await waitFor(() => expect(mockGetPointInView).toHaveBeenCalled());
+    await waitFor(() => expect(mockCameraSet).toHaveBeenCalledWith(expect.objectContaining({
+      zoomLevel: 14,
+      heading: 0,
+      pitch: 0,
+      animationDuration: 96,
+    })));
+
+    const cameraCallsBeforePan = mockCameraSet.mock.calls.length;
+    fireEvent(screen.getByTestId('mock-map'), 'cameraChanged', {
+      properties: { center: [174.7775, -41.2864], zoom: 14, heading: 0, pitch: 0, isUserInteraction: true },
+    });
+    expect(screen.queryByTestId('source-ordered-route-growth')).toBeNull();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 80)); });
+    expect(mockCameraSet).toHaveBeenCalledTimes(cameraCallsBeforePan);
+    const committed = screen.getByTestId('source-ordered-route-parts').props.shape.features;
+    expect(committed).toHaveLength(2);
+    expect(committed[1].geometry.coordinates).toEqual([
+      [174.7782, -41.2865],
+      [174.7772, -41.2865],
+    ]);
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features).toHaveLength(1);
+  });
+
+  test('R3 mixed Draw then Point actions keep a coincident seam and do not append the provider triangle', async () => {
+    reduceMotionSpy.mockResolvedValueOnce(true);
+    mockLoadedDraft = {
+      ...mockDraft,
+      parts: [{ ...mockDraft.parts[0], resolution: 'draw-matched' as const }],
+    };
+    mockResolveDraw.mockResolvedValueOnce({ outcome: 'accepted', points: mockStroke });
+    mockResolvePoint.mockResolvedValueOnce({
+      outcome: 'accepted',
+      points: [
+        { lat: -41.2865, lng: 174.7782 },
+        { lat: -41.2865, lng: 174.7772 },
+      ],
+    });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByTestId('route-tool-draw'));
+    fireEvent.press(screen.getByTestId('emit-route-stroke'));
+    await waitFor(() => expect(screen.queryByTestId('emit-route-stroke')).toBeNull());
+
+    fireEvent.press(screen.getByTestId('route-tool-point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(1));
+    const features = screen.getByTestId('source-ordered-route-parts').props.shape.features;
+    expect(features.length).toBeGreaterThanOrEqual(2);
+    const before = features.at(-2).geometry.coordinates;
+    const continuation = features.at(-1).geometry.coordinates;
+    expect(continuation[0]).toEqual(before.at(-1));
+    expect(continuation).not.toContainEqual([174.7777, -41.2858]);
+  });
+
   test.each(['plan', 'activity'] as const)('Trim is map-visible for a %s draft, previews live, applies once, and Undo restores it', async origin => {
     mockLoadedDraft = { ...mockDraft, origin };
     const screen = render(<OrderedRouteEditorScreen />);
@@ -409,6 +628,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     const original = screen.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates;
     fireEvent.press(screen.getByText('Trim'));
     expect(screen.getByTestId('route-trim-strip')).toBeTruthy();
+    expect(screen.queryByText('Cancel')).toBeNull();
+    expect(screen.queryByText('Drag the handles to shorten your route.')).toBeNull();
     expect(screen.getByTestId('source-ordered-route-trim-original')).toBeTruthy();
     fireEvent.press(screen.getByTestId('trim-start-25'));
     fireEvent.press(screen.getByTestId('trim-end-75'));
@@ -438,7 +659,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.press(screen.getByText('Point'));
     expect(screen.getByTestId('route-point-context')).toBeTruthy();
     expect(screen.getByTestId('route-point-confirm')).toBeTruthy();
-    expect(screen.getByText('Move the map to choose your next point.')).toBeTruthy();
+    expect(screen.getByText('Move map to choose.')).toBeTruthy();
     expect(screen.getByText('Add point')).toBeTruthy();
     expect(screen.queryByTestId('route-point-add-here')).toBeNull();
     expect(screen.queryByText('Add destination')).toBeNull();
@@ -451,7 +672,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByTestId('route-tool-draw'));
-    expect(screen.getByText('Draw to extend or reshape your route.')).toBeTruthy();
+    expect(screen.getByText('Draw to reshape your route.')).toBeTruthy();
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
     await waitFor(() => expect(screen.queryByTestId('emit-route-stroke')).toBeNull());
     expect(screen.getByText('Line added. Move the map, or tap Draw to continue.')).toBeTruthy();

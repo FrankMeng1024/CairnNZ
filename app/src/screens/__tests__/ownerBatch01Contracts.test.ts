@@ -22,7 +22,12 @@ describe('Owner device Batch 01 source contracts', () => {
     const home = read('screens/HomeScreen.tsx');
     expect(settings).toContain('qaTapCount.current < 5');
     expect(settings).toContain("updateSetting('debugMode', true)");
-    expect(settings).toContain("navigation.navigate('Debug')");
+    expect(settings).toContain("activitySimulatorBuildCapable ? 'Debug' : 'RouteDrawingDiagnostics'");
+    const routeDiagnostics = read('screens/RouteDrawingDiagnosticsScreen.tsx');
+    expect(routeDiagnostics).toContain('testID="route-owner-trace-toggle"');
+    expect(routeDiagnostics).toContain("nav.navigate('RouteDrawingReplay'");
+    expect(routeDiagnostics).toContain('exportRouteDrawingTrace');
+    expect(routeDiagnostics).not.toContain('telemetryApiKey');
     expect(home).not.toContain('testID="internal-qa-entry"');
   });
 
@@ -32,10 +37,11 @@ describe('Owner device Batch 01 source contracts', () => {
     const memory = read('features/memory/screens/MemoryScreen.tsx');
     expect(activityMap).toContain('delayMs={activityMapHasRendered ? 280 : 0}');
     expect(memoryMap).toContain('delayMs={memoryMapHasRendered ? 280 : 0}');
-    expect(memory).toContain('Restoring Memory…');
+    expect(memory).toContain('testID="memory-entry-veil"');
+    expect(memory).toContain('delayMs={MEMORY_ENTRY_MESSAGE_DELAY_MS}');
     expect(memory).not.toContain('Map still loading…');
-    expect(memory).toContain('if (!mapReady || fogReady) return undefined;');
-    expect(memory).toContain('setTimeout(() => setRestoringMemoryVisible(true), 600)');
+    expect(memory).not.toContain('PREPARING YOUR MAP');
+    expect(memory).not.toContain('Restoring Memory…');
   });
 
   test('Home uses actionable balanced recent activity language', () => {

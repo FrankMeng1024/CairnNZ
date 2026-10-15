@@ -1,6 +1,7 @@
 import {
   applyDrawTransaction,
   classifyDrawTransaction,
+  classifyDrawTransactionWithDiagnostics,
   continueDrawTransaction,
   nearestOrderedPositions,
   selectIntentAwareDrawCandidate,
@@ -80,6 +81,34 @@ describe('Route edit transaction classification', () => {
     expect(intent.options).toHaveLength(1);
     expect(intent.options[0].start.pointIndex).toBe(1);
     expect(intent.options[0].end.pointIndex).toBe(3);
+  });
+
+  test('R2 diagnostics record unique occurrences while interior crossings stay non-boundaries', () => {
+    const base = appendOrderedSegment(empty(), [
+      p(0, 0), p(30, 30), p(60, -30), p(90, 30), p(120, 0),
+    ], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const classified = classifyDrawTransactionWithDiagnostics(base.draft, [p(0, 0), p(120, 0)]);
+    expect(classified.intent.kind).toBe('replace');
+    expect(classified.diagnostics.startCandidates).toHaveLength(1);
+    expect(classified.diagnostics.endCandidates).toHaveLength(1);
+    expect(classified.diagnostics.startCandidates[0]).toMatchObject({ distanceM: 0, arcM: 0 });
+    expect(classified.diagnostics.interiorCrossingCount).toBeGreaterThanOrEqual(2);
+    expect(classified.diagnostics.crossingPolicy).toBe('interior-crossings-ignored-as-boundaries');
+    expect(classified.diagnostics.ambiguityReason).toBe('none');
+  });
+
+  test('R2 true ambiguity is competing ordered endpoint occurrences on a retraced route', () => {
+    const base = appendOrderedSegment(empty(), [p(0, 0), p(50, 0), p(0, 0), p(50, 0), p(100, 0)], 'point');
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const classified = classifyDrawTransactionWithDiagnostics(base.draft, [p(0, 0), p(20, 30), p(50, 0)]);
+    expect(classified.intent).toMatchObject({ kind: 'pending-replace', ambiguity: 'overlap' });
+    expect(classified.diagnostics.startCandidates.length).toBeGreaterThan(1);
+    expect(classified.diagnostics.endCandidates.length).toBeGreaterThan(1);
+    expect(classified.diagnostics.ambiguityReason).toBe('near-equal-intervals');
+    expect(classified.diagnostics.intervalCandidates.every(option => Number.isFinite(option.shapeScore))).toBe(true);
   });
 
   test('repeated coordinate occurrences stay unchanged instead of guessing an interval', () => {

@@ -31,13 +31,13 @@ import { TrimSlider } from '../components/map/TrimSlider';
 import { FontSize, RadiusRole, Spacing } from '../components/tokens';
 import { getCurrentRegion } from '../config/regions';
 import { buildStandardConfig, getMapStyleForTheme, themeToStandardPreset } from '../config/mapbox';
-import { mapOrnamentsAbove } from '../config/mapOrnaments';
+import { groupedMapOrnamentsAbove } from '../config/mapOrnaments';
 import { qualifiedLocationPoint } from '../services/locationFixPolicy';
 import { segmentTrace } from '../features/activity/activityContracts';
 import { loadActivityFinalArtifact } from '../features/activity/activityFinalArtifact';
 import {
   applyDrawTransaction,
-  classifyDrawTransaction,
+  classifyDrawTransactionWithDiagnostics,
   selectIntentAwareDrawCandidate,
   type DrawTransactionIntent,
 } from '../features/route/routeEditTransactions';
@@ -47,6 +47,7 @@ import {
   isRouteDrawingDiagnosticsEnabled,
   recordRouteDrawingTrace,
   selectRouteDrawingOperation,
+  selectRouteDrawingSessionOperation,
 } from '../features/routeDrawing/routeDrawingTrace';
 import {
   appendOrderedSegment,
@@ -72,17 +73,28 @@ import {
   type RouteDraftHistory,
 } from '../features/route/orderedRouteDraft';
 import {
+  abandonRoutePlannerDraft,
   loadRoutePlannerDraft,
   plannerDraftMatchesRequest,
   removeRoutePlannerDraft,
   saveRoutePlannerDraft,
 } from '../features/route/routePlannerDraftPersistence';
+import {
+  activityCreationDraftId,
+  mayRecoverRouteCreationDraft,
+} from '../features/route/routeCreationSession';
 import { RoutePlaceSearchError, searchRoutePlaces, type RoutePlaceSearchResult } from '../features/route/routePlaceSearch';
 import {
   resolveDrawPlan,
   resolvePointPlan,
   type RouteProviderReason,
 } from '../features/route/routePlanningProvider';
+import { selectPointRouteCandidate } from '../features/route/pointRouteIntent';
+import {
+  pointGrowthDurationMs,
+  pointGrowthFrame,
+  pointInsideUsableMap,
+} from '../features/route/pointGrowthTimeline';
 import { routeMatchesIdentity } from '../features/route/routeContracts';
 import { selectActivityRouteImportPoints } from '../features/route/activityRouteImport';
 import { canonicalRouteGeometry } from '../features/route/canonicalRouteGeometry';
@@ -91,6 +103,7 @@ import { useVisualTheme } from '../hooks/useVisualTheme';
 import { uuidv4 } from '../services/offlineQueue';
 import { useAppStore } from '../store/useAppStore';
 import { useRouteStore, type RoutePoint } from '../store/useRouteStore';
+import { useSettingsStore } from '../store/useSettingsStore';
 import { loadActivityTrackPoints, useSessionStore } from '../store/useSessionStore';
 import { useDistance } from '../utils/distanceFormat';
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
@@ -152,8 +165,9 @@ interface PendingPointReview {
 interface RouteGrowthAnimation {
   key: string;
   hiddenPartId?: string;
-  points: RoutePoint[];
-  visibleCount: number;
+  visiblePoints: RoutePoint[];
+  head: RoutePoint;
+  progress: number;
 }
 
 function providerReason(reason: RouteProviderReason): string {
@@ -219,8 +233,10 @@ export function OrderedRouteEditorScreen() {
   const fromSessionId = params.fromSessionId as string | undefined;
   const sharedDeliveryId = params.sharedDeliveryId as string | undefined;
   const creationSource = params.creationSource as 'plan' | 'activity' | 'shared-copy' | undefined;
+  const creationSessionId = params.creationSessionId as string | undefined;
   const readOnlyShared = Boolean(sharedDeliveryId && creationSource !== 'shared-copy');
   const ownerId = useAppStore(state => String(state.user?.id ?? ''));
+  const debugMode = useSettingsStore(state => state.debugMode);
   const sessions = useSessionStore(state => state.sessions);
   const routes = useRouteStore(state => state.routes);
   const sharedRoutes = useRouteStore(state => state.sharedRoutes);
@@ -256,6 +272,7 @@ export function OrderedRouteEditorScreen() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [planningMemoryScope, setPlanningMemoryScope] = useState<'self' | 'combined'>('self');
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
+  const routeGrowthAnimationRef = useRef<RouteGrowthAnimation | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<RoutePlaceSearchResult[]>([]);
@@ -276,6 +293,9 @@ export function OrderedRouteEditorScreen() {
   // This ref is the synchronous owner for the one allowed provider transaction.
   const providerTransactionRef = useRef(false);
   const routeAnimationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const routeAnimationGenerationRef = useRef(0);
+  const cameraFollowBusyRef = useRef(false);
+  const animationTraceBucketRef = useRef(-1);
   const initializedKeyRef = useRef('');
   const initializingKeyRef = useRef('');
   const initialLocationAttemptedRef = useRef(false);
@@ -284,6 +304,9 @@ export function OrderedRouteEditorScreen() {
   const cameraBearingRef = useRef(0);
   const cameraPitchRef = useRef(0);
   const traceDraftIdRef = useRef<string | null>(null);
+  const abandonedDraftIdsRef = useRef(new Set<string>());
+  const savedDraftIdsRef = useRef(new Set<string>());
+  const editorGenerationRef = useRef(0);
   const tool: PlannerTool = mode === 'DrawArmed' || mode === 'Drawing'
     ? 'draw'
     : mode === 'PointTargeting'
@@ -306,9 +329,13 @@ export function OrderedRouteEditorScreen() {
     return () => { mounted = false; subscription.remove(); };
   }, []);
 
-  const finishRouteAnimation = useCallback(() => {
+  const finishRouteAnimation = useCallback((reason: 'complete' | 'superseded' | 'user-camera' | 'tool-switch' | 'undo' | 'camera-action' = 'superseded') => {
+    routeAnimationGenerationRef.current += 1;
     if (routeAnimationTimerRef.current) clearInterval(routeAnimationTimerRef.current);
     routeAnimationTimerRef.current = null;
+    cameraFollowBusyRef.current = false;
+    recordRouteDrawingTrace('route_point_animation_ended', { reason }, 'state');
+    routeGrowthAnimationRef.current = null;
     setRouteGrowthAnimation(null);
   }, []);
 
@@ -317,7 +344,7 @@ export function OrderedRouteEditorScreen() {
     operationAbortRef.current = null;
     activeOperationIdRef.current = null;
     providerTransactionRef.current = false;
-    finishRouteAnimation();
+    finishRouteAnimation('tool-switch');
     setProviderBusy(false);
     setResolvingDrawPoints([]);
     setPendingReview(null);
@@ -335,23 +362,111 @@ export function OrderedRouteEditorScreen() {
   }, [invalidatePendingOperation, saving, setTool]);
 
   const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
-    finishRouteAnimation();
-    if (reduceMotion || points.length < 3) return;
-    const durationMs = 1150;
+    finishRouteAnimation('superseded');
+    if (points.length < 2) return;
+    if (reduceMotion) {
+      const target = points.at(-1)!;
+      cameraRef.current?.setCamera?.({
+        centerCoordinate: [target.lng, target.lat],
+        zoomLevel: cameraZoomRef.current,
+        heading: cameraBearingRef.current,
+        pitch: cameraPitchRef.current,
+        animationDuration: 160,
+      });
+      recordRouteDrawingTrace('route_point_reduced_motion_transition', { target, durationMs: 160 }, 'state');
+      return;
+    }
+    const durationMs = pointGrowthDurationMs(points);
     const tickMs = 32;
     const startedAt = Date.now();
     const key = uuidv4();
-    setRouteGrowthAnimation({ key, hiddenPartId, points, visibleCount: 2 });
+    const animationGeneration = routeAnimationGenerationRef.current;
+    const initialFrame = pointGrowthFrame(points, 0);
+    if (!initialFrame) return;
+    animationTraceBucketRef.current = -1;
+    const initialAnimation = { key, hiddenPartId, visiblePoints: initialFrame.visiblePoints, head: initialFrame.head, progress: 0 };
+    routeGrowthAnimationRef.current = initialAnimation;
+    setRouteGrowthAnimation(initialAnimation);
+    recordRouteDrawingTrace('route_point_animation_started', {
+      animationId: key,
+      durationMs,
+      pointCount: points.length,
+      totalM: initialFrame.totalM,
+      zoom: cameraZoomRef.current,
+      bearing: cameraBearingRef.current,
+      pitch: cameraPitchRef.current,
+    }, 'state');
     routeAnimationTimerRef.current = setInterval(() => {
+      if (routeAnimationGenerationRef.current !== animationGeneration) return;
       const elapsed = Date.now() - startedAt;
       const progress = Math.min(1, elapsed / durationMs);
-      const visibleCount = Math.max(2, Math.ceil(progress * points.length));
-      setRouteGrowthAnimation(current => current?.key === key ? { ...current, visibleCount } : current);
-      if (progress >= 1) finishRouteAnimation();
+      const frame = pointGrowthFrame(points, progress);
+      if (!frame) { finishRouteAnimation('complete'); return; }
+      const nextAnimation = {
+        key,
+        hiddenPartId,
+        visiblePoints: frame.visiblePoints,
+        head: frame.head,
+        progress,
+      };
+      routeGrowthAnimationRef.current = nextAnimation;
+      setRouteGrowthAnimation(current => {
+        if (current?.key !== key) return current;
+        return nextAnimation;
+      });
+      const bucket = Math.min(4, Math.floor(progress * 4));
+      if (bucket !== animationTraceBucketRef.current) {
+        animationTraceBucketRef.current = bucket;
+        recordRouteDrawingTrace('route_point_animation_frame', {
+          animationId: key,
+          progress,
+          travelledM: frame.travelledM,
+          totalM: frame.totalM,
+          head: frame.head,
+        }, 'state');
+      }
+      if (!cameraFollowBusyRef.current && mapViewRef.current?.getPointInView) {
+        cameraFollowBusyRef.current = true;
+        void Promise.resolve(mapViewRef.current.getPointInView([frame.head.lng, frame.head.lat]))
+          .then((screenPoint: unknown) => {
+            if (routeAnimationGenerationRef.current !== animationGeneration) return;
+            if (!Array.isArray(screenPoint) || screenPoint.length < 2) return;
+            const inside = pointInsideUsableMap(
+              { x: Number(screenPoint[0]), y: Number(screenPoint[1]) },
+              {
+                width: viewportWidth,
+                height: viewportHeight,
+                topInset: insets.top,
+                bottomInset: bottomWorkspaceHeight || insets.bottom + (compactViewport ? 126 : 138),
+              },
+            );
+            if (inside) return;
+            cameraRef.current?.setCamera?.({
+              centerCoordinate: [frame.head.lng, frame.head.lat],
+              zoomLevel: cameraZoomRef.current,
+              heading: cameraBearingRef.current,
+              pitch: cameraPitchRef.current,
+              animationDuration: 96,
+            });
+            recordRouteDrawingTrace('route_point_camera_follow', {
+              animationId: key,
+              progress,
+              head: frame.head,
+              reason: 'drawing-head-left-usable-map',
+              zoom: cameraZoomRef.current,
+              bearing: cameraBearingRef.current,
+              pitch: cameraPitchRef.current,
+            }, 'state');
+          })
+          .finally(() => {
+            if (routeAnimationGenerationRef.current === animationGeneration) cameraFollowBusyRef.current = false;
+          });
+      }
+      if (progress >= 1) finishRouteAnimation('complete');
     }, tickMs);
-  }, [finishRouteAnimation, reduceMotion]);
+  }, [bottomWorkspaceHeight, compactViewport, finishRouteAnimation, insets.bottom, insets.top, reduceMotion, viewportHeight, viewportWidth]);
 
-  useEffect(() => () => finishRouteAnimation(), [finishRouteAnimation]);
+  useEffect(() => () => finishRouteAnimation('superseded'), [finishRouteAnimation]);
 
   useEffect(() => {
     if (!briefStatus) return undefined;
@@ -382,8 +497,10 @@ export function OrderedRouteEditorScreen() {
   }, []);
 
   useEffect(() => {
-    const initKey = `${ownerId}|${routeId ?? ''}|${fromSessionId ?? ''}|${sharedDeliveryId ?? ''}|${creationSource ?? ''}`;
+    const initKey = `${ownerId}|${routeId ?? ''}|${fromSessionId ?? ''}|${sharedDeliveryId ?? ''}|${creationSource ?? ''}|${creationSessionId ?? ''}`;
     if (!ownerId || initializedKeyRef.current === initKey || initializingKeyRef.current === initKey) return;
+    const editorGeneration = editorGenerationRef.current + 1;
+    editorGenerationRef.current = editorGeneration;
     initializingKeyRef.current = initKey;
     initialLocationAttemptedRef.current = false;
     userMovedCameraRef.current = false;
@@ -391,21 +508,29 @@ export function OrderedRouteEditorScreen() {
     let cancelled = false;
     setInitializing(true);
     setError(null);
+    historyRef.current = null;
+    initialDraftRef.current = null;
+    setHistory(null);
+    setName('');
+    setMode('Browse');
+    setTrimStart(0);
+    setTrimEnd(1);
     void (async () => {
       let draft: OrderedRouteDraft;
       let initialName = '';
       let initialPermission: 'personal' | 'friend' = 'personal';
+      const activityDraftId = activityCreationDraftId({ creationSource, fromSessionId, creationSessionId });
       const requestedDraftId = routeId
         ? `route:${routeId}`
-        : fromSessionId
-          ? `activity:${fromSessionId}`
+        : fromSessionId && creationSource === 'activity'
+          ? activityDraftId ?? undefined
           : sharedDeliveryId && creationSource === 'shared-copy'
             ? `received:${sharedDeliveryId}`
             : undefined;
-      if (!readOnlyShared) {
+      if (!readOnlyShared && mayRecoverRouteCreationDraft({ creationSource, fromSessionId, creationSessionId })) {
         const recovered = await loadRoutePlannerDraft(ownerId, requestedDraftId);
         if (recovered && plannerDraftMatchesRequest(recovered, requestedDraftId)) {
-          if (cancelled) return;
+          if (cancelled || editorGenerationRef.current !== editorGeneration) return;
           historyRef.current = recovered.history;
           initialDraftRef.current = cloneOrderedDraft(recovered.history.present);
           setHistory(recovered.history);
@@ -453,7 +578,11 @@ export function OrderedRouteEditorScreen() {
           .filter(segment => segment.length >= 2)
           .map(segment => segment.map(point => ({ lat: point.lat, lng: point.lng, alt: point.alt ?? null })));
         if (segments.length === 0) throw new Error('This Activity has no usable path.');
-        draft = createImportedOrderedDraft({ draftId: `activity:${fromSessionId}`, ownerId, segments });
+        draft = createImportedOrderedDraft({
+          draftId: activityDraftId ?? `activity:${fromSessionId}:legacy-${editorGeneration}`,
+          ownerId,
+          segments,
+        });
         initialName = `${session.name || (session.activityMode === 'running' ? 'Run' : 'Hike')} Route`;
       } else if (sharedDeliveryId) {
         let shared = useRouteStore.getState().sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
@@ -498,7 +627,7 @@ export function OrderedRouteEditorScreen() {
         draft = createEmptyOrderedDraft({ draftId: `plan:${uuidv4()}`, ownerId });
       }
       const nextHistory = { present: draft, past: [] };
-      if (cancelled) return;
+      if (cancelled || editorGenerationRef.current !== editorGeneration) return;
       historyRef.current = nextHistory;
       initialDraftRef.current = cloneOrderedDraft(draft);
       initialBoundsRef.current = initialBounds(draft);
@@ -520,11 +649,12 @@ export function OrderedRouteEditorScreen() {
       if (initializingKeyRef.current === initKey) initializingKeyRef.current = '';
       operationAbortRef.current?.abort();
     };
-  }, [creationSource, fromSessionId, loadRouteDetail, loadSharedRouteDetail, ownerId, readOnlyShared, routeId, sharedDeliveryId]);
+  }, [creationSessionId, creationSource, fromSessionId, loadRouteDetail, loadSharedRouteDetail, ownerId, readOnlyShared, routeId, sharedDeliveryId]);
 
   useEffect(() => {
     if (!history || initializing || readOnlyShared) return;
     const timeout = setTimeout(() => {
+      if (abandonedDraftIdsRef.current.has(history.present.draftId)) return;
       void saveRoutePlannerDraft({
         ownerId,
         draftId: history.present.draftId,
@@ -578,6 +708,38 @@ export function OrderedRouteEditorScreen() {
       }
     };
   }, [fromSessionId, routeId, traceDraftId]);
+
+  const abandonUnsavedCreation = useCallback(() => {
+    const current = historyRef.current;
+    if (!current || routeId || readOnlyShared || creationSource !== 'activity'
+      || savedDraftIdsRef.current.has(current.present.draftId)
+      || abandonedDraftIdsRef.current.has(current.present.draftId)) return;
+    const draftId = current.present.draftId;
+    abandonedDraftIdsRef.current.add(draftId);
+    editorGenerationRef.current += 1;
+    invalidatePendingOperation();
+    selectRouteDrawingSessionOperation();
+    recordRouteDrawingTrace('route_creation_abandoned', {
+      draftId,
+      sourceActivityId: fromSessionId ?? null,
+      creationSessionId: creationSessionId ?? null,
+      revision: current.present.revision,
+      undoDepth: current.past.length,
+      finalGeometry: orderedDraftPoints(current.present),
+    }, 'session');
+    endRouteDrawingTrace('cancelled');
+    void abandonRoutePlannerDraft(ownerId, draftId).catch(cause => {
+      recordRouteDrawingTrace('route_creation_abandon_failed', {
+        draftId,
+        error: String(cause),
+      }, 'persistence');
+    });
+  }, [creationSessionId, creationSource, fromSessionId, invalidatePendingOperation, ownerId, readOnlyShared, routeId]);
+
+  useEffect(() => {
+    const removeListener = nav.addListener?.('beforeRemove', abandonUnsavedCreation);
+    return typeof removeListener === 'function' ? removeListener : undefined;
+  }, [abandonUnsavedCreation, nav]);
   const mapStyle = getMapStyleForTheme('outdoors', mapTheme);
   const lightPreset = themeToStandardPreset(mapTheme);
   const region = getCurrentRegion();
@@ -589,19 +751,20 @@ export function OrderedRouteEditorScreen() {
     || initialLocation.status === 'ready'
     || initialLocation.status === 'unavailable';
   const bottomClearance = bottomWorkspaceHeight || insets.bottom + (compactViewport ? 126 : 138);
-  const routeOrnaments = mapOrnamentsAbove(bottomClearance + Spacing.sm);
+  const routeOrnaments = groupedMapOrnamentsAbove(bottomClearance + Spacing.sm);
   const handleBottomWorkspaceLayout = useCallback((event: LayoutChangeEvent) => {
     const measured = Math.ceil(event.nativeEvent.layout.height);
     setBottomWorkspaceHeight(current => current === measured ? current : measured);
   }, []);
 
   const moveCamera = useCallback((point: RoutePoint, zoomLevel = 13.5) => {
+    finishRouteAnimation('camera-action');
     cameraRef.current?.setCamera?.({
       centerCoordinate: [point.lng, point.lat],
       zoomLevel,
       animationDuration: reduceMotion ? 0 : 420,
     });
-  }, [reduceMotion]);
+  }, [finishRouteAnimation, reduceMotion]);
 
   useEffect(() => {
     if (initializing || !draft || initialBoundsRef.current || initialLocationAttemptedRef.current) return;
@@ -639,12 +802,13 @@ export function OrderedRouteEditorScreen() {
   }, [draft, initializing]);
 
   const showRouteOverview = useCallback(() => {
+    finishRouteAnimation('camera-action');
     const points = historyRef.current?.present.parts.flatMap(part => part.points) ?? [];
     if (points.length < 2) { setError('Add a path before showing its overview.'); return; }
     const ne: [number, number] = [Math.max(...points.map(point => point.lng)), Math.max(...points.map(point => point.lat))];
     const sw: [number, number] = [Math.min(...points.map(point => point.lng)), Math.min(...points.map(point => point.lat))];
     cameraRef.current?.fitBounds?.(ne, sw, [insets.top + 110, 88, bottomClearance + 30, 36], reduceMotion ? 0 : 420);
-  }, [bottomClearance, insets.top, reduceMotion]);
+  }, [bottomClearance, finishRouteAnimation, insets.top, reduceMotion]);
 
   const fitReviewPoints = useCallback((points: RoutePoint[]) => {
     if (points.length < 2) return;
@@ -793,6 +957,8 @@ export function OrderedRouteEditorScreen() {
       inputBoundary: nativeCapture ? 'native-rngh' : 'development-coordinate-injection',
       startedAtMs: nativeCapture?.startedAtMs ?? null,
       endedAtMs: nativeCapture?.endedAtMs ?? null,
+      sampleCapacity: nativeCapture?.sampleCapacity ?? null,
+      droppedSampleCount: nativeCapture?.droppedSampleCount ?? null,
       viewportWidth,
       viewportHeight,
       camera,
@@ -813,22 +979,39 @@ export function OrderedRouteEditorScreen() {
     const latitude = raw[0]?.lat ?? cameraCenterRef.current?.lat ?? 0;
     const metresPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / (2 ** cameraZoomRef.current);
     const attachmentToleranceM = Math.max(4, Math.min(20, metresPerPixel * 24));
-    const intent = classifyDrawTransaction(current.present, raw, undefined, attachmentToleranceM);
+    const classification = classifyDrawTransactionWithDiagnostics(current.present, raw, undefined, attachmentToleranceM);
+    const intent = classification.intent;
     recordRouteDrawingTrace('route_draw_transaction_intent', {
       strokeId,
       intent,
       attachmentToleranceM,
       initialRevision: current.present.revision,
       undoDepth: current.past.length,
+      preStateGeometry: orderedDraftPoints(current.present),
+      diagnostics: classification.diagnostics,
     }, 'intent');
     if (intent.kind === 'reject') {
-      recordRouteDrawingTrace('route_draw_rejected', { strokeId, code: intent.code }, 'selection');
+      recordRouteDrawingTrace('route_draw_rejected', {
+        strokeId,
+        code: intent.code,
+        diagnostics: classification.diagnostics,
+        initialRevision: current.present.revision,
+        finalRevision: current.present.revision,
+        unchangedFinalGeometry: orderedDraftPoints(current.present),
+      }, 'selection');
       setError(editFailure(intent.code));
       setMode('Browse');
       return;
     }
     if (intent.kind === 'pending-bridge' || intent.kind === 'pending-replace') {
-      recordRouteDrawingTrace('route_draw_ambiguous', { strokeId, intent }, 'attachment');
+      recordRouteDrawingTrace('route_draw_ambiguous', {
+        strokeId,
+        intent,
+        diagnostics: classification.diagnostics,
+        initialRevision: current.present.revision,
+        finalRevision: current.present.revision,
+        unchangedFinalGeometry: orderedDraftPoints(current.present),
+      }, 'attachment');
       setError(intent.kind === 'pending-replace' && intent.ambiguity === 'overlap'
         ? 'Redraw from clearer positions so Cairn can preserve the right path.'
         : 'Redraw with both ends clearly attached. Your Route is unchanged.');
@@ -945,20 +1128,28 @@ export function OrderedRouteEditorScreen() {
   }, [applyResolvedDraw, ownerId, viewportHeight, viewportWidth]);
 
   useEffect(() => {
-    if (!__DEV__ || Platform.OS !== 'web') return undefined;
-    // Development-only visual-QA bridge. It submits geographic ink through
+    if (!debugMode || Platform.OS !== 'web') return undefined;
+    // Explicit-debug visual-QA bridge. It submits geographic ink through
     // the real transaction classifier, provider fencing and editor state
     // machine because the native RNGH drawing surface is intentionally not
     // mounted on Web. The hook is absent from production/native runtimes.
     const qaRoot = globalThis as unknown as {
-      __cairnRouteEditorQa?: { submitStroke: (points: RoutePoint[]) => Promise<void> };
+      __cairnRouteEditorQa?: {
+        submitStroke: (points: RoutePoint[]) => Promise<void>;
+        getPointAnimationSnapshot: () => RouteGrowthAnimation | null;
+        getCurrentDraft: () => OrderedRouteDraft | null;
+      };
     };
-    const bridge = { submitStroke: handleDrawStroke };
+    const bridge = {
+      submitStroke: handleDrawStroke,
+      getPointAnimationSnapshot: () => routeGrowthAnimationRef.current,
+      getCurrentDraft: () => historyRef.current?.present ?? null,
+    };
     qaRoot.__cairnRouteEditorQa = bridge;
     return () => {
       if (qaRoot.__cairnRouteEditorQa === bridge) delete qaRoot.__cairnRouteEditorQa;
     };
-  }, [handleDrawStroke]);
+  }, [debugMode, handleDrawStroke]);
 
   const applyResolvedPoint = useCallback((points: RoutePoint[], intent: PointTransactionIntent, baseRevision: number) => {
     const current = historyRef.current;
@@ -1005,6 +1196,22 @@ export function OrderedRouteEditorScreen() {
       target,
       intent,
       baseRevision,
+      preStateDraft: current.present,
+      preStateGeometry: orderedDraftPoints(current.present),
+      currentEndpointOccurrence: {
+        partId: current.present.parts.at(-1)?.id ?? null,
+        pointIndex: current.present.parts.at(-1)?.points.length
+          ? current.present.parts.at(-1)!.points.length - 1
+          : null,
+      },
+      providerContract: {
+        profile: 'mapbox/walking',
+        waypointOrder: ['start', 'target'],
+        bearings: null,
+        continueStraight: 'walking-default-false',
+        overview: 'full',
+        geometry: 'geojson',
+      },
     }, 'provider-request');
     const token = beginRouteOperation(current.present, ownerId, 'point', operationId);
     operationAbortRef.current?.abort();
@@ -1027,7 +1234,22 @@ export function OrderedRouteEditorScreen() {
       if (!live || controller.signal.aborted
         || !routeOperationIsCurrent(live.present, ownerId, token, activeOperationIdRef.current)) return;
       if (result.outcome === 'accepted') {
-        applyResolvedPoint(result.points, intent, baseRevision);
+        const selection = selectPointRouteCandidate({
+          draft: live.present,
+          target,
+          provider: result.points,
+        });
+        recordRouteDrawingTrace('route_point_candidate_selected', {
+          strokeId: operationId,
+          source: selection.source,
+          reason: selection.reason,
+          knownRetrace: selection.knownRetrace,
+          occurrence: selection.occurrence,
+          providerDeviationM: selection.providerDeviationM,
+          lengthInflation: selection.lengthInflation,
+          selectedGeometry: selection.points,
+        }, 'selection');
+        applyResolvedPoint(selection.points, intent, baseRevision);
       }
       else if (result.outcome === 'review') {
         setPendingPointReview({ kind: 'point', points: result.points, intent, reason: result.reason, baseRevision });
@@ -1068,6 +1290,7 @@ export function OrderedRouteEditorScreen() {
 
   const handleUndo = useCallback(() => {
     if (providerTransactionRef.current || hasUncommittedRouteEdit) return;
+    finishRouteAnimation('undo');
     const current = historyRef.current;
     if (!current) return;
     const next = undoRouteHistory(current);
@@ -1081,7 +1304,7 @@ export function OrderedRouteEditorScreen() {
       undoDepthAfter: next.past.length,
       finalGeometry: orderedDraftPoints(next.present),
     }, 'state');
-  }, [hasUncommittedRouteEdit]);
+  }, [finishRouteAnimation, hasUncommittedRouteEdit]);
 
   const applyTrim = useCallback(() => {
     const current = historyRef.current;
@@ -1142,6 +1365,7 @@ export function OrderedRouteEditorScreen() {
         } : undefined) ?? undefined;
       }
       if (!savedId) throw new Error('Route save did not complete.');
+      savedDraftIdsRef.current.add(current.present.draftId);
       recordRouteDrawingTrace('route_save_succeeded', {
         savedRouteId: savedId,
         draftId: current.present.draftId,
@@ -1216,9 +1440,7 @@ export function OrderedRouteEditorScreen() {
     properties: {},
     geometry: {
       type: 'LineString' as const,
-      coordinates: routeGrowthAnimation.points
-        .slice(0, routeGrowthAnimation.visibleCount)
-        .map(point => [point.lng, point.lat]),
+      coordinates: routeGrowthAnimation.visiblePoints.map(point => [point.lng, point.lat]),
     },
   } : null;
   const routeEndpoints = (() => {
@@ -1269,12 +1491,13 @@ export function OrderedRouteEditorScreen() {
     properties: {},
     geometry: { type: 'LineString' as const, coordinates: reviewPoints.map(point => [point.lng, point.lat]) },
   } : null;
+  const contextSurface = theme.mode === 'night' ? '#AAB8A7' : theme.mode === 'sunset' ? '#D8D4B9' : '#DCE5D4';
+  const contextInk = '#17372D';
   const routeContextContent = readOnlyShared ? null : trimOpen ? (
-    <View style={styles.contextContent} testID="route-trim-strip">
-      <Text style={[styles.contextText, { color: theme.foreground }]}>Drag the handles to shorten your route.</Text>
-      <TrimSlider trimStartFrac={trimStart} trimEndFrac={trimEnd} onTrimStartChange={setTrimStart} onTrimEndChange={setTrimEnd} totalLengthM={orderedDraftDistanceM(draft)} />
-      <View style={styles.compactActionRow}>
-        <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => selectEditorTool('browse')}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Cancel</Text></TouchableOpacity>
+    <View style={styles.trimInlineRow} testID="route-trim-strip">
+      <View style={styles.trimSliderFrame}>
+        <TrimSlider trimStartFrac={trimStart} trimEndFrac={trimEnd} onTrimStartChange={setTrimStart} onTrimEndChange={setTrimEnd} totalLengthM={orderedDraftDistanceM(draft)} />
+      </View>
         <TouchableOpacity
           style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }, trimStart <= 0.001 && trimEnd >= 0.999 && styles.disabled]}
           onPress={applyTrim}
@@ -1283,11 +1506,10 @@ export function OrderedRouteEditorScreen() {
           accessibilityState={{ disabled: trimStart <= 0.001 && trimEnd >= 0.999 }}
           testID="route-trim-apply"
         ><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Apply</Text></TouchableOpacity>
-      </View>
     </View>
   ) : manualRecovery ? (
     <View style={styles.contextContent} testID="route-freehand-choice">
-      <Text style={[styles.contextText, { color: theme.foreground }]}>Keep the line you drew?</Text>
+      <Text style={[styles.contextText, { color: contextInk }]}>Keep the line you drew?</Text>
       <View style={styles.compactActionRow}>
         <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setManualRecovery(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => { const pending = manualRecovery; setManualRecovery(null); applyResolvedDraw(pending.points, 'draw-manual', pending.intent); }} testID="route-use-drawing"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use drawing</Text></TouchableOpacity>
@@ -1295,7 +1517,7 @@ export function OrderedRouteEditorScreen() {
     </View>
   ) : pendingReview || pendingPointReview ? (
     <View style={styles.contextContent} testID="route-inline-review">
-      <Text style={[styles.contextText, { color: theme.foreground }]}>{pendingPointReview ? 'Keep this walking path?' : 'Keep this path?'}</Text>
+      <Text style={[styles.contextText, { color: contextInk }]}>{pendingPointReview ? 'Keep this walking path?' : 'Keep this path?'}</Text>
       <View style={styles.compactActionRow}>
         <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setPendingReview(null); setPendingPointReview(null); setMode(pendingPointReview ? 'PointTargeting' : 'DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>{pendingPointReview ? 'Cancel' : 'Redraw'}</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
@@ -1306,20 +1528,20 @@ export function OrderedRouteEditorScreen() {
     </View>
   ) : mode === 'MatchPending' || providerBusy ? (
     <View style={[styles.contextContent, styles.contextProgress]}>
-      <View style={styles.busyRow}><ActivityIndicator size="small" color={theme.primary} /><Text style={[styles.contextText, { color: theme.foreground }]}>Finding a path…</Text></View>
+      <View style={styles.busyRow}><ActivityIndicator size="small" color={contextInk} /><Text style={[styles.contextText, { color: contextInk }]}>Finding a path…</Text></View>
       <TouchableOpacity onPress={() => { invalidatePendingOperation(); setMode('Browse'); }} accessibilityRole="button"><Text style={[styles.linkText, { color: theme.primary }]}>Cancel</Text></TouchableOpacity>
     </View>
   ) : tool === 'point' ? (
-    <View style={styles.contextContent} testID="route-point-context">
-      <Text style={[styles.contextText, { color: theme.foreground }]}>Move the map to choose your next point.</Text>
+    <View style={styles.pointInlineRow} testID="route-point-context">
+      <Text style={[styles.contextText, { color: contextInk }]}>Move map to choose.</Text>
       <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={confirmPointTarget} disabled={providerBusy} accessibilityRole="button" accessibilityLabel={pointActionLabel} testID="route-point-confirm"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{pointActionLabel}</Text></TouchableOpacity>
     </View>
   ) : tool === 'draw' ? (
-    <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: theme.foreground }]}>{draft.gaps.length > 0 ? 'Draw across the dotted line to join the route.' : 'Draw to extend or reshape your route.'}</Text></View>
+    <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: contextInk }]}>{draft.gaps.length > 0 ? 'Draw across the dotted gap to join your route.' : 'Draw to reshape your route.'}</Text></View>
   ) : error ? (
-    <TouchableOpacity style={styles.contextContent} onPress={() => setError(null)} accessibilityRole="button" testID="route-context-message"><Text style={[styles.contextText, { color: theme.foreground }]}>{error}</Text></TouchableOpacity>
+    <TouchableOpacity style={styles.contextContent} onPress={() => setError(null)} accessibilityRole="button" testID="route-context-message"><Text style={[styles.contextText, { color: contextInk }]}>{error}</Text></TouchableOpacity>
   ) : briefStatus ? (
-    <View style={styles.contextContent} testID="route-brief-status"><Text style={[styles.contextText, { color: theme.foregroundSecondary }]}>{briefStatus}</Text></View>
+    <View style={styles.contextContent} testID="route-brief-status"><Text style={[styles.contextText, { color: contextInk }]}>{briefStatus}</Text></View>
   ) : null;
 
   return (
@@ -1359,7 +1581,10 @@ export function OrderedRouteEditorScreen() {
             if (Number.isFinite(bearing)) cameraBearingRef.current = bearing;
             const pitch = Number(event?.properties?.pitch);
             if (Number.isFinite(pitch)) cameraPitchRef.current = pitch;
-            if (event?.properties?.isUserInteraction) userMovedCameraRef.current = true;
+            if (event?.properties?.isUserInteraction) {
+              userMovedCameraRef.current = true;
+              finishRouteAnimation('user-camera');
+            }
           }}
         >
           {StyleImport ? <StyleImport key={lightPreset} id="basemap" existing config={buildStandardConfig(mapTheme) as any} /> : null}
@@ -1480,9 +1705,10 @@ export function OrderedRouteEditorScreen() {
               void loadMemorySubscriptions();
             }}
             accessibilityRole="button"
-            accessibilityLabel="More Route actions"
+            accessibilityLabel="Exploration layers"
+            accessibilityState={{ selected: moreOpen }}
             testID="route-more"
-          ><Icon name="Settings2" size={19} color={theme.iconActive} /></TouchableOpacity>
+          ><Icon name="Layers" size={19} color={moreOpen ? theme.primary : theme.iconActive} /></TouchableOpacity>
         ) : null}
       </View>
 
@@ -1502,19 +1728,6 @@ export function OrderedRouteEditorScreen() {
             ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine + Friends</Text></TouchableOpacity>
           </View>
           {memorySubscriptions.length === 0 ? <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>No shared Friend Fog is available. Mine stays visible.</Text> : null}
-          <TouchableOpacity
-            style={[styles.popoverAction, { borderTopColor: theme.borderSubtle }]}
-            onPress={() => {
-              invalidatePendingOperation();
-              const initial = initialDraftRef.current;
-              if (initial) {
-                const next = { present: cloneOrderedDraft(initial), past: [] };
-                historyRef.current = next;
-                setHistory(next);
-              }
-              setMoreOpen(false);
-            }}
-          ><Icon name="RotateCcw" size={15} color={theme.destructive} /><Text style={[styles.popoverActionText, { color: theme.destructive }]}>Reset draft</Text></TouchableOpacity>
         </View>
       ) : null}
 
@@ -1522,7 +1735,7 @@ export function OrderedRouteEditorScreen() {
         styles.topBar,
         { paddingTop: insets.top + Spacing.sm, paddingBottom: Spacing.sm, backgroundColor: theme.mapOverlay, borderBottomColor: theme.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth },
       ]} pointerEvents="box-none">
-        <BackButton variant="inline" onPress={() => nav.goBack()} />
+        <BackButton variant="inline" onPress={() => { abandonUnsavedCreation(); nav.goBack(); }} />
         <View style={styles.topTitleWrap}>
           <Text testID="route-editor-title" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
         </View>
@@ -1577,7 +1790,7 @@ export function OrderedRouteEditorScreen() {
           ) : (
             <>
               {routeContextContent ? (
-                <View style={[styles.contextPanel, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]} testID="route-context-slot">
+                <View style={[styles.contextPanel, { backgroundColor: contextSurface, borderColor: 'rgba(23,55,45,0.22)' }]} testID="route-context-slot">
                   {routeContextContent}
                 </View>
               ) : null}
@@ -1613,6 +1826,7 @@ export function OrderedRouteEditorScreen() {
                     style={[styles.nameInput, compactViewport && styles.nameInputCompact, { color: theme.foreground }]}
                     accessibilityLabel="Route name"
                   />
+                  <View pointerEvents="none" style={styles.nameEditAffordance}><Icon name="Edit3" size={15} color={theme.iconActive} strokeWidth={2} /></View>
                 </View>
                 <TouchableOpacity
                   style={[styles.compactSaveAction, { backgroundColor: theme.primaryAction }, (draft.parts.length === 0 || !name.trim() || hasUncommittedRouteEdit) && styles.disabled]}
@@ -1705,9 +1919,10 @@ const styles = StyleSheet.create({
   bottomCardCompact: { paddingHorizontal: Spacing.sm, paddingTop: 6, gap: 6 },
   summary: { borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
   summaryCompact: { paddingHorizontal: Spacing.sm, paddingVertical: 2 },
-  nameInput: { flex: 1, minHeight: 40, fontSize: FontSize.body, fontWeight: '700', paddingHorizontal: Spacing.md, paddingVertical: 0 },
+  nameInput: { flex: 1, minHeight: 40, fontSize: FontSize.body, fontWeight: '700', paddingLeft: Spacing.md, paddingRight: 38, paddingVertical: 0 },
   nameInputCompact: { fontSize: FontSize.body, lineHeight: 20 },
   nameInputFrame: { flex: 1, minWidth: 0, minHeight: 44, borderWidth: 1, borderRadius: RadiusRole.input, justifyContent: 'center' },
+  nameEditAffordance: { position: 'absolute', right: 12, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
   nameSaveRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   nameReadOnly: { fontSize: FontSize.h3, fontWeight: '700', marginBottom: Spacing.xs },
   helper: { fontSize: FontSize.small, lineHeight: 18 },
@@ -1733,6 +1948,9 @@ const styles = StyleSheet.create({
   trimHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
   contextPanel: { minHeight: 52, borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.sm, paddingVertical: 8, justifyContent: 'center' },
   contextContent: { justifyContent: 'center', gap: 8 },
+  pointInlineRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  trimInlineRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  trimSliderFrame: { flex: 1, minWidth: 0, paddingHorizontal: 2 },
   contextProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   contextText: { flexShrink: 1, fontSize: FontSize.small, lineHeight: 18, fontWeight: '600' },
   compactActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.sm },

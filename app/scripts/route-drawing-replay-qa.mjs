@@ -13,6 +13,7 @@ const allFixtureIds = [
   'mixedTool',
   'intentionalTurn',
   'ambiguousCrossing',
+  'trueAmbiguousOccurrences',
   'flattenVWideZoom',
 ];
 const fixtureIds = process.env.CAIRN_ROUTE_REPLAY_FIXTURES
@@ -122,8 +123,8 @@ try {
   const editorToolFiles = [];
   if (process.env.CAIRN_ROUTE_REPLAY_CAPTURE_EDITOR === 'true') {
     const routeFixture = {
-      id: 'o81-ui-evidence-route',
-      clientRouteId: 'o81-ui-evidence-route',
+      id: 'o82-ui-evidence-route',
+      clientRouteId: 'o82-ui-evidence-route',
       name: 'Kauri Ridge Loop',
       createdAt: 1_760_000_000_000,
       updatedAt: 1_760_000_000_000,
@@ -168,19 +169,59 @@ try {
     await page.getByTestId('ordered-route-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
     await page.waitForTimeout(2_000);
 
-    const captureEditor = async (name, appearance, toolTestId) => {
+    let currentTool = 'browse';
+    const activateTool = async (tool) => {
+      if (tool === currentTool) return;
+      if (tool === 'browse') {
+        if (currentTool === 'draw') await page.getByTestId('route-tool-draw').click();
+        else {
+          await page.getByTestId('route-tool-draw').click();
+          await page.getByTestId('route-tool-draw').click();
+        }
+      } else {
+        await page.getByTestId(`route-tool-${tool}`).click();
+      }
+      currentTool = tool;
+      await page.waitForTimeout(120);
+    };
+    const captureEditor = async (name, width, height, appearance, tool = 'browse', action = null) => {
+      await page.setViewportSize({ width, height });
       await page.evaluate(value => globalThis.__cairnStores.useSettingsStore.getState().saveAll({ appearance: value }), appearance);
-      if (toolTestId) await page.getByTestId(toolTestId).click();
-      await page.waitForTimeout(900);
-      const file = path.join(outputDir, `${name}-390x844.png`);
+      await activateTool(tool);
+      if (action === 'layers') await page.getByTestId('route-more').click();
+      if (action === 'keyboard') await page.getByLabel('Route name').focus();
+      await page.waitForTimeout(320);
+      const file = path.join(outputDir, `${name}.png`);
       await page.screenshot({ path: file, fullPage: false });
-      editorToolFiles.push({ name, appearance, file });
+      const contextBox = await page.getByTestId('route-context-slot').count()
+        ? await page.getByTestId('route-context-slot').boundingBox()
+        : null;
+      const saveBox = await page.getByTestId('ordered-route-save').boundingBox();
+      const logoBox = await page.locator('.mapboxgl-ctrl-logo').boundingBox().catch(() => null);
+      const attributionBox = await page.locator('.mapboxgl-ctrl-attrib').boundingBox().catch(() => null);
+      editorToolFiles.push({ name, width, height, appearance, tool, action, file, contextBox, saveBox, logoBox, attributionBox });
+      if (action === 'layers') await page.getByTestId('route-more').click();
+      if (action === 'keyboard') await page.getByLabel('Route name').blur();
     };
 
-    await captureEditor('route-editor-browse-day', 'day', null);
-    await captureEditor('route-editor-draw-day', 'day', 'route-tool-draw');
-    await captureEditor('route-editor-point-sunset', 'sunset', 'route-tool-point');
-    await captureEditor('route-editor-trim-night', 'night', 'route-tool-trim');
+    await captureEditor('route-editor-360-browse-day', 360, 844, 'day');
+    await captureEditor('route-editor-360-draw-day', 360, 844, 'day', 'draw');
+    await captureEditor('route-editor-360-point-day', 360, 844, 'day', 'point');
+    await captureEditor('route-editor-360-trim-day', 360, 844, 'day', 'trim');
+    await captureEditor('route-editor-360-layers-day', 360, 844, 'day', 'browse', 'layers');
+    await captureEditor('route-editor-360-keyboard-day', 360, 540, 'day', 'browse', 'keyboard');
+    await captureEditor('route-editor-390-browse-sunset', 390, 844, 'sunset');
+    await captureEditor('route-editor-390-draw-sunset', 390, 844, 'sunset', 'draw');
+    await captureEditor('route-editor-390-point-sunset', 390, 844, 'sunset', 'point');
+    await captureEditor('route-editor-390-trim-sunset', 390, 844, 'sunset', 'trim');
+    await captureEditor('route-editor-430-browse-night', 430, 844, 'night');
+    await captureEditor('route-editor-430-draw-night', 430, 844, 'night', 'draw');
+    await captureEditor('route-editor-430-point-night', 430, 844, 'night', 'point');
+    await captureEditor('route-editor-430-trim-night', 430, 844, 'night', 'trim');
+
+    const visibleText = await page.locator('body').innerText();
+    if (visibleText.includes('Reset draft')) runtimeErrors.push('visual-contract: Reset draft is visible');
+    if (visibleText.includes('Drag the handles to shorten your route.')) runtimeErrors.push('visual-contract: redundant Trim instruction is visible');
   }
 
   const report = {

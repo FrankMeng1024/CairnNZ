@@ -13,6 +13,7 @@ jest.mock('../../../store/storage', () => ({
 
 import { appendOrderedSegment, createEmptyOrderedDraft, createImportedOrderedDraft } from '../orderedRouteDraft';
 import {
+  abandonRoutePlannerDraft,
   loadRoutePlannerDraft,
   plannerDraftMatchesRequest,
   purgeRoutePlannerDraftsForOwner,
@@ -111,7 +112,7 @@ describe('Route planner draft recovery', () => {
     const latest = await loadRoutePlannerDraft('owner-a');
     expect(latest).not.toBeNull();
     expect(plannerDraftMatchesRequest(latest!, undefined)).toBe(false);
-    expect(plannerDraftMatchesRequest(latest!, 'activity:walk-a')).toBe(true);
+    expect(plannerDraftMatchesRequest(latest!, 'activity:walk-a')).toBe(false);
 
     const planDraft = createEmptyOrderedDraft({ draftId: 'plan:new-a', ownerId: 'owner-a' });
     await saveRoutePlannerDraft({
@@ -131,5 +132,37 @@ describe('Route planner draft recovery', () => {
     await purgeRoutePlannerDraftsForOwner('owner-a');
     expect(await loadRoutePlannerDraft('owner-a')).toBeNull();
     expect((await loadRoutePlannerDraft('owner-b'))?.draftId).toBe('plan-b');
+  });
+
+  test('abandoning one creation draft makes it unavailable without deleting sibling drafts', async () => {
+    const first = createEmptyOrderedDraft({ draftId: 'activity:goood:create-a', ownerId: 'owner-a' });
+    const second = createEmptyOrderedDraft({ draftId: 'activity:goood:create-b', ownerId: 'owner-a' });
+    await saveRoutePlannerDraft({ ownerId: 'owner-a', draftId: first.draftId, history: { present: first, past: [] }, name: 'A', permission: 'personal', sourceActivityId: 'goood' });
+    await saveRoutePlannerDraft({ ownerId: 'owner-a', draftId: second.draftId, history: { present: second, past: [] }, name: 'B', permission: 'personal', sourceActivityId: 'goood' });
+    await abandonRoutePlannerDraft('owner-a', first.draftId);
+    expect(await loadRoutePlannerDraft('owner-a', first.draftId)).toBeNull();
+    expect((await loadRoutePlannerDraft('owner-a', second.draftId))?.name).toBe('B');
+  });
+
+  test('a late write already queued by an abandoned session cannot recreate it', async () => {
+    const { storage } = require('../../../store/storage');
+    const originalSet = storage.setItem.getMockImplementation();
+    let releaseFirstWrite!: () => void;
+    const firstWriteBlocked = new Promise<void>(resolve => { releaseFirstWrite = resolve; });
+    storage.setItem.mockImplementationOnce(async (key: string, value: string) => {
+      await firstWriteBlocked;
+      mockMemory.set(key, value);
+    });
+    const draft = createEmptyOrderedDraft({ draftId: 'activity:goood:late-a', ownerId: 'owner-a' });
+    const pendingSave = saveRoutePlannerDraft({
+      ownerId: 'owner-a', draftId: draft.draftId, history: { present: draft, past: [] },
+      name: 'Abandoned', permission: 'personal', sourceActivityId: 'goood',
+    });
+    await Promise.resolve();
+    const abandonment = abandonRoutePlannerDraft('owner-a', draft.draftId);
+    releaseFirstWrite();
+    await Promise.all([pendingSave, abandonment]);
+    expect(await loadRoutePlannerDraft('owner-a', draft.draftId)).toBeNull();
+    storage.setItem.mockImplementation(originalSet);
   });
 });

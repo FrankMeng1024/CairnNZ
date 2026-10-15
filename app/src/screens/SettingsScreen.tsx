@@ -626,7 +626,6 @@ export function SettingsScreen() {
   const handleSignOut = () => setSignOutOpen(true);
 
   const handleOwnerQaUnlock = () => {
-    if (!activitySimulatorBuildCapable) return;
     qaTapCount.current += 1;
     if (qaTapReset.current) clearTimeout(qaTapReset.current);
     qaTapReset.current = setTimeout(() => { qaTapCount.current = 0; }, 1800);
@@ -635,7 +634,7 @@ export function SettingsScreen() {
     if (qaTapReset.current) clearTimeout(qaTapReset.current);
     updateSetting('debugMode', true);
     haptic.notification('success');
-    navigation.navigate('Debug');
+    navigation.navigate(activitySimulatorBuildCapable ? 'Debug' : 'RouteDrawingDiagnostics');
   };
 
   const scrollContentStyle = useMemo(() => [

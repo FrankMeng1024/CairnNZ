@@ -33,6 +33,9 @@ jest.mock('expo-linear-gradient', () => ({
 jest.mock('../../components/BackButton', () => ({ BackButton: () => null }));
 jest.mock('../../components/ActivityIcons', () => ({ HikingIcon: () => null, RunningIcon: () => null }));
 jest.mock('../../components/Icon', () => ({ Icon: () => null }));
+jest.mock('../../features/route/routeCreationSession', () => ({
+  createRouteCreationSessionId: jest.fn(() => 'creation-session-1'),
+}));
 jest.mock('../../components/SyncBadge', () => ({ SyncBadge: () => null }));
 jest.mock('../../components/PressBtn', () => {
   const ReactModule = require('react'); const { TouchableOpacity } = require('react-native');
@@ -148,7 +151,7 @@ describe('RoutesScreen final creation and sibling-list flow', () => {
     fireEvent.press(row);
     fireEvent.press(row);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('RouteEditor', {
-      creationSource: 'activity', fromSessionId: 'activity-1',
+      creationSource: 'activity', fromSessionId: 'activity-1', creationSessionId: 'creation-session-1',
     }));
     expect(mockNavigate.mock.calls.filter(call => call[0] === 'RouteEditor')).toHaveLength(1);
     expect(screen.queryByTestId('route-create-source')).toBeNull();

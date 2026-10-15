@@ -33,6 +33,7 @@ import { RoutesScreen } from '../screens/RoutesScreen';
 import { OrderedRouteEditorScreen as RouteEditorScreen } from '../screens/OrderedRouteEditorScreen';
 import { DebugScreen } from '../screens/DebugScreen';
 import { RouteDrawingReplayScreen } from '../screens/RouteDrawingReplayScreen';
+import { RouteDrawingDiagnosticsScreen } from '../screens/RouteDrawingDiagnosticsScreen';
 import { PlantScreen } from '../screens/PlantScreen';
 import { FriendsScreen } from '../screens/FriendsScreen';
 import { FriendContentScreen } from '../screens/FriendContentScreen';
@@ -94,6 +95,8 @@ export type RootStackParamList = {
     fromSessionId?: string;
     sharedDeliveryId?: string;
     creationSource?: 'plan' | 'activity' | 'shared-copy';
+    /** Fresh identity for one explicit Create action; the Activity id is only a template id. */
+    creationSessionId?: string;
   } | undefined;
   Plant: {
     origin: {
@@ -127,6 +130,7 @@ export type RootStackParamList = {
   OfflineMaps: undefined;
   Memory: undefined;
   Debug: undefined;
+  RouteDrawingDiagnostics: undefined;
   RouteDrawingReplay: {
     sessionId?: string;
     operationId?: string;
@@ -356,7 +360,8 @@ export function RootNavigator() {
             <Stack.Screen name="OfflineMaps" component={OfflineMapsScreen} />
             <Stack.Screen name="Memory"      component={MemoryScreen} />
             <Stack.Screen name="Debug"       component={DebugScreen} />
-            {__DEV__ && <Stack.Screen name="RouteDrawingReplay" component={RouteDrawingReplayScreen} />}
+            <Stack.Screen name="RouteDrawingDiagnostics" component={RouteDrawingDiagnosticsScreen} />
+            <Stack.Screen name="RouteDrawingReplay" component={RouteDrawingReplayScreen} />
             {__DEV__ && <Stack.Screen name="MarkDetailDevPreview" component={MarkDetailDevPreviewScreen} />}
             {__DEV__ && (
               <Stack.Screen

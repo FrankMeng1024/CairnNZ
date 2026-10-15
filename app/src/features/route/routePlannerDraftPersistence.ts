@@ -10,6 +10,11 @@ import type { DrawTransactionIntent } from './routeEditTransactions';
 const KEY_PREFIX = '@cairn:route-planner:v1:';
 const ownerWriteTails = new Map<string, Promise<void>>();
 const ownerGenerations = new Map<string, number>();
+const draftGenerations = new Map<string, number>();
+
+function draftGenerationKey(ownerId: string, draftId: string): string {
+  return `${ownerId}\u0000${draftId}`;
+}
 
 export interface PersistedRoutePlannerDraft {
   schemaVersion: 1;
@@ -34,6 +39,7 @@ export function plannerDraftMatchesRequest(
   record: PersistedRoutePlannerDraft,
   requestedDraftId?: string,
 ): boolean {
+  if (record.sourceActivityId || requestedDraftId?.startsWith('activity:')) return false;
   if (requestedDraftId) return record.draftId === requestedDraftId;
   return record.history.present.origin === 'plan'
     && !record.sourceActivityId
@@ -88,11 +94,14 @@ export async function saveRoutePlannerDraft(
     savedAt: Date.now(),
   };
   const generation = ownerGenerations.get(record.ownerId) ?? 0;
+  const draftGeneration = draftGenerations.get(draftGenerationKey(record.ownerId, record.draftId)) ?? 0;
   const previous = ownerWriteTails.get(record.ownerId) ?? Promise.resolve();
   const write = previous.catch(() => undefined).then(async () => {
     if ((ownerGenerations.get(record.ownerId) ?? 0) !== generation) return;
+    if ((draftGenerations.get(draftGenerationKey(record.ownerId, record.draftId)) ?? 0) !== draftGeneration) return;
     await storage.setItem(draftKey(record.ownerId, record.draftId), JSON.stringify(snapshot), { strict: true });
     if ((ownerGenerations.get(record.ownerId) ?? 0) !== generation) return;
+    if ((draftGenerations.get(draftGenerationKey(record.ownerId, record.draftId)) ?? 0) !== draftGeneration) return;
     await storage.setItem(latestKey(record.ownerId), record.draftId, { strict: true });
   });
   ownerWriteTails.set(record.ownerId, write);
@@ -123,6 +132,21 @@ export async function loadRoutePlannerDraft(
 }
 
 export async function removeRoutePlannerDraft(ownerId: string, draftId: string): Promise<void> {
+  await ownerWriteTails.get(ownerId)?.catch(() => undefined);
+  await storage.removeItem(draftKey(ownerId, draftId), { strict: true });
+  const latest = await storage.getItemStrict(latestKey(ownerId));
+  if (latest === draftId) await storage.removeItem(latestKey(ownerId), { strict: true });
+}
+
+/**
+ * Explicitly abandoning one creation session invalidates writes that were
+ * already queued when Back was pressed, without touching saved Routes or
+ * drafts owned by another creation session. The editor separately fences any
+ * later debounce/callback with its abandoned-session set.
+ */
+export async function abandonRoutePlannerDraft(ownerId: string, draftId: string): Promise<void> {
+  const key = draftGenerationKey(ownerId, draftId);
+  draftGenerations.set(key, (draftGenerations.get(key) ?? 0) + 1);
   await ownerWriteTails.get(ownerId)?.catch(() => undefined);
   await storage.removeItem(draftKey(ownerId, draftId), { strict: true });
   const latest = await storage.getItemStrict(latestKey(ownerId));

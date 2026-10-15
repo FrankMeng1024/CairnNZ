@@ -139,7 +139,7 @@ function applyLogoOffset(map: any, position: MapViewProps['logoPosition']) {
   logo.style.right = position.right != null ? `${position.right}px` : '';
 }
 
-export function MapView({
+export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   style,
   styleURL,
   styleJSON,
@@ -154,9 +154,22 @@ export function MapView({
   logoPosition,
   attributionPosition,
   children,
-}: MapViewProps) {
+}: MapViewProps, ref) {
   const mapRef = useRef<MapRef | null>(null);
   const loadingStartedRef = useRef(false);
+
+  React.useImperativeHandle(ref, () => ({
+    getPointInView: async (coordinate: [number, number]) => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      const point = inner?.project?.(coordinate);
+      return point ? [point.x, point.y] : null;
+    },
+    getCoordinateFromView: async (screenPoint: [number, number]) => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      const coordinate = inner?.unproject?.(screenPoint);
+      return coordinate ? [coordinate.lng, coordinate.lat] : null;
+    },
+  }), []);
 
   useEffect(() => () => {
     const inner = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -310,7 +323,17 @@ export function MapView({
             if (!onCameraChanged) return;
             const c = e.target.getCenter();
             const z = e.target.getZoom();
-            onCameraChanged({ properties: { center: [c.lng, c.lat], zoom: z } });
+            onCameraChanged({
+              properties: {
+                center: [c.lng, c.lat],
+                zoom: z,
+                heading: e.target.getBearing?.() ?? 0,
+                pitch: e.target.getPitch?.() ?? 0,
+                // react-map-gl supplies originalEvent for pointer/wheel/touch
+                // moves, while programmatic easeTo/jumpTo updates omit it.
+                isUserInteraction: Boolean(e.originalEvent),
+              },
+            });
           }}
           style={{ width: '100%', height: '100%' }}
         >
@@ -326,7 +349,7 @@ export function MapView({
       </div>
     </MapInstanceContext.Provider>
   );
-}
+});
 
 // ── Camera (mostly a no-op wrapper for prop discovery) ────────────────
 interface CameraProps {
@@ -355,6 +378,8 @@ interface CameraRef {
   setCamera: (config: {
     centerCoordinate?: [number, number];
     zoomLevel?: number;
+    heading?: number;
+    pitch?: number;
     animationDuration?: number;
   }) => void;
   fitBounds: (
@@ -390,14 +415,18 @@ export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(p
       if (!inner) return;
       const center = config.centerCoordinate;
       const z = config.zoomLevel;
+      const bearing = config.heading;
+      const pitch = config.pitch;
       const duration = config.animationDuration ?? 0;
       if (duration <= 0) {
-        if (center) inner.jumpTo({ center, zoom: z ?? inner.getZoom() });
+        if (center) inner.jumpTo({ center, zoom: z ?? inner.getZoom(), bearing, pitch });
         else if (typeof z === 'number') inner.setZoom(z);
       } else {
         inner.easeTo({
           center: center ?? inner.getCenter(),
           zoom: z ?? inner.getZoom(),
+          bearing: bearing ?? inner.getBearing?.(),
+          pitch: pitch ?? inner.getPitch?.(),
           duration,
         });
       }

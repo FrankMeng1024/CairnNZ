@@ -19,4 +19,13 @@ export function mapOrnamentsAbove(bottomClearance: number) {
   };
 }
 
+/** Route workspace keeps both genuine legal controls together at lower-left. */
+export function groupedMapOrnamentsAbove(bottomClearance: number) {
+  const bottom = Math.max(8, Math.round(bottomClearance));
+  return {
+    logoPosition: { bottom, left: 8 } satisfies MapOrnamentPosition,
+    attributionPosition: { bottom, left: 92 } satisfies MapOrnamentPosition,
+  };
+}
+
 export const MAP_ORNAMENTS_EDGE = mapOrnamentsAbove(8);

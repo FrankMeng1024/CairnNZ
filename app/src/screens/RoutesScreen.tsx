@@ -37,6 +37,7 @@ import { FontSize, IconSize, RadiusRole, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useDistance } from '../utils/distanceFormat';
 import { formatDuration } from '../utils/geo';
+import { createRouteCreationSessionId } from '../features/route/routeCreationSession';
 import {
   activityDateLabel,
   activityDisplayName,
@@ -524,7 +525,11 @@ export function RoutesScreen() {
               renderItem={({ item: session }) => (
                 <TouchableOpacity
                   style={[styles.pickerRow, { borderColor: theme.borderSubtle }]}
-                  onPress={() => leaveCreateFlow({ creationSource: 'activity', fromSessionId: session.id })}
+                  onPress={() => leaveCreateFlow({
+                    creationSource: 'activity',
+                    fromSessionId: session.id,
+                    creationSessionId: createRouteCreationSessionId(),
+                  })}
                   accessibilityRole="button"
                   testID={`route-activity-${session.id}`}
                 >

@@ -45,6 +45,11 @@ describe('Owner 13 root-cause source contracts', () => {
     expect(editor).not.toContain('Connect next gap');
     expect(editor).not.toContain('factual Activity gap');
     expect(editor).not.toContain('Plan only · not walking evidence');
+    expect(editor).not.toContain('Reset draft');
+    expect(editor).toContain('styles.pointInlineRow');
+    expect(editor).toContain('styles.trimInlineRow');
+    expect(editor).toContain('name="Layers"');
+    expect(editor).toContain('name="Edit3"');
   });
 
   test('native Draw has exclusive map gesture ownership while armed', () => {

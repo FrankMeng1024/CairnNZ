@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager, FlatList } from 'react-native';
+import { Animated, View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager, FlatList } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -34,6 +34,7 @@ import { useFriendStore } from '../../../store/useFriendStore';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap, type MemoryMapHandle } from '../components/MemoryMap';
+import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
 import { MemoryScopeToggle } from '../components/MemoryScopeToggle';
 import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
 import { BackButton } from '../../../components/BackButton';
@@ -66,6 +67,10 @@ import {
   resolveMemoryInitialMapCenter,
   type MemoryCityViewport,
 } from '../services/memoryEntryCameraPolicy';
+import {
+  MEMORY_ENTRY_MESSAGE_DELAY_MS,
+  MEMORY_ENTRY_SETTLE_MS,
+} from '../services/memoryEntryPresentation';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
 // v427: hierarchy migrated to async /api/hierarchy — legacy static store deleted.
@@ -230,8 +235,11 @@ export function MemoryScreen() {
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
   const [fogReady, setFogReady] = useState(false);
-  const [restoringMemoryVisible, setRestoringMemoryVisible] = useState(false);
   const [fogUnavailable, setFogUnavailable] = useState(false);
+  const entryUsableRef = useRef(false);
+  const [entryVeilMounted, setEntryVeilMounted] = useState(true);
+  const entryVeilOpacity = useRef(new Animated.Value(1)).current;
+  const [entryMapLoadState, setEntryMapLoadState] = useState<MapLoadState>('loading');
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
@@ -371,19 +379,17 @@ export function MemoryScreen() {
     setMapReady(true);
     setFogReady(true);
   }, []);
-  // MemoryMap owns the one canonical basemap loading/error overlay. This
-  // parent tracks only the independent Fog restoration phase.
+  // One parent-owned veil covers both basemap and Fog readiness. MemoryMap
+  // reports renderer state but never paints a competing loading page.
   useEffect(() => {
+    entryUsableRef.current = false;
+    setEntryVeilMounted(true);
+    entryVeilOpacity.setValue(1);
     setMapReady(false);
     setFogReady(false);
-  }, [mountKey]);
-
-  useEffect(() => {
-    setRestoringMemoryVisible(false);
-    if (!mapReady || fogReady) return undefined;
-    const timer = setTimeout(() => setRestoringMemoryVisible(true), 600);
-    return () => clearTimeout(timer);
-  }, [mapReady, fogReady, mountKey]);
+    setEntryMapLoadState('loading');
+    log('memory.entry_visible_state', { state: 'stable-placeholder', mount_key: mountKey });
+  }, [entryVeilOpacity, mountKey]);
 
   // Retry handler: reset state + bump refetchToken to re-trigger pull.
   const handleRetryLoad = () => {
@@ -505,7 +511,10 @@ export function MemoryScreen() {
       // two logs — server can see at a glance whether Settings→Memory
       // return was fast (reuse) or slow (bump → cold Mapbox reload).
       const _msSinceLastMount = lastMountAtRef.current === 0 ? -1 : Date.now() - lastMountAtRef.current;
-      const _willBump = lastMountAtRef.current === 0 || _msSinceLastMount >= FOCUS_REMOUNT_DEBOUNCE_MS;
+      // The screen is kept mounted, so a normal focus transition reuses the
+      // same native map host. Automatic remounting was the second large
+      // Preparing/map flash. Explicit Retry remains the only remount owner.
+      const _willBump = false;
       log('v357.tab_focus_entry', {
         points_n: useMemoryStore.getState().points.length,
         mountKey_pre: mountKeyLatest,
@@ -527,19 +536,7 @@ export function MemoryScreen() {
       // Reset scope to 'mine' on every focus — per product spec, social
       // view is a deliberate switch, not a persistent default.
       useMemoryScopeStore.getState().setScope('self');
-      // S3 fix: debounce map remount separately. Cheap to keep the
-      // map mounted across rapid back-and-forth; expensive to tear
-      // it down and reload Mapbox tiles.
-      if (now - lastMountAtRef.current >= FOCUS_REMOUNT_DEBOUNCE_MS) {
-        lastMountAtRef.current = now;
-        setMountKey((n) => {
-          const next = n + 1;
-          // v357 diagnostic: mountKey was actually bumped this focus.
-          log('v357.mountKey_bumped', { from: n, to: next });
-          mountKeyRef.current = next;
-          return next;
-        });
-      }
+      lastMountAtRef.current = now;
       if (now - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
         lastRefetchAtRef.current = now;
         setRefetchToken((n) => n + 1);
@@ -745,6 +742,36 @@ export function MemoryScreen() {
     : null;
 
   const mapMayBeShown = Boolean(persistentCoord);
+  const memoryEntryUsable = mapMayBeShown && mapReady && (fogReady || fogUnavailable);
+  useEffect(() => {
+    if (!memoryEntryUsable) {
+      if (!failReason) {
+        setEntryVeilMounted(true);
+        entryVeilOpacity.setValue(1);
+        log('memory.entry_visible_state', {
+          state: 'stable-placeholder',
+          mount_key: mountKey,
+          map_ready: mapReady,
+          fog_ready: fogReady,
+          has_center: mapMayBeShown,
+        });
+      }
+      return undefined;
+    }
+    entryUsableRef.current = true;
+    log('memory.entry_visible_state', { state: 'settling-to-usable-map', mount_key: mountKey });
+    const animation = Animated.timing(entryVeilOpacity, {
+      toValue: 0,
+      duration: MEMORY_ENTRY_SETTLE_MS,
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (!finished) return;
+      setEntryVeilMounted(false);
+      log('memory.entry_visible_state', { state: 'usable-map', mount_key: mountKey });
+    });
+    return () => animation.stop();
+  }, [entryVeilOpacity, failReason, fogReady, fogUnavailable, mapMayBeShown, mapReady, memoryEntryUsable, mountKey]);
   useEffect(() => {
     if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId) return undefined;
     if (manualBrowseThisMountRef.current) return undefined;
@@ -1005,7 +1032,7 @@ export function MemoryScreen() {
           onFogPreparing={() => {
             if (mountKeyRef.current !== mountKey) return;
             setFogUnavailable(false);
-            setFogReady(false);
+            if (!entryUsableRef.current) setFogReady(false);
           }}
           onFogReady={() => {
             if (mountKeyRef.current !== mountKey) return;
@@ -1015,10 +1042,12 @@ export function MemoryScreen() {
           }}
           onFogUnavailable={() => {
             if (mountKeyRef.current !== mountKey) return;
-            setFogReady(false);
+            if (!entryUsableRef.current) setFogReady(false);
             setFogUnavailable(true);
           }}
           qaWorkspaceActive={syntheticQaAuthority}
+          presentationOwnedByParent
+          onPresentationState={setEntryMapLoadState}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
@@ -1059,17 +1088,25 @@ export function MemoryScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.emptyState}>
-          <MemoryStateMark label="PREPARING YOUR MAP" />
-          <ActivityIndicator color={theme.primary} size="large" />
-          <Text style={[styles.emptyTitle, { marginTop: 14, color: theme.foreground }]}>Finding your location…</Text>
-          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
-            Your saved Memory will appear as soon as it is available.
-          </Text>
-        </View>
+        <View style={[styles.memoryEntryPlaceholder, { backgroundColor: theme.background }]} testID="memory-entry-placeholder" />
       )}
 
-      {mapMayBeShown && persistentCoord && !freshCurrentEvidence && !failReason ? (
+      {entryVeilMounted && !failReason ? (
+        <Animated.View
+          pointerEvents={memoryEntryUsable ? 'none' : 'auto'}
+          style={[StyleSheet.absoluteFill, { opacity: entryVeilOpacity, zIndex: 30, backgroundColor: theme.background }]}
+          testID="memory-entry-veil"
+        >
+          <MapLoadOverlay
+            state={entryMapLoadState}
+            delayMs={MEMORY_ENTRY_MESSAGE_DELAY_MS}
+            onRetry={entryMapLoadState === 'slow' || entryMapLoadState === 'error' ? handleRetryLoad : undefined}
+            testID="memory-entry-loading"
+          />
+        </Animated.View>
+      ) : null}
+
+      {memoryEntryUsable && persistentCoord && !freshCurrentEvidence && !failReason ? (
         <View
           style={[styles.locationStatusBanner, { top: insets.top + (syntheticQaAuthority ? 174 : 120), backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           pointerEvents="none"
@@ -1198,17 +1235,6 @@ export function MemoryScreen() {
           <Text style={styles.slowBannerText} numberOfLines={1}>{friendFogToast}</Text>
         </View>
       )}
-
-      {mapMayBeShown && persistentCoord && restoringMemoryVisible && !fogReady && !initialMemoryOffline ? (
-        <View
-          style={[styles.memoryRestoreBanner, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
-          pointerEvents="none"
-          testID="memory-restoring-status"
-        >
-          <ActivityIndicator color={theme.primary} size="small" style={styles.slowBannerSpinner} />
-          <Text style={[styles.slowBannerText, { color: theme.foregroundSecondary }]} numberOfLines={1}>Restoring Memory…</Text>
-        </View>
-      ) : null}
 
       {mapMayBeShown && persistentCoord && initialMemoryOffline ? (
         <TouchableOpacity
@@ -1429,6 +1455,7 @@ export function MemoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  memoryEntryPlaceholder: { flex: 1 },
   root: { flex: 1, backgroundColor: MemoryColors.cream },
   topBar: {
     position: 'absolute',

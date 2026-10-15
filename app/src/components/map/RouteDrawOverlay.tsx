@@ -29,7 +29,11 @@ export interface RouteDrawStrokeCapture {
   startedAtMs: number;
   endedAtMs: number;
   samples: RouteDrawSample[];
+  sampleCapacity: number;
+  droppedSampleCount: number;
 }
+
+const MAX_NATIVE_SAMPLES = 4096;
 
 /**
  * One finger draws one stroke. Any interruption cancels that provisional
@@ -55,6 +59,7 @@ export function RouteDrawOverlay({
   const rawSamplesRef = useRef<RouteDrawSample[]>([]);
   const strokeIdRef = useRef('');
   const startedAtMsRef = useRef(0);
+  const droppedSampleCountRef = useRef(0);
   const [screenPoints, setScreenPoints] = useState<Array<{ x: number; y: number }>>([]);
 
   if (!active || Platform.OS === 'web') return null;
@@ -95,6 +100,7 @@ export function RouteDrawOverlay({
     coordinateFailureRef.current = false;
     pointsRef.current = [];
     startedAtMsRef.current = Date.now();
+    droppedSampleCountRef.current = 0;
     strokeIdRef.current = `${startedAtMsRef.current}-${Math.random().toString(36).slice(2, 10)}`;
     rawSamplesRef.current = [{ timestampMs: startedAtMsRef.current, x, y }];
     screenPointsRef.current = [{ x, y }];
@@ -105,6 +111,10 @@ export function RouteDrawOverlay({
   }
 
   function update(x: number, y: number) {
+    if (rawSamplesRef.current.length >= MAX_NATIVE_SAMPLES) {
+      droppedSampleCountRef.current += 1;
+      return;
+    }
     const sampleIndex = rawSamplesRef.current.push({ timestampMs: Date.now(), x, y }) - 1;
     const previous = screenPointsRef.current.at(-1);
     if (!previous || Math.hypot(previous.x - x, previous.y - y) >= 2) {
@@ -118,15 +128,38 @@ export function RouteDrawOverlay({
     const generation = generationRef.current;
     endedNormallyRef.current = true;
     const endedAtMs = Date.now();
-    const sampleIndex = rawSamplesRef.current.push({ timestampMs: endedAtMs, x, y }) - 1;
-    queuePoint(x, y, generation, sampleIndex);
-    await chainRef.current;
+    if (rawSamplesRef.current.length < MAX_NATIVE_SAMPLES) {
+      const sampleIndex = rawSamplesRef.current.push({ timestampMs: endedAtMs, x, y }) - 1;
+      queuePoint(x, y, generation, sampleIndex);
+      await chainRef.current;
+    } else {
+      // Preserve the pen-up position inside the bounded capture. Await older
+      // projections first so one of them cannot attach its coordinate to the
+      // replacement sample.
+      droppedSampleCountRef.current += 1;
+      await chainRef.current;
+      const point = await unproject(x, y);
+      rawSamplesRef.current[MAX_NATIVE_SAMPLES - 1] = {
+        timestampMs: endedAtMs,
+        x,
+        y,
+        ...(point ? { geographic: { ...point } } : {}),
+      };
+      if (point) {
+        const previous = pointsRef.current.at(-1);
+        if (!previous || routePointDistanceM(previous, point) >= 0.75) pointsRef.current.push(point);
+      } else {
+        coordinateFailureRef.current = true;
+      }
+    }
     if (generationRef.current !== generation) return;
     const points = pointsRef.current.map(point => ({ ...point }));
     const capture: RouteDrawStrokeCapture = {
       strokeId: strokeIdRef.current,
       startedAtMs: startedAtMsRef.current,
       endedAtMs,
+      sampleCapacity: MAX_NATIVE_SAMPLES,
+      droppedSampleCount: droppedSampleCountRef.current,
       samples: rawSamplesRef.current.map(sample => ({
         ...sample,
         geographic: sample.geographic ? { ...sample.geographic } : undefined,

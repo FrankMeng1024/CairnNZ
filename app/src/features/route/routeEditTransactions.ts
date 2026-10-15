@@ -60,6 +60,8 @@ export function selectIntentAwareDrawCandidate(input: {
 export interface RouteAnchorCandidate extends OrderedPosition {
   distanceM: number;
   point: RoutePoint;
+  occurrenceId?: string;
+  arcM?: number;
 }
 
 export interface RouteIntervalCandidate {
@@ -165,7 +167,10 @@ export function nearestOrderedPositions(
   }
   return clusters
     .map(cluster => cluster.reduce((best, candidate) => candidate.distanceM < best.distanceM ? candidate : best))
-    .map(({ partIndex: _partIndex, segmentIndex: _segmentIndex, segmentFraction: _segmentFraction, connectedGroup: _connectedGroup, arcM: _arcM, tangent: _tangent, ...candidate }) => candidate)
+    .map(({ partIndex: _partIndex, segmentIndex: _segmentIndex, segmentFraction: _segmentFraction, connectedGroup: _connectedGroup, tangent: _tangent, ...candidate }) => ({
+      ...candidate,
+      occurrenceId: positionKey(candidate),
+    }))
     .sort((a, b) => a.distanceM - b.distanceM
       || a.partId.localeCompare(b.partId) || a.pointIndex - b.pointIndex || (a.fraction ?? 0) - (b.fraction ?? 0));
 }
@@ -272,6 +277,108 @@ function unambiguousInterval(
   return second.score - best.score >= Math.max(8, best.score * 0.22) ? best.option : null;
 }
 
+function intervalOptions(
+  draft: OrderedRouteDraft,
+  starts: RouteAnchorCandidate[],
+  ends: RouteAnchorCandidate[],
+): RouteIntervalCandidate[] {
+  const options: RouteIntervalCandidate[] = [];
+  for (const start of starts) {
+    for (const end of ends) {
+      const comparison = compareOrderedPositions(draft, start, end);
+      if (comparison == null || comparison === 0) continue;
+      const forward = comparison < 0;
+      const a = forward ? start : end;
+      const b = forward ? end : start;
+      if (orderedIntervalCrossesGap(draft, a, b)) continue;
+      const id = `${positionKey(a)}-${positionKey(b)}`;
+      if (!options.some(option => option.id === id)) {
+        options.push({
+          id,
+          start: { partId: a.partId, pointIndex: a.pointIndex, ...(a.fraction != null ? { fraction: a.fraction } : {}) },
+          end: { partId: b.partId, pointIndex: b.pointIndex, ...(b.fraction != null ? { fraction: b.fraction } : {}) },
+          reverseCandidate: !forward,
+        });
+      }
+    }
+  }
+  return options;
+}
+
+function segmentIntersection(a: RoutePoint, b: RoutePoint, c: RoutePoint, d: RoutePoint): { t: number; u: number } | null {
+  const latitude = a.lat * Math.PI / 180;
+  const scaleX = Math.cos(latitude);
+  const bx = (b.lng - a.lng) * scaleX;
+  const by = b.lat - a.lat;
+  const cx = (c.lng - a.lng) * scaleX;
+  const cy = c.lat - a.lat;
+  const dx = (d.lng - a.lng) * scaleX;
+  const dy = d.lat - a.lat;
+  const sx = dx - cx;
+  const sy = dy - cy;
+  const cross = bx * sy - by * sx;
+  if (Math.abs(cross) < 1e-12) return null;
+  const t = (cx * sy - cy * sx) / cross;
+  const u = (cx * by - cy * bx) / cross;
+  return t > 0.04 && t < 0.96 && u >= 0 && u <= 1 ? { t, u } : null;
+}
+
+function interiorCrossingCount(draft: OrderedRouteDraft, raw: RoutePoint[]): number {
+  const route = orderedDraftPoints(draft);
+  let count = 0;
+  for (let rawIndex = 1; rawIndex < raw.length; rawIndex += 1) {
+    for (let routeIndex = 1; routeIndex < route.length; routeIndex += 1) {
+      if (segmentIntersection(raw[rawIndex - 1], raw[rawIndex], route[routeIndex - 1], route[routeIndex])) count += 1;
+    }
+  }
+  return count;
+}
+
+export interface DrawTransactionDiagnostics {
+  attachmentToleranceM: number;
+  startCandidates: RouteAnchorCandidate[];
+  endCandidates: RouteAnchorCandidate[];
+  intervalCandidates: Array<RouteIntervalCandidate & { shapeScore: number }>;
+  selectedIntervalId: string | null;
+  ambiguityReason: 'competing-start-occurrences' | 'competing-end-occurrences' | 'near-equal-intervals' | 'none';
+  interiorCrossingCount: number;
+  crossingPolicy: 'interior-crossings-ignored-as-boundaries';
+}
+
+export function classifyDrawTransactionWithDiagnostics(
+  draft: OrderedRouteDraft,
+  raw: RoutePoint[],
+  selectedGapId?: string,
+  attachmentToleranceM = ROUTE_ATTACHMENT_TOLERANCE_M,
+): { intent: DrawTransactionIntent; diagnostics: DrawTransactionDiagnostics } {
+  const toleranceM = Math.max(4, Math.min(ROUTE_ATTACHMENT_TOLERANCE_M, attachmentToleranceM));
+  const starts = raw[0] ? nearestOrderedPositions(draft, raw[0], toleranceM) : [];
+  const ends = raw.at(-1) ? nearestOrderedPositions(draft, raw.at(-1)!, toleranceM) : [];
+  const options = selectedGapId ? [] : intervalOptions(draft, starts, ends);
+  const intent = classifyDrawTransaction(draft, raw, selectedGapId, attachmentToleranceM);
+  const selectedIntervalId = intent.kind === 'replace' ? intent.options[0]?.id ?? null : null;
+  const ambiguityReason = intent.kind === 'pending-replace' && intent.ambiguity === 'overlap'
+    ? starts.length > 1 && ends.length <= 1
+      ? 'competing-start-occurrences'
+      : ends.length > 1 && starts.length <= 1
+        ? 'competing-end-occurrences'
+        : 'near-equal-intervals'
+    : 'none';
+  return {
+    intent,
+    diagnostics: {
+      attachmentToleranceM: toleranceM,
+      startCandidates: starts,
+      endCandidates: ends,
+      intervalCandidates: options.map(option => ({ ...option, shapeScore: intervalShapeScore(draft, raw, option) })),
+      selectedIntervalId,
+      ambiguityReason,
+      interiorCrossingCount: interiorCrossingCount(draft, raw),
+      crossingPolicy: 'interior-crossings-ignored-as-boundaries',
+    },
+  };
+}
+
 export function classifyDrawTransaction(
   draft: OrderedRouteDraft,
   raw: RoutePoint[],
@@ -330,26 +437,7 @@ export function classifyDrawTransaction(
 
   const starts = nearestOrderedPositions(draft, first, toleranceM);
   const ends = nearestOrderedPositions(draft, last, toleranceM);
-  const options: RouteIntervalCandidate[] = [];
-  for (const start of starts) {
-    for (const end of ends) {
-      const comparison = compareOrderedPositions(draft, start, end);
-      if (comparison == null || comparison === 0) continue;
-      const forward = comparison < 0;
-      const a = forward ? start : end;
-      const b = forward ? end : start;
-      if (orderedIntervalCrossesGap(draft, a, b)) continue;
-      const id = `${positionKey(a)}-${positionKey(b)}`;
-      if (!options.some(option => option.id === id)) {
-        options.push({
-          id,
-          start: { partId: a.partId, pointIndex: a.pointIndex, ...(a.fraction != null ? { fraction: a.fraction } : {}) },
-          end: { partId: b.partId, pointIndex: b.pointIndex, ...(b.fraction != null ? { fraction: b.fraction } : {}) },
-          reverseCandidate: !forward,
-        });
-      }
-    }
-  }
+  const options = intervalOptions(draft, starts, ends);
   if (options.length > 0) {
     const selected = unambiguousInterval(draft, raw, options);
     if (selected) return { kind: 'replace', options: [selected] };
