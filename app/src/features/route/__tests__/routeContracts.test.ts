@@ -113,13 +113,14 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(overlay).toContain('onStroke(points, capture)');
     expect(overlay).toContain('samples: rawSamplesRef.current.map');
     expect(editor).toContain('testID="ordered-route-save"');
-    expect(editor).toContain('saveRoutePlannerDraft({');
+    expect(editor).not.toContain('saveRoutePlannerDraft({');
     expect(editor).toContain('loadActivityFinalArtifact(ownerId, clientActivityId)');
     expect(editor).toContain('createImportedOrderedDraft');
     expect(editor).toContain("'This Route changed while the edit was being reviewed");
-    expect(editor).toContain('setPendingPointReview({ kind: \'point\', points: result.points, intent');
+    expect(editor).toContain('rawTarget: selection.rawTarget');
+    expect(editor).toContain('effectiveTarget: selection.effectiveTarget');
     expect(editor).toContain('animateAcceptedPoint(points');
-    expect(editor).toContain('plannerDraftMatchesRequest(recovered, requestedDraftId)');
+    expect(editor).not.toContain('loadRoutePlannerDraft(');
     expect(editor).toContain('useRouteStore.getState().routes.find');
     expect(editor).toContain('invalidatePendingOperation();');
     expect(editor).toContain("nav.replace('MapHistory', { routeId: savedId })");

@@ -1,6 +1,7 @@
 import {
   MEMORY_ENTRY_MESSAGE_DELAY_MS,
   MEMORY_ENTRY_SETTLE_MS,
+  MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS,
   memoryEntryVisibleState,
 } from '../services/memoryEntryPresentation';
 
@@ -10,9 +11,22 @@ describe('Memory entry has one stable presentation owner', () => {
       .toBe('usable-map');
   });
 
-  test.each([250, 300, 700, 1500, 4000])('%d ms slow readiness uses the same preparing veil', elapsedMs => {
+  test.each([250, 400, 700, 1000, 2000, 4000])('%d ms cold readiness uses the same preparing veil', elapsedMs => {
     expect(memoryEntryVisibleState({ elapsedMs, hasCenter: true, mapReady: false, fogReady: false }))
       .toBe('preparing');
+  });
+
+  test.each([0, 50, 150, 250, 400, 700, 1000])('%d ms warm entry keeps authorized content instead of Preparing', elapsedMs => {
+    expect(memoryEntryVisibleState({
+      elapsedMs, hasCenter: true, mapReady: false, fogReady: false, hasAuthorizedPreview: true,
+    })).toBe('authorized-preview');
+  });
+
+  test('a genuinely slow warm render eventually gains one loading message without changing shells', () => {
+    expect(memoryEntryVisibleState({
+      elapsedMs: MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS,
+      hasCenter: true, mapReady: false, fogReady: false, hasAuthorizedPreview: true,
+    })).toBe('preparing');
   });
 
   test('map-before-Fog and Fog-before-map remain one placeholder/veil sequence', () => {
@@ -28,8 +42,8 @@ describe('Memory entry has one stable presentation owner', () => {
 
   test('documents bounded show-delay and settling fade', () => {
     expect(MEMORY_ENTRY_MESSAGE_DELAY_MS).toBe(250);
+    expect(MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS).toBe(1200);
     expect(MEMORY_ENTRY_SETTLE_MS).toBeGreaterThanOrEqual(120);
     expect(MEMORY_ENTRY_SETTLE_MS).toBeLessThanOrEqual(180);
   });
 });
-

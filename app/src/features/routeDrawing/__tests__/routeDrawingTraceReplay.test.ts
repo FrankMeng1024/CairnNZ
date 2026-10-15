@@ -88,4 +88,22 @@ describe('bounded multi-operation Route trace round-trip', () => {
     expect(parseRouteDrawingTrace('{bad')).toBeNull();
     expect(parseRouteDrawingTrace('x'.repeat(4 * 1024 * 1024))).toBeNull();
   });
+
+  test('an overflowing active operation preserves its start and reports an incomplete capture', () => {
+    selectRouteDrawingOperation('large-stroke');
+    recordRouteDrawingTrace('route_draw_geographic_stroke', {
+      strokeId: 'large-stroke', rawPoints: [original[0], original[2]],
+    }, 'geographic-stroke');
+    for (let index = 0; index < 700; index += 1) {
+      recordRouteDrawingTrace('route_point_animation_frame', {
+        strokeId: 'large-stroke', index, head: original[index % original.length],
+      }, 'state');
+    }
+    const trace = getLatestRouteDrawingTrace();
+    expect(trace?.events[0].kind).toBe('route_session_started');
+    expect(trace?.events.some(event => event.kind === 'route_draw_geographic_stroke')).toBe(true);
+    expect(trace?.events.length).toBeLessThanOrEqual(600);
+    expect(trace?.droppedEvents).toBeGreaterThan(0);
+    expect(trace?.captureError).toBe('event-budget-exceeded');
+  });
 });

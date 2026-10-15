@@ -280,7 +280,6 @@ function connectCandidate(
   return { ok: true, points };
 }
 
-const ROUTE_SEAM_CLEANUP_RADIUS_M = 12;
 const ROUTE_SEAM_DUPLICATE_M = 1.5;
 
 function localVector(a: RoutePoint, b: RoutePoint): { x: number; y: number } {
@@ -297,30 +296,32 @@ function normalizedDot(a: { x: number; y: number }, b: { x: number; y: number })
 }
 
 /**
- * Remove only tiny snapped seam folds. A deliberate corner remains because
- * points outside the bounded 12m seam neighborhood are never touched. A
- * deliberate U-turn also remains anchored at the junction after its redundant
- * near-anchor backtracking samples are removed.
+ * Remove only sub-1.5m snapped seam folds that immediately reverse. A
+ * deliberate corner or sustained U-turn remains ordered, including a short
+ * return inside the former 12m cleanup radius.
  */
 function normalizeCandidateSeam(
   candidate: RoutePoint[],
-  reference: RoutePoint | undefined,
+  _reference: RoutePoint | undefined,
   side: 'start' | 'end',
 ): RoutePoint[] {
   const points = candidate.map(clonePoint);
-  if (!reference || points.length < 3) return points;
+  if (points.length < 3) return points;
   while (points.length >= 3) {
     const anchor = side === 'start' ? points[0] : points.at(-1)!;
     const adjacent = side === 'start' ? points[1] : points.at(-2)!;
     const distance = routePointDistanceM(anchor, adjacent);
-    if (distance > ROUTE_SEAM_CLEANUP_RADIUS_M) break;
-    const incoming = side === 'start'
-      ? localVector(reference, anchor)
-      : localVector(adjacent, anchor);
-    const outgoing = side === 'start'
-      ? localVector(anchor, adjacent)
-      : localVector(anchor, reference);
-    if (distance > ROUTE_SEAM_DUPLICATE_M && normalizedDot(incoming, outgoing) >= -0.15) break;
+    if (distance > ROUTE_SEAM_DUPLICATE_M) break;
+    const first = side === 'start'
+      ? localVector(points[0], points[1])
+      : localVector(points.at(-3)!, points.at(-2)!);
+    const second = side === 'start'
+      ? localVector(points[1], points[2])
+      : localVector(points.at(-2)!, points.at(-1)!);
+    // A tiny segment that immediately reverses is an incidental projection /
+    // provider seam fold. A sustained 180-degree return has both local
+    // vectors in the same direction and is retained, even inside 12 metres.
+    if (normalizedDot(first, second) >= -0.15) break;
     points.splice(side === 'start' ? 1 : points.length - 2, 1);
   }
   return points;

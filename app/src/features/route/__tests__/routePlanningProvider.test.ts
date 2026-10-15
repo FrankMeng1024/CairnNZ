@@ -93,7 +93,24 @@ describe('Route planning provider boundaries', () => {
     const result = await resolvePointPlan(start, end, {
       router: async () => [start, end],
     });
-    expect(result).toEqual({ outcome: 'accepted', points: [start, end] });
+    expect(result).toEqual({
+      outcome: 'accepted', points: [start, end],
+      providerStartShiftM: 0, providerTargetShiftM: 0,
+    });
+  });
+
+  test('Point preserves provider-snapped endpoint for continuity selection instead of inventing a raw-target connector', async () => {
+    const start = p(0, 0);
+    const rawTarget = p(80, 7);
+    const snappedTarget = p(80, 0);
+    const result = await resolvePointPlan(start, rawTarget, {
+      router: async () => [start, p(40, 0), snappedTarget],
+    });
+    expect(result).toMatchObject({
+      outcome: 'accepted',
+      points: [start, p(40, 0), snappedTarget],
+    });
+    expect(result.outcome === 'accepted' && result.providerTargetShiftM).toBeCloseTo(7, 0);
   });
 
   test('multiple Map Matching submatches are never concatenated', async () => {

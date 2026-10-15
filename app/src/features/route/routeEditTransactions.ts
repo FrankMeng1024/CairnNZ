@@ -64,6 +64,16 @@ export interface RouteAnchorCandidate extends OrderedPosition {
   arcM?: number;
 }
 
+/** 24 screen pixels, bounded to avoid both sub-finger and city-scale snaps. */
+export function routeAttachmentToleranceM(latitude: number, zoom: number): number {
+  const safeLatitude = Math.max(-85, Math.min(85, Number.isFinite(latitude) ? latitude : 0));
+  const safeZoom = Math.max(0, Math.min(24, Number.isFinite(zoom) ? zoom : 15));
+  const metresPerPixel = 156543.03392 * Math.cos(safeLatitude * Math.PI / 180) / (2 ** safeZoom);
+  return Math.max(4, Math.min(60, metresPerPixel * 24));
+}
+
+const ROUTE_MAX_SCREEN_ATTACHMENT_M = 60;
+
 export interface RouteIntervalCandidate {
   id: string;
   start: OrderedPosition;
@@ -194,6 +204,13 @@ function segmentTangent(a: RoutePoint, b: RoutePoint): { x: number; y: number } 
 
 function sameLocalOrderedHit(a: RawAnchorCandidate, b: RawAnchorCandidate): boolean {
   if (a.partIndex === b.partIndex && a.segmentIndex === b.segmentIndex) return true;
+  // The two segments on either side of one shared vertex represent the same
+  // cumulative ordered occurrence even when the Route turns sharply there or
+  // the vertex is an internal Draw/Point part boundary. Distinct retraced
+  // visits remain separate because their cumulative arc positions differ.
+  if (a.connectedGroup === b.connectedGroup
+    && Math.abs(b.arcM - a.arcM) <= 0.5
+    && routePointDistanceM(a.point, b.point) <= 0.5) return true;
   const tangentDot = a.tangent.x * b.tangent.x + a.tangent.y * b.tangent.y;
   return a.connectedGroup === b.connectedGroup
     && b.arcM - a.arcM <= 4.1
@@ -351,7 +368,7 @@ export function classifyDrawTransactionWithDiagnostics(
   selectedGapId?: string,
   attachmentToleranceM = ROUTE_ATTACHMENT_TOLERANCE_M,
 ): { intent: DrawTransactionIntent; diagnostics: DrawTransactionDiagnostics } {
-  const toleranceM = Math.max(4, Math.min(ROUTE_ATTACHMENT_TOLERANCE_M, attachmentToleranceM));
+  const toleranceM = Math.max(4, Math.min(ROUTE_MAX_SCREEN_ATTACHMENT_M, attachmentToleranceM));
   const starts = raw[0] ? nearestOrderedPositions(draft, raw[0], toleranceM) : [];
   const ends = raw.at(-1) ? nearestOrderedPositions(draft, raw.at(-1)!, toleranceM) : [];
   const options = selectedGapId ? [] : intervalOptions(draft, starts, ends);
@@ -388,7 +405,7 @@ export function classifyDrawTransaction(
   if (raw.length < 2) return { kind: 'reject', code: 'ZERO_LENGTH' };
   const first = raw[0];
   const last = raw[raw.length - 1];
-  const toleranceM = Math.max(4, Math.min(ROUTE_ATTACHMENT_TOLERANCE_M, attachmentToleranceM));
+  const toleranceM = Math.max(4, Math.min(ROUTE_MAX_SCREEN_ATTACHMENT_M, attachmentToleranceM));
   if (selectedGapId) {
     const gap = draft.gaps.find(item => item.id === selectedGapId);
     const leftIndex = gap ? draft.parts.findIndex(part => part.id === gap.afterPartId) : -1;

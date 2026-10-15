@@ -4,6 +4,7 @@ import {
   classifyDrawTransactionWithDiagnostics,
   continueDrawTransaction,
   nearestOrderedPositions,
+  routeAttachmentToleranceM,
   selectIntentAwareDrawCandidate,
 } from '../routeEditTransactions';
 import {
@@ -21,6 +22,12 @@ const p = (eastM: number, northM: number) => ({
 const empty = () => createEmptyOrderedDraft({ draftId: 'draft-a', ownerId: 'owner-a' });
 
 describe('Route edit transaction classification', () => {
+  test('24 px attachment tolerance scales with zoom but stays geographically bounded', () => {
+    expect(routeAttachmentToleranceM(origin.lat, 18)).toBeGreaterThanOrEqual(4);
+    expect(routeAttachmentToleranceM(origin.lat, 18)).toBeLessThan(20);
+    expect(routeAttachmentToleranceM(origin.lat, 13)).toBe(60);
+    expect(routeAttachmentToleranceM(origin.lat, 8)).toBe(60);
+  });
   test('O81 production path flattens a V before the ordered replacement commit', () => {
     const apex = p(50, 75);
     const base = appendOrderedSegment(empty(), [p(0, 0), apex, p(100, 0)], 'point');
@@ -275,6 +282,20 @@ describe('Route edit transaction classification', () => {
     ]);
     expect(applied.draft.parts[0].points).toEqual([p(0, 0), p(40, 0)]);
     expect(applied.draft.parts.at(-1)?.points).toEqual([p(120, 0), p(160, 0)]);
+  });
+
+  test('one shared vertex across connected stroke parts is one ordered occurrence', () => {
+    const first = appendOrderedSegment(empty(), [p(0, 0), p(40, 0), p(80, 0)], 'draw-manual');
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const second = appendOrderedSegment(first.draft, [p(80, 0), p(40, 40), p(120, 60)], 'draw-manual');
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    const joinHits = nearestOrderedPositions(second.draft, p(80, 0));
+    expect(joinHits).toHaveLength(1);
+    const intent = classifyDrawTransaction(second.draft, [p(40, 0), p(80, -20), p(120, 60)]);
+    expect(intent.kind).toBe('replace');
+    if (intent.kind === 'replace') expect(intent.options).toHaveLength(1);
   });
 
   test('R2 replacement never crosses an unresolved imported gap', () => {

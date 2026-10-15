@@ -33,6 +33,7 @@ describe('planWalkingRoute', () => {
     const url = String((fetchMock as jest.Mock).mock.calls[0]?.[0]);
     expect(url).toContain('/directions/v5/mapbox/walking/174.76,-36.85;174.78,-36.83');
     expect(url).toContain('geometries=geojson');
+    expect(url).toContain('radiuses=25%3B25');
   });
 
   test('fails explicitly when no configured Mapbox authority exists', async () => {

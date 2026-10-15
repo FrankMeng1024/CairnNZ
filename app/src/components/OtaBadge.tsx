@@ -360,7 +360,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O82 (2026-10-15): fresh Activity-derived Route sessions, ordered endpoint
 // intent, faithful Point retracing/follow, stable Memory entry, and completed
 // editor context/ornament controls with Owner-accessible local diagnostics.
-export const OTA_VERSION = 'O82';
+// O83 (2026-10-15): continuity-aware walking Point targets, manual provider
+// retry, multi-stroke Draw joins, traversal lanes, stable camera/Memory entry,
+// and source-reviewable diagnostics on the Build 65 / 0.2.6-o66 runtime.
+export const OTA_VERSION = 'O83';
 
 
 type OtaState =

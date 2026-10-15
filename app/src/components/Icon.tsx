@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import {
-  Mountain, Map, Users, Settings2,
+  Mountain, Map, Users, Settings2, MoreHorizontal,
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Play, Square, Flag,
   TriangleAlert, Star, Navigation, Lock,
   Target, Timer, Heart, Zap, MapPin, Route,
@@ -67,7 +67,7 @@ import {
 import { IconSize } from './tokens';
 
 const ICON_MAP = {
-  Mountain, Map, Users, Settings2, Cog,
+  Mountain, Map, Users, Settings2, MoreHorizontal, Cog,
   ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Play, Square, Flag,
   TriangleAlert, Star, Navigation, Lock,
   Target, Timer, Heart, Zap, MapPin, Route,

@@ -1,14 +1,14 @@
 import { MAP_ORNAMENTS_EDGE, groupedMapOrnamentsAbove, mapOrnamentsAbove } from '../mapOrnaments';
 
 describe('Mapbox ornament placement', () => {
-  test('keeps legal controls in separate corners with one shared clearance', () => {
+  test('keeps genuine legal controls together at the exposed lower-left edge', () => {
     expect(MAP_ORNAMENTS_EDGE).toEqual({
       logoPosition: { bottom: 8, left: 8 },
-      attributionPosition: { bottom: 8, right: 8 },
+      attributionPosition: { bottom: 8, left: 92 },
     });
     expect(mapOrnamentsAbove(246)).toEqual({
       logoPosition: { bottom: 246, left: 8 },
-      attributionPosition: { bottom: 246, right: 8 },
+      attributionPosition: { bottom: 246, left: 92 },
     });
   });
 

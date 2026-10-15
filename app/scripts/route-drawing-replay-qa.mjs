@@ -20,6 +20,15 @@ const fixtureIds = process.env.CAIRN_ROUTE_REPLAY_FIXTURES
   ? process.env.CAIRN_ROUTE_REPLAY_FIXTURES.split(',').map(value => value.trim()).filter(value => allFixtureIds.includes(value))
   : allFixtureIds;
 if (fixtureIds.length === 0) throw new Error('No valid Route replay fixture ids were selected.');
+const fixtureAssertions = {
+  flattenV: [/Intent: straight-replacement/, /Selected: drawn-intent/, /spikes 0/],
+  straightRoad: [/Selected: provider/, /spikes 0/],
+  mixedTool: [/Selected: provider/, /Seams: 0° in · 0° out/],
+  intentionalTurn: [/Intent: intentional-turn/, /Selected: drawn-intent/, /turns [1-9]/],
+  ambiguousCrossing: [/Intent: straight-replacement/, /Selected: (provider|drawn-intent)/, /spikes 0/],
+  trueAmbiguousOccurrences: [/Intent: ambiguous/, /Selected: original-preserved/, /First divergence: attachment/],
+  flattenVWideZoom: [/Selected: drawn-intent/, /same final yes/, /spikes 0/],
+};
 fs.mkdirSync(outputDir, { recursive: true });
 
 // One browser and one already-running Expo server cover the entire matrix.
@@ -117,7 +126,8 @@ try {
     const summary = await page.locator('text=Replay result').locator('..').innerText();
     const file = path.join(outputDir, `${fixtureId}-390x844.png`);
     await page.screenshot({ path: file, fullPage: false });
-    results.push({ fixtureId, file, summary });
+    const assertions = fixtureAssertions[fixtureId].map(pattern => ({ pattern: String(pattern), pass: pattern.test(summary) }));
+    results.push({ fixtureId, file, summary, assertions, pass: assertions.every(assertion => assertion.pass) });
   }
 
   const editorToolFiles = [];
@@ -234,6 +244,7 @@ try {
   };
   fs.writeFileSync(path.join(outputDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify({ outputDir, fixtureCount: results.length, runtimeErrorCount: runtimeErrors.length }));
+  if (runtimeErrors.length || results.some(result => !result.pass)) process.exitCode = 1;
 } finally {
   await browser.close();
 }

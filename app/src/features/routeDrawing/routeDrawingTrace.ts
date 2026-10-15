@@ -50,7 +50,7 @@ export interface RouteDrawingTrace {
   events: RouteDrawingTraceEvent[];
   droppedEvents: number;
   approximateBytes: number;
-  captureError: 'original-route-too-large' | null;
+  captureError: 'original-route-too-large' | 'event-budget-exceeded' | null;
 }
 
 export interface RouteDrawingReplayFixture {
@@ -133,10 +133,15 @@ function stageForKind(kind: string): RouteDrawingTraceStage {
 
 function trimTrace(trace: RouteDrawingTrace): void {
   while (trace.events.length > MAX_EVENTS_PER_TRACE || trace.approximateBytes > MAX_TRACE_BYTES) {
-    const removed = trace.events.shift();
+    // Preserve the original/session start and all previously complete
+    // operations. If the active trace exceeds its budget, reject the newest
+    // event and mark the export explicitly non-replayable instead of silently
+    // deleting the beginning of the failure being diagnosed.
+    const removed = trace.events.pop();
     if (!removed) break;
     trace.approximateBytes = Math.max(0, trace.approximateBytes - JSON.stringify(removed).length);
     trace.droppedEvents += 1;
+    trace.captureError = 'event-budget-exceeded';
   }
 }
 

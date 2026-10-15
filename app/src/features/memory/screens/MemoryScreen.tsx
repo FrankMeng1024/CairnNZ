@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager, FlatList } from 'react-native';
+import { Animated, Image, View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager, FlatList, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -69,7 +69,7 @@ import {
 } from '../services/memoryEntryCameraPolicy';
 import {
   MEMORY_ENTRY_MESSAGE_DELAY_MS,
-  MEMORY_ENTRY_SETTLE_MS,
+  MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS,
 } from '../services/memoryEntryPresentation';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
@@ -97,6 +97,8 @@ type FailReason = 'permission' | 'timeout' | 'error';
 // Dev caveat: Metro fast refresh resets module scope, so the fix is only
 // verifiable on release builds.
 const _lastKnownCoordByOwner = new Map<string, { lat: number; lng: number; ts: number }>();
+let _authorizedMemoryPreview: { key: string; uri: string; capturedAtMs: number } | null = null;
+const MAX_MEMORY_PREVIEW_BYTES = 4 * 1024 * 1024;
 
 // v357 diagnostic: module-scope counter for MemoryScreen render invocations.
 // Counts across mount/unmount within the same JS session so we can tell
@@ -231,9 +233,13 @@ export function MemoryScreen() {
   // States: 'loading' (overlay opaque) | 'ready' (faded out) | 'slow'
   // (faded out + banner).
   const [mapReady, setMapReady] = useState(false);
+  const entryStartedAtRef = useRef(Date.now());
+  const qaReadinessTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const qaReadinessScheduledRef = useRef(new Set<string>());
   // Outgoing sharing is managed in Friends; this is display selection only.
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
+  const selectedMemoryFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const [fogReady, setFogReady] = useState(false);
   const [fogUnavailable, setFogUnavailable] = useState(false);
   const entryUsableRef = useRef(false);
@@ -382,6 +388,10 @@ export function MemoryScreen() {
   // One parent-owned veil covers both basemap and Fog readiness. MemoryMap
   // reports renderer state but never paints a competing loading page.
   useEffect(() => {
+    entryStartedAtRef.current = Date.now();
+    qaReadinessTimersRef.current.forEach(clearTimeout);
+    qaReadinessTimersRef.current = [];
+    qaReadinessScheduledRef.current.clear();
     entryUsableRef.current = false;
     setEntryVeilMounted(true);
     entryVeilOpacity.setValue(1);
@@ -389,7 +399,82 @@ export function MemoryScreen() {
     setFogReady(false);
     setEntryMapLoadState('loading');
     log('memory.entry_visible_state', { state: 'stable-placeholder', mount_key: mountKey });
+    return () => {
+      qaReadinessTimersRef.current.forEach(clearTimeout);
+      qaReadinessTimersRef.current = [];
+    };
   }, [entryVeilOpacity, mountKey]);
+
+  // Development-only presentation harness. It drives the screen's actual
+  // readiness state at exact boundaries so 0/50/…/4000 ms transitions are
+  // genuine injected scenarios rather than timestamps sampled from a pair
+  // of naturally slow map loads. Native callbacks are still recorded below,
+  // but they cannot race or redefine a controlled scenario.
+  useEffect(() => {
+    const qaRoot = globalThis as typeof globalThis & {
+      __cairnMemoryQaConfig?: {
+        controlledReadiness?: boolean;
+        readinessDelayMs?: number;
+        events?: Array<Record<string, unknown>>;
+      };
+    };
+    const qa = Platform.OS === 'web' && debugMode ? qaRoot.__cairnMemoryQaConfig : undefined;
+    if (!qa?.controlledReadiness) return undefined;
+    const sourceMountKey = mountKey;
+    const delayMs = Math.max(0, Math.min(4_000, Number(qa.readinessDelayMs) || 0));
+    const elapsedMs = Date.now() - entryStartedAtRef.current;
+    const remainingMs = Math.max(0, delayMs - elapsedMs);
+    qa.events?.push({ kind: 'combined', phase: 'injected-scheduled', elapsedMs, delayMs, remainingMs });
+    const deliver = () => {
+      if (mountKeyRef.current !== sourceMountKey) return;
+      qa.events?.push({ kind: 'combined', phase: 'delivered', elapsedMs: Date.now() - entryStartedAtRef.current });
+      setMapReady(true);
+      setFogReady(true);
+    };
+    if (remainingMs <= 0) {
+      deliver();
+      return undefined;
+    }
+    const timer = setTimeout(deliver, remainingMs);
+    qaReadinessTimersRef.current.push(timer);
+    return () => clearTimeout(timer);
+  }, [debugMode, mountKey]);
+
+  const deliverReadiness = useCallback((kind: 'map' | 'fog', sourceMountKey: number, apply: () => void) => {
+    const qaRoot = globalThis as typeof globalThis & {
+      __cairnMemoryQaConfig?: {
+        controlledReadiness?: boolean;
+        readinessDelayMs?: number;
+        events?: Array<Record<string, unknown>>;
+      };
+    };
+    if (Platform.OS === 'web' && debugMode && qaRoot.__cairnMemoryQaConfig?.controlledReadiness) {
+      qaRoot.__cairnMemoryQaConfig.events?.push({
+        kind,
+        phase: 'native-observed',
+        elapsedMs: Date.now() - entryStartedAtRef.current,
+      });
+      return;
+    }
+    const configuredDelay = Platform.OS === 'web' && debugMode
+      ? Number(qaRoot.__cairnMemoryQaConfig?.readinessDelayMs ?? 0)
+      : 0;
+    const deliveryKey = `${sourceMountKey}:${kind}`;
+    if (qaReadinessScheduledRef.current.has(deliveryKey)) return;
+    qaReadinessScheduledRef.current.add(deliveryKey);
+    const elapsedMs = Date.now() - entryStartedAtRef.current;
+    const remainingMs = Number.isFinite(configuredDelay)
+      ? Math.max(0, Math.min(4_000, configuredDelay) - elapsedMs)
+      : 0;
+    const deliver = () => {
+      if (mountKeyRef.current !== sourceMountKey) return;
+      qaRoot.__cairnMemoryQaConfig?.events?.push({ kind, phase: 'delivered', elapsedMs: Date.now() - entryStartedAtRef.current });
+      apply();
+    };
+    qaRoot.__cairnMemoryQaConfig?.events?.push({ kind, phase: 'native-ready', elapsedMs, remainingMs });
+    if (remainingMs <= 0) deliver();
+    else qaReadinessTimersRef.current.push(setTimeout(deliver, remainingMs));
+  }, [debugMode]);
 
   // Retry handler: reset state + bump refetchToken to re-trigger pull.
   const handleRetryLoad = () => {
@@ -743,6 +828,12 @@ export function MemoryScreen() {
 
   const mapMayBeShown = Boolean(persistentCoord);
   const memoryEntryUsable = mapMayBeShown && mapReady && (fogReady || fogUnavailable);
+  const memoryPreviewKey = activeOwnerId
+    ? `${activeOwnerId}:${memoryScope}:${selectedMemoryFriendId ?? 'none'}:${subscriptions.map(item => item.friend_id).sort((a, b) => a - b).join(',')}:${theme.mode}`
+    : null;
+  const authorizedPreviewUri = memoryPreviewKey && _authorizedMemoryPreview?.key === memoryPreviewKey
+    ? _authorizedMemoryPreview.uri
+    : null;
   useEffect(() => {
     if (!memoryEntryUsable) {
       if (!failReason) {
@@ -759,19 +850,29 @@ export function MemoryScreen() {
       return undefined;
     }
     entryUsableRef.current = true;
-    log('memory.entry_visible_state', { state: 'settling-to-usable-map', mount_key: mountKey });
-    const animation = Animated.timing(entryVeilOpacity, {
-      toValue: 0,
-      duration: MEMORY_ENTRY_SETTLE_MS,
-      useNativeDriver: true,
-    });
-    animation.start(({ finished }) => {
-      if (!finished) return;
-      setEntryVeilMounted(false);
-      log('memory.entry_visible_state', { state: 'usable-map', mount_key: mountKey });
-    });
-    return () => animation.stop();
+    // Ready content wins immediately. The previous 150 ms JS-driven fade was
+    // routinely stretched by initial map work and turned a fast readiness
+    // signal into the Owner's perceived one-second mandatory interstitial.
+    entryVeilOpacity.setValue(0);
+    setEntryVeilMounted(false);
+    log('memory.entry_visible_state', { state: 'usable-map', mount_key: mountKey });
+    return undefined;
   }, [entryVeilOpacity, failReason, fogReady, fogUnavailable, mapMayBeShown, mapReady, memoryEntryUsable, mountKey]);
+  useEffect(() => {
+    if (!memoryEntryUsable || !memoryPreviewKey) return undefined;
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void mapRef.current?.captureAuthorizedPreview().then(uri => {
+        if (cancelled || !uri || uri.length > MAX_MEMORY_PREVIEW_BYTES) return;
+        _authorizedMemoryPreview = { key: memoryPreviewKey, uri, capturedAtMs: Date.now() };
+        log('memory.entry_preview_captured', { key: memoryPreviewKey, bytes: uri.length });
+      });
+    });
+    return () => {
+      cancelled = true;
+      task.cancel?.();
+    };
+  }, [memoryEntryUsable, memoryPreviewKey]);
   useEffect(() => {
     if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId) return undefined;
     if (manualBrowseThisMountRef.current) return undefined;
@@ -1026,7 +1127,7 @@ export function MemoryScreen() {
           onMapFullyReady={() => {
             if (mountKeyRef.current !== mountKey) return;
             log('v359.map_fully_ready_cb', {});
-            setMapReady(true);
+            deliverReadiness('map', mountKey, () => setMapReady(true));
           }}
           onMapUnavailable={() => handleMapUnavailable(mountKey)}
           onFogPreparing={() => {
@@ -1037,8 +1138,10 @@ export function MemoryScreen() {
           onFogReady={() => {
             if (mountKeyRef.current !== mountKey) return;
             log('v359.fog_ready_cb', {});
-            setFogUnavailable(false);
-            setFogReady(true);
+            deliverReadiness('fog', mountKey, () => {
+              setFogUnavailable(false);
+              setFogReady(true);
+            });
           }}
           onFogUnavailable={() => {
             if (mountKeyRef.current !== mountKey) return;
@@ -1097,12 +1200,22 @@ export function MemoryScreen() {
           style={[StyleSheet.absoluteFill, { opacity: entryVeilOpacity, zIndex: 30, backgroundColor: theme.background }]}
           testID="memory-entry-veil"
         >
-          <MapLoadOverlay
-            state={entryMapLoadState}
-            delayMs={MEMORY_ENTRY_MESSAGE_DELAY_MS}
-            onRetry={entryMapLoadState === 'slow' || entryMapLoadState === 'error' ? handleRetryLoad : undefined}
-            testID="memory-entry-loading"
-          />
+          {authorizedPreviewUri ? (
+            <Image
+              source={{ uri: authorizedPreviewUri }}
+              resizeMode="cover"
+              style={StyleSheet.absoluteFill}
+              testID="memory-authorized-preview"
+            />
+          ) : null}
+          {!memoryEntryUsable ? (
+            <MapLoadOverlay
+              state={entryMapLoadState}
+              delayMs={authorizedPreviewUri ? MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS : MEMORY_ENTRY_MESSAGE_DELAY_MS}
+              onRetry={entryMapLoadState === 'slow' || entryMapLoadState === 'error' ? handleRetryLoad : undefined}
+              testID="memory-entry-loading"
+            />
+          ) : null}
         </Animated.View>
       ) : null}
 

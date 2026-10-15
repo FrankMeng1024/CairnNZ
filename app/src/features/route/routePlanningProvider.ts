@@ -32,8 +32,8 @@ export type DrawPlanResolution =
   | { outcome: 'rejected'; reason: RouteProviderReason; callCount: number };
 
 export type PointPlanResolution =
-  | { outcome: 'accepted'; points: RoutePoint[] }
-  | { outcome: 'review'; points: RoutePoint[]; reason: RouteProviderReason }
+  | { outcome: 'accepted'; points: RoutePoint[]; providerStartShiftM: number; providerTargetShiftM: number }
+  | { outcome: 'review'; points: RoutePoint[]; reason: RouteProviderReason; providerStartShiftM: number; providerTargetShiftM: number }
   | { outcome: 'rejected'; reason: RouteProviderReason };
 
 export type DrawMatcher = (segment: MatchSegment, options?: { signal?: AbortSignal }) => Promise<MatchResult>;
@@ -263,11 +263,13 @@ export async function resolvePointPlan(
     const startShift = routePointDistanceM(start, routed[0]);
     const endShift = routePointDistanceM(target, routed[routed.length - 1]);
     if (startShift > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M || endShift > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M) {
-      return { outcome: 'review', points: routed, reason: 'endpoint-shift' };
+      return { outcome: 'review', points: routed, reason: 'endpoint-shift', providerStartShiftM: startShift, providerTargetShiftM: endShift };
     }
-    routed[0] = { ...start };
-    routed[routed.length - 1] = { ...target };
-    return { outcome: 'accepted', points: routed };
+    // Preserve the provider's actual snapped waypoints. The editor records
+    // the raw target separately and applies its bounded continuity policy to
+    // choose an effective target. Replacing this endpoint with the raw tap
+    // manufactured the small connector/spur we are specifically avoiding.
+    return { outcome: 'accepted', points: routed, providerStartShiftM: startShift, providerTargetShiftM: endShift };
   } catch (error: any) {
     return {
       outcome: 'rejected',

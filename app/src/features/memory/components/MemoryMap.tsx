@@ -116,6 +116,8 @@ export type MemoryMapHandle = {
    * Returns null if map not ready.
    */
   getCurrentCenter: () => Promise<{ lat: number; lng: number } | null>;
+  /** Capture the fully rendered local map+Fog frame for one bounded warm-entry preview. */
+  captureAuthorizedPreview: () => Promise<string | null>;
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
@@ -166,6 +168,18 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         return null;
       } catch (err) {
         log('v447.map.get_center_err', { err: String(err) });
+        return null;
+      }
+    },
+    captureAuthorizedPreview: async () => {
+      try {
+        const m = mapViewRef.current;
+        if (!m || typeof m.takeSnap !== 'function') return null;
+        const raw = await m.takeSnap(false);
+        if (typeof raw !== 'string' || raw.length < 32) return null;
+        return raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`;
+      } catch (err) {
+        log('memory.map.preview_capture_error', { err: String(err) });
         return null;
       }
     },

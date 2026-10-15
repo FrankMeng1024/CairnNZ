@@ -70,6 +70,35 @@ describe('RouteDrawOverlay native gesture handoff', () => {
     });
   });
 
+  test('projects absolute finger samples through the measured MapView-local origin', async () => {
+    const onStroke = jest.fn();
+    const mapViewRef = { current: {
+      measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => callback(7, 54, 390, 700),
+      getCoordinateFromView: jest.fn(async ([x, y]: [number, number]) => [174 + x / 1000, -41 + y / 1000]),
+    } } as any;
+    render(<RouteDrawOverlay active mapViewRef={mapViewRef} onStroke={onStroke} onCancel={jest.fn()} />);
+
+    await act(async () => {
+      mockPanCallbacks.onBegin({ absoluteX: 107, absoluteY: 254 });
+      mockPanCallbacks.onUpdate({ absoluteX: 127, absoluteY: 274 });
+      mockPanCallbacks.onEnd({ absoluteX: 147, absoluteY: 294 });
+      mockPanCallbacks.onFinalize({}, true);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(onStroke).toHaveBeenCalledTimes(1));
+    expect(mapViewRef.current.getCoordinateFromView).toHaveBeenNthCalledWith(1, [100, 200]);
+    expect(onStroke.mock.calls[0][1].samples[0]).toMatchObject({
+      x: 107,
+      y: 254,
+      mapX: 100,
+      mapY: 200,
+      mapOriginX: 7,
+      mapOriginY: 54,
+      mapOriginMeasured: true,
+    });
+  });
+
   test('a pointer-count interruption cancels provisional ink and yields to native map navigation', async () => {
     const onStroke = jest.fn();
     const onCancel = jest.fn();

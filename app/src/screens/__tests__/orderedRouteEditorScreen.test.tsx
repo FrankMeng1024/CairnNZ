@@ -16,7 +16,7 @@ const mockSearchPlaces = jest.fn();
 const mockSaveDraft = jest.fn(async (..._args: any[]) => undefined);
 let mockRecoveredPending: any = null;
 let mockRecoveredDraftEnabled = true;
-let mockScreenParams: any = {};
+let mockScreenParams: any = { routeId: 'route-screen' };
 const mockLoadActivityTrackPoints = jest.fn();
 const mockLoadActivityFinalArtifact = jest.fn();
 const mockStroke = [
@@ -163,7 +163,13 @@ jest.mock('../../store/useAppStore', () => {
   return { useAppStore: hook };
 });
 const mockRouteState = {
-  routes: [], sharedRoutes: [], addRoute: jest.fn(), updateRoute: jest.fn(),
+  get routes() {
+    return [{
+      id: 'route-screen', name: 'Screen Route', permission: 'personal', creationOrigin: 'plan',
+      points: mockLoadedDraft.parts.flatMap((part: any) => part.points), orderedDraft: mockLoadedDraft,
+    }];
+  },
+  sharedRoutes: [], addRoute: jest.fn(), updateRoute: jest.fn(),
   loadRouteDetail: jest.fn(), loadSharedRouteDetail: jest.fn(), removeSharedRoute: jest.fn(), captureActivityRouteReference: jest.fn(),
 };
 jest.mock('../../store/useRouteStore', () => {
@@ -186,7 +192,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     jest.clearAllMocks();
     mockRecoveredPending = null;
     mockRecoveredDraftEnabled = true;
-    mockScreenParams = {};
+    mockScreenParams = { routeId: 'route-screen' };
     mockLoadedDraft = mockDraft;
     mockRecoveredPast = [];
     mockEmittedStroke = mockStroke;
@@ -307,8 +313,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       resolveLocation({ coords: { latitude: 31.2304, longitude: 121.4737, accuracy: 18 }, timestamp: Date.now() });
       await Promise.resolve();
     });
-    await waitFor(() => expect(screen.getByTestId('mock-camera').props.centerCoordinate).toEqual([121.4737, 31.2304]));
-    expect(screen.getByTestId('mock-camera').props.zoomLevel).toBe(14);
+    await waitFor(() => expect(screen.getByTestId('mock-camera').props.defaultSettings.centerCoordinate).toEqual([121.4737, 31.2304]));
+    expect(screen.getByTestId('mock-camera').props.defaultSettings.zoomLevel).toBe(14);
   });
 
   test('a deliberate place choice fences a late initial GPS result', async () => {
@@ -323,12 +329,12 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.changeText(screen.getByLabelText('Place or city search'), 'Wellington');
     fireEvent.press(screen.getByText('Search'));
     fireEvent.press(await screen.findByText('Wellington'));
-    await waitFor(() => expect(screen.getByTestId('mock-camera').props.centerCoordinate).toEqual([174.7762, -41.2865]));
+    await waitFor(() => expect(screen.getByTestId('mock-camera').props.defaultSettings.centerCoordinate).toEqual([174.7762, -41.2865]));
     await act(async () => {
       resolveLocation({ coords: { latitude: 31.2304, longitude: 121.4737, accuracy: 18 }, timestamp: Date.now() });
       await Promise.resolve();
     });
-    expect(screen.getByTestId('mock-camera').props.centerCoordinate).toEqual([174.7762, -41.2865]);
+    expect(screen.getByTestId('mock-camera').props.defaultSettings.centerCoordinate).toEqual([174.7762, -41.2865]);
   });
 
   test('Activity import immediately renders the complete canonical multipart geometry', async () => {
@@ -357,7 +363,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       canonical.slice(2).map(point => [point.lng, point.lat]),
     ]);
     expect(screen.getByTestId('source-ordered-route-gaps')).toBeTruthy();
-    expect(screen.getByTestId('mock-camera').props.bounds).toEqual(expect.objectContaining({
+    expect(screen.getByTestId('mock-camera').props.defaultSettings.bounds).toEqual(expect.objectContaining({
       ne: [121.4754, 31.2328],
       sw: [121.4737, 31.2304],
       paddingRight: 88,
@@ -487,7 +493,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
   });
 
-  test('R2 true competing endpoint occurrences stay unchanged with a specific hint before provider', async () => {
+  test('R2 true competing endpoint occurrences stay unchanged until the highlighted interval is deliberately chosen', async () => {
     const { HUMAN_ROUTE_DRAWING_FIXTURES } = require('../../features/routeDrawing/humanIntentFixtures');
     const fixture = HUMAN_ROUTE_DRAWING_FIXTURES.trueAmbiguousOccurrences;
     mockLoadedDraft = {
@@ -503,10 +509,13 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByTestId('route-tool-draw'));
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
-    expect(await screen.findByText('Redraw from clearer positions so Cairn can preserve the right path.')).toBeTruthy();
+    expect(await screen.findByTestId('route-attachment-choice')).toBeTruthy();
+    expect(screen.getByText('Use the highlighted section?')).toBeTruthy();
+    expect(screen.getByTestId('source-ordered-route-review-original')).toBeTruthy();
     expect(mockResolveDraw).not.toHaveBeenCalled();
-    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates).toEqual(original);
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByTestId('route-use-highlighted-interval'));
+    await waitFor(() => expect(mockResolveDraw).toHaveBeenCalledTimes(1));
   });
 
   test.each([
@@ -570,7 +579,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       zoomLevel: 14,
       heading: 0,
       pitch: 0,
-      animationDuration: 96,
+      animationDuration: 180,
     })));
 
     const cameraCallsBeforePan = mockCameraSet.mock.calls.length;
@@ -580,14 +589,14 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.queryByTestId('source-ordered-route-growth')).toBeNull();
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 80)); });
     expect(mockCameraSet).toHaveBeenCalledTimes(cameraCallsBeforePan);
-    const committed = screen.getByTestId('source-ordered-route-parts').props.shape.features;
-    expect(committed).toHaveLength(2);
-    expect(committed[1].geometry.coordinates).toEqual([
-      [174.7782, -41.2865],
+    const repeat = screen.getByTestId('source-ordered-route-repeated-traversals').props.shape.features;
+    expect(repeat).toHaveLength(2);
+    expect(repeat.map((feature: any) => feature.geometry.coordinates)).toContainEqual([
       [174.7772, -41.2865],
+      [174.7782, -41.2865],
     ]);
     fireEvent.press(screen.getByLabelText('Undo last Route edit'));
-    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features).toHaveLength(1);
+    expect(screen.queryByTestId('source-ordered-route-repeated-traversals')).toBeNull();
   });
 
   test('R3 mixed Draw then Point actions keep a coincident seam and do not append the provider triangle', async () => {
@@ -614,11 +623,10 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.press(screen.getByTestId('route-point-confirm'));
     await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(1));
     const features = screen.getByTestId('source-ordered-route-parts').props.shape.features;
-    expect(features.length).toBeGreaterThanOrEqual(2);
-    const before = features.at(-2).geometry.coordinates;
-    const continuation = features.at(-1).geometry.coordinates;
-    expect(continuation[0]).toEqual(before.at(-1));
+    expect(features).toHaveLength(1);
+    const continuation = features[0].geometry.coordinates;
     expect(continuation).not.toContainEqual([174.7777, -41.2858]);
+    expect(continuation.at(-1)).toEqual([174.7772, -41.2865]);
   });
 
   test.each(['plan', 'activity'] as const)('Trim is map-visible for a %s draft, previews live, applies once, and Undo restores it', async origin => {
@@ -697,6 +705,48 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
   });
 
+  test('unmatched appended freehand keeps the decision on one compact row', async () => {
+    mockEmittedStroke = [
+      { lat: -41.2865, lng: 174.7782 },
+      { lat: -41.2859, lng: 174.7790 },
+    ];
+    mockResolveDraw.mockResolvedValueOnce({ outcome: 'manual-available', reason: 'no-matches', rawPoints: mockEmittedStroke });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByTestId('route-tool-draw'));
+    fireEvent.press(screen.getByTestId('emit-route-stroke'));
+    const row = await screen.findByTestId('route-freehand-choice');
+    expect(row.props.style).toEqual(expect.objectContaining({ flexDirection: 'row' }));
+    expect(screen.getByText('Keep the line you drew?')).toBeTruthy();
+    expect(screen.getByText('Redraw')).toBeTruthy();
+    expect(screen.getByText('Use line')).toBeTruthy();
+  });
+
+  test('a bounded provider snap commits as walking geometry without exposing a Direct mode', async () => {
+    mockResolvePoint.mockResolvedValueOnce({
+      outcome: 'accepted',
+      points: [
+        { lat: -41.2865, lng: 174.7782 },
+        { lat: -41.2865, lng: 174.7788 },
+      ],
+    });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByTestId('route-tool-point'));
+    fireEvent(screen.getByTestId('mock-map'), 'cameraChanged', {
+      properties: { center: [174.7790, -41.2865], zoom: 14, heading: 18, pitch: 12, isUserInteraction: true },
+    });
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false));
+    expect(screen.queryByText(/Direct/)).toBeNull();
+    fireEvent.press(screen.getByTestId('ordered-route-save'));
+    await waitFor(() => expect(mockRouteState.updateRoute).toHaveBeenCalledTimes(1));
+    const saved = mockRouteState.updateRoute.mock.calls[0][1];
+    expect(saved.orderedDraft.parts.at(-1).resolution).toBe('point');
+    expect(saved.orderedDraft.parts.at(-1).points.at(-1)).toEqual({ lat: -41.2865, lng: 174.7788 });
+  });
+
   test('switching Trim to Point removes the unapplied preview and keeps dock anchors stable', async () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
@@ -725,11 +775,11 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByTestId('ordered-route-save'));
-    await waitFor(() => expect(mockRouteState.addRoute).toHaveBeenCalledTimes(1));
-    const saved = mockRouteState.addRoute.mock.calls[0][0];
+    await waitFor(() => expect(mockRouteState.updateRoute).toHaveBeenCalledTimes(1));
+    const saved = mockRouteState.updateRoute.mock.calls[0][1];
     expect(saved.orderedDraft.parts).toEqual(mockDraft.parts);
     expect(saved.points).toEqual(mockDraft.parts[0].points);
-    expect(mockNavReplace).toHaveBeenCalledWith('MapHistory', { routeId: 'saved-route-77' });
+    expect(mockNavReplace).toHaveBeenCalledWith('MapHistory', { routeId: 'route-screen' });
     expect(screen.queryByText('Route saved')).toBeNull();
   });
 
@@ -766,7 +816,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     });
     expect(screen.queryByText('Review this walking Route')).toBeNull();
     const rendered = screen.getByTestId('source-ordered-route-parts').props.shape.features;
-    expect(rendered).toHaveLength(2);
+    expect(rendered).toHaveLength(1);
+    expect(rendered[0].geometry.coordinates).toHaveLength(5);
   });
 
   test('one-shot Draw Cancel fences a slow provider reply without creating Undo history', async () => {
@@ -792,22 +843,47 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     );
   });
 
-  test('Point review Cancel dismisses only the uncommitted result', async () => {
+  test('a bounded provider endpoint shift does not add a redundant review confirmation', async () => {
     mockResolvePoint.mockResolvedValueOnce({
       outcome: 'review',
       reason: 'endpoint-shift',
-      points: mockStroke,
+      points: [
+        { lat: -41.2865, lng: 174.7782 },
+        { lat: -41.2862, lng: 174.7777 },
+        { lat: -41.2865, lng: 174.7772 },
+      ],
     });
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByText('Point'));
     fireEvent.press(screen.getByTestId('route-point-confirm'));
-    expect(await screen.findByTestId('route-inline-review')).toBeTruthy();
-    fireEvent.press(screen.getByText('Cancel'));
+    await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('route-inline-review')).toBeNull();
-    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features[0].geometry.coordinates).toEqual(
-      mockDraft.parts[0].points.map(point => [point.lng, point.lat]),
-    );
+    expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
+  });
+
+  test('provider failure keeps the Point target and commits exactly once after manual Retry', async () => {
+    mockResolvePoint
+      .mockResolvedValueOnce({ outcome: 'rejected', reason: 'provider-unavailable' })
+      .mockResolvedValueOnce({
+        outcome: 'accepted',
+        points: [
+          { lat: -41.2865, lng: 174.7782 },
+          { lat: -41.2865, lng: 174.7777 },
+          { lat: -41.2865, lng: 174.7772 },
+        ],
+      });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    const before = screen.getByTestId('source-ordered-route-parts').props.shape.features;
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    expect(await screen.findByTestId('route-provider-retry')).toBeTruthy();
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features).toEqual(before);
+    fireEvent.press(screen.getByTestId('route-provider-retry-action'));
+    await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('route-provider-retry')).toBeNull());
+    expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
   });
 
   test('N02 same-frame repeated Point confirmation starts only one provider transaction', async () => {

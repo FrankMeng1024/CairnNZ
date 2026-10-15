@@ -22,7 +22,10 @@ export async function planWalkingRoute(
   const token = await resolveMapboxPublicToken();
   if (!token) throw new WalkingPlanError('NO_TOKEN');
   const coords = `${start.lng},${start.lat};${destination.lng},${destination.lat}`;
-  const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${coords}?alternatives=false&geometries=geojson&overview=full&steps=false&access_token=${encodeURIComponent(token)}`;
+  // Bound waypoint snapping at the provider as well as in the editor. This
+  // lets walking paths/trails participate without allowing a remote road
+  // waypoint to masquerade as the selected neighborhood.
+  const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${coords}?alternatives=false&geometries=geojson&overview=full&steps=false&radiuses=25%3B25&access_token=${encodeURIComponent(token)}`;
   let response: Response;
   try {
     response = await fetch(url, { method: 'GET', signal });

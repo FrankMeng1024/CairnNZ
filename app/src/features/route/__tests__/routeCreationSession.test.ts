@@ -1,6 +1,5 @@
 import {
   activityCreationDraftId,
-  mayRecoverRouteCreationDraft,
 } from '../routeCreationSession';
 
 describe('fresh Route creation session identity', () => {
@@ -10,7 +9,5 @@ describe('fresh Route creation session identity', () => {
     expect(activityCreationDraftId(first)).toBe('activity:goood:create-a');
     expect(activityCreationDraftId(second)).toBe('activity:goood:create-b');
     expect(activityCreationDraftId(first)).not.toBe(activityCreationDraftId(second));
-    expect(mayRecoverRouteCreationDraft(first)).toBe(false);
-    expect(mayRecoverRouteCreationDraft({ creationSource: 'plan' })).toBe(true);
   });
 });

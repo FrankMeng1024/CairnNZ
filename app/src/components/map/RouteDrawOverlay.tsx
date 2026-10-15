@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { findNodeHandle, PixelRatio, Platform, StyleSheet, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import Svg, { Polyline } from 'react-native-svg';
@@ -19,8 +19,16 @@ interface Props {
 
 export interface RouteDrawSample {
   timestampMs: number;
+  /** Absolute window coordinate from RNGH; retained as the native evidence. */
   x: number;
   y: number;
+  /** Coordinate in the MapView's local projection space. */
+  mapX?: number;
+  mapY?: number;
+  mapOriginX?: number;
+  mapOriginY?: number;
+  mapOriginMeasured?: boolean;
+  pixelRatio?: number;
   geographic?: RoutePoint;
 }
 
@@ -34,6 +42,12 @@ export interface RouteDrawStrokeCapture {
 }
 
 const MAX_NATIVE_SAMPLES = 4096;
+
+interface MapWindowOrigin {
+  x: number;
+  y: number;
+  measured: boolean;
+}
 
 /**
  * One finger draws one stroke. Any interruption cancels that provisional
@@ -60,33 +74,82 @@ export function RouteDrawOverlay({
   const strokeIdRef = useRef('');
   const startedAtMsRef = useRef(0);
   const droppedSampleCountRef = useRef(0);
+  const mapOriginPromiseRef = useRef<Promise<MapWindowOrigin>>(Promise.resolve({ x: 0, y: 0, measured: false }));
   const [screenPoints, setScreenPoints] = useState<Array<{ x: number; y: number }>>([]);
 
   if (!active || Platform.OS === 'web') return null;
 
-  async function unproject(x: number, y: number): Promise<RoutePoint | null> {
+  function measureMapOrigin(): Promise<MapWindowOrigin> {
+    const map = mapViewRef.current;
+    if (!map) {
+      return Promise.resolve({ x: 0, y: 0, measured: false });
+    }
+    return new Promise(resolve => {
+      const done = (x: number, y: number) => {
+        resolve(Number.isFinite(x) && Number.isFinite(y)
+          ? { x, y, measured: true }
+          : { x: 0, y: 0, measured: false });
+      };
+      try {
+        if (typeof map.measureInWindow === 'function') {
+          map.measureInWindow(done);
+          return;
+        }
+        // RNMapbox exposes a composite MapView ref on some native versions.
+        // Resolve its host node instead of silently projecting absolute window
+        // coordinates as map-local coordinates.
+        const node = findNodeHandle(map);
+        if (node != null && typeof UIManager.measureInWindow === 'function') {
+          UIManager.measureInWindow(node, done);
+          return;
+        }
+        resolve({ x: 0, y: 0, measured: false });
+      } catch {
+        resolve({ x: 0, y: 0, measured: false });
+      }
+    });
+  }
+
+  async function unproject(absoluteX: number, absoluteY: number): Promise<{
+    point: RoutePoint | null;
+    mapX: number;
+    mapY: number;
+    origin: MapWindowOrigin;
+  }> {
+    const origin = await mapOriginPromiseRef.current;
+    const mapX = absoluteX - origin.x;
+    const mapY = absoluteY - origin.y;
     try {
       const map = mapViewRef.current;
-      if (!map || typeof map.getCoordinateFromView !== 'function') return null;
-      const coordinate = await map.getCoordinateFromView([x, y]);
+      if (!map || typeof map.getCoordinateFromView !== 'function') return { point: null, mapX, mapY, origin };
+      const coordinate = await map.getCoordinateFromView([mapX, mapY]);
       const point = Array.isArray(coordinate)
         ? { lng: Number(coordinate[0]), lat: Number(coordinate[1]) }
         : null;
-      return validRoutePoint(point) ? point : null;
+      return { point: validRoutePoint(point) ? point : null, mapX, mapY, origin };
     } catch {
-      return null;
+      return { point: null, mapX, mapY, origin };
     }
   }
 
   function queuePoint(x: number, y: number, generation: number, sampleIndex: number) {
     chainRef.current = chainRef.current.then(async () => {
       if (generationRef.current !== generation) return;
-      const point = await unproject(x, y);
+      const projection = await unproject(x, y);
+      const point = projection.point;
+      const sample = rawSamplesRef.current[sampleIndex];
+      if (sample) {
+        sample.mapX = projection.mapX;
+        sample.mapY = projection.mapY;
+        sample.mapOriginX = projection.origin.x;
+        sample.mapOriginY = projection.origin.y;
+        sample.mapOriginMeasured = projection.origin.measured;
+        sample.pixelRatio = PixelRatio.get();
+      }
       if (!point) {
         coordinateFailureRef.current = true;
         return;
       }
-      const sample = rawSamplesRef.current[sampleIndex];
       if (sample) sample.geographic = { ...point };
       const previous = pointsRef.current.at(-1);
       if (!previous || routePointDistanceM(previous, point) >= 0.75) pointsRef.current.push(point);
@@ -103,6 +166,7 @@ export function RouteDrawOverlay({
     droppedSampleCountRef.current = 0;
     strokeIdRef.current = `${startedAtMsRef.current}-${Math.random().toString(36).slice(2, 10)}`;
     rawSamplesRef.current = [{ timestampMs: startedAtMsRef.current, x, y }];
+    mapOriginPromiseRef.current = measureMapOrigin();
     screenPointsRef.current = [{ x, y }];
     setScreenPoints(screenPointsRef.current);
     chainRef.current = Promise.resolve();
@@ -138,11 +202,18 @@ export function RouteDrawOverlay({
       // replacement sample.
       droppedSampleCountRef.current += 1;
       await chainRef.current;
-      const point = await unproject(x, y);
+      const projection = await unproject(x, y);
+      const point = projection.point;
       rawSamplesRef.current[MAX_NATIVE_SAMPLES - 1] = {
         timestampMs: endedAtMs,
         x,
         y,
+        mapX: projection.mapX,
+        mapY: projection.mapY,
+        mapOriginX: projection.origin.x,
+        mapOriginY: projection.origin.y,
+        mapOriginMeasured: projection.origin.measured,
+        pixelRatio: PixelRatio.get(),
         ...(point ? { geographic: { ...point } } : {}),
       };
       if (point) {

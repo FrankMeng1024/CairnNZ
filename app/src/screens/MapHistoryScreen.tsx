@@ -91,7 +91,7 @@ import {
   type SnapLabActivityRecord,
 } from '../features/activitySimulator/snapLabActivityStore';
 
-const HISTORY_ROUTE_ORNAMENT_CLEARANCE = 336;
+const HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE = 248;
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native uses @rnmapbox/maps; Web uses Cairn's real Mapbox GL adapter so the
@@ -101,6 +101,7 @@ let MapView: any = null;
 let CameraComponent: any = null;
 let LineLayer: any = null;
 let ShapeSource: any = null;
+let SymbolLayer: any = null;
 let PointAnnotation: any = null;
 let StyleImport: any = null;
 try {
@@ -113,6 +114,7 @@ try {
     CameraComponent = Mapbox.Camera;
     LineLayer = Mapbox.LineLayer;
     ShapeSource = Mapbox.ShapeSource;
+    SymbolLayer = Mapbox.SymbolLayer;
     PointAnnotation = Mapbox.PointAnnotation;
     StyleImport = Mapbox.StyleImport;
   }
@@ -242,16 +244,16 @@ function NativeTrackMap({
   }, []);
   useEffect(() => {
     if (!mapReady || !bounds || !cameraRef.current) return;
-    const fitIdentity = `${mapEpoch}:${mapBindingIdentity}`;
+    const fitIdentity = `${mapEpoch}:${mapBindingIdentity}:${Math.round(ornamentBottomClearance)}`;
     if (lastCameraFitRef.current === fitIdentity) return;
     lastCameraFitRef.current = fitIdentity;
     cameraRef.current?.fitBounds(
       [bounds.maxLng, bounds.maxLat],
       [bounds.minLng, bounds.minLat],
-      [60, 40, 60, 40],
+      [104, 40, ornamentBottomClearance + 28, 40],
       0,
     );
-  }, [bounds, mapBindingIdentity, mapEpoch, mapReady]);
+  }, [bounds, mapBindingIdentity, mapEpoch, mapReady, ornamentBottomClearance]);
   if (!MapView || !bounds || pts.length < 2) return null;
   const { minLat, maxLat, minLng, maxLng } = bounds;
 
@@ -315,16 +317,18 @@ function NativeTrackMap({
       {CameraComponent && (
         <CameraComponent
           ref={cameraRef}
-          bounds={{
-            ne: [maxLng, maxLat],
-            sw: [minLng, minLat],
-            paddingTop: 60,
-            paddingBottom: 60,
-            paddingLeft: 40,
-            paddingRight: 40,
+          defaultSettings={{
+            bounds: {
+              ne: [maxLng, maxLat],
+              sw: [minLng, minLat],
+              paddingTop: 104,
+              paddingBottom: ornamentBottomClearance + 28,
+              paddingLeft: 40,
+              paddingRight: 40,
+            },
+            pitch: 0,
+            animationDuration: 0,
           }}
-          pitch={0}
-          animationDuration={0}
         />
       )}
       {plannedRouteGeometry ? (
@@ -333,6 +337,7 @@ function NativeTrackMap({
           theme={visualTheme}
           ShapeSource={ShapeSource}
           LineLayer={LineLayer}
+          SymbolLayer={SymbolLayer}
           idPrefix={`route-detail-${geometryIdentity}`}
         />
       ) : ShapeSource && LineLayer && (() => {
@@ -421,7 +426,7 @@ function NativeTrackMap({
           cameraRef.current?.fitBounds(
             [maxLng, maxLat],
             [minLng, minLat],
-            [60, 40, 60, 40], // [top, right, bottom, left]
+            [104, 40, ornamentBottomClearance + 28, 40], // [top, right, bottom, left]
             500,
           );
           setHasPanned(false);
@@ -926,6 +931,7 @@ function MapHistoryObjectScreen() {
   const [routeUseLoading, setRouteUseLoading] = useState(false);
   const [routeDeleteConfirm, setRouteDeleteConfirm] = useState(false);
   const [routeMoreOpen, setRouteMoreOpen] = useState(false);
+  const [routeDetailPanelHeight, setRouteDetailPanelHeight] = useState(0);
   const routeFriends = useFriendStore(s => s.friends);
   const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
   const [routeShareOpen, setRouteShareOpen] = useState(false);
@@ -1643,7 +1649,7 @@ function MapHistoryObjectScreen() {
                 session={routePreviewSession}
                 markers={[]}
                 plannedRouteGeometry={routePreviewGeometry ?? undefined}
-                ornamentBottomClearance={HISTORY_ROUTE_ORNAMENT_CLEARANCE}
+                ornamentBottomClearance={(routeDetailPanelHeight || HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE) + Spacing.sm}
               />
             : <TrackPolyline session={routePreviewSession} planned />
         ) : isRouteDetail ? (
@@ -1720,7 +1726,11 @@ function MapHistoryObjectScreen() {
 
       {/* Top bar — overlays map */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
-        <View style={styles.topRow}>
+        <View style={[
+          styles.topRow,
+          isRouteDetail && styles.routeDetailTopRow,
+          isRouteDetail && { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border },
+        ]}>
           <BackButton
             variant="inline"
             onPress={targetSessionId
@@ -1731,14 +1741,18 @@ function MapHistoryObjectScreen() {
               has NO top title — the tab bar (Activities/Routes/Cairns) below
               already anchors the context. Only detail views show a title.
               Type-specific label based on which detail is open. */}
-          <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{isRouteDetail ? 'Route Detail' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
+          <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{isRouteDetail ? 'Route' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
           {/* User decision 2026-08-16: Plan button removed from Trails top row.
               Also drop the right-side spacer — nothing to balance now. */}
-          {!targetSessionId && !isRouteDetail ? (
-            <View style={{ width: 40 }} />
-          ) : (
-            <View style={{ width: 40 }} />
-          )}
+          {isRouteDetail && selectedRoute ? (
+            <TouchableOpacity
+              style={[styles.routeHeaderMore, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}
+              onPress={() => setRouteMoreOpen(value => !value)}
+              accessibilityRole="button"
+              accessibilityLabel="More Route actions"
+              testID="route-detail-header-more"
+            ><Icon name="MoreHorizontal" size={20} color={visualTheme.iconActive} /></TouchableOpacity>
+          ) : <View style={{ width: 44 }} />}
         </View>
 
         {/* Tab bar — only show when viewing all sessions (Trails index). Hide
@@ -1767,10 +1781,14 @@ function MapHistoryObjectScreen() {
       {isRouteDetail && selectedRoute ? (
         <>
         <View
-          style={[styles.singleSessionPanel, { paddingBottom: Math.max(insets.bottom, Spacing.base) + Spacing.md, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}
+          style={[styles.singleSessionPanel, styles.routeDetailPanel, { paddingBottom: Math.max(insets.bottom, Spacing.base) + Spacing.sm, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}
           testID="route-detail-panel"
+          onLayout={event => {
+            const height = Math.ceil(event.nativeEvent.layout.height);
+            setRouteDetailPanelHeight(current => current === height ? current : height);
+          }}
         >
-          <View style={{ marginBottom: Spacing.md }}>
+          <View style={{ marginBottom: Spacing.xs }}>
             {renameEditing ? (
               <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
                 <TextInput
@@ -1816,7 +1834,7 @@ function MapHistoryObjectScreen() {
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{selectedRoute.name || 'Route'}</Text>
+                  <Text style={[styles.routeDetailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{selectedRoute.name || 'Route'}</Text>
                   {!targetSharedDeliveryId ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
                 </View>
               </TouchableOpacity>
@@ -1849,11 +1867,15 @@ function MapHistoryObjectScreen() {
             </Text>
           ) : null}
           <View style={styles.routeOriginBlock} testID="route-origin-context">
-            <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>{routeSourceLabel(selectedRoute)} · {routeStatusLabel(selectedRoute)}</Text>
+            <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>
+              {targetSharedDeliveryId
+                ? `${routeSourceLabel(selectedRoute)} · Received ${formatDate(selectedRoute.createdAt)}`
+                : `${selectedRoute.creationOrigin === 'activity' ? 'From Activity' : 'Planned Route'} · Saved ${formatDate(selectedRoute.createdAt)}`}
+              {routeStatusLabel(selectedRoute) === 'Ready' ? '' : ` · ${routeStatusLabel(selectedRoute)}`}
+            </Text>
             {selectedRoute.originPersistence === 'legacy-local' ? (
               <Text style={[styles.routeStateText, { color: Colors.warning }]}>Origin is saved on this device; server support is pending.</Text>
             ) : null}
-            <Text style={[styles.routeUpdatedText, { color: visualTheme.muted }]}>{targetSharedDeliveryId ? 'Received' : 'Saved'} {formatDate(selectedRoute.createdAt)}</Text>
           </View>
           {!routeCanBeUsed(selectedRoute) ? (
             <Text style={[styles.routeStateText, { color: Colors.warning }]} testID="route-unresolved-gap-notice">
@@ -1910,12 +1932,6 @@ function MapHistoryObjectScreen() {
                   <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>Share</Text>
                 </TouchableOpacity>
               ) : null}
-              <TouchableOpacity
-                style={[styles.routeMoreAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
-                onPress={() => setRouteMoreOpen(value => !value)}
-                accessibilityRole="button"
-                accessibilityLabel="More Route actions"
-              ><Icon name="Settings2" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>More</Text></TouchableOpacity>
             </View>
             {routeMoreOpen ? (
               <View style={[styles.routeCompactMenu, { backgroundColor: visualTheme.surface, borderColor: visualTheme.borderSubtle }]} testID="route-detail-more-menu">
@@ -2656,6 +2672,23 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg, paddingBottom: Spacing.xs,
     gap: Spacing.sm,
   },
+  routeDetailTopRow: {
+    minHeight: 52,
+    marginHorizontal: Spacing.sm,
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xs,
+    borderWidth: 1,
+    borderRadius: Radius.card,
+  },
+  routeHeaderMore: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: Radius.button,
+  },
   backBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     backgroundColor: 'rgba(255,255,255,0.95)',
@@ -2698,6 +2731,10 @@ const styles = StyleSheet.create({
     padding: Spacing.xl, paddingBottom: Spacing.xxl,
     shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08, shadowRadius: 16, elevation: 6,
+  },
+  routeDetailPanel: {
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.md,
   },
   activityDetailPanel: {
     maxHeight: Math.min(H * 0.68, 580),
@@ -2816,6 +2853,12 @@ const styles = StyleSheet.create({
   detailTitle: {
     fontSize: 26, fontWeight: '700', color: Colors.textPrimary,
   },
+  routeDetailTitle: {
+    flexShrink: 1,
+    fontSize: FontSize.h2,
+    lineHeight: 26,
+    fontWeight: '700',
+  },
   // Meta row under the stats: activity icon + "Hiking · 7/8/2036 · 08:21".
   // 13pt/600 Label style per project font rule.
   detailMetaRow: {
@@ -2870,15 +2913,15 @@ const styles = StyleSheet.create({
   activityDeleteText: { fontSize: FontSize.caption, fontWeight: '600' },
   deleteModalActions: { gap: Spacing.sm },
   routeActions: { gap: Spacing.sm, marginTop: Spacing.sm },
-  routeOriginBlock: { gap: 3, marginBottom: Spacing.md },
+  routeOriginBlock: { gap: 3, marginBottom: Spacing.sm },
   routeSyncBlock: { gap: Spacing.xs, marginBottom: Spacing.sm, alignItems: 'flex-start' },
   routeOriginText: { fontSize: FontSize.caption, lineHeight: 19, fontWeight: '600' },
   routeUpdatedText: { fontSize: FontSize.small, lineHeight: 17, marginTop: 2 },
   routeStateText: { fontSize: FontSize.small, lineHeight: 18, marginBottom: Spacing.xs },
-  routeMaintenanceRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
+  routeMaintenanceRow: { flexDirection: 'row', gap: Spacing.sm },
   routeMaintenanceAction: {
     flexGrow: 1,
-    flexBasis: 104,
+    flexBasis: 84,
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',

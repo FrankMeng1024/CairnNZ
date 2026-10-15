@@ -6,16 +6,16 @@ export interface MapOrnamentPosition {
 }
 
 /**
- * Keep the genuine Mapbox logo and attribution control in separate legal
- * corners with the same vertical clearance. Screens pass the height of any
- * persistent bottom surface; both native RNMapbox and the Web adapter consume
- * these exact positions.
+ * Keep the genuine Mapbox logo and attribution control together at the
+ * lower-left of the exposed map. Screens pass the measured height of any
+ * sheet that covers a full-screen map; already-resized maps pass only their
+ * local safe inset.
  */
 export function mapOrnamentsAbove(bottomClearance: number) {
   const bottom = Math.max(8, Math.round(bottomClearance));
   return {
     logoPosition: { bottom, left: 8 } satisfies MapOrnamentPosition,
-    attributionPosition: { bottom, right: 8 } satisfies MapOrnamentPosition,
+    attributionPosition: { bottom, left: 92 } satisfies MapOrnamentPosition,
   };
 }
 
@@ -28,4 +28,4 @@ export function groupedMapOrnamentsAbove(bottomClearance: number) {
   };
 }
 
-export const MAP_ORNAMENTS_EDGE = mapOrnamentsAbove(8);
+export const MAP_ORNAMENTS_EDGE = groupedMapOrnamentsAbove(8);

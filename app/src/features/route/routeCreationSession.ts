@@ -18,8 +18,3 @@ export function activityCreationDraftId(input: RouteCreationIdentity): string | 
   if (input.creationSource !== 'activity' || !input.fromSessionId || !input.creationSessionId) return null;
   return `activity:${input.fromSessionId}:${input.creationSessionId}`;
 }
-
-export function mayRecoverRouteCreationDraft(input: RouteCreationIdentity): boolean {
-  return input.creationSource !== 'activity';
-}
-

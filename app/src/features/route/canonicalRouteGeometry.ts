@@ -8,6 +8,7 @@ export interface CanonicalRoutePart {
 
 export interface CanonicalRouteGap {
   id: string;
+  afterPartId: string;
   from: RoutePoint;
   to: RoutePoint;
 }
@@ -51,7 +52,7 @@ export function canonicalRouteGeometry(input: {
     const from = parts[precedingIndex]?.points.at(-1);
     const to = parts[precedingIndex + 1]?.points[0];
     return finitePoint(from) && finitePoint(to)
-      ? [{ id: gap.id, from: { ...from }, to: { ...to } }]
+      ? [{ id: gap.id, afterPartId: gap.afterPartId, from: { ...from }, to: { ...to } }]
       : [];
   });
 

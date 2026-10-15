@@ -79,7 +79,7 @@ describe('ordered Route draft topology', () => {
     const base = appendOrderedSegment(empty(), [p(0, 0), p(40, 0), p(80, 0)], 'draw-manual');
     expect(base.ok).toBe(true);
     if (!base.ok) return;
-    const extended = appendOrderedSegment(base.draft, [p(80, 0), p(76, 0.4), p(90, 0), p(120, 0)], 'draw-manual');
+    const extended = appendOrderedSegment(base.draft, [p(80, 0), p(79, 0.1), p(90, 0), p(120, 0)], 'draw-manual');
     expect(extended.ok).toBe(true);
     if (!extended.ok) return;
     expect(extended.draft.parts[1].points).toEqual([p(80, 0), p(90, 0), p(120, 0)]);
@@ -97,7 +97,7 @@ describe('ordered Route draft topology', () => {
     const uTurn = appendOrderedSegment(base.draft, [p(80, 0), p(75, 0), p(55, 0)], 'draw-manual');
     expect(uTurn.ok).toBe(true);
     if (!uTurn.ok) return;
-    expect(uTurn.draft.parts[1].points).toEqual([p(80, 0), p(55, 0)]);
+    expect(uTurn.draft.parts[1].points).toEqual([p(80, 0), p(75, 0), p(55, 0)]);
   });
 
   test('disconnected append rejects only the edit and preserves draft identity', () => {

@@ -38,6 +38,7 @@ import { loadActivityFinalArtifact } from '../features/activity/activityFinalArt
 import {
   applyDrawTransaction,
   classifyDrawTransactionWithDiagnostics,
+  routeAttachmentToleranceM,
   selectIntentAwareDrawCandidate,
   type DrawTransactionIntent,
 } from '../features/route/routeEditTransactions';
@@ -74,14 +75,10 @@ import {
 } from '../features/route/orderedRouteDraft';
 import {
   abandonRoutePlannerDraft,
-  loadRoutePlannerDraft,
-  plannerDraftMatchesRequest,
   removeRoutePlannerDraft,
-  saveRoutePlannerDraft,
 } from '../features/route/routePlannerDraftPersistence';
 import {
   activityCreationDraftId,
-  mayRecoverRouteCreationDraft,
 } from '../features/route/routeCreationSession';
 import { RoutePlaceSearchError, searchRoutePlaces, type RoutePlaceSearchResult } from '../features/route/routePlaceSearch';
 import {
@@ -97,7 +94,7 @@ import {
 } from '../features/route/pointGrowthTimeline';
 import { routeMatchesIdentity } from '../features/route/routeContracts';
 import { selectActivityRouteImportPoints } from '../features/route/activityRouteImport';
-import { canonicalRouteGeometry } from '../features/route/canonicalRouteGeometry';
+import { canonicalRouteGeometry, type CanonicalRouteGeometry } from '../features/route/canonicalRouteGeometry';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { uuidv4 } from '../services/offlineQueue';
@@ -157,8 +154,35 @@ type PointTransactionIntent =
 interface PendingPointReview {
   kind: 'point';
   points: RoutePoint[];
+  resolution: 'point';
   intent: PointTransactionIntent;
-  reason: RouteProviderReason | null;
+  reason: string | null;
+  baseRevision: number;
+}
+
+type PendingProviderRetry =
+  | {
+      kind: 'draw';
+      raw: RoutePoint[];
+      capture?: RouteDrawStrokeCapture;
+      intent: DrawTransactionIntent;
+      baseRevision: number;
+      reason: RouteProviderReason;
+    }
+  | {
+      kind: 'point';
+      start: RoutePoint;
+      target: RoutePoint;
+      intent: PointTransactionIntent;
+      baseRevision: number;
+      reason: RouteProviderReason;
+    };
+
+interface PendingAttachmentChoice {
+  raw: RoutePoint[];
+  capture?: RouteDrawStrokeCapture;
+  intent: Extract<DrawTransactionIntent, { kind: 'replace' }>;
+  alternativeCount: number;
   baseRevision: number;
 }
 
@@ -172,13 +196,13 @@ interface RouteGrowthAnimation {
 
 function providerReason(reason: RouteProviderReason): string {
   switch (reason) {
-    case 'no-route': return 'No walking path was found. Move the target or draw this part yourself.';
+    case 'no-route': return 'No nearby path found. You can draw this section.';
     case 'no-match': return 'No mapped path fits this drawing. Redraw with clearer attachments.';
     case 'split-match': return 'No mapped path fits this drawing. Your Route is unchanged.';
     case 'endpoint-shift': return 'The mapped result moved an endpoint. Review it before applying.';
     case 'shape-deviation': return 'The mapped result may shortcut the path you drew. Review it first.';
     case 'chunk-seam': return 'No mapped path fits this drawing. Your Route is unchanged.';
-    case 'provider-unavailable': return 'Routing is unavailable. Your Route is unchanged; try again when connected.';
+    case 'provider-unavailable': return 'Routing is unavailable. Your Route and selection are unchanged.';
     default: return 'This edit could not be used. Your Route is unchanged.';
   }
 }
@@ -258,6 +282,8 @@ export function OrderedRouteEditorScreen() {
   const [pendingReview, setPendingReview] = useState<PendingCandidateReview | null>(null);
   const [pendingPointReview, setPendingPointReview] = useState<PendingPointReview | null>(null);
   const [manualRecovery, setManualRecovery] = useState<PendingCandidateReview | null>(null);
+  const [pendingAttachmentChoice, setPendingAttachmentChoice] = useState<PendingAttachmentChoice | null>(null);
+  const [pendingProviderRetry, setPendingProviderRetry] = useState<PendingProviderRetry | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(1);
@@ -273,6 +299,7 @@ export function OrderedRouteEditorScreen() {
   const [planningMemoryScope, setPlanningMemoryScope] = useState<'self' | 'combined'>('self');
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
   const routeGrowthAnimationRef = useRef<RouteGrowthAnimation | null>(null);
+  const routeGrowthSourceRef = useRef<any>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<RoutePlaceSearchResult[]>([]);
@@ -292,9 +319,11 @@ export function OrderedRouteEditorScreen() {
   // React state alone cannot fence two taps delivered before the next render.
   // This ref is the synchronous owner for the one allowed provider transaction.
   const providerTransactionRef = useRef(false);
-  const routeAnimationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const routeAnimationFrameRef = useRef<number | null>(null);
   const routeAnimationGenerationRef = useRef(0);
   const cameraFollowBusyRef = useRef(false);
+  const cameraFollowLastCommandAtRef = useRef(0);
+  const routeGrowthLastPaintAtRef = useRef(0);
   const animationTraceBucketRef = useRef(-1);
   const initializedKeyRef = useRef('');
   const initializingKeyRef = useRef('');
@@ -303,10 +332,17 @@ export function OrderedRouteEditorScreen() {
   const cameraZoomRef = useRef(14);
   const cameraBearingRef = useRef(0);
   const cameraPitchRef = useRef(0);
+  const cameraGenerationRef = useRef(0);
+  const approvedPointTargetRef = useRef<RoutePoint | null>(null);
   const traceDraftIdRef = useRef<string | null>(null);
+  const initializationProvenanceRef = useRef('unknown');
   const abandonedDraftIdsRef = useRef(new Set<string>());
   const savedDraftIdsRef = useRef(new Set<string>());
   const editorGenerationRef = useRef(0);
+  const canonicalGeometryCacheRef = useRef<{
+    key: string;
+    geometry: CanonicalRouteGeometry;
+  } | null>(null);
   const tool: PlannerTool = mode === 'DrawArmed' || mode === 'Drawing'
     ? 'draw'
     : mode === 'PointTargeting'
@@ -331,9 +367,12 @@ export function OrderedRouteEditorScreen() {
 
   const finishRouteAnimation = useCallback((reason: 'complete' | 'superseded' | 'user-camera' | 'tool-switch' | 'undo' | 'camera-action' = 'superseded') => {
     routeAnimationGenerationRef.current += 1;
-    if (routeAnimationTimerRef.current) clearInterval(routeAnimationTimerRef.current);
-    routeAnimationTimerRef.current = null;
+    if (routeAnimationFrameRef.current != null) cancelAnimationFrame(routeAnimationFrameRef.current);
+    routeAnimationFrameRef.current = null;
     cameraFollowBusyRef.current = false;
+    // A native map gesture interrupts Mapbox's active transition. Do not send
+    // a compensating camera command here: even one duration-0 write can race
+    // the gesture and feel like the map pulled back after the user's pan.
     recordRouteDrawingTrace('route_point_animation_ended', { reason }, 'state');
     routeGrowthAnimationRef.current = null;
     setRouteGrowthAnimation(null);
@@ -350,15 +389,25 @@ export function OrderedRouteEditorScreen() {
     setPendingReview(null);
     setPendingPointReview(null);
     setManualRecovery(null);
+    setPendingAttachmentChoice(null);
+    setPendingProviderRetry(null);
   }, [finishRouteAnimation]);
 
   const selectEditorTool = useCallback((next: PlannerTool) => {
     if (saving) return;
+    const preservedCamera = {
+      center: cameraCenterRef.current,
+      zoom: cameraZoomRef.current,
+      bearing: cameraBearingRef.current,
+      pitch: cameraPitchRef.current,
+      generation: cameraGenerationRef.current,
+    };
     invalidatePendingOperation();
     setTrimStart(0);
     setTrimEnd(1);
     setError(null);
     setTool(next);
+    recordRouteDrawingTrace('route_tool_selected', { tool: next, cameraIntent: 'preserve', preservedCamera }, 'state');
   }, [invalidatePendingOperation, saving, setTool]);
 
   const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
@@ -377,14 +426,15 @@ export function OrderedRouteEditorScreen() {
       return;
     }
     const durationMs = pointGrowthDurationMs(points);
-    const tickMs = 32;
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     const key = uuidv4();
     const animationGeneration = routeAnimationGenerationRef.current;
     const initialFrame = pointGrowthFrame(points, 0);
     if (!initialFrame) return;
     animationTraceBucketRef.current = -1;
     const initialAnimation = { key, hiddenPartId, visiblePoints: initialFrame.visiblePoints, head: initialFrame.head, progress: 0 };
+    cameraFollowLastCommandAtRef.current = 0;
+    routeGrowthLastPaintAtRef.current = 0;
     routeGrowthAnimationRef.current = initialAnimation;
     setRouteGrowthAnimation(initialAnimation);
     recordRouteDrawingTrace('route_point_animation_started', {
@@ -396,9 +446,9 @@ export function OrderedRouteEditorScreen() {
       bearing: cameraBearingRef.current,
       pitch: cameraPitchRef.current,
     }, 'state');
-    routeAnimationTimerRef.current = setInterval(() => {
+    const tick = () => {
       if (routeAnimationGenerationRef.current !== animationGeneration) return;
-      const elapsed = Date.now() - startedAt;
+      const elapsed = performance.now() - startedAt;
       const progress = Math.min(1, elapsed / durationMs);
       const frame = pointGrowthFrame(points, progress);
       if (!frame) { finishRouteAnimation('complete'); return; }
@@ -410,10 +460,25 @@ export function OrderedRouteEditorScreen() {
         progress,
       };
       routeGrowthAnimationRef.current = nextAnimation;
-      setRouteGrowthAnimation(current => {
-        if (current?.key !== key) return current;
-        return nextAnimation;
-      });
+      const nextGrowthFeature = {
+        type: 'Feature' as const,
+        properties: {},
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: nextAnimation.visiblePoints.map(point => [point.lng, point.lat]),
+        },
+      };
+      const shouldPaintGrowth = progress >= 1 || elapsed - routeGrowthLastPaintAtRef.current >= 32;
+      if (shouldPaintGrowth && routeGrowthSourceRef.current?.setNativeProps) {
+        // ShapeSource's native bridge accepts serialized GeoJSON. Updating the
+        // one transient source at a bounded ~30fps avoids both full React
+        // reconciliation and Mapbox worker churn. Canonical geometry,
+        // persistence and the animation clock remain static/independent.
+        routeGrowthSourceRef.current.setNativeProps({ shape: JSON.stringify(nextGrowthFeature) });
+        routeGrowthLastPaintAtRef.current = elapsed;
+      } else if (!routeGrowthSourceRef.current?.setNativeProps) {
+        setRouteGrowthAnimation(current => current?.key === key ? nextAnimation : current);
+      }
       const bucket = Math.min(4, Math.floor(progress * 4));
       if (bucket !== animationTraceBucketRef.current) {
         animationTraceBucketRef.current = bucket;
@@ -425,7 +490,9 @@ export function OrderedRouteEditorScreen() {
           head: frame.head,
         }, 'state');
       }
-      if (!cameraFollowBusyRef.current && mapViewRef.current?.getPointInView) {
+      if (!cameraFollowBusyRef.current
+        && elapsed - cameraFollowLastCommandAtRef.current >= 180
+        && mapViewRef.current?.getPointInView) {
         cameraFollowBusyRef.current = true;
         void Promise.resolve(mapViewRef.current.getPointInView([frame.head.lng, frame.head.lat]))
           .then((screenPoint: unknown) => {
@@ -441,18 +508,22 @@ export function OrderedRouteEditorScreen() {
               },
             );
             if (inside) return;
+            cameraFollowLastCommandAtRef.current = elapsed;
             cameraRef.current?.setCamera?.({
               centerCoordinate: [frame.head.lng, frame.head.lat],
               zoomLevel: cameraZoomRef.current,
               heading: cameraBearingRef.current,
               pitch: cameraPitchRef.current,
-              animationDuration: 96,
+              animationMode: 'linearTo',
+              animationDuration: 180,
             });
             recordRouteDrawingTrace('route_point_camera_follow', {
               animationId: key,
               progress,
               head: frame.head,
               reason: 'drawing-head-left-usable-map',
+              timelineElapsedMs: elapsed,
+              commandDurationMs: 180,
               zoom: cameraZoomRef.current,
               bearing: cameraBearingRef.current,
               pitch: cameraPitchRef.current,
@@ -462,8 +533,13 @@ export function OrderedRouteEditorScreen() {
             if (routeAnimationGenerationRef.current === animationGeneration) cameraFollowBusyRef.current = false;
           });
       }
-      if (progress >= 1) finishRouteAnimation('complete');
-    }, tickMs);
+      if (progress >= 1) {
+        finishRouteAnimation('complete');
+        return;
+      }
+      routeAnimationFrameRef.current = requestAnimationFrame(tick);
+    };
+    routeAnimationFrameRef.current = requestAnimationFrame(tick);
   }, [bottomWorkspaceHeight, compactViewport, finishRouteAnimation, insets.bottom, insets.top, reduceMotion, viewportHeight, viewportWidth]);
 
   useEffect(() => () => finishRouteAnimation('superseded'), [finishRouteAnimation]);
@@ -492,6 +568,7 @@ export function OrderedRouteEditorScreen() {
       undoDepthBefore: current.past.length,
       undoDepthAfter: next.past.length,
       finalGeometry: orderedDraftPoints(next.present),
+      finalDraft: next.present,
     }, 'commit');
     return true;
   }, []);
@@ -504,6 +581,7 @@ export function OrderedRouteEditorScreen() {
     initializingKeyRef.current = initKey;
     initialLocationAttemptedRef.current = false;
     userMovedCameraRef.current = false;
+    initializationProvenanceRef.current = 'unknown';
     setInitialLocation({ status: 'idle' });
     let cancelled = false;
     setInitializing(true);
@@ -520,29 +598,6 @@ export function OrderedRouteEditorScreen() {
       let initialName = '';
       let initialPermission: 'personal' | 'friend' = 'personal';
       const activityDraftId = activityCreationDraftId({ creationSource, fromSessionId, creationSessionId });
-      const requestedDraftId = routeId
-        ? `route:${routeId}`
-        : fromSessionId && creationSource === 'activity'
-          ? activityDraftId ?? undefined
-          : sharedDeliveryId && creationSource === 'shared-copy'
-            ? `received:${sharedDeliveryId}`
-            : undefined;
-      if (!readOnlyShared && mayRecoverRouteCreationDraft({ creationSource, fromSessionId, creationSessionId })) {
-        const recovered = await loadRoutePlannerDraft(ownerId, requestedDraftId);
-        if (recovered && plannerDraftMatchesRequest(recovered, requestedDraftId)) {
-          if (cancelled || editorGenerationRef.current !== editorGeneration) return;
-          historyRef.current = recovered.history;
-          initialDraftRef.current = cloneOrderedDraft(recovered.history.present);
-          setHistory(recovered.history);
-          setName(recovered.name);
-          setPermission(recovered.permission);
-          initialBoundsRef.current = initialBounds(recovered.history.present);
-          initializedKeyRef.current = initKey;
-          initializingKeyRef.current = '';
-          setInitializing(false);
-          return;
-        }
-      }
       if (routeId) {
         let source = useRouteStore.getState().routes.find(item => routeMatchesIdentity(item, routeId));
         if (!source || source.points.length < 2) {
@@ -561,6 +616,7 @@ export function OrderedRouteEditorScreen() {
             });
         initialName = source.name;
         initialPermission = source.permission === 'friend' ? 'friend' : 'personal';
+        initializationProvenanceRef.current = 'saved-route';
       } else if (fromSessionId) {
         const session = useSessionStore.getState().sessions.find(item => item.id === fromSessionId);
         if (!session) throw new Error('This Activity is no longer available.');
@@ -584,6 +640,7 @@ export function OrderedRouteEditorScreen() {
           segments,
         });
         initialName = `${session.name || (session.activityMode === 'running' ? 'Run' : 'Hike')} Route`;
+        initializationProvenanceRef.current = 'immutable-activity-template';
       } else if (sharedDeliveryId) {
         let shared = useRouteStore.getState().sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
         if (!shared || shared.points.length < 2) {
@@ -605,26 +662,10 @@ export function OrderedRouteEditorScreen() {
               origin: creationSource === 'shared-copy' ? 'received-copy' : 'plan',
             });
         initialName = creationSource === 'shared-copy' ? `${shared.name} copy` : shared.name;
+        initializationProvenanceRef.current = creationSource === 'shared-copy' ? 'received-route-copy' : 'received-route-view';
       } else {
-        const recovered = await loadRoutePlannerDraft(ownerId);
-        if (recovered && recovered.history.present.origin === 'plan' && !recovered.sourceRouteId && !recovered.sourceActivityId) {
-          draft = recovered.history.present;
-          initialName = recovered.name;
-          initialPermission = recovered.permission;
-          const recoveredHistory = recovered.history;
-          if (cancelled) return;
-          historyRef.current = recoveredHistory;
-          initialDraftRef.current = cloneOrderedDraft(recoveredHistory.present);
-          setHistory(recoveredHistory);
-          setName(initialName);
-          setPermission(initialPermission);
-          initialBoundsRef.current = initialBounds(recoveredHistory.present);
-          initializedKeyRef.current = initKey;
-          initializingKeyRef.current = '';
-          setInitializing(false);
-          return;
-        }
         draft = createEmptyOrderedDraft({ draftId: `plan:${uuidv4()}`, ownerId });
+        initializationProvenanceRef.current = 'new-empty-plan';
       }
       const nextHistory = { present: draft, past: [] };
       if (cancelled || editorGenerationRef.current !== editorGeneration) return;
@@ -651,37 +692,6 @@ export function OrderedRouteEditorScreen() {
     };
   }, [creationSessionId, creationSource, fromSessionId, loadRouteDetail, loadSharedRouteDetail, ownerId, readOnlyShared, routeId, sharedDeliveryId]);
 
-  useEffect(() => {
-    if (!history || initializing || readOnlyShared) return;
-    const timeout = setTimeout(() => {
-      if (abandonedDraftIdsRef.current.has(history.present.draftId)) return;
-      void saveRoutePlannerDraft({
-        ownerId,
-        draftId: history.present.draftId,
-        history,
-        name,
-        permission,
-        sourceActivityId: fromSessionId,
-        sourceRouteId: routeId,
-        reconnectsActivityGap: history.present.gaps.length === 0 && initialDraftRef.current?.gaps.length !== 0,
-      }).then(() => {
-        recordRouteDrawingTrace('route_draft_persisted', {
-          draftId: history.present.draftId,
-          revision: history.present.revision,
-          pointCount: orderedDraftPoints(history.present).length,
-        }, 'persistence');
-      }).catch(cause => {
-        recordRouteDrawingTrace('route_draft_persistence_failed', {
-          draftId: history.present.draftId,
-          revision: history.present.revision,
-          error: String(cause),
-        }, 'persistence');
-        setError('This draft could not be saved on this device. Keep this screen open.');
-      });
-    }, 120);
-    return () => clearTimeout(timeout);
-  }, [fromSessionId, history, initializing, name, ownerId, permission, readOnlyShared, routeId]);
-
   const draft = history?.present ?? null;
   const traceDraftId = draft?.draftId ?? null;
   useEffect(() => {
@@ -701,6 +711,14 @@ export function OrderedRouteEditorScreen() {
       originalRoute: orderedDraftPoints(current.present),
       initialUndoDepth: current.past.length,
     });
+    recordRouteDrawingTrace('route_session_hydrated', {
+      draftId: current.present.draftId,
+      revision: current.present.revision,
+      undoDepth: current.past.length,
+      provenance: initializationProvenanceRef.current,
+      parts: current.present.parts,
+      gaps: current.present.gaps,
+    }, 'session');
     return () => {
       if (traceDraftIdRef.current === traceDraftId) {
         endRouteDrawingTrace('cancelled');
@@ -711,7 +729,7 @@ export function OrderedRouteEditorScreen() {
 
   const abandonUnsavedCreation = useCallback(() => {
     const current = historyRef.current;
-    if (!current || routeId || readOnlyShared || creationSource !== 'activity'
+    if (!current || routeId || readOnlyShared
       || savedDraftIdsRef.current.has(current.present.draftId)
       || abandonedDraftIdsRef.current.has(current.present.draftId)) return;
     const draftId = current.present.draftId;
@@ -734,7 +752,7 @@ export function OrderedRouteEditorScreen() {
         error: String(cause),
       }, 'persistence');
     });
-  }, [creationSessionId, creationSource, fromSessionId, invalidatePendingOperation, ownerId, readOnlyShared, routeId]);
+  }, [creationSessionId, fromSessionId, invalidatePendingOperation, ownerId, readOnlyShared, routeId]);
 
   useEffect(() => {
     const removeListener = nav.addListener?.('beforeRemove', abandonUnsavedCreation);
@@ -940,7 +958,11 @@ export function OrderedRouteEditorScreen() {
     }
   }, [commitResult]);
 
-  const handleDrawStroke = useCallback(async (raw: RoutePoint[], nativeCapture?: RouteDrawStrokeCapture) => {
+  const handleDrawStroke = useCallback(async (
+    raw: RoutePoint[],
+    nativeCapture?: RouteDrawStrokeCapture,
+    forcedIntent?: Extract<DrawTransactionIntent, { kind: 'replace' }>,
+  ) => {
     const current = historyRef.current;
     if (!current) return;
     const strokeId = nativeCapture?.strokeId ?? uuidv4();
@@ -951,6 +973,7 @@ export function OrderedRouteEditorScreen() {
       zoom: cameraZoomRef.current,
       bearing: cameraBearingRef.current,
       pitch: cameraPitchRef.current,
+      generation: cameraGenerationRef.current,
     };
     recordRouteDrawingTrace('route_draw_raw_samples', {
       strokeId,
@@ -961,6 +984,21 @@ export function OrderedRouteEditorScreen() {
       droppedSampleCount: nativeCapture?.droppedSampleCount ?? null,
       viewportWidth,
       viewportHeight,
+      viewportPadding: {
+        top: insets.top,
+        bottom: bottomWorkspaceHeight || insets.bottom + (compactViewport ? 126 : 138),
+        left: 0,
+        right: 0,
+      },
+      projectionCoordinateSpace: 'absolute-window-minus-measured-map-origin',
+      pixelRatio: nativeCapture?.samples.find(sample => sample.pixelRatio)?.pixelRatio ?? null,
+      mapOrigin: nativeCapture?.samples[0]
+        ? {
+            x: nativeCapture.samples[0].mapOriginX ?? null,
+            y: nativeCapture.samples[0].mapOriginY ?? null,
+            measured: nativeCapture.samples[0].mapOriginMeasured ?? false,
+          }
+        : null,
       camera,
       samples: nativeCapture?.samples ?? [],
     }, 'raw-input');
@@ -977,10 +1015,9 @@ export function OrderedRouteEditorScreen() {
     }
     const transactionPoints = raw;
     const latitude = raw[0]?.lat ?? cameraCenterRef.current?.lat ?? 0;
-    const metresPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / (2 ** cameraZoomRef.current);
-    const attachmentToleranceM = Math.max(4, Math.min(20, metresPerPixel * 24));
+    const attachmentToleranceM = routeAttachmentToleranceM(latitude, cameraZoomRef.current);
     const classification = classifyDrawTransactionWithDiagnostics(current.present, raw, undefined, attachmentToleranceM);
-    const intent = classification.intent;
+    const intent = forcedIntent ?? classification.intent;
     recordRouteDrawingTrace('route_draw_transaction_intent', {
       strokeId,
       intent,
@@ -1012,10 +1049,22 @@ export function OrderedRouteEditorScreen() {
         finalRevision: current.present.revision,
         unchangedFinalGeometry: orderedDraftPoints(current.present),
       }, 'attachment');
-      setError(intent.kind === 'pending-replace' && intent.ambiguity === 'overlap'
-        ? 'Redraw from clearer positions so Cairn can preserve the right path.'
-        : 'Redraw with both ends clearly attached. Your Route is unchanged.');
-      setMode('Browse');
+      const rankedOptions = classification.diagnostics.intervalCandidates
+        .slice()
+        .sort((a, b) => a.shapeScore - b.shapeScore);
+      if (intent.kind === 'pending-replace' && intent.ambiguity === 'overlap' && rankedOptions[0]) {
+        setPendingAttachmentChoice({
+          raw: raw.map(point => ({ ...point })),
+          capture: nativeCapture,
+          intent: { kind: 'replace', options: [rankedOptions[0]] },
+          alternativeCount: rankedOptions.length,
+          baseRevision: current.present.revision,
+        });
+        setMode('AwaitFreehandChoice');
+      } else {
+        setError('Continue the stroke until its other end reaches the Route. Your Route is unchanged.');
+        setMode('DrawArmed');
+      }
       return;
     }
     const operationId = strokeId;
@@ -1099,15 +1148,34 @@ export function OrderedRouteEditorScreen() {
         });
         setMode('AwaitFreehandChoice');
       } else if (resolved.outcome === 'manual-available') {
-        setManualRecovery({
-          kind: 'draw',
-          points: resolved.rawPoints,
-          resolution: 'draw-manual',
-          intent,
-          reason: resolved.reason,
-          baseRevision: live.present.revision,
-        });
-        setMode('AwaitFreehandChoice');
+        if (resolved.reason === 'provider-unavailable') {
+          setPendingProviderRetry({
+            kind: 'draw',
+            raw: resolved.rawPoints.map(point => ({ ...point })),
+            capture: nativeCapture,
+            intent,
+            reason: resolved.reason,
+            baseRevision: live.present.revision,
+          });
+          setError(providerReason(resolved.reason));
+          setMode('DrawArmed');
+          recordRouteDrawingTrace('route_draw_retry_available', {
+            strokeId,
+            reason: resolved.reason,
+            baseRevision: live.present.revision,
+            preservedRawPoints: resolved.rawPoints,
+          }, 'state');
+        } else {
+          setManualRecovery({
+            kind: 'draw',
+            points: resolved.rawPoints,
+            resolution: 'draw-manual',
+            intent,
+            reason: resolved.reason,
+            baseRevision: live.present.revision,
+          });
+          setMode('AwaitFreehandChoice');
+        }
       } else {
         recordRouteDrawingTrace('route_draw_rejected', {
           strokeId,
@@ -1125,7 +1193,7 @@ export function OrderedRouteEditorScreen() {
       setResolvingDrawPoints([]);
       if (!controller.signal.aborted) setProviderBusy(false);
     }
-  }, [applyResolvedDraw, ownerId, viewportHeight, viewportWidth]);
+  }, [applyResolvedDraw, bottomWorkspaceHeight, compactViewport, insets.bottom, insets.top, ownerId, viewportHeight, viewportWidth]);
 
   useEffect(() => {
     if (!debugMode || Platform.OS !== 'web') return undefined;
@@ -1138,12 +1206,22 @@ export function OrderedRouteEditorScreen() {
         submitStroke: (points: RoutePoint[]) => Promise<void>;
         getPointAnimationSnapshot: () => RouteGrowthAnimation | null;
         getCurrentDraft: () => OrderedRouteDraft | null;
+        getApprovedPointTarget: () => RoutePoint | null;
+        getCameraSnapshot: () => Record<string, unknown>;
       };
     };
     const bridge = {
       submitStroke: handleDrawStroke,
       getPointAnimationSnapshot: () => routeGrowthAnimationRef.current,
       getCurrentDraft: () => historyRef.current?.present ?? null,
+      getApprovedPointTarget: () => approvedPointTargetRef.current,
+      getCameraSnapshot: () => ({
+        center: cameraCenterRef.current,
+        zoom: cameraZoomRef.current,
+        bearing: cameraBearingRef.current,
+        pitch: cameraPitchRef.current,
+        generation: cameraGenerationRef.current,
+      }),
     };
     qaRoot.__cairnRouteEditorQa = bridge;
     return () => {
@@ -1151,7 +1229,12 @@ export function OrderedRouteEditorScreen() {
     };
   }, [debugMode, handleDrawStroke]);
 
-  const applyResolvedPoint = useCallback((points: RoutePoint[], intent: PointTransactionIntent, baseRevision: number) => {
+  const applyResolvedPoint = useCallback((
+    points: RoutePoint[],
+    intent: PointTransactionIntent,
+    baseRevision: number,
+    resolution: 'point' = 'point',
+  ) => {
     const current = historyRef.current;
     if (!current) return;
     if (current.present.revision !== baseRevision) {
@@ -1159,7 +1242,7 @@ export function OrderedRouteEditorScreen() {
       return;
     }
     if (intent.kind === 'append') {
-      const result = appendOrderedSegment(current.present, points, 'point');
+      const result = appendOrderedSegment(current.present, points, resolution);
       if (commitResult(result, 'append-point')) {
         animateAcceptedPoint(points, result.ok ? result.draft.parts.at(-1)?.id : undefined);
         setTool('browse');
@@ -1168,7 +1251,7 @@ export function OrderedRouteEditorScreen() {
     }
     if (intent.kind === 'bridge') {
       const previousPartIds = new Set(current.present.parts.map(part => part.id));
-      const result = bridgeOrderedGap(current.present, intent.gapId, points, 'point');
+      const result = bridgeOrderedGap(current.present, intent.gapId, points, resolution);
       if (commitResult(result, 'bridge-point')) {
         const addedPart = result.ok ? result.draft.parts.find(part => !previousPartIds.has(part.id)) : undefined;
         animateAcceptedPoint(points, addedPart?.id);
@@ -1208,6 +1291,7 @@ export function OrderedRouteEditorScreen() {
         profile: 'mapbox/walking',
         waypointOrder: ['start', 'target'],
         bearings: null,
+        radiusesM: [25, 25],
         continueStraight: 'walking-default-false',
         overview: 'full',
         geometry: 'geojson',
@@ -1229,15 +1313,18 @@ export function OrderedRouteEditorScreen() {
         outcome: result.outcome,
         reason: 'reason' in result ? result.reason : null,
         providerGeometry: 'points' in result ? result.points : null,
+        providerStartShiftM: 'providerStartShiftM' in result ? result.providerStartShiftM : null,
+        providerTargetShiftM: 'providerTargetShiftM' in result ? result.providerTargetShiftM : null,
       }, 'provider-response');
       const live = historyRef.current;
       if (!live || controller.signal.aborted
         || !routeOperationIsCurrent(live.present, ownerId, token, activeOperationIdRef.current)) return;
-      if (result.outcome === 'accepted') {
+      if (result.outcome === 'accepted' || result.outcome === 'review') {
         const selection = selectPointRouteCandidate({
           draft: live.present,
           target,
           provider: result.points,
+          zoom: cameraZoomRef.current,
         });
         recordRouteDrawingTrace('route_point_candidate_selected', {
           strokeId: operationId,
@@ -1247,16 +1334,45 @@ export function OrderedRouteEditorScreen() {
           occurrence: selection.occurrence,
           providerDeviationM: selection.providerDeviationM,
           lengthInflation: selection.lengthInflation,
+          providerTargetShiftM: selection.providerTargetShiftM,
+          providerStartShiftM: selection.providerStartShiftM,
+          networkDistanceM: selection.networkDistanceM,
+          directDistanceM: selection.directDistanceM,
+          knownRetraceLengthM: selection.knownRetraceLengthM,
+          rawTarget: selection.rawTarget,
+          providerTarget: selection.providerTarget,
+          effectiveTarget: selection.effectiveTarget,
+          snapToleranceM: selection.snapToleranceM,
+          terminalSpurLengthM: selection.terminalSpurLengthM,
+          requiresChoice: selection.requiresChoice,
+          accepted: selection.accepted,
           selectedGeometry: selection.points,
         }, 'selection');
-        applyResolvedPoint(selection.points, intent, baseRevision);
-      }
-      else if (result.outcome === 'review') {
-        setPendingPointReview({ kind: 'point', points: result.points, intent, reason: result.reason, baseRevision });
-        setMode('PointTargeting');
+        if (!selection.accepted) {
+          setError('No nearby path found. You can draw this section.');
+          setMode('PointTargeting');
+        } else {
+          applyResolvedPoint(selection.points, intent, baseRevision);
+        }
       } else {
-        setError(providerReason(result.reason));
-        setMode('Browse');
+        recordRouteDrawingTrace('route_point_rejected', {
+          strokeId: operationId,
+          reason: result.reason,
+          rawTarget: target,
+          baseRevision,
+          unchangedFinalGeometry: orderedDraftPoints(live.present),
+        }, 'selection');
+        if (result.reason === 'provider-unavailable') {
+          setPendingProviderRetry({
+            kind: 'point', start: { ...start }, target: { ...target }, intent,
+            reason: result.reason, baseRevision,
+          });
+          setError(providerReason(result.reason));
+          setMode('PointTargeting');
+        } else {
+          setError(providerReason(result.reason));
+          setMode('PointTargeting');
+        }
       }
     } finally {
       if (operationAbortRef.current === controller) {
@@ -1268,10 +1384,47 @@ export function OrderedRouteEditorScreen() {
     }
   }, [applyResolvedPoint, finishRouteAnimation, ownerId]);
 
+  const retryPendingProviderOperation = useCallback(() => {
+    const pending = pendingProviderRetry;
+    const current = historyRef.current;
+    if (!pending || !current) return;
+    if (current.present.revision !== pending.baseRevision) {
+      setPendingProviderRetry(null);
+      setError('This Route changed. The older request was not retried.');
+      return;
+    }
+    setPendingProviderRetry(null);
+    setError(null);
+    recordRouteDrawingTrace('route_provider_manual_retry', {
+      kind: pending.kind,
+      baseRevision: pending.baseRevision,
+    }, 'state');
+    if (pending.kind === 'draw') {
+      void handleDrawStroke(
+        pending.raw,
+        pending.capture,
+        pending.intent.kind === 'replace' ? pending.intent : undefined,
+      );
+    } else {
+      void runPointRequest(pending.start, pending.target, pending.intent);
+    }
+  }, [handleDrawStroke, pendingProviderRetry, runPointRequest]);
+
   const confirmPointTarget = useCallback(() => {
     const current = historyRef.current;
     const target = cameraCenterRef.current;
     if (!current || !target || providerBusy) return;
+    approvedPointTargetRef.current = { ...target };
+    recordRouteDrawingTrace('route_point_target_confirmed', {
+      target,
+      camera: {
+        center: cameraCenterRef.current,
+        zoom: cameraZoomRef.current,
+        bearing: cameraBearingRef.current,
+        pitch: cameraPitchRef.current,
+        generation: cameraGenerationRef.current,
+      },
+    }, 'attachment');
     if (current.present.parts.length === 0 && !current.present.startPoint) {
       if (commitResult(setOrderedDraftStart(current.present, target), 'set-start')) {
         setError(null);
@@ -1286,7 +1439,7 @@ export function OrderedRouteEditorScreen() {
 
   const hasUncommittedRouteEdit = providerBusy
     || providerTransactionRef.current
-    || Boolean(pendingReview || pendingPointReview || manualRecovery);
+    || Boolean(pendingReview || pendingPointReview || manualRecovery || pendingAttachmentChoice || pendingProviderRetry);
 
   const handleUndo = useCallback(() => {
     if (providerTransactionRef.current || hasUncommittedRouteEdit) return;
@@ -1324,7 +1477,7 @@ export function OrderedRouteEditorScreen() {
   const saveRoute = useCallback(async () => {
     const current = historyRef.current;
     if (!current || saving || readOnlyShared) return;
-    if (providerBusy || pendingReview || pendingPointReview || manualRecovery) { setError('Finish or cancel the current Route edit before saving.'); return; }
+    if (providerBusy || pendingReview || pendingPointReview || manualRecovery || pendingAttachmentChoice || pendingProviderRetry) { setError('Finish or cancel the current Route edit before saving.'); return; }
     const title = name.trim();
     if (!title) { setError('Name this Route before saving.'); return; }
     if (current.present.parts.length === 0) { setError('Add a path before saving this Route.'); return; }
@@ -1371,6 +1524,7 @@ export function OrderedRouteEditorScreen() {
         draftId: current.present.draftId,
         revision: current.present.revision,
         finalGeometry: points,
+        persistedOrderedDraft: current.present,
         undoDepth: current.past.length,
       }, 'persistence');
       endRouteDrawingTrace('saved');
@@ -1386,13 +1540,13 @@ export function OrderedRouteEditorScreen() {
         outcomeUnknown: Boolean(cause?.outcomeUnknown),
       }, 'persistence');
       setError(cause?.outcomeUnknown
-        ? 'The save outcome is not confirmed. This draft remains available for recovery.'
-        : 'This Route could not be saved. The draft remains on this device.');
+        ? 'The save outcome is not confirmed. Stay on this screen and retry Save.'
+        : 'This Route could not be saved. Stay on this screen and retry Save.');
     } finally {
       setSaving(false);
       setMode('Browse');
     }
-  }, [addRoute, fromSessionId, manualRecovery, name, nav, ownerId, pendingPointReview, pendingReview, permission, providerBusy, readOnlyShared, routeId, saving, sessions, updateRoute]);
+  }, [addRoute, fromSessionId, manualRecovery, name, nav, ownerId, pendingAttachmentChoice, pendingPointReview, pendingProviderRetry, pendingReview, permission, providerBusy, readOnlyShared, routeId, saving, sessions, updateRoute]);
 
   const useSharedRoute = useCallback((mode: 'hiking' | 'running') => {
     const shared = sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
@@ -1426,7 +1580,17 @@ export function OrderedRouteEditorScreen() {
     return result.ok ? result.draft : null;
   })();
   const displayDraft = trimPreviewResult ?? draft;
-  const routeGeometry = canonicalRouteGeometry({ orderedDraft: displayDraft });
+  // Point reveal ticks update only the transient new-leg overlay. Reuse the
+  // immutable canonical Route geometry so a 32 ms clock never rebuilds and
+  // reserializes the whole saved path.
+  const routeGeometryKey = `${displayDraft.draftId}:${displayDraft.revision}:${trimOpen ? `${trimStart}:${trimEnd}` : 'canonical'}`;
+  if (canonicalGeometryCacheRef.current?.key !== routeGeometryKey) {
+    canonicalGeometryCacheRef.current = {
+      key: routeGeometryKey,
+      geometry: canonicalRouteGeometry({ orderedDraft: displayDraft }),
+    };
+  }
+  const routeGeometry = canonicalGeometryCacheRef.current.geometry;
   const trimOriginalFeature = trimOpen ? {
     type: 'FeatureCollection' as const,
     features: draft.parts.filter(part => part.points.length >= 2).map(part => ({
@@ -1458,8 +1622,11 @@ export function OrderedRouteEditorScreen() {
       geometry: { type: 'Point' as const, coordinates: [end.lng, end.lat] },
     }] : [])];
   })();
-  const reviewPoints = pendingReview?.points ?? pendingPointReview?.points ?? [];
+  const reviewPoints = pendingReview?.points ?? pendingPointReview?.points ?? pendingAttachmentChoice?.raw ?? [];
   const reviewIntervals = (() => {
+    if (pendingAttachmentChoice) {
+      return pendingAttachmentChoice.intent.options.map(option => orderedIntervalPoints(draft, option.start, option.end));
+    }
     if (pendingReview?.intent.kind === 'replace') {
       return pendingReview.intent.options.map(option => orderedIntervalPoints(draft, option.start, option.end));
     }
@@ -1507,30 +1674,60 @@ export function OrderedRouteEditorScreen() {
           testID="route-trim-apply"
         ><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Apply</Text></TouchableOpacity>
     </View>
+  ) : pendingProviderRetry ? (
+    <View style={styles.decisionInlineRow} testID="route-provider-retry">
+      <Text style={[styles.contextText, { color: contextInk }]} numberOfLines={2}>
+        {pendingProviderRetry.kind === 'point'
+          ? 'Routing unavailable. Your target is kept.'
+          : 'Matching unavailable. Your line is kept.'}
+      </Text>
+      <TouchableOpacity
+        style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]}
+        onPress={retryPendingProviderOperation}
+        accessibilityRole="button"
+        accessibilityLabel="Retry Route request"
+        testID="route-provider-retry-action"
+      ><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Retry</Text></TouchableOpacity>
+    </View>
+  ) : pendingAttachmentChoice ? (
+    <View style={styles.decisionInlineRow} testID="route-attachment-choice">
+      <Text style={[styles.contextText, { color: contextInk }]}>Use the highlighted section?</Text>
+      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setPendingAttachmentChoice(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
+        const pending = pendingAttachmentChoice;
+        setPendingAttachmentChoice(null);
+        if (historyRef.current?.present.revision !== pending.baseRevision) {
+          setError('This Route changed. The highlighted choice was not applied.');
+          setMode('Browse');
+          return;
+        }
+        void handleDrawStroke(pending.raw, pending.capture, pending.intent);
+      }} testID="route-use-highlighted-interval"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use highlight</Text></TouchableOpacity>
+    </View>
   ) : manualRecovery ? (
-    <View style={styles.contextContent} testID="route-freehand-choice">
+    <View style={styles.decisionInlineRow} testID="route-freehand-choice">
       <Text style={[styles.contextText, { color: contextInk }]}>Keep the line you drew?</Text>
-      <View style={styles.compactActionRow}>
-        <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setManualRecovery(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => { const pending = manualRecovery; setManualRecovery(null); applyResolvedDraw(pending.points, 'draw-manual', pending.intent); }} testID="route-use-drawing"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use drawing</Text></TouchableOpacity>
-      </View>
+      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setManualRecovery(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => { const pending = manualRecovery; setManualRecovery(null); applyResolvedDraw(pending.points, 'draw-manual', pending.intent); }} testID="route-use-drawing"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use line</Text></TouchableOpacity>
     </View>
   ) : pendingReview || pendingPointReview ? (
-    <View style={styles.contextContent} testID="route-inline-review">
-      <Text style={[styles.contextText, { color: contextInk }]}>{pendingPointReview ? 'Keep this walking path?' : 'Keep this path?'}</Text>
-      <View style={styles.compactActionRow}>
-        <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setPendingReview(null); setPendingPointReview(null); setMode(pendingPointReview ? 'PointTargeting' : 'DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>{pendingPointReview ? 'Cancel' : 'Redraw'}</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
-          if (pendingReview) { const pending = pendingReview; setPendingReview(null); applyResolvedDraw(pending.points, pending.resolution, pending.intent); }
-          else if (pendingPointReview) { const pending = pendingPointReview; setPendingPointReview(null); applyResolvedPoint(pending.points, pending.intent, pending.baseRevision); }
-        }}><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use path</Text></TouchableOpacity>
-      </View>
+    <View style={styles.decisionInlineRow} testID="route-inline-review">
+      <Text style={[styles.contextText, { color: contextInk }]}>{pendingPointReview ? 'Keep this road path?' : 'Keep this path?'}</Text>
+      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => {
+        setPendingReview(null); setPendingPointReview(null); setMode(pendingPointReview ? 'PointTargeting' : 'DrawArmed');
+      }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>{pendingPointReview ? 'Cancel' : 'Redraw'}</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
+        if (pendingReview) { const pending = pendingReview; setPendingReview(null); applyResolvedDraw(pending.points, pending.resolution, pending.intent); }
+        else if (pendingPointReview) { const pending = pendingPointReview; setPendingPointReview(null); applyResolvedPoint(pending.points, pending.intent, pending.baseRevision, pending.resolution); }
+      }}><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use path</Text></TouchableOpacity>
     </View>
   ) : mode === 'MatchPending' || providerBusy ? (
     <View style={[styles.contextContent, styles.contextProgress]}>
       <View style={styles.busyRow}><ActivityIndicator size="small" color={contextInk} /><Text style={[styles.contextText, { color: contextInk }]}>Finding a path…</Text></View>
       <TouchableOpacity onPress={() => { invalidatePendingOperation(); setMode('Browse'); }} accessibilityRole="button"><Text style={[styles.linkText, { color: theme.primary }]}>Cancel</Text></TouchableOpacity>
     </View>
+  ) : error ? (
+    <TouchableOpacity style={styles.contextContent} onPress={() => setError(null)} accessibilityRole="button" testID="route-context-message"><Text style={[styles.contextText, { color: contextInk }]}>{error}</Text></TouchableOpacity>
   ) : tool === 'point' ? (
     <View style={styles.pointInlineRow} testID="route-point-context">
       <Text style={[styles.contextText, { color: contextInk }]}>Move map to choose.</Text>
@@ -1538,8 +1735,6 @@ export function OrderedRouteEditorScreen() {
     </View>
   ) : tool === 'draw' ? (
     <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: contextInk }]}>{draft.gaps.length > 0 ? 'Draw across the dotted gap to join your route.' : 'Draw to reshape your route.'}</Text></View>
-  ) : error ? (
-    <TouchableOpacity style={styles.contextContent} onPress={() => setError(null)} accessibilityRole="button" testID="route-context-message"><Text style={[styles.contextText, { color: contextInk }]}>{error}</Text></TouchableOpacity>
   ) : briefStatus ? (
     <View style={styles.contextContent} testID="route-brief-status"><Text style={[styles.contextText, { color: contextInk }]}>{briefStatus}</Text></View>
   ) : null;
@@ -1581,7 +1776,8 @@ export function OrderedRouteEditorScreen() {
             if (Number.isFinite(bearing)) cameraBearingRef.current = bearing;
             const pitch = Number(event?.properties?.pitch);
             if (Number.isFinite(pitch)) cameraPitchRef.current = pitch;
-            if (event?.properties?.isUserInteraction) {
+            cameraGenerationRef.current += 1;
+            if (event?.properties?.isUserInteraction || event?.properties?.gestures?.isGestureActive) {
               userMovedCameraRef.current = true;
               finishRouteAnimation('user-camera');
             }
@@ -1591,18 +1787,20 @@ export function OrderedRouteEditorScreen() {
           {Camera ? initialBoundsRef.current ? (
             <Camera
               ref={cameraRef}
-              bounds={{
-                ...initialBoundsRef.current,
-                paddingTop: insets.top + 100,
-                paddingBottom: bottomClearance + 30,
-                paddingLeft: 40,
-                // Keep Route endpoints and labels clear of the four 44pt map
-                // controls anchored 16pt from the right edge.
-                paddingRight: 88,
+              defaultSettings={{
+                bounds: {
+                  ...initialBoundsRef.current,
+                  paddingTop: insets.top + 100,
+                  paddingBottom: bottomClearance + 30,
+                  paddingLeft: 40,
+                  // Keep Route endpoints and labels clear of the four 44pt map
+                  // controls anchored 16pt from the right edge.
+                  paddingRight: 88,
+                },
+                animationDuration: 0,
               }}
-              animationDuration={0}
             />
-          ) : <Camera ref={cameraRef} centerCoordinate={initialLocationCenter} zoomLevel={initialLocation.status === 'ready' ? 14 : Math.max(region.defaultZoom, 10)} animationDuration={0} /> : null}
+          ) : <Camera ref={cameraRef} defaultSettings={{ centerCoordinate: initialLocationCenter, zoomLevel: initialLocation.status === 'ready' ? 14 : Math.max(region.defaultZoom, 10), animationDuration: 0 }} /> : null}
           <FogLayer scopeOverride={planningMemoryScope} opacityScale={0.42} />
           {ShapeSource && LineLayer && trimOriginalFeature ? (
             <ShapeSource id="ordered-route-trim-original" shape={trimOriginalFeature}>
@@ -1614,11 +1812,12 @@ export function OrderedRouteEditorScreen() {
             theme={theme}
             ShapeSource={ShapeSource}
             LineLayer={LineLayer}
+            SymbolLayer={SymbolLayer}
             idPrefix="ordered-route"
             hiddenPartId={routeGrowthAnimation?.hiddenPartId}
           />
           {ShapeSource && LineLayer && animationFeature ? (
-            <ShapeSource id="ordered-route-growth" shape={animationFeature}>
+            <ShapeSource ref={routeGrowthSourceRef} id="ordered-route-growth" shape={animationFeature}>
               <LineLayer id="ordered-route-growth-line" slot="top" style={{ lineColor: theme.mapRouteLine, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
             </ShapeSource>
           ) : null}
@@ -1697,7 +1896,10 @@ export function OrderedRouteEditorScreen() {
         ><Icon name="Route" size={19} color={theme.iconActive} /></TouchableOpacity>
         {!readOnlyShared ? (
           <TouchableOpacity
-            style={[styles.mapToolButton, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+            style={[styles.mapToolButton, {
+              backgroundColor: moreOpen ? theme.controlSelected : theme.mapOverlay,
+              borderColor: moreOpen ? theme.primary : theme.border,
+            }]}
             onPress={() => {
               searchAbortRef.current?.abort();
               setSearchOpen(false);
@@ -1706,7 +1908,7 @@ export function OrderedRouteEditorScreen() {
             }}
             accessibilityRole="button"
             accessibilityLabel="Exploration layers"
-            accessibilityState={{ selected: moreOpen }}
+            accessibilityState={{ selected: moreOpen, expanded: moreOpen }}
             testID="route-more"
           ><Icon name="Layers" size={19} color={moreOpen ? theme.primary : theme.iconActive} /></TouchableOpacity>
         ) : null}
@@ -1801,7 +2003,7 @@ export function OrderedRouteEditorScreen() {
                 <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'point' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'point' ? theme.controlSelected : theme.surface }]} onPress={() => selectEditorTool('point')} accessibilityRole="button" accessibilityState={{ selected: tool === 'point' }} testID="route-tool-point">
                   <Icon name="MapPin" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Point</Text>
                 </TouchableOpacity>
-                <TouchableOpacity disabled={draft.parts.length === 0} style={[styles.toolButton, { borderColor: tool === 'trim' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'trim' ? theme.controlSelected : theme.surface }, draft.parts.length === 0 && styles.disabled]} onPress={() => selectEditorTool('trim')} accessibilityRole="button" accessibilityState={{ selected: tool === 'trim', disabled: draft.parts.length === 0 }} testID="route-tool-trim">
+                <TouchableOpacity disabled={draft.parts.length === 0} style={[styles.toolButton, { borderColor: tool === 'trim' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'trim' ? theme.controlSelected : theme.surface }, draft.parts.length === 0 && styles.disabled]} onPress={() => selectEditorTool(tool === 'trim' ? 'browse' : 'trim')} accessibilityRole="button" accessibilityState={{ selected: tool === 'trim', disabled: draft.parts.length === 0 }} testID="route-tool-trim">
                   <Icon name="Move" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Trim</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1954,6 +2156,7 @@ const styles = StyleSheet.create({
   contextProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   contextText: { flexShrink: 1, fontSize: FontSize.small, lineHeight: 18, fontWeight: '600' },
   compactActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.sm },
+  decisionInlineRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
   compactSecondaryAction: { minHeight: 44, alignSelf: 'flex-end', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
   compactPrimaryAction: { minHeight: 44, alignSelf: 'flex-end', borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
   compactActionText: { fontSize: FontSize.caption, fontWeight: '800' },

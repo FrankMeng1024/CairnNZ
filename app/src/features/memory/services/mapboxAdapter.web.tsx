@@ -45,6 +45,25 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
   && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
+const LOCAL_QA_STYLE = {
+  version: 8 as const,
+  name: 'Cairn local QA canvas',
+  glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
+  // Keep the SDK's genuine compact attribution control measurable without
+  // contacting a tile provider. This source is empty; its attribution is
+  // consumed by Mapbox GL's own control rather than rendered by Cairn.
+  sources: {
+    'qa-attribution': {
+      type: 'geojson' as const,
+      data: { type: 'FeatureCollection' as const, features: [] },
+      attribution: '<a href="https://www.mapbox.com/about/maps/">© Mapbox</a>',
+    },
+  },
+  layers: [
+    { id: 'qa-background', type: 'background' as const, paint: { 'background-color': '#dce5d4' } },
+    { id: 'qa-attribution-anchor', type: 'circle' as const, source: 'qa-attribution', paint: { 'circle-opacity': 0 } },
+  ],
+};
 
 // ── camelCase → kebab-case for Mapbox GL paint properties ─────────────
 function paintToKebab(style: Record<string, any> | undefined): Record<string, any> {
@@ -208,6 +227,9 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
     ? 'mapbox://styles/mapbox/outdoors-v12'
     : styleURL;
   const styleUrl = rewrittenStyleURL ?? 'mapbox://styles/mapbox/outdoors-v12';
+  const localQaStyleEnabled = process.env.NODE_ENV !== 'production'
+    && typeof window !== 'undefined'
+    && Boolean((window as any).__cairnMapQaLocalStyle);
 
   // react-map-gl needs an initialViewState. We pull it from the first
   // <Camera> child if present. Otherwise default to a sensible center.
@@ -228,6 +250,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
         minHeight: 200,
       }}>
         <MapGL
+          {...(localQaStyleEnabled ? ({ testMode: true } as any) : {})}
           ref={(r) => {
             mapRef.current = r;
             // Expose underlying mapbox-gl Map on `window.__cairnMap` for
@@ -285,11 +308,11 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
             }
           }}
           mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
-          mapStyle={parsedStyleJSON ?? styleUrl}
+          mapStyle={localQaStyleEnabled ? LOCAL_QA_STYLE : (parsedStyleJSON ?? styleUrl)}
           attributionControl={false}
           logoPosition={webControlPosition(logoPosition, 'bottom-left')}
           onLoad={(event) => {
-            const bounds = firstCamera?.props.bounds;
+            const bounds = firstCamera?.props.defaultSettings?.bounds ?? firstCamera?.props.bounds;
             if (bounds) {
               event.target.fitBounds([bounds.sw, bounds.ne], {
                 padding: {
@@ -335,6 +358,41 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
               },
             });
           }}
+          onDragStart={(e) => {
+            const c = e.target.getCenter();
+            onCameraChanged?.({ properties: {
+              center: [c.lng, c.lat], zoom: e.target.getZoom(),
+              heading: e.target.getBearing?.() ?? 0, pitch: e.target.getPitch?.() ?? 0,
+              isUserInteraction: true,
+            } });
+          }}
+          onMouseDown={(e) => {
+            if (!e.originalEvent) return;
+            const c = e.target.getCenter();
+            onCameraChanged?.({ properties: {
+              center: [c.lng, c.lat], zoom: e.target.getZoom(),
+              heading: e.target.getBearing?.() ?? 0, pitch: e.target.getPitch?.() ?? 0,
+              isUserInteraction: true,
+            } });
+          }}
+          onZoomStart={(e) => {
+            if (!e.originalEvent) return;
+            const c = e.target.getCenter();
+            onCameraChanged?.({ properties: {
+              center: [c.lng, c.lat], zoom: e.target.getZoom(),
+              heading: e.target.getBearing?.() ?? 0, pitch: e.target.getPitch?.() ?? 0,
+              isUserInteraction: true,
+            } });
+          }}
+          onRotateStart={(e) => {
+            if (!e.originalEvent) return;
+            const c = e.target.getCenter();
+            onCameraChanged?.({ properties: {
+              center: [c.lng, c.lat], zoom: e.target.getZoom(),
+              heading: e.target.getBearing?.() ?? 0, pitch: e.target.getPitch?.() ?? 0,
+              isUserInteraction: true,
+            } });
+          }}
           style={{ width: '100%', height: '100%' }}
         >
           {attributionEnabled ? (
@@ -352,18 +410,20 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
 });
 
 // ── Camera (mostly a no-op wrapper for prop discovery) ────────────────
+interface WebCameraBounds {
+  ne: [number, number];
+  sw: [number, number];
+  paddingTop?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
+}
+
 interface CameraProps {
   centerCoordinate?: [number, number];
   zoomLevel?: number;
-  defaultSettings?: { centerCoordinate?: [number, number]; zoomLevel?: number };
-  bounds?: {
-    ne: [number, number];
-    sw: [number, number];
-    paddingTop?: number;
-    paddingBottom?: number;
-    paddingLeft?: number;
-    paddingRight?: number;
-  };
+  defaultSettings?: { centerCoordinate?: [number, number]; zoomLevel?: number; bounds?: WebCameraBounds; animationDuration?: number };
+  bounds?: WebCameraBounds;
   animationMode?: string;
   animationDuration?: number;
   minZoomLevel?: number;
@@ -472,7 +532,7 @@ interface ShapeSourceProps {
   clusterProperties?: Record<string, any>;
 }
 
-export function ShapeSource({
+export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function ShapeSource({
   id,
   shape,
   children,
@@ -480,7 +540,21 @@ export function ShapeSource({
   clusterRadius,
   clusterMaxZoomLevel,
   clusterProperties,
-}: ShapeSourceProps) {
+}: ShapeSourceProps, ref) {
+  const mapCtx = React.useContext(MapInstanceContext);
+  React.useImperativeHandle(ref, () => ({
+    setNativeProps: (props: { shape?: unknown }) => {
+      if (props.shape == null) return;
+      const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      const source = inner?.getSource?.(id);
+      if (!source?.setData) return;
+      try {
+        source.setData(typeof props.shape === 'string' ? JSON.parse(props.shape) : props.shape);
+      } catch {
+        // A malformed development payload must not tear down the map.
+      }
+    },
+  }), [id, mapCtx]);
   // react-map-gl handles `data` prop diffing internally and calls
   // mapbox-gl's source.setData when the prop changes. We do NOT manually
   // call setData here — doing so causes the source to enter a permanent
@@ -510,7 +584,7 @@ export function ShapeSource({
       {enriched}
     </Source>
   );
-}
+});
 
 // ── FillLayer ─────────────────────────────────────────────────────────
 interface LayerProps {
@@ -572,6 +646,20 @@ export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
 }
 
 export function SymbolLayer({ id, style, __sourceId, filter }: LayerProps) {
+  // The opt-in local QA style intentionally has no remote glyph endpoint. A
+  // text symbol would therefore be rejected by Mapbox GL before the screen's
+  // structural assertions run. Native and normal Web maps keep the real
+  // style/glyph path; only the explicit development-only fixture omits text.
+  if (
+    !WEB_MAPBOX_AVAILABLE
+    &&
+    process.env.NODE_ENV !== 'production'
+    && typeof window !== 'undefined'
+    && Boolean((window as any).__cairnMapQaLocalStyle)
+    && style?.textField
+  ) {
+    return null;
+  }
   const paintStyle: Record<string, any> = {};
   const layoutStyle: Record<string, any> = {};
   for (const [key, value] of Object.entries(style ?? {})) {
@@ -674,6 +762,9 @@ export function MarkerView({ coordinate, children }: MarkerViewProps) {
 const NoopComponent = () => null;
 
 export function makeWebMapboxAdapter() {
+  const localQaAvailable = process.env.NODE_ENV !== 'production'
+    && typeof window !== 'undefined'
+    && Boolean((window as any).__cairnMapQaLocalStyle);
   return {
     MapView,
     Camera,
@@ -694,6 +785,6 @@ export function makeWebMapboxAdapter() {
     // A mounted canvas without a usable token is not a working map. Let
     // callers show their explicit unavailable state instead of treating a
     // blank Web rectangle as evidence that Mapbox rendered successfully.
-    available: WEB_MAPBOX_AVAILABLE,
+    available: WEB_MAPBOX_AVAILABLE || localQaAvailable,
   };
 }
