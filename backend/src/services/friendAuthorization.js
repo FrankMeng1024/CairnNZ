@@ -63,31 +63,6 @@ async function closeFriendshipEpisode(db, userA, userB, reason) {
   await revokePairGrants(db, userA, userB, reason);
 }
 
-async function createGrantIfPolicyEnabled(db, ownerId, viewerId, episode) {
-  const [policyRows] = await db.execute(
-    `SELECT enabled FROM memory_share_policies WHERE owner_id = ? LIMIT 1 FOR UPDATE`,
-    [ownerId],
-  );
-  if (!policyRows[0]?.enabled) return null;
-  const [activeRows] = await db.execute(
-    `SELECT id, grant_epoch, effective_at, authorization_version
-       FROM memory_share_grants
-      WHERE owner_id = ? AND viewer_id = ? AND status = 'active'
-      LIMIT 1 FOR UPDATE`,
-    [ownerId, viewerId],
-  );
-  if (activeRows[0]) return activeRows[0];
-  const grantEpoch = crypto.randomUUID();
-  const [result] = await db.execute(
-    `INSERT INTO memory_share_grants
-       (owner_id, viewer_id, friendship_episode_id, grant_epoch, effective_at,
-        coverage_scope, consent_version)
-     VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3), 'legacy_activity_since_grant', 0)`,
-    [ownerId, viewerId, episode.id, grantEpoch],
-  );
-  return { id: result.insertId, grant_epoch: grantEpoch, authorization_version: 1 };
-}
-
 async function provisionFriendshipGrants(db, userA, userB, episode) {
   // New friendships never inherit an owner's historical global preference.
   // Sharing accepted Memory history is a directional, explicit decision made
@@ -172,16 +147,15 @@ async function currentMemoryGrant(db, ownerId, viewerId, { requireSelected = fal
     `SELECT g.id, g.grant_epoch, g.effective_at, g.coverage_scope,
             g.consent_version, g.authorization_version,
             e.id AS friendship_episode_id, e.started_at AS friendship_started_at,
-            COALESCE(p.policy_epoch, 0) AS policy_epoch
+            0 AS policy_epoch
        FROM memory_share_grants g
-       LEFT JOIN memory_share_policies p ON p.owner_id = g.owner_id
        JOIN friendship_episodes e ON e.id = g.friendship_episode_id AND e.ended_at IS NULL
        JOIN friends f ON f.user_id = g.viewer_id AND f.friend_id = g.owner_id
        JOIN users owner ON owner.id = g.owner_id AND owner.deleted_at IS NULL
        JOIN users viewer ON viewer.id = g.viewer_id AND viewer.deleted_at IS NULL
        ${requireSelected ? 'JOIN memory_subscriptions ms ON ms.user_id = g.viewer_id AND ms.friend_id = g.owner_id' : ''}
       WHERE g.owner_id = ? AND g.viewer_id = ? AND g.status = 'active'
-        AND (g.coverage_scope = 'full_history_delayed_v1' OR p.enabled = 1)
+        AND g.coverage_scope = 'full_history_delayed_v1'
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users b
            WHERE (b.blocker_id = g.owner_id AND b.blocked_id = g.viewer_id)
@@ -286,7 +260,6 @@ module.exports = {
   ensureFriendshipEpisode,
   closeFriendshipEpisode,
   revokePairGrants,
-  createGrantIfPolicyEnabled,
   provisionFriendshipGrants,
   setExplicitMemoryGrant,
   currentMemoryGrant,

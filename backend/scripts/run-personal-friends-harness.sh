@@ -74,6 +74,45 @@ for migration in \
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done
 
+# Exercise 049 against populated legacy and current contracts. Empty-schema
+# application cannot prove its enum value, selective subscription cleanup, or
+# preservation of valid full-history subscriptions.
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e "
+  INSERT INTO users (id,name,email) VALUES
+    (990001,'Migration owner','migration-owner@example.invalid'),
+    (990002,'Legacy viewer','migration-legacy@example.invalid'),
+    (990003,'Current viewer','migration-current@example.invalid');
+  INSERT INTO friends (user_id,friend_id,created_at) VALUES
+    (990001,990002,UTC_TIMESTAMP(3)),(990002,990001,UTC_TIMESTAMP(3)),
+    (990001,990003,UTC_TIMESTAMP(3)),(990003,990001,UTC_TIMESTAMP(3));
+  INSERT INTO friendship_episodes (episode_id,user_low_id,user_high_id,started_at) VALUES
+    (UUID(),990001,990002,UTC_TIMESTAMP(3)),(UUID(),990001,990003,UTC_TIMESTAMP(3));
+  INSERT INTO memory_share_policies (owner_id,enabled,enabled_at) VALUES
+    (990001,1,UTC_TIMESTAMP(3));
+  INSERT INTO memory_share_grants
+    (owner_id,viewer_id,friendship_episode_id,grant_epoch,effective_at,coverage_scope,consent_version)
+  SELECT 990001,990002,id,UUID(),UTC_TIMESTAMP(3),'legacy_activity_since_grant',0
+    FROM friendship_episodes WHERE user_low_id=990001 AND user_high_id=990002;
+  INSERT INTO memory_share_grants
+    (owner_id,viewer_id,friendship_episode_id,grant_epoch,effective_at,coverage_scope,consent_version)
+  SELECT 990001,990003,id,UUID(),UTC_TIMESTAMP(3),'full_history_delayed_v1',1
+    FROM friendship_episodes WHERE user_low_id=990001 AND user_high_id=990003;
+  INSERT INTO memory_subscriptions (user_id,friend_id) VALUES (990002,990001),(990003,990001);
+" >/dev/null
+docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/049_retire_legacy_memory_sharing.sql" >/dev/null
+legacy_fixture_state="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse "
+  SELECT CONCAT(
+    (SELECT COUNT(*) FROM $DB_NAME.memory_share_grants WHERE owner_id=990001 AND viewer_id=990002 AND status='revoked' AND revoked_reason='legacy_contract_retired'), ':',
+    (SELECT COUNT(*) FROM $DB_NAME.memory_subscriptions WHERE user_id=990002 AND friend_id=990001), ':',
+    (SELECT COUNT(*) FROM $DB_NAME.memory_share_grants WHERE owner_id=990001 AND viewer_id=990003 AND status='active' AND coverage_scope='full_history_delayed_v1'), ':',
+    (SELECT COUNT(*) FROM $DB_NAME.memory_subscriptions WHERE user_id=990003 AND friend_id=990001), ':',
+    (SELECT enabled FROM $DB_NAME.memory_share_policies WHERE owner_id=990001));
+")"
+[ "$legacy_fixture_state" = "1:0:1:1:0" ]
+echo "049 populated fixture verified: $legacy_fixture_state"
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e \
+  "DELETE FROM users WHERE id IN (990001,990002,990003)" >/dev/null
+
 API_PORT=$((32000 + ($$ % 1000)))
 while nc -z 127.0.0.1 "$API_PORT" >/dev/null 2>&1; do API_PORT=$((API_PORT + 1)); done
 (
@@ -102,10 +141,12 @@ if [ -n "${EVIDENCE_DIR:-}" ]; then
   mkdir -p "$EVIDENCE_DIR"
   "$SCRIPT_DIR/verify-migration-047.sh" | tee "$EVIDENCE_DIR/migration-047.txt"
   "$SCRIPT_DIR/verify-migration-048.sh" | tee "$EVIDENCE_DIR/migration-048.txt"
+  "$SCRIPT_DIR/verify-migration-049.sh" | tee "$EVIDENCE_DIR/migration-049.txt"
   node "$HARNESS_PROGRAM" | tee "$EVIDENCE_DIR/result.json"
 else
   "$SCRIPT_DIR/verify-migration-047.sh"
   "$SCRIPT_DIR/verify-migration-048.sh"
+  "$SCRIPT_DIR/verify-migration-049.sh"
   node "$HARNESS_PROGRAM"
 fi
 

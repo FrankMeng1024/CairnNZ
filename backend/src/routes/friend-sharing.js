@@ -4,122 +4,21 @@ const express = require('express');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const {
-  currentFriendshipEpisode,
-  createGrantIfPolicyEnabled,
   currentMemoryGrant,
   setExplicitMemoryGrant,
 } = require('../services/friendAuthorization');
 const { deriveFriendProjection } = require('../services/friendProjection');
+const { eligibleSourceProvenanceSql } = require('../services/activitySourceProvenance');
 
 const router = express.Router();
 router.use(authenticate);
 
 router.get('/policy', async (req, res) => {
-  try {
-    const [rows] = await pool.execute(
-      `SELECT enabled, policy_epoch, enabled_at, updated_at
-         FROM memory_share_policies WHERE owner_id = ? LIMIT 1`,
-      [req.user.userId],
-    );
-    const policy = rows[0];
-    return res.json({
-      enabled: Boolean(policy?.enabled),
-      policy_epoch: Number(policy?.policy_epoch ?? 1),
-      enabled_at: policy?.enabled_at ?? null,
-      updated_at: policy?.updated_at ?? null,
-    });
-  } catch (error) {
-    console.error('[friend-sharing/policy:get]', error.message);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  return res.json({ enabled: false, retired: true, policy_epoch: 0, enabled_at: null, updated_at: null });
 });
 
 router.put('/policy', async (req, res) => {
-  if (typeof req.body?.enabled !== 'boolean') {
-    return res.status(400).json({ error: 'enabled (boolean) required' });
-  }
-  const ownerId = req.user.userId;
-  const enabled = req.body.enabled;
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [ownerId]);
-    await conn.execute(
-      `INSERT INTO memory_share_policies (owner_id, enabled, enabled_at)
-       VALUES (?, 0, NULL)
-       ON DUPLICATE KEY UPDATE owner_id = owner_id`,
-      [ownerId],
-    );
-    const [[current]] = await conn.execute(
-      `SELECT enabled, policy_epoch FROM memory_share_policies WHERE owner_id = ? FOR UPDATE`,
-      [ownerId],
-    );
-    if (Boolean(current.enabled) !== enabled) {
-      await conn.execute(
-        `UPDATE memory_share_policies
-            SET enabled = ?, policy_epoch = policy_epoch + 1,
-                enabled_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP(3) ELSE NULL END
-          WHERE owner_id = ?`,
-        [enabled ? 1 : 0, enabled ? 1 : 0, ownerId],
-      );
-      if (!enabled) {
-        await conn.execute(
-          `UPDATE memory_share_grants
-              SET status = 'revoked', revoked_at = UTC_TIMESTAMP(3),
-                  revoked_reason = 'policy_disabled', authorization_version = authorization_version + 1
-            WHERE owner_id = ? AND status = 'active'
-              AND coverage_scope = 'legacy_activity_since_grant'`,
-          [ownerId],
-        );
-        await conn.execute(
-          `DELETE ms FROM memory_subscriptions ms
-            LEFT JOIN memory_share_grants g
-              ON g.owner_id = ms.friend_id AND g.viewer_id = ms.user_id
-             AND g.status = 'active'
-           WHERE ms.friend_id = ? AND g.id IS NULL`,
-          [ownerId],
-        );
-      } else {
-        const [friends] = await conn.execute(
-          `SELECT f.friend_id
-             FROM friends f
-             JOIN friends reverse_friend
-               ON reverse_friend.user_id = f.friend_id AND reverse_friend.friend_id = f.user_id
-             JOIN users u ON u.id = f.friend_id AND u.deleted_at IS NULL
-            WHERE f.user_id = ?
-              AND NOT EXISTS (
-                SELECT 1 FROM blocked_users b
-                 WHERE (b.blocker_id = f.user_id AND b.blocked_id = f.friend_id)
-                    OR (b.blocker_id = f.friend_id AND b.blocked_id = f.user_id)
-              )
-            ORDER BY f.friend_id ASC`,
-          [ownerId],
-        );
-        for (const friend of friends) {
-          const episode = await currentFriendshipEpisode(conn, ownerId, friend.friend_id, true);
-          if (episode) await createGrantIfPolicyEnabled(conn, ownerId, friend.friend_id, episode);
-        }
-      }
-    }
-    const [[updated]] = await conn.execute(
-      `SELECT enabled, policy_epoch, enabled_at, updated_at
-         FROM memory_share_policies WHERE owner_id = ?`,
-      [ownerId],
-    );
-    await conn.commit();
-    return res.json({
-      enabled: Boolean(updated.enabled),
-      policy_epoch: Number(updated.policy_epoch),
-      enabled_at: updated.enabled_at,
-      updated_at: updated.updated_at,
-    });
-  } catch (error) {
-    try { await conn.rollback(); } catch { /* noop */ }
-    console.error('[friend-sharing/policy:put]', error.message);
-    return res.status(500).json({ error: 'Server error' });
-  } finally {
-    conn.release();
-  }
+  return res.status(410).json({ error: 'Global Memory sharing has been retired. Choose friends individually.' });
 });
 
 router.get('/sources', async (req, res) => {
@@ -140,12 +39,11 @@ router.get('/sources', async (req, res) => {
         `INSERT IGNORE INTO memory_subscriptions (user_id, friend_id)
          SELECT ?, g.owner_id
            FROM memory_share_grants g
-           LEFT JOIN memory_share_policies p ON p.owner_id = g.owner_id
            JOIN friendship_episodes e
              ON e.id = g.friendship_episode_id AND e.ended_at IS NULL
            JOIN friends f ON f.user_id = g.viewer_id AND f.friend_id = g.owner_id
           WHERE g.viewer_id = ? AND g.status = 'active'
-            AND (g.coverage_scope = 'full_history_delayed_v1' OR p.enabled = 1)
+            AND g.coverage_scope = 'full_history_delayed_v1'
             AND NOT EXISTS (
               SELECT 1 FROM blocked_users b
                WHERE (b.blocker_id = g.owner_id AND b.blocked_id = g.viewer_id)
@@ -167,6 +65,21 @@ router.get('/sources', async (req, res) => {
                          AND mp.continuity_state = 'accepted'
                          AND mp.horizontal_accuracy_m IS NOT NULL
                          AND mp.horizontal_accuracy_m <= 50
+                         AND (mp.evidence_source = 'passive_real' OR EXISTS (
+                           SELECT 1 FROM sessions source_session
+                           JOIN JSON_TABLE(COALESCE(source_session.route_points_canonical,JSON_ARRAY()), '$[*]' COLUMNS(
+                             lat DOUBLE PATH '$.lat',lng DOUBLE PATH '$.lng',
+                             observed_ms BIGINT PATH '$.t',segment_id VARCHAR(80) PATH '$.segment_id'
+                           )) canonical
+                             ON ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(mp.ts AS SIGNED))<=1000
+                            AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(mp.lng,mp.lat))<=5
+                            AND COALESCE(canonical.segment_id,'legacy-0')=COALESCE(mp.source_segment_id,'legacy-0')
+                           WHERE source_session.user_id=mp.user_id
+                             AND source_session.client_activity_id=mp.source_activity_client_id
+                             AND source_session.finalized_at IS NOT NULL
+                             AND source_session.abandoned_at IS NULL
+                             AND ${eligibleSourceProvenanceSql('source_session.source_provenance')}
+                         ))
                          AND DATE_ADD(GREATEST(FROM_UNIXTIME(mp.ts / 1000), mp.received_at),
                                       INTERVAL 1800 SECOND) <= UTC_TIMESTAMP(3)
                        LIMIT 1
@@ -175,6 +88,23 @@ router.get('/sources', async (req, res) => {
                        WHERE witness.user_id = f.friend_id
                          AND witness.continuity_state = 'accepted'
                          AND witness.horizontal_accuracy_m <= 50
+                         AND (witness.evidence_source = 'passive_real' OR EXISTS (
+                           SELECT 1 FROM sessions source_session
+                           JOIN JSON_TABLE(COALESCE(source_session.route_points_canonical,JSON_ARRAY()), '$[*]' COLUMNS(
+                             lat DOUBLE PATH '$.lat',lng DOUBLE PATH '$.lng',
+                             observed_ms BIGINT PATH '$.t',segment_id VARCHAR(80) PATH '$.segment_id'
+                           )) canonical
+                             ON (ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(witness.first_observed_at_ms AS SIGNED))<=1000
+                                 AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(witness.first_lng,witness.first_lat))<=5
+                                 OR ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(witness.observed_at_ms AS SIGNED))<=1000
+                                 AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(witness.lng,witness.lat))<=5)
+                            AND COALESCE(canonical.segment_id,'legacy-0')=COALESCE(witness.source_segment_id,'legacy-0')
+                           WHERE source_session.user_id=witness.user_id
+                             AND source_session.client_activity_id=witness.source_activity_client_id
+                             AND source_session.finalized_at IS NOT NULL
+                             AND source_session.abandoned_at IS NULL
+                             AND ${eligibleSourceProvenanceSql('source_session.source_provenance')}
+                         ))
                          AND DATE_ADD(GREATEST(
                                FROM_UNIXTIME(witness.first_observed_at_ms / 1000),
                                witness.received_at), INTERVAL 1800 SECOND) <= UTC_TIMESTAMP(3)
@@ -188,14 +118,13 @@ router.get('/sources', async (req, res) => {
          LEFT JOIN memory_share_grants g
            ON g.owner_id = f.friend_id AND g.viewer_id = f.user_id
           AND g.status = 'active'
-         LEFT JOIN memory_share_policies p ON p.owner_id = g.owner_id
          LEFT JOIN friendship_episodes e
            ON e.id = g.friendship_episode_id AND e.ended_at IS NULL
          LEFT JOIN memory_subscriptions ms
            ON ms.user_id = f.user_id AND ms.friend_id = f.friend_id
         WHERE f.user_id = ?
           AND (g.id IS NULL OR e.id IS NOT NULL)
-          AND (g.id IS NULL OR g.coverage_scope = 'full_history_delayed_v1' OR p.enabled = 1)
+          AND (g.id IS NULL OR g.coverage_scope = 'full_history_delayed_v1')
           AND NOT EXISTS (
             SELECT 1 FROM blocked_users b
              WHERE (b.blocker_id = f.friend_id AND b.blocked_id = f.user_id)
@@ -301,59 +230,8 @@ router.put('/grants/:viewer_id', async (req, res) => {
   }
 });
 
-// Atomically apply one explicit selection to the CURRENT accepted-friend set.
-// This never creates a rule for friends accepted later.
-router.put('/grants', async (req, res) => {
-  const ownerId = Number(req.user.userId);
-  const requested = Array.isArray(req.body?.friend_ids) ? req.body.friend_ids : null;
-  if (!requested) return res.status(400).json({ error: 'friend_ids array required' });
-  const selected = [...new Set(requested.map(Number))];
-  if (selected.length > 1000 || selected.some(id => !Number.isInteger(id) || id <= 0 || id === ownerId)) {
-    return res.status(400).json({ error: 'Valid current friend ids required' });
-  }
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const [friends] = await conn.execute(
-      `SELECT forward.friend_id
-         FROM friends forward
-         JOIN friends reverse
-           ON reverse.user_id=forward.friend_id AND reverse.friend_id=forward.user_id
-         JOIN users friend ON friend.id=forward.friend_id AND friend.deleted_at IS NULL
-        WHERE forward.user_id=?
-          AND NOT EXISTS (
-            SELECT 1 FROM blocked_users blocked
-             WHERE (blocked.blocker_id=forward.user_id AND blocked.blocked_id=forward.friend_id)
-                OR (blocked.blocker_id=forward.friend_id AND blocked.blocked_id=forward.user_id)
-          )
-        ORDER BY forward.friend_id FOR UPDATE`,
-      [ownerId],
-    );
-    const currentIds = friends.map(friend => Number(friend.friend_id));
-    const currentSet = new Set(currentIds);
-    if (selected.some(id => !currentSet.has(id))) {
-      await conn.rollback();
-      return res.status(409).json({ error: 'Friend list changed; reload sharing choices' });
-    }
-    const selectedSet = new Set(selected);
-    const applied = [];
-    for (const friendId of currentIds) {
-      const result = await setExplicitMemoryGrant(conn, ownerId, friendId, selectedSet.has(friendId));
-      if (result.status === 'not_friends') {
-        await conn.rollback();
-        return res.status(409).json({ error: 'Friend list changed; reload sharing choices' });
-      }
-      applied.push({ friend_id: String(friendId), enabled: result.status === 'active' });
-    }
-    await conn.commit();
-    return res.json({ applied, delay_seconds: 1800 });
-  } catch (error) {
-    try { await conn.rollback(); } catch { /* noop */ }
-    console.error('[friend-sharing/grants:bulk]', error.message);
-    return res.status(500).json({ error: 'Server error' });
-  } finally {
-    conn.release();
-  }
+router.put('/grants', (req, res) => {
+  return res.status(410).json({ error: 'Bulk Memory sharing has been retired. Choose one friend at a time.' });
 });
 
 router.post('/projections', async (req, res) => {

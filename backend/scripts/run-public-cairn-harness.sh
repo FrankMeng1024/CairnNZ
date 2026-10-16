@@ -166,6 +166,9 @@ if [ "${HARNESS_REHEARSE_046_RECOVERY:-0}" = "1" ]; then
   [ "$legacy_rows" = "1" ]
   apply_sql_file "$BACKEND_DIR/src/migrations/046_ordered_routes_and_deliveries.sql"
 fi
+apply_sql_file "$BACKEND_DIR/src/migrations/047_friend_request_lifecycle.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/048_friends_memory_history_repair.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/049_retire_legacy_memory_sharing.sql"
 
 MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
   DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
@@ -176,6 +179,9 @@ MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
 MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
   DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
   "$SCRIPT_DIR/verify-migration-046.sh"
+MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
+  DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
+  "$SCRIPT_DIR/verify-migration-049.sh"
 
 API_PORT=$((33000 + ($$ % 1000)))
 while nc -z 127.0.0.1 "$API_PORT" >/dev/null 2>&1; do API_PORT=$((API_PORT + 1)); done

@@ -26,6 +26,7 @@ const {
   locationPolicyVersion,
   publicLocationPolicyConfigured,
 } = require('../services/publicLocationPolicy');
+const { closeFriendshipEpisode } = require('../services/friendAuthorization');
 
 const router = express.Router();
 
@@ -79,7 +80,9 @@ function publicEnvelope(row, includeText = false) {
     ? row.authorization_issued_at.toISOString() : row.authorization_issued_at;
   const envelope = {
     id: String(row.marker_id),
-    author: { id: String(row.author_id), name: row.author_name },
+    // Public is intentionally anonymous. Keep a non-identifying stable shape
+    // for older clients, but never disclose the account id or display name.
+    author: { id: 'anonymous', name: 'Anonymous explorer' },
     type: row.type,
     lat: Number(row.lat),
     lng: Number(row.lng),
@@ -642,6 +645,62 @@ router.post('/cairns/:id/hide', actionLimiter, async (req, res) => {
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
     console.error('[public/hide]', error.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+// Resolve the author exclusively on the server so the anonymous Public wire
+// contract never has to disclose an account identifier merely to support a
+// safety action.
+router.post('/cairns/:id/block-author', actionLimiter, async (req, res) => {
+  const markerId = positiveId(req.params.id);
+  if (!markerId) return res.status(400).json({ error: 'Invalid Cairn id.' });
+  const viewerId = Number(req.user.userId);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const initial = await loadAuthorizedPublicCairn(conn, viewerId, markerId, false);
+    if (!initial) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Cairn unavailable.', code: 'PUBLIC_CAIRN_UNAVAILABLE' });
+    }
+    const authorId = Number(initial.author_id);
+    if (!Number.isInteger(authorId) || authorId === viewerId) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Author cannot be blocked.' });
+    }
+    const lockIds = [viewerId, authorId].sort((a, b) => a - b);
+    await conn.query('SELECT id FROM users WHERE id IN (?) ORDER BY id FOR UPDATE', [lockIds]);
+    const row = await loadAuthorizedPublicCairn(conn, viewerId, markerId, true);
+    if (!row || Number(row.author_id) !== authorId) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Cairn unavailable.', code: 'PUBLIC_CAIRN_UNAVAILABLE' });
+    }
+    await conn.execute(
+      `INSERT INTO blocked_users (blocker_id, blocked_id, reason)
+       VALUES (?, ?, 'public_cairn')
+       ON DUPLICATE KEY UPDATE reason = VALUES(reason)`,
+      [viewerId, authorId],
+    );
+    await conn.execute(
+      `DELETE FROM friends
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
+      [viewerId, authorId, authorId, viewerId],
+    );
+    await closeFriendshipEpisode(conn, viewerId, authorId, 'blocked');
+    await conn.execute(
+      `UPDATE friend_requests SET status='blocked', resolved_at=UTC_TIMESTAMP(3)
+        WHERE status='pending'
+          AND ((from_user_id=? AND to_user_id=?) OR (from_user_id=? AND to_user_id=?))`,
+      [viewerId, authorId, authorId, viewerId],
+    );
+    await conn.commit();
+    return res.json({ blocked: true, cairn_id: String(markerId) });
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* noop */ }
+    console.error('[public/block-author]', error.message);
     return res.status(500).json({ error: 'Server error' });
   } finally {
     conn.release();

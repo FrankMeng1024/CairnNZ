@@ -115,10 +115,9 @@ router.get('/', async (req, res) => {
          JOIN users u ON u.id = ms.friend_id AND u.deleted_at IS NULL
          JOIN memory_share_grants g
            ON g.owner_id = ms.friend_id AND g.viewer_id = ms.user_id AND g.status = 'active'
-         LEFT JOIN memory_share_policies p ON p.owner_id = g.owner_id
          JOIN friendship_episodes e ON e.id = g.friendship_episode_id AND e.ended_at IS NULL
         WHERE ms.user_id = ?
-          AND (g.coverage_scope = 'full_history_delayed_v1' OR p.enabled = 1)
+          AND g.coverage_scope = 'full_history_delayed_v1'
           AND NOT EXISTS (
             SELECT 1 FROM blocked_users b
              WHERE (b.blocker_id = ms.user_id AND b.blocked_id = ms.friend_id)

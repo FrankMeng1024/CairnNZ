@@ -41,6 +41,15 @@ const schemas = require('../middleware/schemas');
 
 const router = express.Router();
 
+function observationDistanceM(aLat, aLng, bLat, bLng) {
+  const toRad = value => Number(value) * Math.PI / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const x = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(Math.max(0, 1 - x)));
+}
+
 // v412: deterministicCid 抽到 lib/deterministicCid.js, sessions.js /save 端点复用同一实现
 
 // Sprint 6 round-30 R30Q3: per-user rate limit on POST /points. Pre-fix,
@@ -121,9 +130,13 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       ? p.source_segment_id.slice(0, 80)
       : null;
     const horizontalAccuracyM = Number.isFinite(p.horizontal_accuracy_m) ? p.horizontal_accuracy_m : null;
-    const continuityState = ['accepted', 'gap', 'unknown'].includes(p.continuity_state)
+    let continuityState = ['accepted', 'gap', 'unknown'].includes(p.continuity_state)
       ? p.continuity_state
       : 'unknown';
+    // Passive clients may propose evidence, but cannot make an individual
+    // point accepted by assertion alone. The server promotes it only after a
+    // qualifying same-segment continuity witness is durable below.
+    if (evidenceSource === 'passive_real') continuityState = 'unknown';
     rows.push([
       userId, p.lat, p.lng, p.ts, cid, evidenceSource,
       sourceActivityClientId, sourceSegmentId, horizontalAccuracyM, continuityState,
@@ -145,26 +158,45 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       && typeof witness?.source_segment_id === 'string'
       ? witness.source_segment_id.slice(0, 80)
       : null;
+    const firstLat = Number(witness?.first_lat);
+    const firstLng = Number(witness?.first_lng);
+    const lat = Number(witness?.lat);
+    const lng = Number(witness?.lng);
+    const accuracyM = Number(witness?.horizontal_accuracy_m);
+    const durationMs = observedAtMs - firstObservedAtMs;
+    const distanceM = observationDistanceM(firstLat, firstLng, lat, lng);
+    const plausibleSpeedMps = durationMs > 0 ? distanceM / (durationMs / 1000) : 0;
     if (!Number.isFinite(firstObservedAtMs) || !Number.isInteger(firstObservedAtMs)
       || !Number.isFinite(observedAtMs) || !Number.isInteger(observedAtMs)
       || firstObservedAtMs <= 0 || observedAtMs < firstObservedAtMs || observedAtMs > tsUpperBound
       || !['activity_real', 'passive_real'].includes(source)
       || (source === 'activity_real' && (!sourceActivityClientId || !sourceSegmentId))
+      || !sourceSegmentId || typeof witness?.cid !== 'string' || witness.cid.length < 1 || witness.cid.length > 36
+      || !Number.isFinite(firstLat) || !Number.isFinite(firstLng) || !Number.isFinite(lat) || !Number.isFinite(lng)
+      || Math.abs(firstLat) > 90 || Math.abs(lat) > 90 || Math.abs(firstLng) > 180 || Math.abs(lng) > 180
+      || !Number.isFinite(accuracyM) || accuracyM <= 0 || accuracyM > 50
       || witness?.continuity_state !== 'accepted') continue;
+    const serverContinuity = source === 'passive_real'
+      ? (durationMs >= 15_000 && plausibleSpeedMps <= 15 ? 'accepted' : 'unknown')
+      : 'accepted';
+    // The witness table contains only evidence accepted by server policy.
+    // Unqualified passive claims leave their matching coverage points unknown
+    // instead of attempting to persist an impossible enum value.
+    if (serverContinuity !== 'accepted') continue;
     presenceRows.push([
       userId,
       witness.cid,
-      witness.first_lat,
-      witness.first_lng,
+      firstLat,
+      firstLng,
       firstObservedAtMs,
-      witness.lat,
-      witness.lng,
+      lat,
+      lng,
       observedAtMs,
       source,
       sourceActivityClientId,
       sourceSegmentId,
-      witness.horizontal_accuracy_m,
-      'accepted',
+      accuracyM,
+      serverContinuity,
     ]);
     presenceEcho.push({ cid: witness.cid, observed_at_ms: observedAtMs });
   }
@@ -242,8 +274,29 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
              horizontal_accuracy_m
            ),
            source_segment_id = COALESCE(VALUES(source_segment_id), source_segment_id),
-           observed_at_ms = GREATEST(observed_at_ms, VALUES(observed_at_ms))`,
+           observed_at_ms = GREATEST(observed_at_ms, VALUES(observed_at_ms)),
+           continuity_state = CASE
+             WHEN continuity_state='accepted' OR VALUES(continuity_state)='accepted' THEN 'accepted'
+             ELSE 'unknown' END`,
         [presenceRows],
+      );
+      // Promote passive coverage only from a server-validated continuity
+      // witness for the same account and segment. This closes the direct
+      // client `continuity_state: accepted` shortcut while preserving the
+      // independent passive recorder's normal 15-second lifecycle.
+      await pool.query(
+        `UPDATE memory_points point
+          JOIN memory_presence_witnesses witness
+            ON witness.user_id=point.user_id
+           AND witness.evidence_source='passive_real'
+           AND witness.source_segment_id=point.source_segment_id
+           AND witness.continuity_state='accepted'
+           AND point.ts BETWEEN witness.first_observed_at_ms AND witness.observed_at_ms
+           SET point.continuity_state='accepted'
+         WHERE point.user_id=? AND point.evidence_source='passive_real'
+           AND point.horizontal_accuracy_m IS NOT NULL
+           AND point.horizontal_accuracy_m>0 AND point.horizontal_accuracy_m<=50`,
+        [userId],
       );
     }
     const presenceCids = presenceEcho.map(entry => entry.cid);
@@ -373,6 +426,16 @@ router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
     const [presenceResult] = await conn.query(
       'DELETE FROM memory_presence_witnesses WHERE user_id = ?',
       [userId]
+    );
+    // A wipe changes every outgoing projection even when the directional
+    // grant itself remains active. Advance authorization atomically so warm
+    // recipients cannot mistake a pre-wipe envelope for current coverage.
+    await conn.query(
+      `UPDATE memory_share_grants
+          SET authorization_version = authorization_version + 1
+        WHERE owner_id = ? AND status = 'active'
+          AND coverage_scope = 'full_history_delayed_v1'`,
+      [userId],
     );
     await conn.commit();
     scheduleMemoryProjectionReset(pool, userId);
