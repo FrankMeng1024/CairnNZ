@@ -32,6 +32,7 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
   const theme = useVisualTheme();
   const sources = useMemorySubscriptionsStore((s) => s.availableSources);
   const loading = useMemorySubscriptionsStore((s) => s.loading);
+  const loadError = useMemorySubscriptionsStore((s) => s.error);
   const load = useMemorySubscriptionsStore((s) => s.load);
   const subscribe = useMemorySubscriptionsStore((s) => s.subscribe);
   const unsubscribe = useMemorySubscriptionsStore((s) => s.unsubscribe);
@@ -167,6 +168,19 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
 
           {loading && sources.length === 0 ? (
             <View style={styles.loadingBox}><ActivityIndicator color={theme.primary} /></View>
+          ) : loadError && sources.length === 0 ? (
+            <View style={styles.listError} testID="memory-friend-list-error">
+              <Text style={[styles.emptyHint, { color: theme.destructive }]}>Couldn't load friends</Text>
+              <TouchableOpacity
+                onPress={() => { void load(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading friends"
+                testID="memory-friend-list-retry"
+                style={[styles.retryButton, { borderColor: theme.borderStrong }]}
+              >
+                <Text style={[styles.retryText, { color: theme.primary }]}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           ) : sources.length === 0 ? (
             <Text style={[styles.emptyHint, { color: theme.muted }]}>No shared places yet.</Text>
           ) : (
@@ -280,6 +294,14 @@ const styles = StyleSheet.create({
   close: { padding: Spacing.xs },
   loadingBox: { paddingVertical: Spacing.xl, alignItems: 'center' },
   emptyHint: { textAlign: 'center', color: Colors.textMuted, paddingVertical: Spacing.xl },
+  listError: { alignItems: 'center', paddingBottom: Spacing.lg },
+  retryButton: {
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  retryText: { fontSize: FontSize.body, fontWeight: '600' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

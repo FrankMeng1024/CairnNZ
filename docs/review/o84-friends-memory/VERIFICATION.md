@@ -9,6 +9,9 @@ packaged in the final ZIP rather than committed to deploy-bearing Git.
 - Final UX closure: **5 suites, 24 tests passed** (natural picker states,
   active-only count badge, action-only Friend Detail and single-tap declined
   dismissal included).
+- Final pre-OTA picker correction: **3 suites, 18 tests passed**; the initial
+  subscriptions/source-list failure is visible, Retry succeeds without closing
+  the picker, and a valid existing selection survives failure and recovery.
 - Friends/Memory/O84 marker: **8 suites, 42 tests passed**.
 - Friend content/account-local authorization: **4 suites, 56 tests passed**.
 - O83 Route: **14 suites, 191 tests passed** (Draw, Point continuity,
@@ -19,8 +22,10 @@ packaged in the final ZIP rather than committed to deploy-bearing Git.
 - Backend authorization/projection: **16 Node tests passed** plus syntax checks.
 - Isolated multi-account API/database harness: **PASS**; migration 047 forward,
   rollback and forward reapply all passed.
-- Mobile Expo Web visual QA: **24 assertions passed**, no page/runtime console
-  errors, 16 current screenshots at 360/390/430 widths across themes.
+- Mobile Expo Web visual QA: **26 assertions passed**, no page/runtime console
+  errors, 17 current screenshots at 360/390/430 widths across themes. The new
+  390x844 failure capture visibly contains `Couldn't load friends` and Retry;
+  recovery continues into the existing two-source real-Fog rendering proof.
 - `git diff --check`: passed.
 - Full `tsc --noEmit`: exit 2 with **159 existing repository errors** (missing
   Playwright declarations, Activity-test typing, generated preview icon keys,

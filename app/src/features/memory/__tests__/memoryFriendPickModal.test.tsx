@@ -146,4 +146,36 @@ describe('Memory friend picker interaction owner', () => {
     });
     await waitFor(() => expect(screen.getByText('Couldn’t load shared places · Retry')).toBeTruthy());
   });
+
+  test('shows an initial list-load failure and retries in place without clearing a valid selection', async () => {
+    const selectedSource = { ...sources[0], selected: true };
+    const selectedSubscription = { friend_id: 11, friend_name: 'First Friend' };
+    useMemorySubscriptionsStore.setState({
+      availableSources: [],
+      subscriptions: [selectedSubscription],
+      loading: false,
+      error: null,
+    });
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce(ok({}, 503))
+      .mockResolvedValueOnce(ok({ sources: [] }))
+      .mockResolvedValueOnce(ok({ limit: null, count: 1, subscriptions: [selectedSubscription] }))
+      .mockResolvedValueOnce(ok({ sources: [selectedSource] }));
+
+    const onClose = jest.fn();
+    const screen = render(<MemoryFriendPickModal visible onClose={onClose} />);
+
+    await waitFor(() => expect(screen.getByText("Couldn't load friends")).toBeTruthy());
+    expect(screen.queryByText('No shared places yet.')).toBeNull();
+    expect(useMemorySubscriptionsStore.getState().subscriptions).toEqual([selectedSubscription]);
+
+    fireEvent.press(screen.getByTestId('memory-friend-list-retry'));
+
+    await waitFor(() => expect(screen.getByTestId('memory-friend-row-11')).toBeTruthy());
+    expect(screen.queryByText("Couldn't load friends")).toBeNull();
+    expect(screen.getByTestId('memory-friend-pick-modal')).toBeTruthy();
+    expect(screen.getByTestId('memory-friend-row-11').props.accessibilityState).toMatchObject({ checked: true });
+    expect(useMemorySubscriptionsStore.getState().subscriptions).toEqual([selectedSubscription]);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

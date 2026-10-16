@@ -40,6 +40,7 @@ const selected = new Set();
 const requests = [];
 const runtimeErrors = [];
 let firstProjectionPending = false;
+let friendSourceFailuresRemaining = 0;
 
 const browser = await chromium.launch({
   headless: true,
@@ -175,14 +176,20 @@ await page.route('**/api/**', async route => {
     selected.delete(pathname.split('/').at(-1));
     return json({ message: 'Unsubscribed' });
   }
-  if (pathname === '/api/friend-sharing/sources') return json({ sources: [
-    ...ownerIds.map((id, index) => ({
-      friend_id: id, friend_name: index === 0 ? 'Mia Rangi' : 'Theo Walker', selected: selected.has(id),
-      authorization_version: Number(ownerById.get(id).projection.authorization_version),
-      effective_at: nowIso, sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
-    })),
-    { friend_id: '6', friend_name: 'Unshared Friend', selected: false, authorization_version: 0, effective_at: null, sharing_status: 'not_shared', coverage_scope: null },
-  ] });
+  if (pathname === '/api/friend-sharing/sources') {
+    if (friendSourceFailuresRemaining > 0) {
+      friendSourceFailuresRemaining -= 1;
+      return json({ error: 'QA initial list failure' }, 503);
+    }
+    return json({ sources: [
+      ...ownerIds.map((id, index) => ({
+        friend_id: id, friend_name: index === 0 ? 'Mia Rangi' : 'Theo Walker', selected: selected.has(id),
+        authorization_version: Number(ownerById.get(id).projection.authorization_version),
+        effective_at: nowIso, sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+      })),
+      { friend_id: '6', friend_name: 'Unshared Friend', selected: false, authorization_version: 0, effective_at: null, sharing_status: 'not_shared', coverage_scope: null },
+    ] });
+  }
   if (pathname === '/api/friend-sharing/projections' && method === 'POST') {
     const ids = (Array.isArray(body.friend_ids) ? body.friend_ids : []).map(String);
     if (ids.includes(ownerIds[0])) {
@@ -358,8 +365,21 @@ await page.evaluate(() => {
 });
 await waitForMap();
 await page.getByTestId('memory-finding-location').waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+friendSourceFailuresRemaining = 1;
+await page.evaluate(() => {
+  globalThis.__cairnStores.useMemorySubscriptionsStore.setState({
+    availableSources: [], loading: false, error: null,
+  });
+});
 await page.getByTestId('memory-scope-combined').click();
 await page.getByTestId('memory-friend-pick-modal').waitFor({ state: 'visible' });
+await page.getByTestId('memory-friend-list-error').waitFor({ state: 'visible', timeout: 10_000 });
+const initialListFailureVisible = await page.getByText("Couldn't load friends", { exact: true }).isVisible();
+await settle(450);
+captures.push(await capture('memory-picker-initial-list-error'));
+await page.getByTestId('memory-friend-list-retry').click();
+await page.getByTestId(`memory-friend-row-${ownerIds[0]}`).waitFor({ state: 'visible', timeout: 10_000 });
+const pickerStayedOpenAfterListRetry = await page.getByTestId('memory-friend-pick-modal').isVisible();
 const centerBeforeSelection = await page.evaluate(() => {
   const center = globalThis.__cairnMap.getCenter();
   return [center.lng, center.lat];
@@ -443,6 +463,8 @@ const assertions = {
   acceptedLandedOnFriendsWithNew: acceptedLandedOnFriends,
   declinedDismissedWithoutModal,
   friendProfileIsActionOnly,
+  initialListFailureVisible,
+  pickerStayedOpenAfterListRetry,
   pickerStayedOpenForTwoSelections: pickerStillOpen,
   perFriendLoadingVisible,
   loadedPickerHidesTechnicalCounts: !/\d+ delayed areas? loaded/i.test(loadedPickerText)

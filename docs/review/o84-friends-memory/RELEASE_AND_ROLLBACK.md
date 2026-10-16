@@ -9,6 +9,22 @@
 - Channel: `production`.
 - No native/config/dependency change requiring an EAS Build.
 
+## EAS pre-OTA read-only verification
+
+- The active `production` channel (`019e4879-5e08-7d10-a62e-264b6561c491`)
+  maps unconditionally to the `production` update branch. Its current iOS
+  update is O82, group `59588309-8fc6-4dbd-a965-7c1c7e751019`, runtime
+  `0.2.6-o66`; O84 has not been published.
+- EAS Build `ad38c7b4-abe0-4378-ab5a-4e43a1962cc5` is the finished Store iOS
+  Build 65, app version `0.2.6`, production profile. Its source config selects
+  the `production` channel and runtime `0.2.6-o66`, so an iOS-only O84 update
+  on that channel/runtime is compatible with Build 65. It will not target
+  binaries on another channel or runtime.
+- The production profile values are API `https://api.yiiling.cn`, Playwright
+  bypass `false`, and Activity simulator `false`. No project-level EAS
+  Production variable with those three names currently overrides them, so the
+  human command below supplies all three explicitly as an additional guard.
+
 ## Current disposition
 
 **BACKEND DEPLOYED; OTA NOT PUBLISHED.** Production is running backend-only

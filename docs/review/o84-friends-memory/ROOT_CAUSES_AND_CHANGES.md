@@ -41,6 +41,12 @@ content remains available through its existing authorized surfaces. Dismissing
 a declined historical attempt is now one row-local action, while cancelling a
 pending invitation retains its separate confirmation.
 
+The final pre-OTA correction also gives the picker's initial source-list read
+its own failure state. A failed subscriptions/sources load no longer falls
+through to the successful-empty copy: it shows `Couldn't load friends` and
+retries the existing account-fenced `load()` in place. Existing selections are
+not cleared, and the separate per-friend projection states are unchanged.
+
 ## Friend Fog
 
 O83 coupled the visible result to close-time picker behavior and fetched all
