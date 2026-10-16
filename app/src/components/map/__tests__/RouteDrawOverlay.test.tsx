@@ -120,4 +120,28 @@ describe('RouteDrawOverlay native gesture handoff', () => {
     await waitFor(() => expect(onCancel).toHaveBeenCalledWith('gesture-interrupted'));
     expect(onStroke).not.toHaveBeenCalled();
   });
+
+  test('cancels the whole stroke when an interior map projection is missing', async () => {
+    const onStroke = jest.fn();
+    const onCancel = jest.fn();
+    let projection = 0;
+    const mapViewRef = { current: {
+      getCoordinateFromView: jest.fn(async ([x, y]: [number, number]) => {
+        projection += 1;
+        return projection === 2 ? null : [174 + x / 1000, -41 + y / 1000];
+      }),
+    } } as any;
+    render(<RouteDrawOverlay active mapViewRef={mapViewRef} onStroke={onStroke} onCancel={onCancel} />);
+
+    await act(async () => {
+      mockPanCallbacks.onBegin({ absoluteX: 10, absoluteY: 20 });
+      mockPanCallbacks.onUpdate({ absoluteX: 20, absoluteY: 30 });
+      mockPanCallbacks.onEnd({ absoluteX: 30, absoluteY: 40 });
+      mockPanCallbacks.onFinalize({}, true);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(onCancel).toHaveBeenCalledWith('coordinate-unavailable'));
+    expect(onStroke).not.toHaveBeenCalled();
+  });
 });

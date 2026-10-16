@@ -127,7 +127,13 @@ interface MemoryState {
    * getCurrentPositionAsync that conflicts with ForegroundUnlockManager's
    * BestForNavigation watcher on iOS.
    */
-  lastWatcherFix: { lat: number; lng: number; ts: number } | null;
+  lastWatcherFix: {
+    lat: number;
+    lng: number;
+    ts: number;
+    accuracyM: number | null;
+    provenance: 'real' | 'simulator_test';
+  } | null;
   /**
    * M9 fix: incrementally-maintained count of unsynced points. Lets the
    * memorySync subscribe avoid O(N) scans of points on every state
@@ -201,7 +207,14 @@ interface MemoryState {
 
   /** R4: any GPS watcher caches its latest fix here so MemoryScreen
    *  can use it without competing for a fresh fix. */
-  setLastWatcherFix: (lat: number, lng: number, ts: number) => void;
+  setLastWatcherFix: (
+    lat: number,
+    lng: number,
+    ts: number,
+    accuracyM?: number | null,
+    provenance?: 'real' | 'simulator_test',
+    ownerUserId?: string,
+  ) => void;
 }
 
 const CULL_THRESHOLD_M = UnlockConfig.radiusMeters * 0.5;
@@ -744,8 +757,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     });
   },
 
-  setLastWatcherFix: (lat, lng, ts) => {
+  setLastWatcherFix: (lat, lng, ts, accuracyM, provenance = 'real', ownerUserId) => {
     if (!isFinite(lat) || !isFinite(lng)) return;
+    const normalizedAccuracy = Number.isFinite(accuracyM) && Number(accuracyM) > 0
+      ? Number(accuracyM) : null;
     const cur = get().lastWatcherFix;
     if (cur) {
       const dt = ts - cur.ts;
@@ -759,9 +774,17 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         if (dM2 < 25 /* 5m squared */) return;
       }
     }
-    set({ lastWatcherFix: { lat, lng, ts } });
-    // v326: persist to AsyncStorage. Fire-and-forget; failure non-fatal.
-    persistLastFix({ lat, lng, ts });
+    set({ lastWatcherFix: { lat, lng, ts, accuracyM: normalizedAccuracy, provenance } });
+    if (provenance === 'real') {
+      let owner = String(ownerUserId ?? '');
+      if (!owner) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          owner = String(require('../../../store/useAppStore').useAppStore.getState().user?.id ?? '');
+        } catch { owner = ''; }
+      }
+      if (owner) persistLastFix(owner, { lat, lng, ts, accuracyM: normalizedAccuracy });
+    }
   },
 
   /**

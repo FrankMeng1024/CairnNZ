@@ -5,6 +5,7 @@ import { useAppStore } from '../../../store/useAppStore';
 import { storage } from '../../../store/storage';
 
 const CACHE_PREFIX = 'cairn:public-cairns:v1:';
+const ANONYMOUS_PUBLIC_AUTHOR = { id: 'anonymous', name: 'Anonymous explorer' } as const;
 
 export interface PublicCairnSummary {
   id: string;
@@ -83,7 +84,7 @@ interface PublicCairnState {
   present: (resourceId: string) => Promise<void>;
   thanks: (resourceId: string) => Promise<PublicActionResult>;
   hide: (resourceId: string) => Promise<PublicActionResult>;
-  blockAuthor: (authorId: string) => Promise<PublicActionResult>;
+  blockAuthor: (resourceId: string) => Promise<PublicActionResult>;
   allowAuthorAfterUnblock: (authorId: string) => Promise<void>;
   report: (resourceId: string, category: 'spam' | 'unsafe' | 'harassment' | 'other', detail?: string) => Promise<PublicActionResult>;
   verifyCompletedActivity: (sourceActivityClientId: string) => Promise<boolean>;
@@ -170,12 +171,35 @@ async function loadSnapshot(viewerId: string): Promise<CacheSnapshot> {
       const parsed = raw ? JSON.parse(raw) : null;
       if (parsed?.version === 1 && parsed.viewerId === viewerId
         && parsed.entries && parsed.details && parsed.pendingActions) {
+        const entries = Object.fromEntries(Object.entries(parsed.entries).map(([id, item]) => [
+          id,
+          { ...(item as PublicCairnSummary), author: { ...ANONYMOUS_PUBLIC_AUTHOR } },
+        ]));
+        const details = Object.fromEntries(Object.entries(parsed.details).map(([id, item]) => [
+          id,
+          { ...(item as PublicCairnDetail), author: { ...ANONYMOUS_PUBLIC_AUTHOR } },
+        ]));
+        // O84 stored real Public author identities. They are no longer part of
+        // the client contract. Keep an id only while an already-queued legacy
+        // Block still needs it to reach the old authenticated endpoint.
+        const pendingLegacyBlockAuthors = new Set<string>(Object.values(parsed.pendingActions)
+          .filter((action: any) => action?.kind === 'block' && !action.resourceId && action.authorId)
+          .map((action: any) => String(action.authorId)));
         snapshot = {
           ...parsed,
+          entries,
+          details,
           pilotEnabled: parsed.pilotEnabled === true,
           hiddenIds: Array.isArray(parsed.hiddenIds) ? parsed.hiddenIds : [],
-          blockedAuthorIds: Array.isArray(parsed.blockedAuthorIds) ? parsed.blockedAuthorIds : [],
+          blockedAuthorIds: Array.isArray(parsed.blockedAuthorIds)
+            ? parsed.blockedAuthorIds.map(String).filter((id: string) => pendingLegacyBlockAuthors.has(id))
+            : [],
         };
+        // Rewrite before publication so an offline cold start cannot leave
+        // the retired identity-bearing envelope on disk.
+        if (viewerIsAuthoritative(viewerId)) {
+          await storage.setItem(cacheKey(viewerId), JSON.stringify(snapshot), { strict: true });
+        }
       }
     } catch { /* malformed cache fails closed */ }
     snapshots.set(viewerId, snapshot);
@@ -201,7 +225,9 @@ async function persist(viewerId: string, expectedGeneration: number): Promise<vo
 function normalizeSummary(raw: any): PublicCairnSummary {
   return {
     id: String(raw.id),
-    author: { id: String(raw.author?.id), name: String(raw.author?.name || '') },
+    // Public discovery is intentionally anonymous even if a mixed-version
+    // backend accidentally returns the retired identity fields.
+    author: { ...ANONYMOUS_PUBLIC_AUTHOR },
     type: String(raw.type || 'cairn'),
     lat: Number(raw.lat), lng: Number(raw.lng), approximate: Boolean(raw.approximate),
     createdAt: Date.parse(raw.created_at), encounteredAt: Date.parse(raw.encountered_at), readOnly: true,
@@ -280,8 +306,15 @@ async function sendPendingAction(
   action: PendingAction,
   generation: number,
 ): Promise<PublicActionResult> {
+  // O84 clients could already have an offline block queued with only the
+  // real author id. Drain that durable safety intent through the legacy
+  // authenticated endpoint; new anonymous Public envelopes always use the
+  // resource-scoped endpoint and never receive an author id.
+  const legacyAuthorBlock = action.kind === 'block' && !action.resourceId && Boolean(action.authorId);
   const path = action.kind === 'block'
-    ? `/api/friends/${encodeURIComponent(action.authorId)}/block`
+    ? legacyAuthorBlock
+      ? `/api/friends/${encodeURIComponent(action.authorId)}/block`
+      : `/api/public-cairns/cairns/${encodeURIComponent(action.resourceId)}/block-author`
     : action.kind === 'encounter'
       ? '/api/public-cairns/encounters/verify'
       : `/api/public-cairns/cairns/${encodeURIComponent(action.resourceId)}/${action.kind}`;
@@ -308,6 +341,20 @@ async function sendPendingAction(
       }
       return QUEUED_RETRY;
     }
+    if (legacyAuthorBlock) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useFriendMemoryStore } = require('../../memory/store/useFriendMemoryStore');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { purgeFriendContent } = require('../../friends/services/friendContent');
+        await Promise.all([
+          useFriendMemoryStore.getState().purgeFriend(action.authorId, snapshot.viewerId),
+          purgeFriendContent(action.authorId, snapshot.viewerId),
+        ]);
+      } catch { /* a cold namespace will be reconciled on its next load */ }
+      if (!accountIsCurrent(snapshot.viewerId, generation)) return SUPERSEDED;
+      snapshot.blockedAuthorIds = snapshot.blockedAuthorIds.filter(id => id !== action.authorId);
+    }
     delete snapshot.pendingActions[action.id];
     await persist(snapshot.viewerId, generation);
     // Persistence is an await boundary: another account may become
@@ -320,37 +367,6 @@ async function sendPendingAction(
     }
     return QUEUED_OFFLINE;
   }
-}
-
-async function purgeBlockedAuthorNamespaces(
-  authorId: string,
-  account: { viewerId: string; generation: number },
-): Promise<void> {
-  const accountStillCurrent = () => accountIsCurrent(account.viewerId, account.generation);
-  if (!accountStillCurrent()) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useFriendMemoryStore } = require('../../memory/store/useFriendMemoryStore');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { purgeFriendContent } = require('../../friends/services/friendContent');
-    await Promise.all([
-      useFriendMemoryStore.getState().purgeFriend(authorId, account.viewerId),
-      purgeFriendContent(authorId, account.viewerId),
-    ]);
-  } catch { /* namespace may not be hydrated */ }
-  if (!accountStillCurrent()) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useFriendStore } = require('../../../store/useFriendStore');
-    useFriendStore.setState((state: any) => ({
-      friends: state.friends.filter((friend: any) => String(friend.id) !== authorId),
-    }));
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useMarkerStore } = require('../../../store/useMarkerStore');
-    useMarkerStore.setState((state: any) => ({
-      circleMarkers: state.circleMarkers.filter((marker: any) => String(marker.userId) !== authorId),
-    }));
-  } catch { /* shared presentation stores may not be hydrated */ }
 }
 
 async function drainPending(snapshot: CacheSnapshot, generation: number): Promise<void> {
@@ -593,28 +609,52 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
     return sendPendingAction(snapshot, action, generation);
   },
 
-  blockAuthor: async authorId => {
+  blockAuthor: async resourceId => {
     const viewerId = get().viewerId;
     if (!viewerId) return SUPERSEDED;
     const generation = bindAccount(viewerId);
     if (generation === null) return SUPERSEDED;
     const snapshot = await loadSnapshot(viewerId);
     if (!accountIsCurrent(viewerId, generation)) return SUPERSEDED;
-    if (!snapshot.blockedAuthorIds.includes(authorId)) snapshot.blockedAuthorIds.push(authorId);
-    const ids = Object.values(snapshot.entries).filter(item => item.author.id === authorId).map(item => item.id);
-    for (const id of ids) {
-      if (!snapshot.hiddenIds.includes(id)) snapshot.hiddenIds.push(id);
-      resourceFences.set(resourceKey(viewerId, id), ++requestSequence);
-      delete snapshot.entries[id];
-      delete snapshot.details[id];
-    }
-    const action: PendingAction = { id: `block:${authorId}`, kind: 'block', resourceId: '', authorId, requestedAt: Date.now() };
+    if (!snapshot.entries[resourceId]) return UNAVAILABLE;
+    // The Public envelope is anonymous, so only the selected resource can be
+    // removed optimistically. Fence every older scene response as a unit;
+    // after acknowledgement a fresh authoritative scene removes any other
+    // Cairns by the blocked author while preserving unrelated explorers.
+    if (!snapshot.hiddenIds.includes(resourceId)) snapshot.hiddenIds.push(resourceId);
+    resourceFences.set(resourceKey(viewerId, '*'), ++requestSequence);
+    resourceFences.set(resourceKey(viewerId, resourceId), ++requestSequence);
+    delete snapshot.entries[resourceId];
+    delete snapshot.details[resourceId];
+    const action: PendingAction = { id: `block:${resourceId}`, kind: 'block', resourceId, authorId: '', requestedAt: Date.now() };
     await queueAction(snapshot, action, generation);
     if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
     publishState(viewerId, snapshot);
-    await purgeBlockedAuthorNamespaces(authorId, { viewerId, generation });
-    if (!accountIsCurrent(viewerId, generation) || get().viewerId !== viewerId) return SUPERSEDED;
-    return sendPendingAction(snapshot, action, generation);
+    const result = await sendPendingAction(snapshot, action, generation);
+    if (result.status === 'confirmed' && accountIsCurrent(viewerId, generation) && get().viewerId === viewerId) {
+      try {
+        // Reload every affected authority boundary without ever learning the
+        // anonymous author's account id on the client.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useFriendStore } = require('../../../store/useFriendStore');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useMemorySubscriptionsStore } = require('../../memory/store/useMemorySubscriptionsStore');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useFriendMemoryStore } = require('../../memory/store/useFriendMemoryStore');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useMarkerStore } = require('../../../store/useMarkerStore');
+        await Promise.all([
+          useFriendStore.getState().loadFriendsFromBackend(),
+          useMemorySubscriptionsStore.getState().load(),
+          useMarkerStore.getState().loadCircleMarkers(),
+        ]);
+        await useFriendMemoryStore.getState().loadSelectedProjections();
+        if (accountIsCurrent(viewerId, generation) && get().viewerId === viewerId) {
+          await get().refreshScene();
+        }
+      } catch { /* next screen focus repeats every authoritative read */ }
+    }
+    return result;
   },
 
   allowAuthorAfterUnblock: async authorId => {

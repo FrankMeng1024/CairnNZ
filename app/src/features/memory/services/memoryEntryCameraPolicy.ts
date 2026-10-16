@@ -19,7 +19,7 @@ export function resolveMemoryInitialMapCenter(input: {
   cachedMemoryCenter?: MemoryCameraPoint | null;
 }): MemoryCameraPoint | null {
   if (input.authority === 'current' && input.current && valid(input.current)) return { ...input.current };
-  if (input.authority === 'manual-fallback' && input.manualCenter) {
+  if ((input.authority === 'manual-fallback' || input.authority === 'preserve-manual-browse') && input.manualCenter) {
     const point = { lat: input.manualCenter[1], lng: input.manualCenter[0] };
     return valid(point) ? point : null;
   }
@@ -28,10 +28,6 @@ export function resolveMemoryInitialMapCenter(input: {
   // caller must keep the puck hidden and must not describe this as current.
   if (input.cachedMemoryCenter && valid(input.cachedMemoryCenter)) {
     return { ...input.cachedMemoryCenter };
-  }
-  if (input.manualCenter) {
-    const point = { lat: input.manualCenter[1], lng: input.manualCenter[0] };
-    return valid(point) ? point : null;
   }
   return null;
 }

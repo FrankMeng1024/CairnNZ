@@ -148,6 +148,8 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(sampler).toContain('readTrustedSimulatorLocation()');
     expect(sampler).toContain("return makeFailure('no-readings')");
     expect(sampler).toContain('decideFromReadings(readings)');
+    expect(sampler).toContain("provenance: 'simulator_test'");
+    expect(sampler).toContain('observedAtMs: fix.timestamp');
     expect(sampler).toContain("locationSource: 'last-canonically-accepted-simulator'");
     expect(provider).toContain('tracking.lastCoordinate');
     expect(provider).toContain('tracking.lastCoordinateTime');

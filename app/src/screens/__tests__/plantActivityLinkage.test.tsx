@@ -285,6 +285,44 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     act(() => { mockContentSubmit!(payload); });
     await waitFor(() => expect(mockAddMarker).toHaveBeenCalledTimes(2));
     expect(mockDraftSet.mock.calls[0][0]).toContain('owner-a');
+    const persisted = JSON.parse(mockDraftSet.mock.calls[0][1]);
+    expect(persisted).toMatchObject({ title: 'Retry', text: 'Preserve this', visibility: 'personal' });
+    expect(persisted).not.toHaveProperty('lat');
+    expect(persisted).not.toHaveProperty('gpsLat');
+    expect(persisted).not.toHaveProperty('accuracyM');
+  });
+
+  test('restores failed words without replacing the current Activity location', async () => {
+    mockDraftGet.mockResolvedValueOnce(JSON.stringify({
+      title: 'Old-place words', text: 'Keep only this copy', type: 'cairn',
+      visibility: 'personal', lat: -45, lng: 170, gpsLat: -45, gpsLng: 170,
+      accuracyM: 5, locationProvenance: 'real',
+    }));
+    render(<PlantScreen />);
+    await waitFor(() => expect(mockDraftGet).toHaveBeenCalled());
+    act(() => { mockContentSubmit!({
+      type: 'cairn', title: 'Old-place words', text: 'Keep only this copy',
+      voiceUri: null, voiceMs: null, visibility: 'personal',
+    }); });
+    await waitFor(() => expect(mockAddMarker).toHaveBeenCalledTimes(1));
+    expect(mockAddMarker.mock.calls[0][0]).toMatchObject({
+      lat: -41.2865,
+      lng: 174.7762,
+    });
+    expect(mockAddMarker.mock.calls[0][0].activityContext).toMatchObject({ clientActivityId: activityId });
+  });
+
+  test('a standalone failed draft never bypasses a fresh GPS lock', async () => {
+    mockRouteParams = { origin: { kind: 'standalone' } };
+    mockTrackingState = { ...mockTrackingState, status: 'idle' };
+    mockDraftGet.mockResolvedValueOnce(JSON.stringify({
+      title: 'Saved words', text: '', type: 'cairn', visibility: 'personal',
+      lat: -45, lng: 170, gpsLat: -45, gpsLng: 170, accuracyM: 5,
+    }));
+    render(<PlantScreen />);
+    await waitFor(() => expect(mockDraftGet).toHaveBeenCalled());
+    expect(mockContentSubmit).toBeNull();
+    expect(mockAddMarker).not.toHaveBeenCalled();
   });
 
   test('suppresses stale failure feedback when A becomes B while the retry draft write awaits', async () => {

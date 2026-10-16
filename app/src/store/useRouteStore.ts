@@ -775,6 +775,12 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     };
     const payload: OfflineRouteCreatePayload = { userId: ownerId, route: routeSnapshot, sourceActivity };
     const saved = await offlineRoutes.saveLocal(payload, ownerId);
+    // saveLocal is intentionally durable across logout/account switches so
+    // Account A can resume its outbox later. That durability must not publish
+    // A's Route into whichever account owns the process after this await.
+    if (currentUserId() !== ownerId || get().routeOwnerId !== ownerId) {
+      throw new Error('route_owner_changed_after_save');
+    }
     const route: Route = {
       ...routeSnapshot,
       id: saved.localId,

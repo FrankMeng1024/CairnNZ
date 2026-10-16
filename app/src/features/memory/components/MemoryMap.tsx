@@ -37,6 +37,8 @@ import { mapOrnamentsAbove } from '../../../config/mapOrnaments';
 import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
 import { useAppStore } from '../../../store/useAppStore';
 import { AcquiredCairnClusterLayer } from './AcquiredCairnClusterLayer';
+import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
+import { excludeAcquiredFriendMarkers } from '../services/cairnMapPresentation';
 
 let memoryMapHasRendered = false;
 const MEMORY_MAP_ORNAMENTS = mapOrnamentsAbove(76);
@@ -135,16 +137,25 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     [qaWorkspaceActive, storedOwnMarkers],
   );
   const friendMarkers = useMarkerStore((s) => s.circleMarkers);
+  const acquiredMarkers = useCairnPresentationStore((s) => s.acquiredMarkers);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
   const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const allMarkers = useMemo(() => {
     if (memoryScope === 'self') return ownMarkers;
+    // Acquired Friend Cairns have one authoritative map presentation in
+    // AcquiredCairnClusterLayer. /api/circle/markers carries the same
+    // immutable acquisition revisions for legacy consumers, so omit those
+    // stable ids here instead of rendering two overlapping features with
+    // different press/archive semantics.
     const visibleFriends = memoryScope === 'friend'
       ? friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId))
       : friendMarkers;
     const seen = new Set(ownMarkers.map(marker => String(marker.id)));
-    return [...ownMarkers, ...visibleFriends.filter(marker => !seen.has(String(marker.id)))];
-  }, [friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
+    return [...ownMarkers, ...excludeAcquiredFriendMarkers(
+      visibleFriends.filter(marker => !seen.has(String(marker.id))),
+      acquiredMarkers,
+    )];
+  }, [acquiredMarkers, friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
   const mapViewRef = useRef<any>(null);
 
   // v447: expose getCurrentCenter so parent can pull the true current

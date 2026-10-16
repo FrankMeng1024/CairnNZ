@@ -3,6 +3,11 @@ import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
 
 const mockRenderedSources = new Map<string, any>();
+const mockAuthenticatedFetch = jest.fn();
+
+jest.mock('../../../services/apiService', () => ({
+  authenticatedFetch: (...args: any[]) => mockAuthenticatedFetch(...args),
+}));
 
 jest.mock('../services/mapboxAdapter', () => ({
   getMapbox: () => {
@@ -46,6 +51,7 @@ import { FogLayer } from '../components/FogLayer';
 import { useFriendMemoryStore, type FriendProjection } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 
 function polygonCount(shape: any): number {
   if (!shape?.geometry) return 0;
@@ -110,16 +116,38 @@ describe('O84 isolated real API Friend Fog render boundary', () => {
         revision: state.localHydration.revision + 1,
       },
     }));
-    useFriendMemoryStore.setState(state => ({
-      userId: viewerId,
-      projections,
-      sourceStates: Object.fromEntries(friendIds.map(id => [id, {
-        status: 'loaded',
-        cellCount: projections[id].cells.length,
-      }])),
-      version: state.version + 1,
-      lastObservedWallClockMs: now,
-    }));
+    useMemorySubscriptionsStore.setState({
+      subscriptions: friendIds.map(id => ({ friend_id: Number(id), friend_name: `Friend ${id}` })),
+      availableSources: friendIds.map(id => ({
+        friend_id: id,
+        friend_name: `Friend ${id}`,
+        selected: true,
+        authorization_version: projections[id].authorizationVersion,
+        effective_at: new Date(now - 60_000).toISOString(),
+        sharing_status: 'shared' as const,
+        coverage_scope: 'full_history_delayed_v1' as const,
+      })),
+      loading: false,
+      error: null,
+    });
+    mockAuthenticatedFetch.mockImplementation(async (_url: string, options: any) => {
+      const requestedId = String(JSON.parse(options.body).friend_ids[0]);
+      const original = fixture.owners.find((owner: any) => String(owner.projection.source_friend_id) === requestedId)?.projection;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          projections: [{
+            ...original,
+            server_authorized_at: new Date(now - 60_000).toISOString(),
+            authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+          }],
+          revoked_friend_ids: [],
+        }),
+      };
+    });
+    useFriendMemoryStore.getState().reset();
+    await useFriendMemoryStore.getState().loadSelectedProjections(friendIds);
 
     const ready = jest.fn();
     render(<FogLayer onFogReady={ready} />);
@@ -147,6 +175,7 @@ describe('O84 isolated real API Friend Fog render boundary', () => {
 
     await act(async () => {
       useFriendMemoryStore.getState().reset();
+      useMemorySubscriptionsStore.getState().reset();
       useMemoryScopeStore.setState({ scope: 'self', selectedFriendId: null });
     });
   });

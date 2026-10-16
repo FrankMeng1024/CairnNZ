@@ -1,6 +1,7 @@
 import { resolveMapboxPublicToken } from '../../config/mapbox';
 
 export type WalkingPlanPoint = { lat: number; lng: number };
+export const WALKING_PLAN_TIMEOUT_MS = 10_000;
 
 export class WalkingPlanError extends Error {
   constructor(public readonly code: 'NO_TOKEN' | 'NO_ROUTE' | 'NETWORK' | 'INVALID_RESPONSE') {
@@ -26,11 +27,19 @@ export async function planWalkingRoute(
   // lets walking paths/trails participate without allowing a remote road
   // waypoint to masquerade as the selected neighborhood.
   const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${coords}?alternatives=false&geometries=geojson&overview=full&steps=false&radiuses=25%3B25&access_token=${encodeURIComponent(token)}`;
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', abortFromCaller, { once: true });
+  const timeout = setTimeout(() => controller.abort(), WALKING_PLAN_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(url, { method: 'GET', signal });
+    response = await fetch(url, { method: 'GET', signal: controller.signal });
   } catch {
     throw new WalkingPlanError('NETWORK');
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortFromCaller);
   }
   if (!response.ok) throw new WalkingPlanError(response.status === 404 ? 'NO_ROUTE' : 'NETWORK');
   const payload = await response.json().catch(() => null) as any;

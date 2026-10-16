@@ -8,7 +8,10 @@ const mockCameraSet = jest.fn();
 const mockCameraFit = jest.fn();
 const mockGetPointInView = jest.fn(async () => [195, 300]);
 const mockNavReplace = jest.fn();
-const mockNavGoBack = jest.fn();
+let mockBeforeRemove: ((event: any) => void) | null = null;
+const mockNavGoBack = jest.fn(() => {
+  mockBeforeRemove?.({ preventDefault: jest.fn(), data: { action: { type: 'GO_BACK' } } });
+});
 const mockAbandonDraft = jest.fn(async (_ownerId: string, _draftId: string) => undefined);
 const mockResolveDraw = jest.fn();
 const mockResolvePoint = jest.fn();
@@ -48,7 +51,15 @@ let mockLoadedDraft: any = mockDraft;
 let mockRecoveredPast: any[] = [];
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ goBack: mockNavGoBack, replace: mockNavReplace, navigate: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
+  useNavigation: () => ({
+    goBack: mockNavGoBack,
+    replace: mockNavReplace,
+    navigate: jest.fn(),
+    addListener: jest.fn((name: string, listener: (event: any) => void) => {
+      if (name === 'beforeRemove') mockBeforeRemove = listener;
+      return () => { if (mockBeforeRemove === listener) mockBeforeRemove = null; };
+    }),
+  }),
   useRoute: () => ({ params: mockScreenParams }),
 }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
@@ -204,6 +215,7 @@ import { OrderedRouteEditorScreen } from '../OrderedRouteEditorScreen';
 describe('OrderedRouteEditorScreen closure UI', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockBeforeRemove = null;
     mockRecoveredPending = null;
     mockRecoveredDraftEnabled = true;
     mockScreenParams = { routeId: 'route-screen' };
@@ -433,6 +445,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.press(first.getByTestId('route-trim-apply'));
     expect(first.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
     fireEvent.press(first.getByLabelText('Back'));
+    expect(first.getByTestId('route-editor-leave-confirm')).toBeTruthy();
+    fireEvent.press(first.getByText('Discard changes'));
     expect(mockAbandonDraft).toHaveBeenCalledWith('owner-a', 'activity:activity-good:create-a');
     first.unmount();
 

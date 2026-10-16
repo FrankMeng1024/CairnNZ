@@ -22,6 +22,7 @@ import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { DismissButton } from '../../../components/DismissButton';
 
 interface Props {
   visible: boolean;
@@ -161,9 +162,7 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
                 Choose one or more shared exploration areas
               </Text>
             </View>
-            <TouchableOpacity onPress={dismiss} testID="memory-friend-pick-close" style={styles.close}>
-              <Icon name="X" size={18} color={theme.iconInactive} strokeWidth={2.2} />
-            </TouchableOpacity>
+            <DismissButton onPress={dismiss} label="Close friend selection" testID="memory-friend-pick-close" />
           </View>
 
           {loading && sources.length === 0 ? (
@@ -295,7 +294,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: FontSize.h2, fontWeight: '700', color: Colors.textPrimary },
   subtitle: { fontSize: FontSize.caption, color: Colors.textSecondary, marginTop: 2 },
-  close: { padding: Spacing.xs },
   loadingBox: { paddingVertical: Spacing.xl, alignItems: 'center' },
   emptyHint: { textAlign: 'center', color: Colors.textMuted, paddingVertical: Spacing.xl },
   listError: { alignItems: 'center', paddingBottom: Spacing.lg },

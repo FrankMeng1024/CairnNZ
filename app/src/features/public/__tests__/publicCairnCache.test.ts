@@ -1,6 +1,10 @@
 const mockValues = new Map<string, string>();
 const mockPurgeFriend = jest.fn(async () => undefined);
 const mockPurgeFriendContent = jest.fn(async () => undefined);
+const mockLoadFriendProjections = jest.fn(async () => undefined);
+const mockLoadMemorySources = jest.fn(async () => undefined);
+const mockLoadFriends = jest.fn(async () => undefined);
+const mockLoadCircleMarkers = jest.fn(async () => undefined);
 const mockFriendSetState = jest.fn();
 const mockMarkerSetState = jest.fn();
 let mockAuthenticatedOwnerId: string | null = 'viewer-a';
@@ -22,11 +26,18 @@ jest.mock('../../../store/useAppStore', () => ({
   },
 }));
 jest.mock('../../memory/store/useFriendMemoryStore', () => ({
-  useFriendMemoryStore: { getState: () => ({ purgeFriend: mockPurgeFriend }) },
+  useFriendMemoryStore: { getState: () => ({ purgeFriend: mockPurgeFriend, loadSelectedProjections: mockLoadFriendProjections }) },
+}));
+jest.mock('../../memory/store/useMemorySubscriptionsStore', () => ({
+  useMemorySubscriptionsStore: { getState: () => ({ load: mockLoadMemorySources }) },
 }));
 jest.mock('../../friends/services/friendContent', () => ({ purgeFriendContent: mockPurgeFriendContent }));
-jest.mock('../../../store/useFriendStore', () => ({ useFriendStore: { setState: mockFriendSetState } }));
-jest.mock('../../../store/useMarkerStore', () => ({ useMarkerStore: { setState: mockMarkerSetState } }));
+jest.mock('../../../store/useFriendStore', () => ({
+  useFriendStore: { setState: mockFriendSetState, getState: () => ({ loadFriendsFromBackend: mockLoadFriends }) },
+}));
+jest.mock('../../../store/useMarkerStore', () => ({
+  useMarkerStore: { setState: mockMarkerSetState, getState: () => ({ loadCircleMarkers: mockLoadCircleMarkers }) },
+}));
 
 import {
   __publicCairnTest,
@@ -108,6 +119,10 @@ describe('Public Cairn shared list/detail authority', () => {
     mockFetch.mockReset();
     mockPurgeFriend.mockClear();
     mockPurgeFriendContent.mockClear();
+    mockLoadFriendProjections.mockClear();
+    mockLoadMemorySources.mockClear();
+    mockLoadFriends.mockClear();
+    mockLoadCircleMarkers.mockClear();
     mockFriendSetState.mockClear();
     mockMarkerSetState.mockClear();
     mockSetItem.mockReset();
@@ -123,7 +138,40 @@ describe('Public Cairn shared list/detail authority', () => {
     await initialize();
     expect(usePublicCairnStore.getState()).toMatchObject({ enabled: true, newlySurfacedId: '1' });
     expect(usePublicCairnStore.getState().entries).toHaveLength(1);
+    expect(usePublicCairnStore.getState().entries[0].author).toEqual({
+      id: 'anonymous', name: 'Anonymous explorer',
+    });
     expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`)).toContain('public:1:1:1');
+  });
+
+  test('an O84 identity-bearing Public cache is anonymized in memory and on disk before offline publication', async () => {
+    const legacySummary = {
+      id: '1', author: { id: '10', name: 'Aroha' }, type: 'cairn',
+      lat: -41.28, lng: 174.77, approximate: false,
+      createdAt: BASE - 60_000, encounteredAt: BASE - 10_000, readOnly: true,
+      resourceRevision: 'v1', authorizationRevision: 'public:1:1:1',
+      authorizationIssuedAt: BASE, authorizationExpiresAt: BASE + 86_400_000,
+    };
+    mockValues.set(`${__publicCairnTest.cachePrefix}viewer-a`, JSON.stringify({
+      version: 1, viewerId: 'viewer-a', pilotEnabled: true, wallClockHighWaterMs: BASE,
+      entries: { '1': legacySummary },
+      details: { '1': { ...legacySummary, text: 'private cache text', displayText: 'A moment here' } },
+      hiddenIds: [], blockedAuthorIds: ['10'], pendingActions: {},
+    }));
+    mockFetch.mockRejectedValueOnce(new Error('offline'));
+
+    await usePublicCairnStore.getState().initialize('viewer-a');
+
+    expect(usePublicCairnStore.getState().entries[0].author).toEqual({
+      id: 'anonymous', name: 'Anonymous explorer',
+    });
+    expect(usePublicCairnStore.getState().details['1'].author).toEqual({
+      id: 'anonymous', name: 'Anonymous explorer',
+    });
+    const persisted = mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '';
+    expect(persisted).not.toContain('Aroha');
+    expect(persisted).not.toContain('"id":"10"');
+    expect(JSON.parse(persisted).blockedAuthorIds).toEqual([]);
   });
 
   test('late scene cannot resurrect a resource after authoritative Detail denial', async () => {
@@ -372,8 +420,8 @@ describe('Public Cairn shared list/detail authority', () => {
       () => usePublicCairnStore.getState().thanks('1')],
     ['hide', 'hide:1', '/api/public-cairns/cairns/1/hide',
       () => usePublicCairnStore.getState().hide('1')],
-    ['block', 'block:10', '/api/friends/10/block',
-      () => usePublicCairnStore.getState().blockAuthor('10')],
+    ['block', 'block:1', '/api/public-cairns/cairns/1/block-author',
+      () => usePublicCairnStore.getState().blockAuthor('1')],
     ['report', 'report:1:', '/api/public-cairns/cairns/1/report',
       () => usePublicCairnStore.getState().report('1', 'other', 'account fence')],
     ['encounter', 'encounter:11111111-1111-4111-8111-111111111111',
@@ -435,7 +483,7 @@ describe('Public Cairn shared list/detail authority', () => {
     expect(usePublicCairnStore.getState()).toMatchObject({ viewerId: 'viewer-b', newlySurfacedId: '1' });
   });
 
-  test('Block is one durable author fence across Public, Friend content and Friend Memory', async () => {
+  test('an offline anonymous Block hides only its selected Cairn and preserves unrelated cached Cairns', async () => {
     await initialize([summary(), secondSummary()]);
     mockFetch.mockResolvedValueOnce(response(200, { cairn: detail() }));
     await usePublicCairnStore.getState().loadDetail('1');
@@ -445,34 +493,73 @@ describe('Public Cairn shared list/detail authority', () => {
     mockFetch.mockImplementation((path: string) => {
       if (path === '/api/public-cairns/scene') return new Promise(resolve => { releaseScene = resolve; });
       if (path.endsWith('/cairns/2')) return new Promise(resolve => { releaseDetail = resolve; });
-      if (path === '/api/friends/10/block') return Promise.reject(new Error('offline'));
+      if (path === '/api/public-cairns/cairns/1/block-author') return Promise.reject(new Error('offline'));
       throw new Error(`unexpected ${path}`);
     });
     const oldScene = usePublicCairnStore.getState().refreshScene();
     const oldDetail = usePublicCairnStore.getState().loadDetail('2').catch(error => error);
     while (!releaseScene || !releaseDetail) await Promise.resolve();
 
-    await expect(usePublicCairnStore.getState().blockAuthor('10')).resolves.toEqual({ status: 'queued_offline' });
-    expect(mockPurgeFriend).toHaveBeenCalledWith('10', 'viewer-a');
-    expect(mockPurgeFriendContent).toHaveBeenCalledWith('10', 'viewer-a');
-    expect(mockFriendSetState).toHaveBeenCalledTimes(1);
-    expect(mockMarkerSetState).toHaveBeenCalledTimes(1);
+    await expect(usePublicCairnStore.getState().blockAuthor('1')).resolves.toEqual({ status: 'queued_offline' });
 
     releaseScene(response(200, scene([summary(), secondSummary()])));
     releaseDetail(response(200, { cairn: { ...detail(), ...secondSummary(), text: 'late' } }));
     await oldScene;
-    await expect(oldDetail).resolves.toMatchObject({ code: 'superseded' });
-    expect(usePublicCairnStore.getState().entries).toEqual([]);
-    expect(usePublicCairnStore.getState().details).toEqual({});
+    await expect(oldDetail).resolves.toMatchObject({ id: '2', text: 'late' });
+    expect(usePublicCairnStore.getState().entries.map(entry => entry.id)).toEqual(['2']);
+    expect(usePublicCairnStore.getState().details['2']).toMatchObject({ text: 'late' });
     const persisted = mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '';
-    expect(persisted).toContain('"blockedAuthorIds":["10"]');
-    expect(persisted).toContain('block:10');
+    expect(persisted).toContain('"hiddenIds":["1"]');
+    expect(persisted).toContain('block:1');
 
     __publicCairnTest.reset();
     mockFetch.mockRejectedValueOnce(new Error('offline'));
     await usePublicCairnStore.getState().initialize('viewer-a');
-    expect(usePublicCairnStore.getState().entries).toEqual([]);
-    expect(usePublicCairnStore.getState().details).toEqual({});
+    expect(usePublicCairnStore.getState().entries.map(entry => entry.id)).toEqual(['2']);
+    expect(usePublicCairnStore.getState().details['2']).toMatchObject({ text: 'late' });
+  });
+
+  test('a confirmed anonymous Block refreshes Public and every affected friend authority', async () => {
+    await initialize([summary(), secondSummary()]);
+    mockFetch
+      .mockResolvedValueOnce(response(200, { blocked: true, cairn_id: '1' }))
+      .mockResolvedValueOnce(response(200, scene([secondSummary()])));
+
+    await expect(usePublicCairnStore.getState().blockAuthor('1')).resolves.toEqual({ status: 'confirmed' });
+
+    expect(usePublicCairnStore.getState().entries.map(entry => entry.id)).toEqual(['2']);
+    expect(mockLoadFriends).toHaveBeenCalledTimes(1);
+    expect(mockLoadMemorySources).toHaveBeenCalledTimes(1);
+    expect(mockLoadCircleMarkers).toHaveBeenCalledTimes(1);
+    expect(mockLoadFriendProjections).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls.map(([path]) => path)).toContain('/api/public-cairns/scene');
+  });
+
+  test('a queued O84 author-id Block drains through the legacy safety endpoint instead of being discarded', async () => {
+    mockValues.set(`${__publicCairnTest.cachePrefix}viewer-a`, JSON.stringify({
+      version: 1,
+      viewerId: 'viewer-a',
+      pilotEnabled: true,
+      wallClockHighWaterMs: BASE,
+      entries: {},
+      details: {},
+      hiddenIds: [],
+      blockedAuthorIds: ['10'],
+      pendingActions: {
+        'block:10': { id: 'block:10', kind: 'block', resourceId: '', authorId: '10', requestedAt: BASE },
+      },
+    }));
+    mockFetch
+      .mockResolvedValueOnce(response(200, { enabled: true }))
+      .mockResolvedValueOnce(response(200, { blocked: true }))
+      .mockResolvedValueOnce(response(200, scene([])));
+
+    await usePublicCairnStore.getState().initialize('viewer-a');
+
+    expect(mockFetch.mock.calls.map(([path]) => path)).toContain('/api/friends/10/block');
+    expect(mockPurgeFriend).toHaveBeenCalledWith('10', 'viewer-a');
+    expect(mockPurgeFriendContent).toHaveBeenCalledWith('10', 'viewer-a');
+    expect(mockValues.get(`${__publicCairnTest.cachePrefix}viewer-a`) ?? '').not.toContain('block:10');
   });
 
   test('a fresh authorized scene begun after invalidation may restore a new publication epoch', async () => {

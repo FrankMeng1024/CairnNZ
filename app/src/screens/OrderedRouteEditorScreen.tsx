@@ -104,6 +104,12 @@ import { useSettingsStore } from '../store/useSettingsStore';
 import { loadActivityTrackPoints, useSessionStore } from '../store/useSessionStore';
 import { useDistance } from '../utils/distanceFormat';
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
+import {
+  createRouteEditorSaveCoordinator,
+  executeRouteEditorLeaveChoice,
+  routeEditorLeaveDecision,
+  type RouteEditorLeaveDecision,
+} from '../features/route/routeEditorSaveCoordinator';
 
 let MapView: any = null;
 let Camera: any = null;
@@ -282,6 +288,11 @@ export function OrderedRouteEditorScreen() {
   const [history, setHistory] = useState<RouteDraftHistory | null>(null);
   const historyRef = useRef<RouteDraftHistory | null>(null);
   const initialDraftRef = useRef<OrderedRouteDraft | null>(null);
+  const initialNameRef = useRef('');
+  const initialPermissionRef = useRef<'personal' | 'friend'>('personal');
+  const saveCoordinatorRef = useRef(createRouteEditorSaveCoordinator());
+  const allowLeaveRef = useRef(false);
+  const [pendingLeave, setPendingLeave] = useState<{ action: any; decision: RouteEditorLeaveDecision } | null>(null);
   const [name, setName] = useState('');
   const [permission, setPermission] = useState<'personal' | 'friend'>('personal');
   const [mode, setMode] = useState<EditorMode>('Browse');
@@ -388,8 +399,10 @@ export function OrderedRouteEditorScreen() {
       if (friendMemory.userId !== ownerId && friendMemory.hydrate) {
         await friendMemory.hydrate(ownerId);
       }
-      await loadMemorySubscriptions();
-      if (!cancelled) await useFriendMemoryStore.getState().loadSelectedProjections();
+      const authorityLoaded = await loadMemorySubscriptions();
+      if (!cancelled && authorityLoaded !== false) {
+        await useFriendMemoryStore.getState().loadSelectedProjections();
+      }
     })();
     return () => { cancelled = true; };
   }, [loadMemorySubscriptions, ownerId, readOnlyShared]);
@@ -705,6 +718,8 @@ export function OrderedRouteEditorScreen() {
       if (cancelled || editorGenerationRef.current !== editorGeneration) return;
       historyRef.current = nextHistory;
       initialDraftRef.current = cloneOrderedDraft(draft);
+      initialNameRef.current = initialName;
+      initialPermissionRef.current = initialPermission;
       initialBoundsRef.current = initialBounds(draft);
       setHistory(nextHistory);
       setName(initialName);
@@ -789,9 +804,32 @@ export function OrderedRouteEditorScreen() {
   }, [creationSessionId, fromSessionId, invalidatePendingOperation, ownerId, readOnlyShared, routeId]);
 
   useEffect(() => {
-    const removeListener = nav.addListener?.('beforeRemove', abandonUnsavedCreation);
+    const removeListener = nav.addListener?.('beforeRemove', (event: any) => {
+      if (allowLeaveRef.current) {
+        allowLeaveRef.current = false;
+        return;
+      }
+      const current = historyRef.current;
+      const hasUnsavedChanges = Boolean(!readOnlyShared && current && (
+        current.past.length > 0
+        || name !== initialNameRef.current
+        || permission !== initialPermissionRef.current
+        || (!routeId && (current.present.parts.length > 0 || name.trim().length > 0))
+      ));
+      const decision = routeEditorLeaveDecision({
+        allowLeave: false,
+        hasUnsavedChanges,
+        saving: saveCoordinatorRef.current.isSaving(),
+      });
+      if (decision === 'allow') {
+        abandonUnsavedCreation();
+        return;
+      }
+      event?.preventDefault?.();
+      setPendingLeave({ action: event?.data?.action ?? null, decision });
+    });
     return typeof removeListener === 'function' ? removeListener : undefined;
-  }, [abandonUnsavedCreation, nav]);
+  }, [abandonUnsavedCreation, name, nav, permission, readOnlyShared, routeId]);
   const mapStyle = getMapStyleForTheme('outdoors', mapTheme);
   const lightPreset = themeToStandardPreset(mapTheme);
   const region = getCurrentRegion();
@@ -1517,11 +1555,14 @@ export function OrderedRouteEditorScreen() {
 
   const saveRoute = useCallback(async () => {
     const current = historyRef.current;
-    if (!current || saving || readOnlyShared) return;
+    if (!current || readOnlyShared) return;
     if (providerBusy || pendingReview || pendingPointReview || manualRecovery || pendingAttachmentChoice || pendingProviderRetry) { setError('Finish or cancel the current Route edit before saving.'); return; }
     const title = name.trim();
     if (!title) { setError('Name this Route before saving.'); return; }
     if (current.present.parts.length === 0) { setError('Add a path before saving this Route.'); return; }
+    const objectKey = `${ownerId}:${routeId ?? current.present.draftId}`;
+    const saveToken = saveCoordinatorRef.current.begin(objectKey);
+    if (!saveToken) return;
     setSaving(true);
     setMode('Saving');
     setError(null);
@@ -1572,7 +1613,12 @@ export function OrderedRouteEditorScreen() {
       await removeRoutePlannerDraft(ownerId, current.present.draftId).catch(() => undefined);
       // Replace only the editor so Back returns to the originating Trails /
       // Routes context (tab, query and scroll state remain owned there).
-      nav.replace('MapHistory', { routeId: savedId });
+      const live = historyRef.current;
+      const currentObjectKey = `${ownerId}:${routeId ?? live?.present.draftId ?? ''}`;
+      if (saveCoordinatorRef.current.claimNavigation(saveToken, currentObjectKey)) {
+        allowLeaveRef.current = true;
+        nav.replace('MapHistory', { routeId: savedId });
+      }
     } catch (cause: any) {
       recordRouteDrawingTrace('route_save_failed', {
         draftId: current.present.draftId,
@@ -1584,10 +1630,11 @@ export function OrderedRouteEditorScreen() {
         ? 'The save outcome is not confirmed. Stay on this screen and retry Save.'
         : 'This Route could not be saved. Stay on this screen and retry Save.');
     } finally {
+      saveCoordinatorRef.current.finish(saveToken);
       setSaving(false);
       setMode('Browse');
     }
-  }, [addRoute, fromSessionId, manualRecovery, name, nav, ownerId, pendingAttachmentChoice, pendingPointReview, pendingProviderRetry, pendingReview, permission, providerBusy, readOnlyShared, routeId, saving, sessions, updateRoute]);
+  }, [addRoute, fromSessionId, manualRecovery, name, nav, ownerId, pendingAttachmentChoice, pendingPointReview, pendingProviderRetry, pendingReview, permission, providerBusy, readOnlyShared, routeId, sessions, updateRoute]);
 
   const useSharedRoute = useCallback((mode: 'hiking' | 'running') => {
     const shared = sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
@@ -1995,11 +2042,15 @@ export function OrderedRouteEditorScreen() {
             <TouchableOpacity
               style={[styles.popoverChoice, { borderColor: planningMemoryScope === 'self' ? theme.primary : theme.borderSubtle, backgroundColor: planningMemoryScope === 'self' ? theme.controlSelected : theme.surface }]}
               onPress={() => setPlanningMemoryScope('self')}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: planningMemoryScope === 'self' }}
             ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine</Text></TouchableOpacity>
             <TouchableOpacity
               style={[styles.popoverChoice, { borderColor: planningMemoryScope === 'combined' ? theme.primary : theme.borderSubtle, backgroundColor: planningMemoryScope === 'combined' ? theme.controlSelected : theme.surface }, memorySubscriptions.length === 0 && styles.disabled]}
               disabled={memorySubscriptions.length === 0}
               onPress={() => { setPlanningMemoryScope('combined'); void useFriendMemoryStore.getState().loadSelectedProjections(); }}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: planningMemoryScope === 'combined', disabled: memorySubscriptions.length === 0 }}
             ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine &amp; Friends</Text></TouchableOpacity>
           </View>
           {memorySubscriptions.length === 0 ? <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>No shared Friend Fog is available. Mine stays visible.</Text> : null}
@@ -2010,7 +2061,7 @@ export function OrderedRouteEditorScreen() {
         styles.topBar,
         { paddingTop: insets.top + Spacing.sm, paddingBottom: Spacing.sm, backgroundColor: theme.mapOverlay, borderBottomColor: theme.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth },
       ]} pointerEvents="box-none">
-        <BackButton variant="inline" onPress={() => { abandonUnsavedCreation(); nav.goBack(); }} />
+        <BackButton variant="inline" onPress={() => nav.goBack()} />
         <View style={styles.topTitleWrap}>
           <Text testID="route-editor-title" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
         </View>
@@ -2157,6 +2208,46 @@ export function OrderedRouteEditorScreen() {
         </ScrollView>
       </ModalCard>
 
+      <ModalCard
+        visible={pendingLeave !== null}
+        onDismiss={() => setPendingLeave(null)}
+        testID="route-editor-leave-confirm"
+      >
+        <ModalCardHeader
+          title={pendingLeave?.decision === 'confirm-saving' ? 'Leave while saving?' : 'Discard Route changes?'}
+          body={pendingLeave?.decision === 'confirm-saving'
+            ? 'The save may still finish, but this screen will not move you after you leave.'
+            : 'Your unsaved Route changes will be discarded.'}
+          onClose={() => setPendingLeave(null)}
+        />
+        <View style={styles.confirmBody}>
+          <PrimaryButton label="Stay" variant="secondary" onPress={() => setPendingLeave(null)} />
+          <PrimaryButton
+            label={pendingLeave?.decision === 'confirm-saving' ? 'Leave' : 'Discard changes'}
+            variant="destructive"
+            onPress={() => {
+              if (!pendingLeave) return;
+              const { decision, action } = pendingLeave;
+              setPendingLeave(null);
+              executeRouteEditorLeaveChoice(
+                decision,
+                decision === 'confirm-saving' ? 'leave-saving' : 'discard',
+                {
+                  discardDraft: abandonUnsavedCreation,
+                  suppressLateNavigation: () => saveCoordinatorRef.current.suppressLateNavigation(),
+                  allowAndDispatch: () => {
+                    allowLeaveRef.current = true;
+                    if (action && nav.dispatch) nav.dispatch(action);
+                    else nav.goBack();
+                  },
+                },
+              );
+            }}
+            testID="route-editor-confirm-leave"
+          />
+        </View>
+      </ModalCard>
+
     </View>
   );
 }
@@ -2178,7 +2269,7 @@ const styles = StyleSheet.create({
   popoverTitle: { fontSize: FontSize.body, fontWeight: '800' },
   popoverLabel: { fontSize: FontSize.small, fontWeight: '600' },
   popoverRow: { flexDirection: 'row', gap: Spacing.xs, flexWrap: 'wrap' },
-  popoverChoice: { minHeight: 34, borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  popoverChoice: { minHeight: 44, borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, alignItems: 'center', justifyContent: 'center' },
   popoverChoiceText: { fontSize: FontSize.small, fontWeight: '700' },
   popoverHint: { fontSize: FontSize.small, lineHeight: 17 },
   popoverAction: { minHeight: 38, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.sm, marginTop: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
@@ -2244,4 +2335,5 @@ const styles = StyleSheet.create({
   modalScroll: { maxHeight: 320 },
   searchInput: { minHeight: 48, borderWidth: 1, borderRadius: RadiusRole.input, paddingHorizontal: Spacing.md, fontSize: FontSize.body },
   searchMessage: { marginTop: Spacing.sm, fontSize: FontSize.small, lineHeight: 18 },
+  confirmBody: { padding: Spacing.lg, gap: Spacing.sm },
 });

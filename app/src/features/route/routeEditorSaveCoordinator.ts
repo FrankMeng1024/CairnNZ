@@ -6,8 +6,12 @@ export function routeEditorLeaveDecision(args: {
   hasUnsavedChanges: boolean;
   saving: boolean;
 }): RouteEditorLeaveDecision {
-  if (args.allowLeave || !args.hasUnsavedChanges) return 'allow';
-  return args.saving ? 'confirm-saving' : 'confirm-discard';
+  if (args.allowLeave) return 'allow';
+  // Even an unchanged existing Route can have a save request in flight. Letting
+  // the screen disappear without suppressing that completion would allow its
+  // late response to navigate over whichever screen the user opened next.
+  if (args.saving) return 'confirm-saving';
+  return args.hasUnsavedChanges ? 'confirm-discard' : 'allow';
 }
 
 export function executeRouteEditorLeaveChoice(

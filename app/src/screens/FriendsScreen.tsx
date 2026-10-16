@@ -145,10 +145,10 @@ function Backdrop() {
 
 // ── Friend row (F1) ─────────────────────────────────────────────────────────
 function FriendRow({
-  id, name, email, sharingEnabled, isNew, onPress, onLongPress,
+  id, name, email, sharingState, isNew, onPress, onLongPress,
 }: {
   id: string; name: string; email: string;
-  sharingEnabled: boolean; isNew: boolean;
+  sharingState: 'shared' | 'not-shared' | 'checking' | 'unavailable'; isNew: boolean;
   onPress?: () => void; onLongPress?: () => void;
 }) {
   const theme = useVisualTheme();
@@ -171,10 +171,12 @@ function FriendRow({
           </View>
           <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{email}</Text>
           <Text
-            style={[s.sharingStatus, { color: sharingEnabled ? theme.primary : theme.foregroundSecondary }]}
+            style={[s.sharingStatus, { color: sharingState === 'shared' ? theme.primary : theme.foregroundSecondary }]}
             numberOfLines={1}
           >
-            My Memory: {sharingEnabled ? 'Shared' : 'Not shared'}
+            My Memory: {sharingState === 'shared' ? 'Shared'
+              : sharingState === 'not-shared' ? 'Not shared'
+                : sharingState === 'checking' ? 'Checking…' : 'Unavailable'}
           </Text>
         </View>
         <Icon name="ChevronRight" size={IconSize.sm} color={theme.iconInactive} strokeWidth={1.8} />
@@ -616,6 +618,7 @@ export function FriendsScreen() {
   const grantsLoading = useMemorySharingStore((state) => state.grantsLoading);
   const grantPendingIds = useMemorySharingStore((state) => state.grantPendingIds);
   const grantErrors = useMemorySharingStore((state) => state.grantErrors);
+  const sharingLoadError = useMemorySharingStore((state) => state.error);
   const loadMemorySharing = useMemorySharingStore((state) => state.load);
   const setMemoryGrant = useMemorySharingStore((state) => state.setGrant);
   const [incoming, setIncoming] = useState<IncomingFriendRequest[]>([]);
@@ -666,6 +669,12 @@ export function FriendsScreen() {
     setOutbound([]);
     setRequestsError('');
     setNewFriendId(null);
+    setShowAdd(false);
+    setProfileFriend(null);
+    setFriendActionTarget(null);
+    setCancelRequestTarget(null);
+    setRemoveConfirming(false);
+    setBlockConfirming(false);
     setInitialLoading(true);
     Promise.all([loadFriendsFromBackend(), loadRequests(), viewerId ? loadMemorySharing(viewerId) : Promise.resolve()]).finally(() => {
       if (active) setInitialLoading(false);
@@ -905,7 +914,12 @@ export function FriendsScreen() {
                 id={f.id}
                 name={f.name}
                 email={f.email}
-                sharingEnabled={Boolean(grants.find(grant => grant.friend_id === f.id)?.enabled)}
+                sharingState={(() => {
+                  const grant = grants.find(item => item.friend_id === f.id);
+                  if (grantsLoading) return 'checking';
+                  if (sharingLoadError) return 'unavailable';
+                  return grant?.enabled ? 'shared' : 'not-shared';
+                })()}
                 isNew={newFriendId === f.id}
                 onPress={() => { setNewFriendId(current => current === f.id ? null : current); void handleFriendTap(f); }}
                 onLongPress={() => handleFriendLongPress(f)}
@@ -1023,8 +1037,12 @@ export function FriendsScreen() {
                   <Text style={[s.consentMeta, { color: theme.destructive }]}>{grantErrors[profileFriend.id]}</Text>
                 ) : null}
               </View>
-              {grantsLoading && !grants.some(grant => grant.friend_id === profileFriend.id) ? (
+              {grantsLoading ? (
                 <ActivityIndicator size="small" color={theme.primary} />
+              ) : sharingLoadError ? (
+                <TouchableOpacity onPress={() => { if (viewerId) void loadMemorySharing(viewerId); }} accessibilityRole="button">
+                  <Text style={[s.consentMeta, { color: theme.primary }]}>Unavailable · Retry</Text>
+                </TouchableOpacity>
               ) : (
                 <Switch
                   value={Boolean(grants.find(grant => grant.friend_id === profileFriend.id)?.enabled)}
@@ -1063,6 +1081,17 @@ export function FriendsScreen() {
                 />
               )}
             </View>
+            <PrimaryButton
+              label="Block friend"
+              variant="secondary"
+              onPress={() => {
+                const friend = profileFriend;
+                closeProfile();
+                handleFriendLongPress(friend);
+              }}
+              style={s.profileRemoveAction}
+              testID="friend-profile-block-trigger"
+            />
         </ModalCard>
       )}
 

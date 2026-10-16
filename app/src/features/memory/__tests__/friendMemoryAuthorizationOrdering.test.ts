@@ -28,7 +28,7 @@ describe('friend Memory authorization cache ordering', () => {
     jest.resetModules();
   });
 
-  test('accepts an account-scoped projection only until its server-bounded expiry', async () => {
+  test('keeps a durable projection hidden until this session re-authorizes it', async () => {
     let now = 1_000_100;
     jest.spyOn(Date, 'now').mockImplementation(() => now);
     const values = new Map([[`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', projection())]]);
@@ -42,11 +42,65 @@ describe('friend Memory authorization cache ordering', () => {
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
     await useFriendMemoryStore.getState().hydrate('viewer-a');
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().projections['11'].cells).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
 
     now = 1_000_000 + 24 * 60 * 60 * 1000 + 1;
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
     expect(useFriendMemoryStore.getState().projections).toEqual({});
+  });
+
+  test('a new sources refresh hides the prior focus immediately and stays hidden on subscriptions HTTP failure', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    let releaseSubscriptions!: (value: any) => void;
+    let releaseSources!: (value: any) => void;
+    const authenticatedFetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          revoked_friend_ids: [],
+          projections: [{
+            source_friend_id: 11,
+            authorization_version: 4,
+            projection_version: 'fresh-4',
+            cell_size_m: 200,
+            server_authorized_at: new Date(1_000_000).toISOString(),
+            authorization_expires_at: new Date(1_000_000 + 86_400_000).toISOString(),
+            cells: projection().cells,
+            regions: [],
+          }],
+        }),
+      })
+      .mockImplementationOnce(() => new Promise(resolve => { releaseSubscriptions = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { releaseSources = resolve; }));
+    jest.doMock('../../../store/storage', () => ({
+      storage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    const { useMemorySubscriptionsStore } = require('../store/useMemorySubscriptionsStore');
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 11, friend_name: 'Mia' }],
+      availableSources: [{
+        friend_id: '11', friend_name: 'Mia', selected: true,
+        authorization_version: 4, effective_at: new Date(0).toISOString(),
+        sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+      }],
+    });
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+
+    const refresh = useMemorySubscriptionsStore.getState().load();
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
+    releaseSubscriptions({ ok: false, status: 503 });
+    releaseSources({ ok: true, status: 200, json: async () => ({ sources: [] }) });
+    await refresh;
+
+    expect(useMemorySubscriptionsStore.getState().error).toContain('HTTP 503');
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
   });
 
   test('fails closed when the wall clock moves behind the last observed server cache time', async () => {

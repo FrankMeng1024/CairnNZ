@@ -253,7 +253,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMemoryStore } = require('../features/memory/store/useMemoryStore');
       useMemoryStore.getState().resetForUserSwitch();
-      await storage.removeItem('cairn_last_fix_v1');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      await require('../features/memory/services/lastFixCache').clearLastFix(String(options.expectedUserId));
       crashLogger.breadcrumb('logout:memory_reset');
     } catch { /* swallow — memoryStore may not be initialized on cold-boot logout */ }
     if (!ownsLogout()) return abortLogout();

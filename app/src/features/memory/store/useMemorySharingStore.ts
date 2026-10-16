@@ -21,7 +21,6 @@ interface State {
   error: string | null;
   load: (ownerId: string) => Promise<void>;
   setGrant: (friendId: string, enabled: boolean) => Promise<boolean>;
-  applyGrantSelection: (friendIds: string[]) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -110,34 +109,6 @@ export const useMemorySharingStore = create<State>((set, get) => ({
         grantPendingIds: get().grantPendingIds.filter(id => id !== friendId),
         grantErrors: { ...get().grantErrors, [friendId]: 'Could not update. Your previous choice is unchanged.' },
       });
-      return false;
-    }
-  },
-
-  applyGrantSelection: async (friendIds) => {
-    const ownerId = get().ownerId;
-    if (!ownerId) return false;
-    const requestGeneration = sessionGeneration;
-    const previous = get().grants;
-    const selected = new Set(friendIds);
-    set({
-      grants: previous.map(grant => ({ ...grant, enabled: selected.has(grant.friend_id) })),
-      loading: true,
-      error: null,
-    });
-    try {
-      const response = await authenticatedFetch('/api/friend-sharing/grants', {
-        method: 'PUT',
-        body: JSON.stringify({ friend_ids: [...selected] }),
-        expectedUserId: ownerId,
-      });
-      if (!response.ok) throw new Error('sharing_bulk_update_failed');
-      if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
-      set({ loading: false });
-      return true;
-    } catch {
-      if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
-      set({ grants: previous, loading: false, error: 'Connect and try again. Your previous sharing choices are unchanged.' });
       return false;
     }
   },

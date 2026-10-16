@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -30,6 +30,7 @@ import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { authenticatedFetch } from '../services/apiService';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
+import { useAppStore } from '../store/useAppStore';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'AllCairns'>;
@@ -107,7 +108,7 @@ function CairnRow({ marker }: { marker: Marker }) {
   );
 }
 
-function FoundCairnRow({ cairn, archived, onRestore }: { cairn: FoundCairn; archived: boolean; onRestore: () => void }) {
+function FoundCairnRow({ cairn, archived, onRestore, restoring }: { cairn: FoundCairn; archived: boolean; onRestore: () => void; restoring: boolean }) {
   const theme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const decoded = splitTitleBody(cairn.text ?? '');
@@ -133,8 +134,8 @@ function FoundCairnRow({ cairn, archived, onRestore }: { cairn: FoundCairn; arch
           <Text style={[styles.rowMeta, { color: theme.muted }]}>{new Date(cairn.acquired_at).toLocaleDateString()}</Text>
         </View>
         {archived ? (
-          <TouchableOpacity onPress={onRestore} accessibilityRole="button" testID={`found-cairn-restore-${cairn.marker_id}`}>
-            <Text style={[styles.restoreText, { color: theme.primary }]}>Restore</Text>
+          <TouchableOpacity disabled={restoring} onPress={onRestore} accessibilityRole="button" testID={`found-cairn-restore-${cairn.marker_id}`}>
+            <Text style={[styles.restoreText, { color: restoring ? theme.muted : theme.primary }]}>{restoring ? 'Restoring…' : 'Restore'}</Text>
           </TouchableOpacity>
         ) : null}
         {!archived && cairn.availability === 'available' && !cairn.opened_at ? <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} /> : null}
@@ -165,32 +166,65 @@ export function AllCairnsScreen() {
   const [foundLoading, setFoundLoading] = useState(false);
   const [foundError, setFoundError] = useState('');
   const [foundCollectionState, setFoundCollectionState] = useState<FoundCollectionState>('active');
+  const [restoringIds, setRestoringIds] = useState<number[]>([]);
+  const restoringRef = useRef(new Set<number>());
+  const foundRequestRef = useRef(0);
+  const ownerId = useAppStore(state => String(state.user?.id ?? ''));
+
+  useEffect(() => {
+    foundRequestRef.current += 1;
+    restoringRef.current.clear();
+    setRestoringIds([]);
+  }, [ownerId]);
 
   const loadFound = useCallback(async () => {
+    const request = ++foundRequestRef.current;
+    const requestedState = foundCollectionState;
+    const requestedOwner = ownerId;
+    if (!requestedOwner) return;
     setFoundLoading(true);
     setFoundError('');
     try {
-      const response = await authenticatedFetch(`/api/cairn-memory/library?section=found&state=${foundCollectionState}`);
+      const response = await authenticatedFetch(`/api/cairn-memory/library?section=found&state=${requestedState}`, {
+        expectedUserId: requestedOwner,
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
+      if (request !== foundRequestRef.current
+        || requestedState !== foundCollectionState
+        || String(useAppStore.getState().user?.id ?? '') !== requestedOwner) return;
       setFoundCairns(Array.isArray(body.cairns) ? body.cairns : []);
       void useCairnPresentationStore.getState().refreshAcquiredMap();
     } catch {
+      if (request !== foundRequestRef.current) return;
       setFoundError('Connect to refresh acquired Cairns.');
     } finally {
-      setFoundLoading(false);
+      if (request === foundRequestRef.current) setFoundLoading(false);
     }
-  }, [foundCollectionState]);
+  }, [foundCollectionState, ownerId]);
 
   const restoreFound = useCallback(async (markerId: number) => {
-    const response = await authenticatedFetch(`/api/cairn-memory/cairns/${markerId}/collection`, {
-      method: 'PUT', body: JSON.stringify({ action: 'restore' }),
-    });
-    if (response.ok) {
+    if (restoringRef.current.has(markerId) || !ownerId) return;
+    restoringRef.current.add(markerId);
+    setRestoringIds(ids => [...ids, markerId]);
+    setFoundError('');
+    try {
+      const response = await authenticatedFetch(`/api/cairn-memory/cairns/${markerId}/collection`, {
+        method: 'PUT', body: JSON.stringify({ action: 'restore' }), expectedUserId: ownerId,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
       setFoundCairns(current => current.filter(cairn => cairn.marker_id !== markerId));
       void useCairnPresentationStore.getState().refreshAcquiredMap();
+    } catch {
+      if (String(useAppStore.getState().user?.id ?? '') === ownerId) setFoundError('Could not restore this Cairn. Try again.');
+    } finally {
+      restoringRef.current.delete(markerId);
+      if (String(useAppStore.getState().user?.id ?? '') === ownerId) {
+        setRestoringIds(ids => ids.filter(id => id !== markerId));
+      }
     }
-  }, []);
+  }, [ownerId]);
 
   useEffect(() => {
     if (section === 'found') void loadFound();
@@ -344,6 +378,7 @@ export function AllCairnsScreen() {
                 cairn={item}
                 archived={foundCollectionState === 'archived'}
                 onRestore={() => void restoreFound(item.marker_id)}
+                restoring={restoringIds.includes(item.marker_id)}
               />
             )}
             contentContainerStyle={[styles.list, visibleFound.length === 0 && styles.listEmpty]}

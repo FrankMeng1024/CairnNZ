@@ -22,26 +22,8 @@ describe('Memory sharing account and rollback fences', () => {
     useMemorySharingStore.setState({ ownerId: 'account-a', grants: [grant('1', true), grant('2', false)] });
   });
 
-  test('bulk grant failure restores the complete previous selection', async () => {
-    mockAuthenticatedFetch.mockResolvedValue({ ok: false, status: 503 });
-
-    await expect(useMemorySharingStore.getState().applyGrantSelection(['2'])).resolves.toBe(false);
-
-    expect(useMemorySharingStore.getState().grants.map(item => [item.friend_id, item.enabled]))
-      .toEqual([['1', true], ['2', false]]);
-    expect(useMemorySharingStore.getState().error).toMatch(/previous sharing choices are unchanged/i);
-  });
-
-  test('a late failed mutation cannot restore the previous account after reset', async () => {
-    let resolveRequest!: (value: any) => void;
-    mockAuthenticatedFetch.mockReturnValue(new Promise(resolve => { resolveRequest = resolve; }));
-
-    const pending = useMemorySharingStore.getState().applyGrantSelection(['2']);
-    useMemorySharingStore.getState().reset();
-    resolveRequest({ ok: false, status: 503 });
-
-    await expect(pending).resolves.toBe(false);
-    expect(useMemorySharingStore.getState()).toMatchObject({ grants: [], loading: false, error: null });
+  test('does not expose the retired bulk-sharing mutation', () => {
+    expect(useMemorySharingStore.getState()).not.toHaveProperty('applyGrantSelection');
   });
 
   test('switching owner clears sharing state immediately and fences a late account-A load', async () => {

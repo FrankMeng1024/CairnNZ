@@ -56,4 +56,21 @@ describe('planWalkingRoute', () => {
       { lat: -36.83, lng: 174.78 },
     )).rejects.toEqual(expect.objectContaining({ code: 'INVALID_RESPONSE' }));
   });
+
+  test('times out a Directions request that never completes', async () => {
+    jest.useFakeTimers();
+    const { planWalkingRoute, WALKING_PLAN_TIMEOUT_MS } = loadWithToken(`pk.${'c'.repeat(48)}`);
+    global.fetch = jest.fn((_url, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    })) as any;
+
+    const request = planWalkingRoute(
+      { lat: -36.85, lng: 174.76 },
+      { lat: -36.83, lng: 174.78 },
+    );
+    const rejection = expect(request).rejects.toEqual(expect.objectContaining({ code: 'NETWORK' }));
+    await jest.advanceTimersByTimeAsync(WALKING_PLAN_TIMEOUT_MS + 1);
+    await rejection;
+    jest.useRealTimers();
+  });
 });

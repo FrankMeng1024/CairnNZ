@@ -46,6 +46,10 @@ export interface SampleResult {
   stdDevMeters: number;
   /** If !ok, the reason. */
   reason?: 'accuracy-too-poor' | 'too-jumpy' | 'no-readings' | 'permission-denied';
+  /** Acquisition authority that produced this window. */
+  provenance?: 'real' | 'simulator_test';
+  /** Trusted time of the latest reading used by the acquisition source. */
+  observedAtMs?: number;
 }
 
 interface RawReading {
@@ -101,7 +105,9 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
         accuracy: fix.accuracyM,
       }, { coordinateSource: 'simulator', virtualTimestamp: fix.timestamp });
     }
-    return result;
+    return result.ok
+      ? { ...result, provenance: 'simulator_test', observedAtMs: fix.timestamp }
+      : result;
   }
   const { status } = await Location.getForegroundPermissionsAsync();
   if (status !== 'granted') {
@@ -243,7 +249,14 @@ export async function sampleGpsWindow(): Promise<SampleResult> {
     poll_count: pollIdx,
     source: usingWatcher ? 'watcher' : 'polling',
   });
-  return decideFromReadings(readings);
+  const result = decideFromReadings(readings);
+  return result.ok
+    ? {
+        ...result,
+        provenance: 'real',
+        observedAtMs: readings.reduce((latest, reading) => Math.max(latest, reading.timestamp), 0),
+      }
+    : result;
 }
 
 /**

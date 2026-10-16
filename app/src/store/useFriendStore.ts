@@ -36,6 +36,12 @@ interface FriendState {
 
 const STORAGE_KEY = 'cairn_friends';
 let friendListPersistenceTail: Promise<void> = Promise.resolve();
+let friendListGeneration = 0;
+
+function invalidateFriendListReads(): number {
+  friendListGeneration += 1;
+  return friendListGeneration;
+}
 
 // ── Store ───────────────────────────────────────────────────────────────────
 
@@ -45,14 +51,15 @@ export const useFriendStore = create<FriendState>(() => ({
   loadFriendsFromBackend: async () => {
     const authority = captureFriendActionAuthority();
     if (!authority) return;
+    const listGeneration = invalidateFriendListReads();
     try {
       const res = await authenticatedFetch('/api/friends', {
         expectedUserId: authority.viewerId,
       });
-      if (!friendActionAuthorityIsCurrent(authority)) return;
+      if (!friendActionAuthorityIsCurrent(authority) || listGeneration !== friendListGeneration) return;
       if (!res.ok) return;
       const rows: Array<{ id: number; name: string; email: string; added_at: string }> = await res.json();
-      if (!friendActionAuthorityIsCurrent(authority)) return;
+      if (!friendActionAuthorityIsCurrent(authority) || listGeneration !== friendListGeneration) return;
       const friends: Friend[] = rows.map(r => ({
         id: String(r.id),
         userId: String(r.id),
@@ -61,8 +68,8 @@ export const useFriendStore = create<FriendState>(() => ({
         addedAt: new Date(r.added_at).getTime(),
         shareMarkers: true,
       }));
-      if (!await persistFriends(friends, authority)) return;
-      if (!friendActionAuthorityIsCurrent(authority)) return;
+      if (!await persistFriends(friends, authority, listGeneration)) return;
+      if (!friendActionAuthorityIsCurrent(authority) || listGeneration !== friendListGeneration) return;
       useFriendStore.setState({ friends });
     } catch {
       // Network failure — keep local cache
@@ -75,11 +82,12 @@ export const useFriendStore = create<FriendState>(() => ({
 async function persistFriends(
   friends: Friend[],
   authority: FriendActionAuthority,
+  expectedGeneration: number,
 ): Promise<boolean> {
   const previous = friendListPersistenceTail;
   let current = false;
   const run = previous.catch(() => {}).then(async () => {
-    if (!friendActionAuthorityIsCurrent(authority)) return;
+    if (!friendActionAuthorityIsCurrent(authority) || expectedGeneration !== friendListGeneration) return;
     let wrote = false;
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(friends));
@@ -87,7 +95,7 @@ async function persistFriends(
     } catch {
       // Memory publication may still proceed for the initiating viewer.
     }
-    current = friendActionAuthorityIsCurrent(authority);
+    current = friendActionAuthorityIsCurrent(authority) && expectedGeneration === friendListGeneration;
     if (!current && wrote) {
       try {
         // Friend-list storage has one legacy device-global key. Serialize all
@@ -242,6 +250,7 @@ export async function fetchFriendRequests(): Promise<FriendRequestLoadResult<Inc
 export async function acceptFriendRequestAPI(requestId: string, shareMemory = false): Promise<FriendMutationResult & { friendId?: string }> {
   const authority = captureFriendActionAuthority();
   if (!authority) return accountChangedResult();
+  invalidateFriendListReads();
   try {
     const res = await authenticatedFetch('/api/friends/accept', {
       method: 'POST',
@@ -531,6 +540,7 @@ export async function removeFriendAPI(
 ): Promise<FriendMutationResult> {
   const authority = captureFriendActionAuthority();
   if (!authority) return { success: false, error: 'Account unavailable' };
+  invalidateFriendListReads();
   // Invalidate source-bound async work at intent time. If the server removal
   // fails, only a later authorized read may restore the borrowed data.
   const intentCleanup = purgeFriendNamespaces(friendId, authority)
@@ -563,10 +573,8 @@ export async function removeFriendAPI(
     } catch { completionCleanupUncertain = true; }
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useMarkerStore } = require('./useMarkerStore');
-    useMarkerStore.setState((state: any) => ({
-      circleMarkers: state.circleMarkers.filter((marker: any) => String(marker.userId) !== String(friendId)),
-    }));
+    const { removeCircleMarkersByAuthor } = require('./useMarkerStore');
+    removeCircleMarkersByAuthor(friendId);
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     if (intentCleanupUncertain || completionCleanupUncertain) {
       return committedCleanupUncertainResult('Unfriend');
@@ -596,6 +604,7 @@ export async function blockUser(
 ): Promise<FriendMutationResult> {
   const authority = captureFriendActionAuthority();
   if (!authority) return { success: false, error: 'Account unavailable' };
+  invalidateFriendListReads();
   const intentCleanup = purgeFriendNamespaces(targetId, authority)
     .then(() => false, () => true);
   if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
@@ -628,10 +637,8 @@ export async function blockUser(
     } catch { completionCleanupUncertain = true; }
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useMarkerStore } = require('./useMarkerStore');
-    useMarkerStore.setState((state: any) => ({
-      circleMarkers: state.circleMarkers.filter((marker: any) => String(marker.userId) !== String(targetId)),
-    }));
+    const { removeCircleMarkersByAuthor } = require('./useMarkerStore');
+    removeCircleMarkersByAuthor(targetId);
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     if (intentCleanupUncertain || completionCleanupUncertain) {
       return committedCleanupUncertainResult('Block');

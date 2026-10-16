@@ -128,6 +128,16 @@ export interface CairnActivityContext {
   ownerGeneration: string;
 }
 
+/** Remove borrowed Cairn presentation for one author after an authorization
+ * boundary commits. Marker.authorId is the canonical field; keeping this
+ * typed helper prevents ad-hoc callers from drifting to nonexistent aliases. */
+export function removeCircleMarkersByAuthor(authorId: string | number): void {
+  const normalized = String(authorId);
+  useMarkerStore.setState(state => ({
+    circleMarkers: state.circleMarkers.filter(marker => String(marker.authorId) !== normalized),
+  }));
+}
+
 export type MarkerCreateInput = Omit<Marker, 'id' | 'createdAt'> & {
   activityContext?: CairnActivityContext | null;
 };

@@ -240,7 +240,9 @@ export function RouteDrawOverlay({
     rawSamplesRef.current = [];
     screenPointsRef.current = [];
     setScreenPoints([]);
-    if (coordinateFailureRef.current && points.length < 2) {
+    // A missing interior projection breaks geographic continuity. Never join
+    // the successful samples on either side with an invented straight edge.
+    if (coordinateFailureRef.current) {
       onCancel('coordinate-unavailable');
       return;
     }

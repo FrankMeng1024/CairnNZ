@@ -56,6 +56,10 @@ interface FriendMemoryState {
   /** Synchronously fence in-flight work for a source without changing product selection. */
   invalidateFriend: (friendId: string | number) => void;
   purgeFriend: (friendId: string | number, expectedUserId?: string) => Promise<void>;
+  /** Reconcile durable projections with a fresh authoritative sources read. */
+  reconcileAuthorizedSources: (sources: Array<{ friend_id: string | number; authorization_version: number; selected?: boolean }>) => Promise<void>;
+  /** Hide every cached source after an authorization refresh failure. */
+  suspendVisibility: () => void;
   getVisibleCells: (friendId?: string | null) => FriendProjectionCell[];
   reset: () => void;
 }
@@ -69,6 +73,7 @@ const activeLoadCounts = new Map<number, number>();
 let persistenceTail: Promise<void> = Promise.resolve();
 const sourceGenerations = new Map<string, number>();
 const latestSourceRequests = new Map<string, number>();
+const verifiedSourceVersions = new Map<string, number>();
 
 function cacheKey(userId: string) {
   return `${CACHE_PREFIX}${userId}`;
@@ -175,6 +180,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     const hydrateAccountGeneration = accountGeneration;
     sourceGenerations.clear();
     latestSourceRequests.clear();
+    verifiedSourceVersions.clear();
     const now = Date.now();
     let projections: Record<string, FriendProjection> = {};
     let lastObservedWallClockMs = now;
@@ -234,6 +240,10 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     );
     const requests = selectedIds.map(friendId => {
       const id = String(friendId);
+      // A focus/reconnect refresh must fail closed while its fresh request is
+      // outstanding. The durable copy remains available for a successful
+      // response to replace, but it is no longer render authority.
+      verifiedSourceVersions.delete(id);
       const sequence = ++requestSequence;
       const generation = sourceGeneration(id);
       latestSourceRequests.set(id, sequence);
@@ -250,7 +260,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     });
     let hadNetworkError = false;
     try {
-      await Promise.all(requests.map(async request => {
+      let nextRequestIndex = 0;
+      const runNext = async (): Promise<void> => {
+        const requestIndex = nextRequestIndex++;
+        const request = requests[requestIndex];
+        if (!request) return;
       try {
         const response = await authenticatedFetch('/api/friend-sharing/projections', {
           method: 'POST',
@@ -268,8 +282,9 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         if (!currentSubscriptions.subscriptions.some((subscription: { friend_id: number }) => Number(subscription.friend_id) === request.friendId)) return;
         const next = { ...get().projections };
         const nextStates = { ...get().sourceStates };
-        if ((Array.isArray(body?.revoked_friend_ids) ? body.revoked_friend_ids : []).some((id: unknown) => String(id) === request.id)) {
-          invalidateSource(request.id);
+          if ((Array.isArray(body?.revoked_friend_ids) ? body.revoked_friend_ids : []).some((id: unknown) => String(id) === request.id)) {
+            invalidateSource(request.id);
+            verifiedSourceVersions.delete(request.id);
           delete next[request.id];
           nextStates[request.id] = { status: 'unauthorized', cellCount: 0 };
         } else {
@@ -294,6 +309,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
             status: candidate.cells.length > 0 ? 'loaded' : 'empty',
             cellCount: candidate.cells.length,
           };
+          verifiedSourceVersions.set(request.id, candidate.authorizationVersion);
         }
         set({
           projections: next,
@@ -308,6 +324,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           || request.generation !== sourceGeneration(request.id)
           || latestSourceRequests.get(request.id) !== request.sequence) return;
         hadNetworkError = true;
+        verifiedSourceVersions.delete(request.id);
         const currentTime = Date.now();
         const retained = Object.fromEntries(Object.entries(get().projections)
           .filter(([, projection]) => validProjection(projection, currentTime)));
@@ -321,7 +338,9 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           lastObservedWallClockMs: Math.max(currentTime, get().lastObservedWallClockMs),
         });
       }
-      }));
+        await runNext();
+      };
+      await Promise.all(Array.from({ length: Math.min(4, requests.length) }, () => runNext()));
       if (String(useAppStore.getState().user?.id ?? '') === userId
         && get().userId === userId && requestAccountGeneration === accountGeneration) {
         const currentlySelected = new Set(useMemorySubscriptionsStore.getState().subscriptions
@@ -346,17 +365,42 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
 
   invalidateFriend: (friendId) => {
     invalidateSource(String(friendId));
+    verifiedSourceVersions.delete(String(friendId));
   },
 
   purgeFriend: async (friendId, expectedUserId) => {
     if (expectedUserId && get().userId !== expectedUserId) return;
     invalidateSource(String(friendId));
+    verifiedSourceVersions.delete(String(friendId));
     const next = { ...get().projections };
     delete next[String(friendId)];
     const nextStates = { ...get().sourceStates };
     delete nextStates[String(friendId)];
     set({ projections: next, sourceStates: nextStates, version: get().version + 1 });
     await persist(get(), { authoritative: true }).catch(() => {});
+  },
+
+  reconcileAuthorizedSources: async (sources) => {
+    const authoritative = new Map(
+      sources
+        .filter(source => source.selected !== false && Number.isInteger(Number(source.authorization_version)))
+        .map(source => [String(source.friend_id), Number(source.authorization_version)]),
+    );
+    const next = Object.fromEntries(Object.entries(get().projections).filter(([id, projection]) =>
+      authoritative.get(id) === projection.authorizationVersion));
+    for (const [id, version] of [...verifiedSourceVersions.entries()]) {
+      if (authoritative.get(id) !== version) verifiedSourceVersions.delete(id);
+    }
+    for (const id of Object.keys(get().projections)) {
+      if (!(id in next)) invalidateSource(id);
+    }
+    set({ projections: next, version: get().version + 1 });
+    await persist(get(), { authoritative: true }).catch(() => {});
+  },
+
+  suspendVisibility: () => {
+    verifiedSourceVersions.clear();
+    set({ version: get().version + 1 });
   },
 
   getVisibleCells: (friendId) => {
@@ -379,7 +423,8 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       : Object.values(retained);
     const cells = new Map<string, FriendProjectionCell>();
     for (const projection of selected) {
-      if (!validProjection(projection, now)) continue;
+      if (!validProjection(projection, now)
+        || verifiedSourceVersions.get(projection.friendId) !== projection.authorizationVersion) continue;
       for (const cell of projection.cells) cells.set(`${projection.friendId}:${cell.id}`, {
         ...cell,
         sourceFriendId: projection.friendId,
@@ -396,6 +441,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     activeLoadCounts.clear();
     sourceGenerations.clear();
     latestSourceRequests.clear();
+    verifiedSourceVersions.clear();
     set({
     userId: null,
     projections: {},

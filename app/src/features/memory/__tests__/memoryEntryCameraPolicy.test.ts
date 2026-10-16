@@ -42,6 +42,12 @@ describe('Memory current-city-first camera policy', () => {
       current: null,
       manualCenter: [116.4074, 39.9042],
     })).toEqual({ lat: 39.9042, lng: 116.4074 });
+    expect(resolveMemoryInitialMapCenter({
+      authority: 'wait-for-location',
+      current: null,
+      manualCenter: [116.4074, 39.9042],
+      cachedMemoryCenter: null,
+    })).toBeNull();
   });
 
   test('does not interrupt intentional manual city browsing on the current mount', () => {

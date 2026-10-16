@@ -77,6 +77,8 @@ interface PlantDraft {
   lng: number | null;
   accuracyM: number | null;
   locationProvenance: PlantLocationProvenance | null;
+  /** Trusted observation time. Never reconstructed from draft restore time. */
+  locationCapturedAtMs: number | null;
   type: MarkerType;
   title: string;
   text: string;
@@ -110,6 +112,7 @@ const INITIAL_DRAFT: PlantDraft = {
   lng: null,
   accuracyM: null,
   locationProvenance: null,
+  locationCapturedAtMs: null,
   type: DEFAULT_TYPE,
   title: '',
   text: '',
@@ -176,6 +179,7 @@ export function resolveInitialPlantContext(
           lng: coordinate.lng,
           accuracyM: coordinate.accuracy ?? null,
           locationProvenance: tracking.locationProviderSource === 'simulator' ? 'simulator_test' : 'real',
+          locationCapturedAtMs: tracking.lastCoordinateTime ?? null,
         },
       };
     }
@@ -228,28 +232,27 @@ export function PlantScreen() {
           typeof parsed.title === 'string' &&
           typeof parsed.text === 'string'
         ) {
-          // v298 N5 migration: drafts persisted before this version
-          // didn't have gpsLat/gpsLng. Fall back to the persisted
-          // pin coord so step 2 (if re-entered from step 3 back) has
-          // a valid anchor — yielding pre-v298 behavior for legacy
-          // drafts only.
+          // A failed submission may preserve words and audience, but never
+          // location authority. Activity entry keeps its current accepted
+          // fix; standalone entry must acquire a new GPS lock.
           const migrated: PlantDraft = {
-            ...parsed,
-            gpsLat: parsed.gpsLat ?? parsed.lat ?? null,
-            gpsLng: parsed.gpsLng ?? parsed.lng ?? null,
+            ...initialContext.draft,
+            type: parsed.type ?? initialContext.draft.type,
+            title: parsed.title,
+            text: parsed.text,
+            voiceUri: parsed.voiceUri ?? null,
+            voiceMs: parsed.voiceMs ?? null,
+            visibility: parsed.visibility ?? initialContext.draft.visibility,
           };
           setDraft(migrated);
-          // If the saved draft already has a GPS lock, skip to content step.
-          if (parsed.lat != null && parsed.lng != null) {
-            setStep('content');
-          }
+          setStep(initialContext.step);
         }
       } catch {
         // Ignore — corrupt draft is silently dropped.
       }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [initialContext, userId]);
 
   const commit = useCallback(
     async (final: PlantDraft) => {
@@ -300,7 +303,9 @@ export function PlantScreen() {
             authorId: initiatingOwnerId,
             permission: final.visibility,
             regionCode: getCurrentRegion().code,
-            gpsAgeS: 0,
+            gpsAgeS: final.locationCapturedAtMs == null
+              ? undefined
+              : Math.max(0, Math.floor((Date.now() - final.locationCapturedAtMs) / 1000)),
             approximate: false,
             voiceMemoUri: final.voiceUri ?? undefined,
             voiceMemoDurationMs: final.voiceMs ?? undefined,
@@ -313,7 +318,14 @@ export function PlantScreen() {
           // The write was not accepted, so retain exactly one owner-scoped
           // draft. Account/activity changes suppress only stale UI feedback.
           try {
-            await storage.setItem(draftKey(initiatingOwnerId), JSON.stringify(final));
+            await storage.setItem(draftKey(initiatingOwnerId), JSON.stringify({
+              type: final.type,
+              title: final.title,
+              text: final.text,
+              voiceUri: final.voiceUri,
+              voiceMs: final.voiceMs,
+              visibility: final.visibility,
+            }));
           } catch { /* best-effort */ }
           if (!contextCurrent || !contextIsCurrent()) return;
           const raw = String((error as any)?.message ?? '').toLowerCase();
@@ -331,40 +343,12 @@ export function PlantScreen() {
           }
           Alert.alert("Couldn't plant this cairn", body, [{ text: 'OK' }]);
         },
-        // A successful standalone real-GPS Plant is also a verified visit to
-        // this place. Record the frozen GPS anchor—not the user-adjusted pin—
-        // and never let Simulator/web QA mutate Personal Memory.
         onCommitted: async result => {
           log('plant.commit_ok', { id: result.marker.id, projection: result.projection });
-          if (
-            !activityContext
-            && final.locationProvenance === 'real'
-            && final.gpsLat != null
-            && final.gpsLng != null
-            && final.accuracyM != null
-            && final.accuracyM > 0
-            && final.accuracyM <= 20
-          ) {
-            try {
-              // Keep the large H3/Memory graph off Plant's initial module path;
-              // a visit write needs it only after the Cairn is durably committed.
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const { recordMemoryEvidence } = require('../features/memory/services/recordMemoryEvidence');
-              await recordMemoryEvidence({
-                lat: final.gpsLat,
-                lng: final.gpsLng,
-                atMs: Date.now(),
-                source: 'passive_real',
-                ownerUserId: initiatingOwnerId,
-                horizontalAccuracyM: final.accuracyM,
-                continuityState: 'accepted',
-                durability: 'immediate',
-              });
-              log('plant.verified_visit_committed', { accuracyM: final.accuracyM });
-            } catch (error) {
-              log('plant.verified_visit_failed', { msg: String(error).slice(0, 120) });
-            }
-          }
+          // Plant's bounded five-second lock proves placement quality, not the
+          // server's 15-second passive-presence contract. Personal Memory is
+          // produced by the independent recorder (or canonical Activity), so
+          // a single Cairn placement can never manufacture shareable Fog.
           try {
             await storage.removeItem(draftKey(initiatingOwnerId));
           } catch { /* best-effort */ }
@@ -409,13 +393,22 @@ export function PlantScreen() {
       <View style={styles.container}>
         {step === 'gps' && (
           <GpsLockStep
-            onLocked={(lat, lng, accuracyM, locationProvenance) => {
+            onLocked={(lat, lng, accuracyM, locationProvenance, observedAtMs) => {
               log('plant.step_gps_to_pin', { accuracyM });
               // v298 N5: GPS anchor + initial pin both = locked point,
               // but gpsLat/gpsLng is then frozen — step 2 confirm only
               // updates lat/lng, leaving the anchor intact for step
               // 3 → step 2 back navigation.
-              setDraft((d) => ({ ...d, gpsLat: lat, gpsLng: lng, lat, lng, accuracyM, locationProvenance }));
+              setDraft((d) => ({
+                ...d,
+                gpsLat: lat,
+                gpsLng: lng,
+                lat,
+                lng,
+                accuracyM,
+                locationProvenance,
+                locationCapturedAtMs: observedAtMs,
+              }));
               setStep('pin');
             }}
             onCancel={() => { log('plant.cancel'); nav.goBack(); }}

@@ -44,7 +44,7 @@ describe('Route editor save and leave coordination', () => {
     expect(token).not.toBeNull();
     expect(routeEditorLeaveDecision({
       allowLeave: false,
-      hasUnsavedChanges: true,
+      hasUnsavedChanges: false,
       saving: coordinator.isSaving(),
     })).toBe('confirm-saving');
 

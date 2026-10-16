@@ -25,7 +25,7 @@ export interface AvailableMemorySource {
   authorization_version: number;
   effective_at: string;
   sharing_status: 'not_shared' | 'shared_empty' | 'shared';
-  coverage_scope: 'legacy_activity_since_grant' | 'full_history_delayed_v1' | null;
+  coverage_scope: 'full_history_delayed_v1' | null;
 }
 
 interface State {
@@ -37,7 +37,7 @@ interface State {
   /** Last raw HTTP status from a mutation, for UI to map 409 → paywall trigger. */
   // O1 batch 37: lastMutationStatus removed — 0 external readers; callers use the return value directly.
 
-  load: () => Promise<void>;
+  load: () => Promise<boolean>;
   /** Returns server status code so caller can branch on 201/403/409. */
   subscribe: (friendId: number) => Promise<number>;
   unsubscribe: (friendId: number) => Promise<number>;
@@ -72,12 +72,18 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     // login), drop the response — without this, user A's in-flight
     // load() resolving after user B's hydrate() would overwrite B's
     // empty subs slice with A's data, leaking cross-session.
-    if (get().loading) return;
+    if (get().loading) return false;
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { useAppStore } = require('../../../store/useAppStore');
     const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
-    if (!viewerAtStart) return;
+    if (!viewerAtStart) return false;
     const generationAtStart = subscriptionGeneration;
+    // Start every authorization refresh fail-closed. A projection verified on
+    // the previous focus must not remain visible while this focus's `/sources`
+    // response is still in flight (or if either paired read fails).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useFriendMemoryStore } = require('./useFriendMemoryStore');
+    useFriendMemoryStore.getState().suspendVisibility();
     set({ loading: true, error: null });
     try {
       const [res, sourcesResponse] = await Promise.all([
@@ -85,23 +91,39 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         authenticatedFetch('/api/friend-sharing/sources', { expectedUserId: viewerAtStart }),
       ]);
       if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return;
-      if (!res.ok) { set({ loading: false, error: `Could not load Memory friends (HTTP ${res.status}).` }); return; }
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
+      if (!res.ok) {
+        set({ loading: false, error: `Could not load Memory friends (HTTP ${res.status}).` });
+        useFriendMemoryStore.getState().suspendVisibility();
+        return false;
+      }
       const data = await res.json();
       const sourcesBody = sourcesResponse.ok ? await sourcesResponse.json() : null;
       if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return;
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
+      const nextSources = sourcesBody && Array.isArray(sourcesBody.sources) ? sourcesBody.sources : null;
       set({
         limit: data.limit == null ? Number.POSITIVE_INFINITY : Number(data.limit),
         subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
-        ...(sourcesBody && Array.isArray(sourcesBody.sources) ? { availableSources: sourcesBody.sources } : {}),
+        ...(nextSources ? { availableSources: nextSources } : {}),
         loading: false,
         error: sourcesBody ? null : `Could not refresh available friends (HTTP ${sourcesResponse.status}).`,
       });
+      // A durable Fog cache is never self-authorizing. A fresh sources read
+      // may purge revoked/version-stale rows; a failed read immediately hides
+      // all cached projections until authority can be checked again.
+      if (nextSources) {
+        await useFriendMemoryStore.getState().reconcileAuthorizedSources(nextSources);
+      } else {
+        useFriendMemoryStore.getState().suspendVisibility();
+      }
+      return Boolean(nextSources);
     } catch (e: any) {
       if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return;
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
       set({ loading: false, error: String(e?.message ?? e).slice(0, 120) });
+      useFriendMemoryStore.getState().suspendVisibility();
+      return false;
     }
   },
 

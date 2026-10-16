@@ -103,6 +103,9 @@ describe('Friends production proof contract', () => {
     expect(source).not.toContain('encountered Cairns');
     expect(source).not.toContain('shared Routes');
     expect(source).not.toContain('fetchFriendProfileForNavigation');
+    expect(source).toContain("if (grantsLoading) return 'checking';");
+    expect(source).toContain("if (sharingLoadError) return 'unavailable';");
+    expect(source).toMatch(/\{grantsLoading \? \([\s\S]*\) : sharingLoadError \? \(/);
   });
 
   it('keeps Decline left of Accept and preserves independent recipient consent', () => {

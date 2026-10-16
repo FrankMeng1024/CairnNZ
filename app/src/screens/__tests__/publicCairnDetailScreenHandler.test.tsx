@@ -265,7 +265,7 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
     ));
     publicState.details = { '501': detail };
     const screen = render(<PublicCairnDetailScreen />);
-    await screen.findByText('Left by Alice');
+    await screen.findByText('Left anonymously');
     mockActionableRenderTrace.length = 0;
 
     mockRouteId = '502';
@@ -273,22 +273,22 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
     screen.rerender(<PublicCairnDetailScreen />);
 
     expect(screen.getByText('Loading Public Cairn…')).toBeTruthy();
-    expect(screen.queryByText('Left by Alice')).toBeNull();
+    expect(screen.queryByText('Left anonymously')).toBeNull();
     expect(mockActionableRenderTrace.filter(frame => frame.startsWith('502:'))).toEqual([]);
     await act(async () => { nextRequest.resolve(nextDetail); });
-    expect(await screen.findByText('Left by Bob')).toBeTruthy();
+    expect(await screen.findByText('Left anonymously')).toBeTruthy();
   });
 
   test('enabled to disabled synchronously removes cached detail, actions, and Retry', async () => {
     const screen = render(<PublicCairnDetailScreen />);
-    await screen.findByText('Left by Alice');
+    await screen.findByText('Left anonymously');
     mockActionableRenderTrace.length = 0;
 
     publicState.enabled = false;
     screen.rerender(<PublicCairnDetailScreen />);
 
     expect(screen.getByText('Public Cairns are not available in this release.')).toBeTruthy();
-    expect(screen.queryByText('Left by Alice')).toBeNull();
+    expect(screen.queryByText('Left anonymously')).toBeNull();
     expect(screen.queryByText('Try again')).toBeNull();
     expect(mockActionableRenderTrace.filter(frame => frame.includes(':off:'))).toEqual([]);
   });
@@ -299,7 +299,7 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
       .mockResolvedValueOnce(detail)
       .mockReturnValueOnce(nextOwnerRequest.promise);
     const screen = render(<PublicCairnDetailScreen />);
-    await screen.findByText('Left by Alice');
+    await screen.findByText('Left anonymously');
     mockActionableRenderTrace.length = 0;
 
     publicState.viewerId = 'viewer-b';
@@ -308,7 +308,7 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
     screen.rerender(<PublicCairnDetailScreen />);
 
     expect(screen.getByText('Loading Public Cairn…')).toBeTruthy();
-    expect(screen.queryByText('Left by Alice')).toBeNull();
+    expect(screen.queryByText('Left anonymously')).toBeNull();
     expect(mockActionableRenderTrace).toEqual([]);
     screen.unmount();
     await act(async () => { nextOwnerRequest.reject({ code: 'superseded' }); });
@@ -320,17 +320,17 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
       .mockResolvedValueOnce(detail)
       .mockReturnValueOnce(nextGenerationRequest.promise);
     const screen = render(<PublicCairnDetailScreen />);
-    await screen.findByText('Left by Alice');
+    await screen.findByText('Left anonymously');
 
     mockAuthorityGeneration = 8;
     publicState.details = {};
     screen.rerender(<PublicCairnDetailScreen />);
 
     expect(screen.getByText('Loading Public Cairn…')).toBeTruthy();
-    expect(screen.queryByText('Left by Alice')).toBeNull();
+    expect(screen.queryByText('Left anonymously')).toBeNull();
     await waitFor(() => expect(mockLoadDetail).toHaveBeenCalledTimes(2));
     await act(async () => { nextGenerationRequest.resolve(detail); });
-    expect(await screen.findByText('Left by Alice')).toBeTruthy();
+    expect(await screen.findByText('Left anonymously')).toBeTruthy();
   });
 
   test('each action payload is taken from the currently visible detail binding', async () => {
@@ -338,7 +338,7 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
     publicState.details = { '502': nextDetail };
     mockLoadDetail.mockResolvedValue(nextDetail);
     const screen = render(<PublicCairnDetailScreen />);
-    await screen.findByText('Left by Bob');
+    await screen.findByText('Left anonymously');
 
     fireEvent.press(screen.getByText('Thanks'));
     await waitFor(() => expect(mockThanks).toHaveBeenCalledWith('502'));
@@ -350,7 +350,7 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
 
     fireEvent.press(screen.getByText('Block author'));
     fireEvent.press(screen.getByTestId('public-confirm-submit'));
-    await waitFor(() => expect(mockBlockAuthor).toHaveBeenCalledWith('author-b'));
+    await waitFor(() => expect(mockBlockAuthor).toHaveBeenCalledWith('502'));
 
     fireEvent.press(screen.getByText('Report'));
     fireEvent.changeText(screen.getByLabelText('Report context'), 'B-only context');
@@ -374,7 +374,7 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
     expect(screen.queryByTestId('public-report-sheet')).toBeNull();
     expect(screen.queryByDisplayValue('A-only context')).toBeNull();
     await act(async () => { nextRequest.resolve(nextDetail); });
-    expect(await screen.findByText('Left by Bob')).toBeTruthy();
+    expect(await screen.findByText('Left anonymously')).toBeTruthy();
     expect(screen.queryByTestId('public-report-sheet')).toBeNull();
   });
 
@@ -398,7 +398,7 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
     expect(screen.getByText('Loading Public Cairn…')).toBeTruthy();
 
     await act(async () => { latest.resolve(detail); });
-    expect(await screen.findByText('Left by Alice')).toBeTruthy();
+    expect(await screen.findByText('Left anonymously')).toBeTruthy();
   });
 
   test('current superseded invalidation terminates loading without exposing actions', async () => {

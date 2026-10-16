@@ -179,6 +179,36 @@ describe('offline Route creation', () => {
     });
   });
 
+  test('a durable create finishing after an account switch never publishes into the new owner', async () => {
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>(resolve => { releaseSave = resolve; });
+    const originalSaveLocal = offlineRoutes.saveLocal.bind(offlineRoutes);
+    const saveSpy = jest.spyOn(offlineRoutes, 'saveLocal').mockImplementation(async (payload, ownerId) => {
+      const saved = await originalSaveLocal(payload, ownerId);
+      await saveGate;
+      return saved;
+    });
+    const pending = useRouteStore.getState().addRoute({
+      name: 'A private route',
+      points: [{ lat: -43, lng: 171 }, { lat: -43.001, lng: 171.001 }],
+      waypoints: [], distanceM: 140, elevationGainM: 8,
+    });
+    await settle();
+
+    mockOwnerId = 'owner-b';
+    useRouteStore.setState({ routeOwnerId: 'owner-b', routes: [{
+      id: 'b-route', name: 'B route', createdAt: 1, updatedAt: 1,
+      points: [], waypoints: [], distanceM: 0, elevationGainM: 0,
+      runCount: 0, isActive: false,
+    }] });
+    releaseSave();
+
+    await expect(pending).rejects.toThrow('route_owner_changed_after_save');
+    expect(useRouteStore.getState().routes.map(route => route.id)).toEqual(['b-route']);
+    expect(mockStorage.get('@cairn:routes:v1:route-owner') ?? '').not.toContain('b-route');
+    saveSpy.mockRestore();
+  });
+
   test('keeps the minimal Activity origin on the independent local Route', async () => {
     const sourcePoints = [{ lat: -44, lng: 168 }, { lat: -44.001, lng: 168.001 }];
     const id = await useRouteStore.getState().addRoute({

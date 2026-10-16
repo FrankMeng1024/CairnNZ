@@ -137,6 +137,7 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
   useEffect(() => {
     if (!managePassiveGps) return;
     let cancelled = false;
+    const passiveSegmentId = `foreground-memory:${effectiveUserId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     // Serialize concurrent start() calls so a fast inactive→active
     // bounce doesn't create two subscriptions.
     let starting = false;
@@ -156,6 +157,9 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
             loc.coords.latitude,
             loc.coords.longitude,
             loc.timestamp ?? Date.now(),
+            loc.coords.accuracy,
+            'real',
+            effectiveUserId ?? undefined,
           );
           // The preference controls only passive/non-Activity exploration.
           // Explicit Hike/Run samples use the Activity recorder's mandatory
@@ -167,6 +171,8 @@ export function ForegroundUnlockManager({ managePassiveGps = false }: { managePa
             lng: loc.coords.longitude,
             atMs: loc.timestamp ?? Date.now(),
             source: 'passive_real',
+            ownerUserId: effectiveUserId ?? undefined,
+            sourceSegmentId: passiveSegmentId,
             horizontalAccuracyM: loc.coords.accuracy ?? undefined,
             continuityState: 'accepted',
           });

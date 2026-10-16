@@ -77,6 +77,11 @@ await page.addInitScript(({ viewer, localQaStyle }) => {
   localStorage.setItem(`cairn_onboarding_v1_done_${viewer}`, 'true');
 }, { viewer: viewerId, localQaStyle: useLocalQaStyle });
 page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
+page.on('requestfailed', request => {
+  if (request.url().includes('mapbox.com')) {
+    runtimeErrors.push(`requestfailed: ${request.url()} ${request.failure()?.errorText ?? ''}`);
+  }
+});
 page.on('console', message => {
   const text = message.text();
   if (message.type() === 'error'
@@ -220,8 +225,35 @@ await page.route('**/api/**', async route => {
 });
 
 const settle = ms => page.waitForTimeout(ms);
+const visibleOverlayRects = () => page.evaluate(() => [...document.querySelectorAll('[data-testid]')]
+  .filter(element => /(?:sheet|modal|confirmation)/.test(element.getAttribute('data-testid') || ''))
+  .map(element => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      id: element.getAttribute('data-testid'), x: rect.x, y: rect.y,
+      width: rect.width, height: rect.height,
+      visible: rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none',
+    };
+  }).filter(item => item.visible));
 const capture = async name => {
   const viewport = page.viewportSize();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const before = await visibleOverlayRects();
+  await settle(140);
+  const after = await visibleOverlayRects();
+  const beforeById = new Map(before.map(item => [item.id, item]));
+  for (const rect of after) {
+    const prior = beforeById.get(rect.id);
+    if (prior && Math.max(
+      Math.abs(prior.x - rect.x), Math.abs(prior.y - rect.y),
+      Math.abs(prior.width - rect.width), Math.abs(prior.height - rect.height),
+    ) > 1) throw new Error(`Capture ${name} caught ${rect.id} mid-transition`);
+    if (rect.x < -1 || rect.y < -1 || rect.x + rect.width > viewport.width + 1
+      || rect.y + rect.height > viewport.height + 1) {
+      throw new Error(`Capture ${name} clipped ${rect.id}: ${JSON.stringify(rect)}`);
+    }
+  }
   const file = path.join(outputDir, `${name}-${viewport.width}x${viewport.height}.jpg`);
   await page.screenshot({ path: file, type: 'jpeg', quality: 84, fullPage: false });
   return { name, file, bytes: fs.statSync(file).size, viewport };
@@ -242,12 +274,60 @@ const setTheme = async theme => {
   }, theme);
   await settle(700);
 };
+const rectDelta = (before, after) => Math.max(
+  Math.abs((before?.x ?? 0) - (after?.x ?? 0)),
+  Math.abs((before?.y ?? 0) - (after?.y ?? 0)),
+  Math.abs((before?.width ?? 0) - (after?.width ?? 0)),
+  Math.abs((before?.height ?? 0) - (after?.height ?? 0)),
+);
+const stableBox = async locator => {
+  let prior = null;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const current = await locator.boundingBox();
+    if (prior && rectDelta(prior, current) <= 1) return current;
+    prior = current;
+    await settle(120);
+  }
+  return prior;
+};
 const waitForMap = async () => {
-  await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()), null, { timeout: 30_000 });
+  try {
+    await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()), null, { timeout: 30_000 });
+  } catch (error) {
+    const mapState = await page.evaluate(() => ({
+      hasMap: Boolean(globalThis.__cairnMap),
+      loaded: Boolean(globalThis.__cairnMap?.loaded?.()),
+      canvasCount: document.querySelectorAll('.mapboxgl-canvas').length,
+      route: globalThis.__cairnStores?.getCurrentRoute?.(),
+      memory: (() => {
+        const state = globalThis.__cairnStores?.useMemoryStore?.getState?.();
+        return state ? {
+          lastWatcherFix: state.lastWatcherFix,
+          localHydration: state.localHydration,
+          pointsCount: state.points?.length ?? 0,
+        } : null;
+      })(),
+      appUser: globalThis.__cairnStores?.useAppStore?.getState?.().user?.id ?? null,
+      body: document.body.innerText.slice(0, 800),
+    }));
+    throw new Error(`Map did not settle: ${JSON.stringify({ mapState, runtimeErrors })}`, { cause: error });
+  }
   await page.waitForFunction(() => !document.querySelector('[data-testid="memory-entry-veil"]'), null, { timeout: 30_000 });
 };
 
 const captures = [];
+const memoryOnly = process.env.CAIRN_O84_MEMORY_ONLY === '1';
+let friendsText = '';
+let friendStatusLayouts = [];
+let declinedDismissedWithoutModal = false;
+let acceptedLandedOnFriends = false;
+let sendLandedOnRequests = false;
+let duplicateSheetBefore = null;
+let duplicateRequestCountBefore = 0;
+let duplicateSheetAfter = null;
+let duplicateRequestCountAfter = 0;
+let duplicateStayedInForm = false;
+let friendProfileIsActionOnly = false;
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.useMemoryStore && globalThis.__cairnStores?.navigationRef), null, { timeout: 120_000 });
 await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120_000 });
@@ -278,6 +358,7 @@ await page.evaluate(({ viewer, points }) => {
   stores.useMemoryScopeStore.setState({ scope: 'self', selectedFriendId: null });
 }, { viewer: viewerId, points: fixture.viewer_points });
 
+if (!memoryOnly) {
 // Home — exactly the existing icon family, with only the Leave a Cairn weight changed.
 for (const theme of ['day', 'sunset', 'night']) {
   await setTheme(theme);
@@ -291,8 +372,7 @@ await setTheme('day');
 await resetRoute('Friends');
 await page.getByTestId(`friend-card-${ownerIds[0]}`).waitFor({ state: 'visible' });
 captures.push(await capture('friends-day'));
-const friendsText = await page.locator('body').innerText();
-const friendStatusLayouts = [];
+friendsText = await page.locator('body').innerText();
 for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 800 }, { width: 430, height: 932 }]) {
   await page.setViewportSize(viewport);
   await settle(180);
@@ -307,11 +387,11 @@ await page.getByTestId('incoming-card-801').waitFor({ state: 'visible' });
 captures.push(await capture('requests-pending-declined-day'));
 await page.getByLabel('Dismiss declined request', { exact: true }).click();
 await page.getByTestId('sent-card-702').waitFor({ state: 'hidden', timeout: 10_000 });
-const declinedDismissedWithoutModal = await page.getByTestId('cancel-request-modal').count() === 0;
+declinedDismissedWithoutModal = await page.getByTestId('cancel-request-modal').count() === 0;
 
 await page.getByLabel('Accept friend request', { exact: true }).click();
 await page.getByTestId('friend-card-8').waitFor({ state: 'visible', timeout: 10_000 });
-const acceptedLandedOnFriends = await page.getByText('New', { exact: true }).isVisible();
+acceptedLandedOnFriends = await page.getByText('New', { exact: true }).isVisible();
 captures.push(await capture('friends-accepted-new-day'));
 
 await page.getByRole('button', { name: 'Add friend', exact: true }).click();
@@ -321,21 +401,21 @@ await settle(600);
 captures.push(await capture('add-friend-390-day'));
 await page.getByRole('button', { name: 'Send request', exact: true }).click();
 await page.getByTestId('sent-card-903').waitFor({ state: 'visible', timeout: 10_000 });
-const sendLandedOnRequests = await page.getByTestId('sent-card-903').isVisible();
+sendLandedOnRequests = await page.getByTestId('sent-card-903').isVisible();
 
 await page.getByRole('tab', { name: 'Friends', exact: true }).click();
 await page.getByRole('button', { name: 'Add friend', exact: true }).click();
 await page.getByTestId('add-friend-sheet').waitFor({ state: 'visible' });
 await page.getByTestId('add-friend-email').fill('MIA@example.org');
 await settle(400);
-const duplicateSheetBefore = await page.getByTestId('add-friend-sheet').boundingBox();
-const duplicateRequestCountBefore = requests.filter(request => request.pathname === '/api/friends/request').length;
+duplicateSheetBefore = await stableBox(page.getByTestId('add-friend-sheet'));
+duplicateRequestCountBefore = requests.filter(request => request.pathname === '/api/friends/request').length;
 await page.getByRole('button', { name: 'Send request', exact: true }).click();
 await page.getByText('Already friends.', { exact: true }).waitFor({ state: 'visible' });
 await settle(220);
-const duplicateSheetAfter = await page.getByTestId('add-friend-sheet').boundingBox();
-const duplicateRequestCountAfter = requests.filter(request => request.pathname === '/api/friends/request').length;
-const duplicateStayedInForm = await page.getByTestId('add-friend-email').isVisible();
+duplicateSheetAfter = await stableBox(page.getByTestId('add-friend-sheet'));
+duplicateRequestCountAfter = requests.filter(request => request.pathname === '/api/friends/request').length;
+duplicateStayedInForm = await page.getByTestId('add-friend-email').isVisible();
 captures.push(await capture('add-friend-existing-inline-390-day'));
 await page.getByTestId('add-friend-close').click();
 await page.getByTestId('add-friend-sheet').waitFor({ state: 'hidden' });
@@ -344,7 +424,7 @@ await page.getByTestId(`friend-card-${ownerIds[0]}`).click();
 await page.getByTestId('friend-profile-modal').waitFor({ state: 'visible' });
 await settle(450);
 const friendProfileText = await page.getByTestId('friend-profile-modal').innerText();
-const friendProfileIsActionOnly = friendProfileText.includes('Share my Memory')
+friendProfileIsActionOnly = friendProfileText.includes('Share my Memory')
   && friendProfileText.includes('Remove friend')
   && !friendProfileText.includes('encountered Cairn')
   && !friendProfileText.includes('shared Route')
@@ -365,6 +445,7 @@ await setTheme('night');
 await resetRoute('Friends');
 await page.getByRole('tab', { name: 'Requests', exact: true }).click();
 captures.push(await capture('requests-430-night'));
+}
 
 // Real isolated-backend fixture through actual subscription/projection stores and production FogLayer.
 await page.setViewportSize({ width: 390, height: 844 });
@@ -380,7 +461,9 @@ await page.evaluate(({ viewer, points }) => {
       evidenceSource: point.evidence_source, sourceSegmentId: point.source_segment_id,
       horizontalAccuracyM: point.horizontal_accuracy_m, continuityState: point.continuity_state,
     })),
-    lastWatcherFix: { lat: -41.2864, lng: 174.7180, ts: Date.now() },
+    lastWatcherFix: {
+      lat: -41.2864, lng: 174.7180, ts: Date.now(), accuracyM: 10, provenance: 'real',
+    },
     geometryVersion: state.geometryVersion + 1,
     localHydration: {
       ownerUserId: viewer, status: 'ready', requiresInitialReconcile: false,
@@ -390,9 +473,29 @@ await page.evaluate(({ viewer, points }) => {
   stores.useMemoryCameraStore.setState({ ownerId: viewer, hydrated: true, manualCity: null });
 }, { viewer: viewerId, points: fixture.viewer_points });
 await resetRoute('Memory');
-await page.evaluate(() => {
-  globalThis.__cairnStores.useMemoryStore.getState().setLastWatcherFix(-41.2864, 174.7180, Date.now());
-});
+// The app-level owner hydrator may begin just after navigation and deliberately
+// reset transient in-memory state. Wait for that authority handoff before
+// injecting a fresh QA GPS fix, then prove the fix remains stable.
+await settle(1_800);
+await page.waitForFunction(viewer => {
+  const hydration = globalThis.__cairnStores.useMemoryStore.getState().localHydration;
+  return String(hydration.ownerUserId) === viewer
+    && hydration.status === 'ready'
+    && (!hydration.requiresInitialReconcile || hydration.initialReconcile === 'success');
+}, viewerId, { timeout: 30_000 });
+const injectCurrentFix = () => page.evaluate(viewer => {
+  globalThis.__cairnStores.useMemoryStore.getState().setLastWatcherFix(
+    -41.2864, 174.7180, Date.now(), 10, 'real', viewer,
+  );
+}, viewerId);
+await injectCurrentFix();
+await settle(500);
+if (!await page.evaluate(() => Boolean(globalThis.__cairnStores.useMemoryStore.getState().lastWatcherFix))) {
+  await injectCurrentFix();
+}
+await page.waitForFunction(() => Boolean(
+  globalThis.__cairnStores.useMemoryStore.getState().lastWatcherFix,
+), null, { timeout: 5_000 });
 await waitForMap();
 await page.getByTestId('memory-finding-location').waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
 friendSourceFailuresRemaining = 1;
@@ -553,12 +656,6 @@ const centerDelta = Math.max(
   Math.abs(centerBeforeSelection[0] - centerAfterSelection[0]),
   Math.abs(centerBeforeSelection[1] - centerAfterSelection[1]),
 );
-const rectDelta = (before, after) => Math.max(
-  Math.abs((before?.x ?? 0) - (after?.x ?? 0)),
-  Math.abs((before?.y ?? 0) - (after?.y ?? 0)),
-  Math.abs((before?.width ?? 0) - (after?.width ?? 0)),
-  Math.abs((before?.height ?? 0) - (after?.height ?? 0)),
-);
 const friendRowStable = [friendRowLoading, friendRowLoaded].every(state => (
   rectDelta(friendRowBefore.row, state.row) <= 1
   && rectDelta(friendRowBefore.statusSlot, state.statusSlot) <= 1
@@ -567,20 +664,20 @@ const friendRowStable = [friendRowLoading, friendRowLoaded].every(state => (
 const fogSamplesWithFriendCells = fogTransitionSamples.filter(sample => sample.scope === 'combined' && sample.friendCells > 0);
 const assertions = {
   backendEvidencePass: evidence.result === 'PASS',
-  noBulkSharing: !friendsText.includes('Memory sharing'),
-  noProtectedPlaces: !friendsText.includes('Protected Places'),
-  noOpenSharedContent: !friendsText.includes('Open shared content'),
-  directionalFriendLabels: friendsText.includes('My Memory: Shared') && friendsText.includes('My Memory: Not shared'),
-  directionalStatusSingleLineAtCommonWidths: friendStatusLayouts.every(layout => (
+  noBulkSharing: memoryOnly || !friendsText.includes('Memory sharing'),
+  noProtectedPlaces: memoryOnly || !friendsText.includes('Protected Places'),
+  noOpenSharedContent: memoryOnly || !friendsText.includes('Open shared content'),
+  directionalFriendLabels: memoryOnly || (friendsText.includes('My Memory: Shared') && friendsText.includes('My Memory: Not shared')),
+  directionalStatusSingleLineAtCommonWidths: memoryOnly || friendStatusLayouts.every(layout => (
     layout.shared && layout.notShared && layout.shared.height <= 20 && layout.notShared.height <= 20
   )),
-  sendLandedOnRequests,
-  duplicateFriendStaysInlineWithoutRequestOrSheetJump: duplicateStayedInForm
+  sendLandedOnRequests: memoryOnly || sendLandedOnRequests,
+  duplicateFriendStaysInlineWithoutRequestOrSheetJump: memoryOnly || (duplicateStayedInForm
     && duplicateRequestCountAfter === duplicateRequestCountBefore
-    && rectDelta(duplicateSheetBefore, duplicateSheetAfter) <= 1,
-  acceptedLandedOnFriendsWithNew: acceptedLandedOnFriends,
-  declinedDismissedWithoutModal,
-  friendProfileIsActionOnly,
+    && rectDelta(duplicateSheetBefore, duplicateSheetAfter) <= 1),
+  acceptedLandedOnFriendsWithNew: memoryOnly || acceptedLandedOnFriends,
+  declinedDismissedWithoutModal: memoryOnly || declinedDismissedWithoutModal,
+  friendProfileIsActionOnly: memoryOnly || friendProfileIsActionOnly,
   initialListFailureVisible,
   pickerStayedOpenAfterListRetry,
   pickerStayedOpenForTwoSelections: pickerStillOpen,

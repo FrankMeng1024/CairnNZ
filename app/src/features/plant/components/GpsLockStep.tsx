@@ -29,7 +29,13 @@ import { log } from '../../../services/appLog';
 export type PlantLocationProvenance = 'real' | 'simulator_test';
 
 interface Props {
-  onLocked: (lat: number, lng: number, accuracyM: number, provenance: PlantLocationProvenance) => void;
+  onLocked: (
+    lat: number,
+    lng: number,
+    accuracyM: number,
+    provenance: PlantLocationProvenance,
+    observedAtMs: number,
+  ) => void;
   onCancel: () => void;
 }
 
@@ -68,7 +74,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
     if (__DEV__ && Platform.OS === 'web') {
       log('plant.gps_lock_web_mock', { lat: WEB_MOCK_LAT, lng: WEB_MOCK_LNG });
       const t = setTimeout(() => {
-        onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M, 'simulator_test');
+        onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M, 'simulator_test', Date.now());
       }, 100);
       return () => clearTimeout(t);
     }
@@ -145,13 +151,18 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
         // open Plant a few seconds after stopping their Hiking watcher
         // still hit the fast path instead of falling into the full
         // sample window.
-        if (watcherFix && Date.now() - watcherFix.ts < 12000) {
+        if (watcherFix
+          && Date.now() - watcherFix.ts < 12000
+          && watcherFix.accuracyM != null
+          && watcherFix.accuracyM <= GpsSamplingConfig.rejectAccuracyAboveMeters) {
           log('plant.gps_fast_path', { source: 'watcher', age_ms: Date.now() - watcherFix.ts });
-          // Watcher cache has no accuracy — approximate as 10m (the
-          // typical iOS BestForNavigation steady-state). Pin step shows
-          // an accuracy ring of this size; user can pan if they
-          // disagree.
-          return { lat: watcherFix.lat, lng: watcherFix.lng, accuracyM: 10 };
+          return {
+            lat: watcherFix.lat,
+            lng: watcherFix.lng,
+            accuracyM: watcherFix.accuracyM,
+            provenance: watcherFix.provenance,
+            observedAtMs: watcherFix.ts,
+          };
         }
         const last = await Location.getLastKnownPositionAsync({
           maxAge: 8000,
@@ -162,7 +173,10 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
         // numeric comparison (negative <= 20 passes!), so we must
         // double-check on the JS side. accuracy === null means "not
         // reported" — accept conservatively.
-        if (last && (last.coords.accuracy == null || last.coords.accuracy > 0)) {
+        if (last
+          && last.coords.accuracy != null
+          && last.coords.accuracy > 0
+          && last.coords.accuracy <= GpsSamplingConfig.rejectAccuracyAboveMeters) {
           log('plant.gps_fast_path', {
             source: 'last_known',
             age_ms: Date.now() - last.timestamp,
@@ -171,7 +185,9 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
           return {
             lat: last.coords.latitude,
             lng: last.coords.longitude,
-            accuracyM: last.coords.accuracy ?? 10,
+            accuracyM: last.coords.accuracy,
+            provenance: 'real' as const,
+            observedAtMs: last.timestamp,
           };
         }
       } catch (e: any) {
@@ -183,7 +199,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
       if (fast) {
         setProgress(1);
         setBusy(false);
-        onLockedRef.current(fast.lat, fast.lng, fast.accuracyM, 'real');
+        onLockedRef.current(fast.lat, fast.lng, fast.accuracyM, fast.provenance, fast.observedAtMs);
         return;
       }
       // No fast fix → fall through to the slow 15s sampler.
@@ -208,7 +224,15 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
         });
         setResult(res);
         setBusy(false);
-        if (res.ok) onLockedRef.current(res.lat, res.lng, res.accuracyMeters, 'real');
+        if (res.ok) {
+          onLockedRef.current(
+            res.lat,
+            res.lng,
+            res.accuracyMeters,
+            res.provenance ?? 'real',
+            res.observedAtMs ?? Date.now(),
+          );
+        }
       });
     });
     })();  // v324: close async IIFE wrapping the permission check + sampler

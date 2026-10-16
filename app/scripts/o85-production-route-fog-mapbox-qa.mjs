@@ -158,10 +158,24 @@ await page.getByTestId('route-more').click();
 const measurements = [];
 for (let index = 0; index < centers.length; index += 1) {
   await page.evaluate(center => globalThis.__cairnMap.jumpTo({ center, zoom: 16 }), centers[index]);
+  // Camera ownership updates can briefly remount the Fog source after the
+  // immediate jump. Assert the settled rendered layer, not that transient
+  // pre-region-change instance.
   await page.waitForTimeout(900);
+  await page.waitForFunction(() => (
+    Boolean(globalThis.__cairnMap?.getSource?.('memory-friend-union-src'))
+    && Boolean(globalThis.__cairnMap?.getLayer?.('memory-friend-union'))
+    && globalThis.__cairnMap.queryRenderedFeatures(
+      undefined, { layers: ['memory-friend-union'] },
+    ).length > 0
+  ), null, { timeout: 30_000 });
   const measured = await page.evaluate(() => ({
-    renderedFeatures: globalThis.__cairnMap.queryRenderedFeatures(undefined, { layers: ['memory-friend-union'] }).length,
-    sourceFeatures: globalThis.__cairnMap.querySourceFeatures('memory-friend-union-src').length,
+    renderedFeatures: globalThis.__cairnMap.getLayer('memory-friend-union')
+      ? globalThis.__cairnMap.queryRenderedFeatures(undefined, { layers: ['memory-friend-union'] }).length
+      : 0,
+    sourceFeatures: globalThis.__cairnMap.getSource('memory-friend-union-src')
+      ? globalThis.__cairnMap.querySourceFeatures('memory-friend-union-src').length
+      : 0,
     layerPresent: Boolean(globalThis.__cairnMap.getLayer('memory-friend-union')),
   }));
   measurements.push(measured);

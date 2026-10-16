@@ -263,10 +263,6 @@ export function MemoryScreen() {
   // has data immediately (previously required visiting Friends tab first).
   const loadFriendsFromBackend = useFriendStore((s) => s.loadFriendsFromBackend);
   const friendsLoadedRef = useRef(false);
-  // Bug-3 fix: throttle loadSubs+loadFriendFog to at most once per 30s.
-  // Previously fired on every mount (tab switch), stacking concurrent
-  // network requests that caused the "weak signal" timeout banner.
-  const lastFriendLoadRef = useRef<number>(0);
   const restoredManualCityRef = useRef<string | null>(null);
   const manualBrowseThisMountRef = useRef(false);
   const currentCityAppliedRef = useRef<string | null>(null);
@@ -281,16 +277,7 @@ export function MemoryScreen() {
       friendsLoadedRef.current = true;
       void loadFriendsFromBackend();
     }
-    // Bug-3: throttle fog/sub refresh to 30s
-    const now = Date.now();
-    if (now - lastFriendLoadRef.current < 30_000) return;
-    lastFriendLoadRef.current = now;
-    void (async () => {
-      if (userId) await hydrateFriendProjections(String(userId));
-      await loadSubs();
-      await Promise.all([loadFriendProjections(), loadCircleMarkers()]);
-    })();
-  }, [hydrateFriendProjections, loadCircleMarkers, loadFriendProjections, loadSubs, loadFriendsFromBackend, userId]);
+  }, [loadFriendsFromBackend]);
   const openFriendPicker = useCallback(() => {
     setPickModalOpen(true);
   }, []);
@@ -521,16 +508,23 @@ export function MemoryScreen() {
     if (useMemoryStore.getState().lastWatcherFix) return;
     let cancelled = false;
     void (async () => {
-      const cached = await readLastFix();
+      const cached = await readLastFix(String(userId ?? ''));
       if (cancelled) return;
       if (!cached) return;
       // Don't overwrite if a fresh watcher fix arrived during the await.
       if (useMemoryStore.getState().lastWatcherFix) return;
       log('memory.last_fix_hydrated', { age_ms: Date.now() - cached.ts });
-      useMemoryStore.getState().setLastWatcherFix(cached.lat, cached.lng, cached.ts);
+      useMemoryStore.getState().setLastWatcherFix(
+        cached.lat,
+        cached.lng,
+        cached.ts,
+        cached.accuracyM,
+        cached.provenance,
+        cached.ownerId,
+      );
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -575,6 +569,23 @@ export function MemoryScreen() {
       // Reset scope to 'mine' on every focus — per product spec, social
       // view is a deliberate switch, not a persistent default.
       useMemoryScopeStore.getState().setScope('self');
+      // Fence the prior focus synchronously. Waiting for the subscriptions
+      // request would leave a small revoke window where the old verified
+      // projection could be made visible from another map control.
+      useFriendMemoryStore.getState().suspendVisibility();
+      // Re-authorize social layers on every return to Memory. Cached Fog may
+      // accelerate a successful refresh, but it is deliberately invisible
+      // until the current session has revalidated sources and projections.
+      void (async () => {
+        const ownerId = String(useAppStore.getState().user?.id ?? '');
+        if (!ownerId) return;
+        if (useFriendMemoryStore.getState().userId !== ownerId) {
+          await hydrateFriendProjections(ownerId);
+        }
+        const authorityLoaded = await loadSubs();
+        if (authorityLoaded === false) return;
+        await Promise.all([loadFriendProjections(), loadCircleMarkers()]);
+      })();
       lastMountAtRef.current = now;
       if (now - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
         lastRefetchAtRef.current = now;
@@ -600,8 +611,7 @@ export function MemoryScreen() {
         // while inside the tab can never be diagnosed otherwise.
         void flushLogsNow();
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [hydrateFriendProjections, loadCircleMarkers, loadFriendProjections, loadSubs])
   );
 
   // R4 + S1: only fetch a one-shot fix when (a) user explicitly

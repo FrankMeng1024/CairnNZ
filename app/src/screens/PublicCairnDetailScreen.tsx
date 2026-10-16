@@ -51,7 +51,6 @@ type ReportCategory = 'spam' | 'unsafe' | 'harassment' | 'other';
 interface ScreenActionTicket {
   attempt: number;
   resourceId: string;
-  authorId: string;
   authority: PublicCairnAccountAuthority;
 }
 
@@ -157,7 +156,6 @@ export function PublicCairnDetailScreen() {
     return {
       attempt: ++actionAttempt.current,
       resourceId: binding.resourceId,
-      authorId: binding.detail.author.id,
       authority: binding.authority,
     };
   };
@@ -327,7 +325,7 @@ export function PublicCairnDetailScreen() {
     setConfirmAction(null);
     setActionPending(true);
     try {
-      const result = await (selected === 'hide' ? hide(ticket.resourceId) : blockAuthor(ticket.authorId));
+      const result = await (selected === 'hide' ? hide(ticket.resourceId) : blockAuthor(ticket.resourceId));
       if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;
       if (result.status === 'queued_offline') {
         showPublicActionFeedback(
@@ -490,7 +488,7 @@ export function PublicCairnDetailScreen() {
           <View style={[styles.badge, { borderColor: markerType.color, backgroundColor: markerType.bg }]}> 
             <Text style={[styles.badgeText, { color: markerType.color }]}>{markerType.label}</Text>
           </View>
-          <Text style={[styles.author, { color: theme.foregroundSecondary }]}>Left by {detail?.author.name}</Text>
+          <Text style={[styles.author, { color: theme.foregroundSecondary }]}>Left anonymously</Text>
         </View>
         {detailStatus ? <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{detailStatus}</Text> : null}
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
@@ -505,10 +503,10 @@ export function PublicCairnDetailScreen() {
           <PrimaryButton label="Hide" variant="secondary" onPress={() => setConfirmAction('hide')} disabled={actionPending} style={styles.action} testID="public-hide" />
         </View>
         <View style={styles.secondaryActions}>
-          <TouchableOpacity onPress={() => setConfirmAction('block')} disabled={actionPending} accessibilityRole="button" accessibilityLabel="Block author">
+          <TouchableOpacity style={styles.safetyAction} onPress={() => setConfirmAction('block')} disabled={actionPending} accessibilityRole="button" accessibilityLabel="Block author">
             <Text style={[styles.link, { color: theme.destructive }]}>Block author</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setReportOpen(true)} disabled={actionPending} accessibilityRole="button" accessibilityLabel="Report Cairn">
+          <TouchableOpacity style={styles.safetyAction} onPress={() => setReportOpen(true)} disabled={actionPending} accessibilityRole="button" accessibilityLabel="Report Cairn">
             <Text style={[styles.link, { color: theme.foregroundSecondary }]}>Report</Text>
           </TouchableOpacity>
         </View>
@@ -548,7 +546,7 @@ export function PublicCairnDetailScreen() {
 
       <ModalCard visible={confirmAction !== null} onDismiss={() => !actionPending && setConfirmAction(null)} testID="public-confirm-action">
         <ModalCardHeader
-          title={confirmAction === 'block' ? `Block ${detail?.author.name ?? 'this author'}?` : 'Hide this Cairn?'}
+          title={confirmAction === 'block' ? 'Block this author?' : 'Hide this Cairn?'}
           body={confirmAction === 'block'
             ? 'Their Public Cairns and any friend access will no longer be available. Your own data is unchanged.'
             : 'It will disappear for you immediately. This does not punish the author.'}
@@ -588,7 +586,8 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: Spacing.sm },
   action: { flex: 1 },
   secondaryActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.lg, paddingHorizontal: Spacing.sm },
-  link: { fontSize: FontSize.caption, fontWeight: '700', padding: 8 },
+  safetyAction: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
+  link: { fontSize: FontSize.caption, fontWeight: '700', paddingHorizontal: 8 },
   safety: { textAlign: 'center', fontSize: FontSize.small, marginTop: Spacing.md },
   status: { fontSize: FontSize.caption, marginTop: Spacing.sm },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 36, gap: 12 },

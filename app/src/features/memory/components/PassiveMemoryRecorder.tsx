@@ -201,6 +201,9 @@ export function PassiveMemoryRecorder() {
           reduced.qualifiedPosition.lat,
           reduced.qualifiedPosition.lng,
           reduced.qualifiedPosition.t,
+          reduced.state.lastTrusted?.accuracy ?? observation.accuracy,
+          'real',
+          ownerUserId,
         );
       }
       for (const accepted of reduced.accepted) {
@@ -244,7 +247,14 @@ export function PassiveMemoryRecorder() {
               }
             : null);
         if (qualified) {
-          useMemoryStore.getState().setLastWatcherFix(qualified.lat, qualified.lng, qualified.t);
+          useMemoryStore.getState().setLastWatcherFix(
+            qualified.lat,
+            qualified.lng,
+            qualified.t,
+            persisted.continuityState.lastTrusted?.accuracy ?? null,
+            'real',
+            ownerUserId,
+          );
         }
       }
       await stopPassiveMemoryBackgroundUpdates(epoch);
@@ -267,7 +277,14 @@ export function PassiveMemoryRecorder() {
           if (!transitionIsCurrent(transitionGeneration, 'foreground')
             || activeForegroundGeneration !== foregroundGeneration) return;
           if (sample.accuracy > MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M) return;
-          useMemoryStore.getState().setLastWatcherFix(sample.lat, sample.lng, sample.timestamp);
+          useMemoryStore.getState().setLastWatcherFix(
+            sample.lat,
+            sample.lng,
+            sample.timestamp,
+            sample.accuracy,
+            'simulator_test',
+            ownerUserId,
+          );
           void recordMemoryEvidence({
             lat: sample.lat,
             lng: sample.lng,
