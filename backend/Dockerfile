@@ -23,6 +23,9 @@ RUN npm config set registry https://registry.npmmirror.com && \
 
 # Copy application source
 COPY src ./src
+# O85 one-time, operator-reviewed historical Activity -> Memory repair. The
+# script is dry-run by default and requires an explicit complete manifest.
+COPY scripts/o85-memory-history-backfill.js ./scripts/o85-memory-history-backfill.js
 # O13: static legal pages (privacy.html) served by express.
 COPY public ./public
 

@@ -38,8 +38,14 @@ docker run -d --name "$CONTAINER" --security-opt seccomp=unconfined \
   -e MYSQL_DATABASE="$DB_NAME" \
   -p 127.0.0.1::3306 "$MYSQL_IMAGE" >/dev/null
 
+stable_mysql_checks=0
 for attempt in $(seq 1 60); do
-  if docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 'SELECT 1' >/dev/null 2>&1; then break; fi
+  if docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 'SELECT 1' >/dev/null 2>&1; then
+    stable_mysql_checks=$((stable_mysql_checks + 1))
+    if [ "$stable_mysql_checks" -ge 2 ]; then break; fi
+  else
+    stable_mysql_checks=0
+  fi
   if [ "$attempt" = 60 ]; then
     echo "MySQL did not become ready from image $MYSQL_IMAGE" >&2
     docker logs "$CONTAINER" >&2 || true
@@ -63,7 +69,8 @@ for migration in \
   044_public_cairn_moderation_audit.sql \
   045_memory_friends_cairn_contract.sql \
   046_ordered_routes_and_deliveries.sql \
-  047_friend_request_lifecycle.sql; do
+  047_friend_request_lifecycle.sql \
+  048_friends_memory_history_repair.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done
 
@@ -94,9 +101,11 @@ HARNESS_PROGRAM="${HARNESS_PROGRAM:-$SCRIPT_DIR/personal-friends-harness/abcdn-a
 if [ -n "${EVIDENCE_DIR:-}" ]; then
   mkdir -p "$EVIDENCE_DIR"
   "$SCRIPT_DIR/verify-migration-047.sh" | tee "$EVIDENCE_DIR/migration-047.txt"
+  "$SCRIPT_DIR/verify-migration-048.sh" | tee "$EVIDENCE_DIR/migration-048.txt"
   node "$HARNESS_PROGRAM" | tee "$EVIDENCE_DIR/result.json"
 else
   "$SCRIPT_DIR/verify-migration-047.sh"
+  "$SCRIPT_DIR/verify-migration-048.sh"
   node "$HARNESS_PROGRAM"
 fi
 

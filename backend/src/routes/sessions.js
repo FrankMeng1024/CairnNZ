@@ -16,9 +16,12 @@ const idempotency = require('../middleware/idempotency');
 const { validateBody } = require('../middleware/validate');
 const schemas = require('../middleware/schemas');
 const pool = require('../config/db');
-const { deterministicCid } = require('../lib/deterministicCid');
 const { scheduleMemoryAttribution } = require('../lib/attributeMemoryPoints');
 const { reconcilePublicSubmissionsForActivity } = require('../services/publicPublication');
+const {
+  buildCurrentActivityMemoryRows,
+  upsertActivityMemoryRows,
+} = require('../services/activityMemoryIngestion');
 
 const router = express.Router();
 
@@ -360,7 +363,9 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
 
     // 1. FOR UPDATE 锁行, 校验归属 + 未 finalize
     const [rows] = await conn.execute(
-      `SELECT id, client_activity_id, start_time, end_time, finalized_at FROM sessions
+      `SELECT id, client_activity_id, source_provenance, start_time, end_time,
+              finalized_at, route_points_raw, route_points_canonical
+         FROM sessions
        WHERE id=? AND user_id=? FOR UPDATE`,
       [id, userId]
     );
@@ -410,15 +415,30 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     if (alreadyFinalized) {
       // 幂等: 返回当前 server 状态, idempotent_replay=true
       // 若 idempotency middleware 已 cache 命中, 这段不会跑到 (middleware 直接 replay)
-      // 但若 middleware 因 cache 过期 miss, 这里作为兜底再次幂等
-      await conn.rollback();
+      // 但若 middleware 因 cache 过期 miss, 这里作为兜底再次幂等。
+      // Older successful finalizations could contain accepted canonical GPS
+      // but no Memory rows. Repair from that already-durable evidence instead
+      // of returning another false success.
+      const replayMemory = buildCurrentActivityMemoryRows({
+        userId,
+        clientActivityId: rows[0].client_activity_id,
+        memoryPoints: [],
+        canonicalPoints: rows[0].route_points_canonical,
+        rawPoints: rows[0].route_points_raw,
+      });
+      const replayAccepted = await upsertActivityMemoryRows(conn, replayMemory.rows);
+      await conn.commit();
+      if (replayMemory.rows.length > 0) {
+        const replayTimestamps = replayMemory.rows.map(row => row.ts);
+        scheduleMemoryAttribution(pool, userId, Math.min(...replayTimestamps), Math.max(...replayTimestamps));
+      }
       schedulePublicAfterActivityCommit(userId, rows[0].client_activity_id);
       return res.status(200).json({
         ok: true,
         session_id: id,
         client_activity_id: rows[0].client_activity_id ?? null,
         finalized_at: rows[0].finalized_at || rows[0].end_time,
-        memory: { accepted: 0, rejected: 0 },
+        memory: { accepted: replayAccepted, rejected: 0 },
         idempotent_replay: true,
       });
     }
@@ -446,64 +466,23 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       ],
     );
 
-    // 3. Bulk INSERT memory_points (chunk=50 防事务过长锁行)
-    let accepted = 0;
-    let rejected = 0;
-    if (memPts.length > 0) {
-      const tsUpperBound = Date.now() + 24 * 60 * 60 * 1000;
-      const validRows = [];
-      for (const p of memPts) {
-        if (
-          typeof p?.lat !== 'number' || typeof p?.lng !== 'number' || typeof p?.ts !== 'number' ||
-          !isFinite(p.lat) || !isFinite(p.lng) || !isFinite(p.ts) ||
-          !Number.isInteger(p.ts) ||
-          p.lat < -90 || p.lat > 90 || p.lng < -180 || p.lng > 180 ||
-          p.ts <= 0 || p.ts > tsUpperBound
-        ) {
-          rejected++;
-          continue;
-        }
-        // The central Memory producer already assigned an immutable client
-        // event identity. Reuse it across direct Memory sync and Activity
-        // finalization; legacy payloads still receive a deterministic ID.
-        const cid = (typeof p.cid === 'string' && p.cid.length > 0 && p.cid.length <= 36)
-          ? p.cid
-          : deterministicCid(userId, p.ts, p.lat, p.lng);
-        validRows.push([
-          userId, p.lat, p.lng, p.ts, cid, 'activity_real',
-          rows[0].client_activity_id ?? client_activity_id ?? null,
-          typeof p.source_segment_id === 'string' ? p.source_segment_id.slice(0, 80) : null,
-          Number.isFinite(p.horizontal_accuracy_m) ? p.horizontal_accuracy_m : null,
-          p.continuity_state === 'gap' ? 'gap' : 'accepted',
-        ]);
-      }
-      const CHUNK = 50;
-      for (let i = 0; i < validRows.length; i += CHUNK) {
-        const slice = validRows.slice(i, i + CHUNK);
-        await conn.query(
-          `INSERT INTO memory_points
-             (user_id, lat, lng, ts, client_id, evidence_source,
-              source_activity_client_id, source_segment_id, horizontal_accuracy_m, continuity_state)
-           VALUES ?
-           ON DUPLICATE KEY UPDATE
-             evidence_source='activity_real',
-             source_activity_client_id=COALESCE(VALUES(source_activity_client_id), source_activity_client_id),
-             source_segment_id=COALESCE(VALUES(source_segment_id), source_segment_id),
-             horizontal_accuracy_m=COALESCE(VALUES(horizontal_accuracy_m), horizontal_accuracy_m),
-             continuity_state=VALUES(continuity_state)`,
-          [slice],
-        );
-        accepted += slice.length;
-      }
-      // O41: unlocked_regions is a derived projection. Capture the committed
-      // source range here and schedule its spatial scan only after commit.
-      // O1 (2026-07-26): guard validRows.length > 0 — Math.min/max(...[])
-      // = ±Infinity 传入 attributeMemoryPoints 会触发 SQL warning + 无谓
-      // round-trip。若所有 memory_points 都被 reject,无需 attribution。
-      if (validRows.length > 0) {
-        const tsList = validRows.map((r) => r[3]);
-        attributionRange = { minTs: Math.min(...tsList), maxTs: Math.max(...tsList) };
-      }
+    // 3. Project the accepted Activity evidence into cumulative Memory in the
+    // same transaction. The client batch remains useful, while canonical GPS
+    // is the repair authority if the independent client worker supplied zero
+    // or only a partial batch. This reuses the Activity trace; it is not a
+    // second location collector.
+    const activityMemory = buildCurrentActivityMemoryRows({
+      userId,
+      clientActivityId: rows[0].client_activity_id ?? client_activity_id ?? null,
+      memoryPoints: memPts,
+      canonicalPoints: route_points_canonical,
+      rawPoints: route_points_raw,
+    });
+    const accepted = await upsertActivityMemoryRows(conn, activityMemory.rows);
+    const rejected = activityMemory.rejected;
+    if (activityMemory.rows.length > 0) {
+      const tsList = activityMemory.rows.map(row => row.ts);
+      attributionRange = { minTs: Math.min(...tsList), maxTs: Math.max(...tsList) };
     }
 
     await conn.commit();

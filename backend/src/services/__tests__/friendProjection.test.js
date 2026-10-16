@@ -7,108 +7,22 @@ const path = require('node:path');
 
 const {
   CELL_SIZE_M,
-  MASK_RADIUS_M,
-  MASK_DISTANCE_TOLERANCE_M,
+  FRIEND_PROJECTION_POLICY_VERSION,
   cellFor,
   cellPolygon,
-  cellIntersectsMask,
   deriveFriendProjection,
 } = require('../friendProjection');
 
-const TEST_EARTH_RADIUS_M = 6371008.8;
-
-// Independent spherical oracle used only by the test. It deliberately does
-// not reuse friendProjection's coordinate helpers.
-function haversineMeters(a, b) {
-  const radians = value => value * Math.PI / 180;
-  const dLat = radians(b.lat - a.lat);
-  const dLng = radians((((b.lng - a.lng) + 540) % 360) - 180);
-  const lat1 = radians(a.lat);
-  const lat2 = radians(b.lat);
-  const h = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * TEST_EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-function pointDueEast(origin, metres) {
-  return {
-    lat: origin.lat,
-    lng: origin.lng + metres / (TEST_EARTH_RADIUS_M * Math.cos(origin.lat * Math.PI / 180)) * 180 / Math.PI,
-  };
-}
-
-function pointAtBearing(origin, metres, bearingDegrees) {
-  const radians = value => value * Math.PI / 180;
-  const degrees = value => value * 180 / Math.PI;
-  const angular = metres / TEST_EARTH_RADIUS_M;
-  const bearing = radians(bearingDegrees);
-  const lat1 = radians(origin.lat);
-  const lng1 = radians(origin.lng);
-  const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(angular)
-      + Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing),
-  );
-  const lng2 = lng1 + Math.atan2(
-    Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1),
-    Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2),
-  );
-  return { lat: degrees(lat2), lng: ((degrees(lng2) + 540) % 360) - 180 };
-}
-
-test('projection cells are fixed coarse polygons and a 250 m mask removes intersecting cells', () => {
+test('projection cells remain fixed coarse polygons under the full-history policy', () => {
   assert.equal(CELL_SIZE_M, 200);
-  assert.equal(MASK_RADIUS_M, 250);
+  assert.equal(FRIEND_PROJECTION_POLICY_VERSION, 2);
   const cell = cellFor(-41.2865, 174.7762);
   const polygon = cellPolygon(cell);
   assert.equal(polygon.length, 5);
   assert.deepEqual(polygon[0], polygon[4]);
-  assert.equal(cellIntersectsMask(cell, { lat: -41.2865, lng: 174.7762, radius_m: 250 }), true);
-  assert.equal(cellIntersectsMask(cell, { lat: -41.0, lng: 174.0, radius_m: 250 }), false);
 });
 
-test('privacy mask radius is ground distance at representative NZ latitudes', () => {
-  for (const lat of [-35, -41, -45, -47]) {
-    const cell = cellFor(lat, 174.75);
-    const ring = cellPolygon(cell);
-    const eastEdge = {
-      lng: Math.max(...ring.slice(0, 4).map(coordinate => coordinate[0])),
-      lat: (ring[1][1] + ring[2][1]) / 2,
-    };
-    const inside = pointDueEast(eastEdge, 249);
-    const onBoundary = pointDueEast(eastEdge, 250);
-    const outside = pointDueEast(eastEdge, 252);
-    assert.ok(haversineMeters(eastEdge, inside) > 248.5);
-    assert.ok(haversineMeters(eastEdge, inside) < 249.5);
-    assert.equal(cellIntersectsMask(cell, { ...inside, radius_m: 250 }), true, `inside at ${lat}`);
-    assert.equal(cellIntersectsMask(cell, { ...onBoundary, radius_m: 250 }), true, `on boundary at ${lat}`);
-    assert.equal(cellIntersectsMask(cell, { ...outside, radius_m: 250 }), false, `outside at ${lat}`);
-  }
-});
-
-test('privacy predicate measures nearest cell corner rather than only centre or edges', () => {
-  const cell = cellFor(-45, 170.5);
-  const ring = cellPolygon(cell);
-  const southWest = { lng: ring[0][0], lat: ring[0][1] };
-  const justInside = pointAtBearing(southWest, 249, 225);
-  const justOutside = pointAtBearing(southWest, 252, 225);
-  assert.ok(haversineMeters(southWest, justInside) > 248.5);
-  assert.equal(cellIntersectsMask(cell, { ...justInside, radius_m: 250 }), true);
-  assert.equal(cellIntersectsMask(cell, { ...justOutside, radius_m: 250 }), false);
-});
-
-test('privacy mask handles an NZ-adjacent antimeridian wrap conservatively', () => {
-  const cell = cellFor(-47, 179.999);
-  const ring = cellPolygon(cell);
-  const eastEdge = {
-    lng: Math.max(...ring.slice(0, 4).map(coordinate => coordinate[0])),
-    lat: (ring[1][1] + ring[2][1]) / 2,
-  };
-  const wrappedMask = { lat: eastEdge.lat, lng: -179.999, radius_m: 250 };
-  assert.ok(haversineMeters(eastEdge, wrappedMask) < 250);
-  assert.equal(cellIntersectsMask(cell, wrappedMask), true);
-});
-
-test('server projection excludes whole endpoint/private cells and emits no source rows', async () => {
+test('server projection returns every eligible coarse cell and emits no source rows', async () => {
   const rows = [
     { id: 1, lat: -41.2865, lng: 174.7762, ts: 1000, evidence_source: 'activity_real', source_activity_client_id: 'activity-a', session_id: 9 },
     { id: 2, lat: -41.2865, lng: 174.7830, ts: 2000, evidence_source: 'activity_real', source_activity_client_id: 'activity-a', session_id: 9 },
@@ -120,9 +34,6 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
     async execute(sql, params) {
       calls.push({ sql, params });
       if (sql.includes('FROM memory_points')) return [rows];
-      if (sql.includes('FROM memory_private_places')) {
-        return [[{ lat: -41.2865, lng: 174.7900, radius_m: 250, version: 4 }]];
-      }
       if (sql.includes('FROM JSON_TABLE')) return [[]];
       throw new Error(`unexpected query: ${sql}`);
     },
@@ -139,12 +50,11 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
   assert.equal(projection.cell_size_m, 200);
   assert.equal(projection.grid_cell_size_mercator_m, 200);
   assert.equal(projection.cell_size_basis, 'EPSG:3857_projected_grid');
-  assert.equal(projection.mask_radius_ground_m, 250);
-  assert.equal(projection.mask_distance_tolerance_m, MASK_DISTANCE_TOLERANCE_M);
-  assert.equal(projection.mask_distance_model, 'local_tangent_ground_distance');
+  assert.equal(projection.projection_policy_version, 2);
+  assert.equal('mask_radius_ground_m' in projection, false);
   assert.equal(projection.authorization_version, 3);
   assert.match(projection.projection_version, /^[0-9a-f]{64}$/);
-  assert.ok(projection.cells.length < new Set(rows.map(row => cellFor(row.lat, row.lng).id)).size);
+  assert.equal(projection.cells.length, new Set(rows.map(row => cellFor(row.lat, row.lng).id)).size);
   assert.equal(JSON.stringify(projection).includes('source_activity_client_id'), false);
   assert.equal(JSON.stringify(projection).includes('ts'), false);
   assert.match(calls[0].sql, /evidence_source = 'activity_real'/);
@@ -158,7 +68,7 @@ test('server projection excludes whole endpoint/private cells and emits no sourc
   assert.deepEqual(calls[0].params.slice(0, 4), [7, 7, 7, 7]);
 });
 
-test('passive acquisition lifecycles mask their own endpoints without collapsing into one lifetime', async () => {
+test('passive acquisition lifecycles contribute all delayed eligible cells', async () => {
   const rows = [
     { id: 1, lat: -40, lng: 174, ts: 1000, evidence_source: 'passive_real', source_segment_id: 'passive-a' },
     { id: 2, lat: -40, lng: 174.01, ts: 2000, evidence_source: 'passive_real', source_segment_id: 'passive-a' },
@@ -170,7 +80,6 @@ test('passive acquisition lifecycles mask their own endpoints without collapsing
   const db = {
     async execute(sql) {
       if (sql.includes('FROM memory_points')) return [rows];
-      if (sql.includes('FROM memory_private_places')) return [[]];
       if (sql.includes('FROM JSON_TABLE')) return [[]];
       throw new Error(`unexpected query: ${sql}`);
     },
@@ -183,10 +92,11 @@ test('passive acquisition lifecycles mask their own endpoints without collapsing
     policy_epoch: 0,
   });
   const ids = new Set(projection.cells.map(cell => cell.id));
+  assert.equal(ids.size, new Set(rows.map(row => cellFor(row.lat, row.lng).id)).size);
   assert.equal(ids.has(cellFor(-40, 174.01).id), true);
   assert.equal(ids.has(cellFor(-40.1, 174.01).id), true);
-  assert.equal(ids.has(cellFor(-40, 174).id), false);
-  assert.equal(ids.has(cellFor(-40.1, 174.02).id), false);
+  assert.equal(ids.has(cellFor(-40, 174).id), true);
+  assert.equal(ids.has(cellFor(-40.1, 174.02).id), true);
 });
 
 test('friendship active uniqueness does not derive a generated column from cascading FK inputs', () => {

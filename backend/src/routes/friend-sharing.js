@@ -409,92 +409,15 @@ router.post('/projections', async (req, res) => {
 });
 
 router.get('/private-places', async (req, res) => {
-  try {
-    const [rows] = await pool.execute(
-      `SELECT id, label, lat, lng, GREATEST(radius_m, 250) AS radius_m, created_at, updated_at
-         FROM memory_private_places
-        WHERE owner_id = ? AND active = 1 ORDER BY created_at DESC`,
-      [req.user.userId],
-    );
-    return res.json({ private_places: rows.map(row => ({ ...row, lat: Number(row.lat), lng: Number(row.lng), radius_m: Number(row.radius_m) })) });
-  } catch (error) {
-    console.error('[friend-sharing/private-places:get]', error.message);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  return res.json({ private_places: [], removed: true });
 });
 
 router.post('/private-places', async (req, res) => {
-  const lat = Number(req.body?.lat);
-  const lng = Number(req.body?.lng);
-  const radiusM = Math.max(250, Math.min(5000, Number(req.body?.radius_m ?? 250)));
-  const label = typeof req.body?.label === 'string' ? req.body.label.trim().slice(0, 80) || null : null;
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
-    return res.status(400).json({ error: 'Valid lat/lng required' });
-  }
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    // Serialize this owner's bounded collection without relying on an
-    // aggregate SELECT lock (not portable across MySQL execution plans).
-    await conn.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [req.user.userId]);
-    const [[count]] = await conn.execute(
-      'SELECT COUNT(*) AS n FROM memory_private_places WHERE owner_id = ? AND active = 1',
-      [req.user.userId],
-    );
-    if (Number(count.n) >= 20) {
-      await conn.rollback();
-      return res.status(409).json({ error: 'Private place limit reached' });
-    }
-    const [result] = await conn.execute(
-      `INSERT INTO memory_private_places (owner_id, label, lat, lng, radius_m)
-       VALUES (?, ?, ?, ?, ?)`,
-      [req.user.userId, label, lat, lng, Math.round(radiusM)],
-    );
-    await conn.execute(
-      `UPDATE memory_share_grants SET authorization_version = authorization_version + 1
-        WHERE owner_id = ? AND status = 'active'`,
-      [req.user.userId],
-    );
-    await conn.commit();
-    return res.status(201).json({ id: result.insertId, label, lat, lng, radius_m: Math.round(radiusM) });
-  } catch (error) {
-    try { await conn.rollback(); } catch { /* noop */ }
-    console.error('[friend-sharing/private-places:post]', error.message);
-    return res.status(500).json({ error: 'Server error' });
-  } finally {
-    conn.release();
-  }
+  return res.status(410).json({ error: 'Protected Places have been removed from Friends Memory.' });
 });
 
 router.delete('/private-places/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid private place id' });
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const [result] = await conn.execute(
-      `UPDATE memory_private_places SET active = 0, version = version + 1
-        WHERE id = ? AND owner_id = ? AND active = 1`,
-      [id, req.user.userId],
-    );
-    if (!result.affectedRows) {
-      await conn.rollback();
-      return res.status(404).json({ error: 'Private place not found' });
-    }
-    await conn.execute(
-      `UPDATE memory_share_grants SET authorization_version = authorization_version + 1
-        WHERE owner_id = ? AND status = 'active'`,
-      [req.user.userId],
-    );
-    await conn.commit();
-    return res.json({ removed: true });
-  } catch (error) {
-    try { await conn.rollback(); } catch { /* noop */ }
-    console.error('[friend-sharing/private-places:delete]', error.message);
-    return res.status(500).json({ error: 'Server error' });
-  } finally {
-    conn.release();
-  }
+  return res.status(410).json({ error: 'Protected Places have been removed from Friends Memory.' });
 });
 
 module.exports = router;

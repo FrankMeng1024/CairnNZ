@@ -4,14 +4,8 @@ const crypto = require('crypto');
 const { eligibleSourceProvenanceSql } = require('./activitySourceProvenance');
 
 const CELL_SIZE_M = 200;
-const MASK_RADIUS_M = 250;
+const FRIEND_PROJECTION_POLICY_VERSION = 2;
 const EARTH_RADIUS_M = 6378137;
-const GROUND_EARTH_RADIUS_M = 6371008.8;
-// Cell edges are at most 200 EPSG:3857 metres. Across the NZ latitude
-// range, a local tangent-plane distance over a cell plus a 250 m mask has
-// sub-metre spherical approximation error. This explicit margin makes the
-// privacy predicate conservative at the numerical boundary.
-const MASK_DISTANCE_TOLERANCE_M = 1;
 const FRIEND_VISIBILITY_DELAY_SECONDS = 30 * 60;
 
 function toMercator(lat, lng) {
@@ -46,41 +40,6 @@ function cellPolygon(cell) {
   const ne = fromMercator(maxX, maxY);
   const nw = fromMercator(minX, maxY);
   return [[sw.lng, sw.lat], [se.lng, se.lat], [ne.lng, ne.lat], [nw.lng, nw.lat], [sw.lng, sw.lat]];
-}
-
-function normalizedLongitudeDeltaDegrees(lng, originLng) {
-  return ((Number(lng) - Number(originLng) + 540) % 360) - 180;
-}
-
-/**
- * Minimum ground distance from a point to the cell's geographic rectangle.
- *
- * The grid itself remains EPSG:3857 for stable cell identities. Privacy is
- * different: its promised radius is a ground distance. Each small cell is
- * projected into a local tangent plane centred on the protected point, with
- * wrapped longitude deltas for the antimeridian. We compare the closest point
- * on that rectangle using spherical ground metres, never Mercator metres.
- */
-function minimumGroundDistanceToCellMeters(cell, point) {
-  const ring = cellPolygon(cell).slice(0, 4);
-  const latitudes = ring.map(coordinate => Number(coordinate[1]));
-  const longitudeDeltas = ring.map(coordinate => normalizedLongitudeDeltaDegrees(coordinate[0], point.lng));
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLngDelta = Math.min(...longitudeDeltas);
-  const maxLngDelta = Math.max(...longitudeDeltas);
-  const closestLat = Math.max(minLat, Math.min(maxLat, Number(point.lat)));
-  const closestLngDelta = Math.max(minLngDelta, Math.min(maxLngDelta, 0));
-  const radians = Math.PI / 180;
-  const northM = (closestLat - Number(point.lat)) * radians * GROUND_EARTH_RADIUS_M;
-  const eastM = closestLngDelta * radians * GROUND_EARTH_RADIUS_M
-    * Math.cos(Number(point.lat) * radians);
-  return Math.hypot(eastM, northM);
-}
-
-function cellIntersectsMask(cell, mask) {
-  const radiusM = Math.max(MASK_RADIUS_M, Number(mask.radius_m || 0));
-  return minimumGroundDistanceToCellMeters(cell, mask) <= radiusM + MASK_DISTANCE_TOLERANCE_M;
 }
 
 async function loadFriendProjectionEvidence(db, ownerId, grant) {
@@ -165,35 +124,6 @@ async function loadFriendProjectionEvidence(db, ownerId, grant) {
 
 async function deriveFriendProjection(db, ownerId, viewerId, grant) {
   const rows = await loadFriendProjectionEvidence(db, ownerId, grant);
-  const [privatePlaces] = await db.execute(
-    `SELECT lat, lng, GREATEST(radius_m, 250) AS radius_m, version
-       FROM memory_private_places
-      WHERE owner_id = ? AND active = 1
-      ORDER BY id ASC`,
-    [ownerId],
-  );
-
-  const endpoints = [];
-  const byActivity = new Map();
-  for (const row of rows) {
-    // New passive producers send an acquisition-lifecycle segment. Legacy
-    // passive evidence falls back to a UTC-day bucket, which safely
-    // under-reveals at day boundaries instead of treating a lifetime as one
-    // continuous journey. This affects only coarse Friend-Fog endpoint masks.
-    const key = row.evidence_source === 'passive_real'
-      ? `passive:${row.source_segment_id || Math.floor(Number(row.ts) / 86_400_000)}`
-      : `activity:${row.source_activity_client_id}:${row.source_segment_id || 'legacy-0'}`;
-    const entry = byActivity.get(key);
-    if (!entry) byActivity.set(key, { first: row, last: row });
-    else entry.last = row;
-  }
-  for (const entry of byActivity.values()) {
-    endpoints.push({ lat: Number(entry.first.lat), lng: Number(entry.first.lng), radius_m: MASK_RADIUS_M });
-    endpoints.push({ lat: Number(entry.last.lat), lng: Number(entry.last.lng), radius_m: MASK_RADIUS_M });
-  }
-  const masks = [...endpoints, ...privatePlaces.map(place => ({
-    lat: Number(place.lat), lng: Number(place.lng), radius_m: Math.max(MASK_RADIUS_M, Number(place.radius_m)),
-  }))];
 
   const cells = new Map();
   const cellLatestObservedAt = new Map();
@@ -204,9 +134,6 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
       cell.id,
       Math.max(Number(row.ts) || 0, cellLatestObservedAt.get(cell.id) || 0),
     );
-  }
-  for (const [cellId, cell] of cells) {
-    if (masks.some(mask => cellIntersectsMask(cell, mask))) cells.delete(cellId);
   }
   const sortedCells = [...cells.values()].sort((a, b) => a.id.localeCompare(b.id));
   let regions = [];
@@ -263,11 +190,11 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
     }));
   }
   const versionMaterial = JSON.stringify({
+    projection_policy: FRIEND_PROJECTION_POLICY_VERSION,
     grant: grant.grant_epoch,
     authorization: Number(grant.authorization_version),
     policy: Number(grant.policy_epoch),
     cells: sortedCells.map(cell => cell.id),
-    private: privatePlaces.map(place => Number(place.version)),
   });
   const projectionVersion = crypto.createHash('sha256').update(versionMaterial).digest('hex');
   return {
@@ -279,14 +206,12 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
     cell_size_m: CELL_SIZE_M,
     cell_size_basis: 'EPSG:3857_projected_grid',
     grid_cell_size_mercator_m: CELL_SIZE_M,
-    mask_radius_ground_m: MASK_RADIUS_M,
-    mask_distance_tolerance_m: MASK_DISTANCE_TOLERANCE_M,
-    mask_distance_model: 'local_tangent_ground_distance',
+    projection_policy_version: FRIEND_PROJECTION_POLICY_VERSION,
     contribution_delay_seconds: FRIEND_VISIBILITY_DELAY_SECONDS,
     coverage_scope: grant.coverage_scope || 'legacy_activity_since_grant',
-    // City/country presence is derived only from the same delayed, endpoint-
-    // and private-place-masked cells returned below. It cannot reveal a more
-    // recent or more precise area than the authorized map projection.
+    // City/country presence is derived only from the same delayed coarse cells
+    // returned below. It cannot reveal a more recent or more precise area than
+    // the authorized map projection.
     regions,
     cells: sortedCells.map(cell => ({
       id: cell.id,
@@ -297,13 +222,10 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
 
 module.exports = {
   CELL_SIZE_M,
-  MASK_RADIUS_M,
-  MASK_DISTANCE_TOLERANCE_M,
+  FRIEND_PROJECTION_POLICY_VERSION,
   FRIEND_VISIBILITY_DELAY_SECONDS,
   cellFor,
   cellPolygon,
-  minimumGroundDistanceToCellMeters,
-  cellIntersectsMask,
   loadFriendProjectionEvidence,
   deriveFriendProjection,
 };
