@@ -26,6 +26,8 @@ test('scheduled attribution returns immediately and coalesces a user range', asy
 
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].params, [91001, 50, 300]);
+  assert.match(calls[0].sql, /mp\.lng BETWEEN r\.bbox_min_lng AND r\.bbox_max_lng/);
+  assert.match(calls[0].sql, /mp\.lat BETWEEN r\.bbox_min_lat AND r\.bbox_max_lat/);
 });
 
 test('reset fences an in-flight attribution before post-reset evidence', async () => {
