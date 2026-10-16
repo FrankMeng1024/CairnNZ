@@ -284,6 +284,9 @@ const friendsText = await page.locator('body').innerText();
 await page.getByRole('tab', { name: 'Requests', exact: true }).click();
 await page.getByTestId('incoming-card-801').waitFor({ state: 'visible' });
 captures.push(await capture('requests-pending-declined-day'));
+await page.getByLabel('Dismiss declined request', { exact: true }).click();
+await page.getByTestId('sent-card-702').waitFor({ state: 'hidden', timeout: 10_000 });
+const declinedDismissedWithoutModal = await page.getByTestId('cancel-request-modal').count() === 0;
 
 await page.getByLabel('Accept friend request', { exact: true }).click();
 await page.getByTestId('friend-card-8').waitFor({ state: 'visible', timeout: 10_000 });
@@ -303,6 +306,13 @@ await page.getByRole('tab', { name: 'Friends', exact: true }).click();
 await page.getByTestId(`friend-card-${ownerIds[0]}`).click();
 await page.getByTestId('friend-profile-modal').waitFor({ state: 'visible' });
 await settle(450);
+const friendProfileText = await page.getByTestId('friend-profile-modal').innerText();
+const friendProfileIsActionOnly = friendProfileText.includes('Share my Memory')
+  && friendProfileText.includes('Remove friend')
+  && !friendProfileText.includes('encountered Cairn')
+  && !friendProfileText.includes('shared Route')
+  && !friendProfileText.includes('Memory sharing is available')
+  && !friendProfileText.includes('No shared Memory layer');
 captures.push(await capture('friend-profile-toggle-day'));
 await page.getByTestId('friend-profile-remove-trigger').click();
 captures.push(await capture('friend-remove-confirmation-day'));
@@ -358,9 +368,10 @@ await page.getByTestId(`memory-friend-row-${ownerIds[0]}`).click();
 await page.waitForFunction(id => globalThis.__cairnStores.useMemorySubscriptionsStore.getState().isSubscribed(Number(id)), ownerIds[0]);
 await page.getByTestId(`memory-friend-row-${ownerIds[1]}`).click();
 await page.waitForFunction(id => globalThis.__cairnStores.useMemorySubscriptionsStore.getState().isSubscribed(Number(id)), ownerIds[1]);
-const perFriendLoadingVisible = await page.getByText('Loading shared area…', { exact: true }).count() > 0;
+const perFriendLoadingVisible = await page.getByText('Loading shared places…', { exact: true }).count() > 0;
 captures.push(await capture('memory-picker-two-selected-loading'));
 await page.waitForFunction(ids => ids.every(id => globalThis.__cairnStores.useFriendMemoryStore.getState().sourceStates[id]?.status === 'loaded'), ownerIds, { timeout: 20_000 });
+const loadedPickerText = await page.getByTestId('memory-friend-pick-modal').innerText();
 captures.push(await capture('memory-picker-two-loaded'));
 const pickerStillOpen = await page.getByTestId('memory-friend-pick-modal').isVisible();
 const centerAfterSelection = await page.evaluate(() => {
@@ -369,6 +380,11 @@ const centerAfterSelection = await page.evaluate(() => {
 });
 await page.getByTestId('memory-friend-pick-close').click();
 await page.getByTestId('memory-friend-pick-modal').waitFor({ state: 'hidden' });
+const activeFriendsCountVisible = await page.getByTestId('memory-scope-combined').getByText(String(ownerIds.length), { exact: true }).count() === 1;
+await page.getByTestId('memory-scope-self').click();
+const inactiveFriendsCountHidden = await page.getByTestId('memory-scope-combined').getByText(String(ownerIds.length), { exact: true }).count() === 0;
+captures.push(await capture('memory-mine-inactive-friends-no-count'));
+await page.getByTestId('memory-scope-combined').click();
 await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.getSource?.('memory-friend-union-src'))
   && Boolean(globalThis.__cairnMap?.getLayer?.('memory-friend-union')), null, { timeout: 20_000 });
 
@@ -425,8 +441,14 @@ const assertions = {
   directionalFriendLabels: friendsText.includes('My Memory: Shared') && friendsText.includes('My Memory: Not shared'),
   sendLandedOnRequests,
   acceptedLandedOnFriendsWithNew: acceptedLandedOnFriends,
+  declinedDismissedWithoutModal,
+  friendProfileIsActionOnly,
   pickerStayedOpenForTwoSelections: pickerStillOpen,
   perFriendLoadingVisible,
+  loadedPickerHidesTechnicalCounts: !/\d+ delayed areas? loaded/i.test(loadedPickerText)
+    && !loadedPickerText.includes('Shared · no delayed area available yet'),
+  activeFriendsCountVisible,
+  inactiveFriendsCountHidden,
   bothSourcesLoaded: ownerIds.every(id => finalState.sourceStates[id]?.status === 'loaded'),
   exactAuthorizedCellsVisible: finalState.visibleCells === 10,
   exactAuthorizedSourceIds: JSON.stringify(finalState.visibleSourceFriendIds) === JSON.stringify([...ownerIds].sort()),

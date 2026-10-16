@@ -180,17 +180,17 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
                 const unavailable = item.sharing_status === 'not_shared';
                 const pending = pendingIds.includes(friendId);
                 const projectionState = sourceStates[String(friendId)];
-                const stateCopy = unavailable
+                const stateCopy: string | null = unavailable
                   ? 'Not shared with you'
                   : pending || projectionState?.status === 'loading'
-                    ? 'Loading shared area…'
+                    ? 'Loading shared places…'
                     : projectionState?.status === 'error'
-                      ? 'Shared area unavailable · tap to retry'
+                      ? 'Couldn’t load shared places · Retry'
                       : projectionState?.status === 'empty' || item.sharing_status === 'shared_empty'
-                        ? 'Shared · no delayed area available yet'
+                        ? 'No shared places yet'
                         : subscribed && projectionState?.status === 'loaded'
-                          ? `${projectionState.cellCount} delayed ${projectionState.cellCount === 1 ? 'area' : 'areas'} loaded`
-                          : subscribed ? 'Selected' : 'Shared with you';
+                          ? null
+                          : subscribed ? 'Loading shared places…' : 'Shared with you';
                 return (
                   <View>
                     <TouchableOpacity
@@ -203,7 +203,14 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
                     >
                       <View style={styles.rowMain}>
                         <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
-                        <Text style={[styles.rowEmail, { color: theme.foregroundSecondary }]}>{stateCopy}</Text>
+                        {stateCopy ? (
+                          <Text
+                            style={[styles.rowEmail, { color: theme.foregroundSecondary }]}
+                            testID={`memory-friend-row-status-${item.friend_id}`}
+                          >
+                            {stateCopy}
+                          </Text>
+                        ) : null}
                       </View>
                       {pending ? (
                         <ActivityIndicator size="small" color={theme.primary} />

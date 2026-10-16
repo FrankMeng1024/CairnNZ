@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockAuthenticatedFetch = jest.fn();
 
@@ -88,7 +88,7 @@ describe('Memory friend picker interaction owner', () => {
     await waitFor(() => expect(screen.getByTestId('memory-friend-row-11')).toBeTruthy());
 
     fireEvent.press(screen.getByTestId('memory-friend-row-11'));
-    await waitFor(() => expect(screen.getByText('Loading shared area…')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Loading shared places…')).toBeTruthy());
     expect(screen.getByTestId('memory-friend-pick-modal')).toBeTruthy();
     fireEvent.press(screen.getByTestId('memory-friend-row-22'));
 
@@ -99,6 +99,10 @@ describe('Memory friend picker interaction owner', () => {
 
     releaseFirst();
     await waitFor(() => expect(useFriendMemoryStore.getState().sourceStates['11']).toMatchObject({ status: 'loaded', cellCount: 1 }));
+    expect(screen.queryByText(/delayed areas? loaded/i)).toBeNull();
+    expect(screen.queryByText(/no delayed area available/i)).toBeNull();
+    expect(screen.queryByTestId('memory-friend-row-status-11')).toBeNull();
+    expect(screen.queryByTestId('memory-friend-row-status-22')).toBeNull();
     expect(new Set(useFriendMemoryStore.getState().getVisibleCells().map(cell => cell.sourceFriendId)))
       .toEqual(new Set(['11', '22']));
     expect(useMemoryScopeStore.getState().scope).toBe('combined');
@@ -109,5 +113,37 @@ describe('Memory friend picker interaction owner', () => {
     expect(screen.getByTestId('memory-friend-pick-modal')).toBeTruthy();
     expect(screen.getByText('Not shared with you')).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test('uses natural empty and retry states without exposing cell counts', async () => {
+    const emptySource = { ...sources[0], sharing_status: 'shared_empty' as const };
+    useMemorySubscriptionsStore.setState({
+      availableSources: [emptySource],
+      subscriptions: [{ friend_id: 11, friend_name: 'First Friend' }],
+      loading: false,
+      error: null,
+    });
+    useFriendMemoryStore.setState({
+      sourceStates: { '11': { status: 'empty', cellCount: 0 } },
+    });
+    mockAuthenticatedFetch.mockImplementation(async (path: string) => {
+      if (path === '/api/memory-subscriptions') {
+        return ok({ limit: null, count: 1, subscriptions: [{ friend_id: 11, friend_name: 'First Friend' }] });
+      }
+      if (path === '/api/friend-sharing/sources') return ok({ sources: [emptySource] });
+      throw new Error(`unexpected GET ${path}`);
+    });
+
+    const screen = render(<MemoryFriendPickModal visible onClose={jest.fn()} />);
+    await waitFor(() => expect(screen.getByText('No shared places yet')).toBeTruthy());
+    expect(screen.queryByText(/delayed/i)).toBeNull();
+    expect(screen.queryByText(/\d+ areas? loaded/i)).toBeNull();
+
+    await act(async () => {
+      useFriendMemoryStore.setState({
+        sourceStates: { '11': { status: 'error', cellCount: 0, error: 'network' } },
+      });
+    });
+    await waitFor(() => expect(screen.getByText('Couldn’t load shared places · Retry')).toBeTruthy());
   });
 });

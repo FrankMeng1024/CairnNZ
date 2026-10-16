@@ -85,7 +85,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
           >
             <View style={styles.labelRow}>
               <Text style={[styles.label, active && styles.labelActive, { color: active ? theme.primary : theme.foregroundSecondary }]}>{o.label}</Text>
-              {o.id === 'combined' && subscriptions.length > 0 ? (
+              {o.id === 'combined' && active && subscriptions.length > 0 ? (
                 <View style={[styles.countBadge, { backgroundColor: active ? theme.primary : theme.borderStrong }]}>
                   <Text style={[styles.countText, { color: theme.onPrimary }]}>{subscriptions.length}</Text>
                 </View>

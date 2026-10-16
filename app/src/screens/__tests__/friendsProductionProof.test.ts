@@ -45,14 +45,15 @@ describe('Friends production proof contract', () => {
     expect(source).toContain('variant="destructive"');
     expect(source).toContain('removeFriendAPI(profileFriend.id)');
     expect(source).toContain('<View style={s.profileRemoveShell} testID="friend-profile-remove-region">');
-    expect(source).toMatch(/profileRemoveShell:\s*\{\s*marginTop: DS\.sp3,\s*paddingTop: Spacing\.md,/);
+    expect(source).toMatch(/profileRemoveShell:\s*\{\s*marginTop: 0,\s*paddingTop: 0,/);
     expect(source).not.toContain('<ContentSurface\n              style={s.profileRemoveShell}');
     expect(source).not.toContain('Remove from your circle?');
     expect(source).not.toContain('label="Keep friend"');
   });
 
   it('silently discards stale block and unfriend completions after an account boundary', () => {
-    expect(source.match(/if \(result\.superseded\) return;/g)).toHaveLength(2);
+    expect(source.match(/if \(result\.superseded\) return;/g)).toHaveLength(3);
+    expect(source).toMatch(/cancelOutboundRequest\(req\.id\);\s+if \(result\.superseded\) return;\s+setOutboundBusyId\(null\)/);
     expect(source).toMatch(/blockUser\(friendActionTarget\.id\);\s+if \(result\.superseded\) return;\s+setBlockBusy\(false\)/);
     expect(source).toMatch(/removeFriendAPI\(profileFriend\.id\);\s+if \(result\.superseded\) return;\s+setRemoveBusy\(false\)/);
   });
@@ -80,7 +81,11 @@ describe('Friends production proof contract', () => {
     expect(source).toContain('>Cancel request</Text>');
     expect(source).toContain('testID="cancel-request-modal"');
     expect(source).toContain('testID="cancel-request-confirm"');
-    expect(source).toContain(": 'They won’t receive this friend request.'}");
+    expect(source).toContain('body="They won’t receive this friend request."');
+    expect(source).toContain("if (req.status === 'declined')");
+    expect(source).toContain('void dismissDeclinedOutbound(req);');
+    expect(source).not.toContain('Dismiss declined request from');
+    expect(source).not.toContain('label={cancelRequestTarget.status');
     expect(source).not.toContain('label="Keep request"');
     expect(source).not.toContain('Alert.alert(');
     expect(source).not.toContain('window.confirm(');
@@ -93,6 +98,11 @@ describe('Friends production proof contract', () => {
     expect(source).not.toContain('MemorySharingSheet');
     expect(source).not.toContain('Open shared content');
     expect(source).not.toContain('Protected Places');
+    expect(source).not.toContain('Memory sharing is available');
+    expect(source).not.toContain('No shared Memory layer');
+    expect(source).not.toContain('encountered Cairns');
+    expect(source).not.toContain('shared Routes');
+    expect(source).not.toContain('fetchFriendProfileForNavigation');
   });
 
   it('keeps Decline left of Accept and preserves independent recipient consent', () => {

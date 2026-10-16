@@ -129,66 +129,33 @@ describe('FriendsScreen mutation result handling', () => {
     mockProfileAuthorityCurrent.mockReturnValue(true);
   });
 
-  test('keeps the profile local and never exposes the removed shared-content navigation online or offline', async () => {
+  test('keeps friend detail action-only with one Memory switch and Remove Friend', async () => {
     const screen = await renderReady();
     fireEvent.press(screen.getByTestId('friend-card-owner-a'));
     await waitFor(() => expect(screen.getByTestId('friend-profile-memory-toggle')).toBeTruthy());
     expect(screen.queryByText('Open shared content')).toBeNull();
+    expect(screen.queryByText(/encountered Cairn/)).toBeNull();
+    expect(screen.queryByText(/shared Route/)).toBeNull();
+    expect(screen.queryByText(/Memory sharing is available/)).toBeNull();
+    expect(screen.getByTestId('friend-profile-remove-trigger')).toBeTruthy();
     fireEvent(screen.getByTestId('friend-profile-memory-toggle'), 'valueChange', true);
     expect(mockSetGrant).toHaveBeenCalledWith('owner-a', true);
-    fireEvent.press(screen.getByTestId('friend-profile-close'));
-
-    mockFetchProfileForNavigation.mockResolvedValueOnce({
-      status: 'offline-fallback',
-      identity: { id: 'owner-a', name: 'Alice Example', email: 'alice@example.com' },
-      authority: mockProfileAuthority,
-    });
-    fireEvent.press(screen.getByTestId('friend-card-owner-a'));
-    await waitFor(() => expect(screen.getByTestId('friend-profile-offline-fallback')).toBeTruthy());
-    expect(screen.getByText('Profile details unavailable offline')).toBeTruthy();
-    expect(screen.queryByText('Open shared content')).toBeNull();
-
-    expect(mockFetchProfileForNavigation).toHaveBeenCalledTimes(2);
+    expect(mockFetchProfileForNavigation).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('an account switch clears the modal and discards a delayed account-A fallback completion', async () => {
-    let release!: (value: any) => void;
-    mockFetchProfileForNavigation.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+  test('an account switch clears the local friend detail', async () => {
     const screen = await renderReady();
     fireEvent.press(screen.getByTestId('friend-card-owner-a'));
-    await waitFor(() => expect(screen.getByText('Loading profile…')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('friend-profile-modal')).toBeTruthy());
 
     mockViewerState.user = { id: 'viewer-b' };
     mockFriendState.friends = [];
     screen.rerender(<FriendsScreen />);
-    await act(async () => {
-      release({
-        status: 'offline-fallback',
-        identity: { id: 'owner-a', name: 'Alice Example', email: 'alice@example.com' },
-        authority: mockProfileAuthority,
-      });
-    });
 
     await waitFor(() => expect(screen.queryByTestId('friend-profile-modal')).toBeNull());
     expect(screen.queryByText('Open shared content')).toBeNull();
     expect(mockNavigate).not.toHaveBeenCalled();
-  });
-
-  test('an offline fallback has no route into shared content even if its prior authority becomes stale', async () => {
-    mockFetchProfileForNavigation.mockResolvedValueOnce({
-      status: 'offline-fallback',
-      identity: { id: 'owner-a', name: 'Alice Example', email: 'alice@example.com' },
-      authority: mockProfileAuthority,
-    });
-    const screen = await renderReady();
-    fireEvent.press(screen.getByTestId('friend-card-owner-a'));
-    await waitFor(() => expect(screen.getByTestId('friend-profile-offline-fallback')).toBeTruthy());
-
-    mockProfileAuthorityCurrent.mockReturnValue(false);
-    expect(screen.queryByText('Open shared content')).toBeNull();
-    expect(mockNavigate).not.toHaveBeenCalled();
-    expect(screen.getByTestId('friend-profile-modal')).toBeTruthy();
   });
 
   test('a server-confirmed send immediately selects Requests and renders the authoritative outgoing row', async () => {
@@ -215,6 +182,37 @@ describe('FriendsScreen mutation result handling', () => {
     expect(screen.getByTestId('friends-tabs-active')).toHaveTextContent('Requests');
     expect(screen.getByText('recipient@example.com')).toBeTruthy();
     expect(mockSendFriendRequest).toHaveBeenCalledWith('recipient@example.com', false);
+  });
+
+  test('dismisses declined history in one tap with pending and inline error states', async () => {
+    mockFetchOutboundRequests.mockResolvedValue({
+      success: true,
+      items: [{
+        id: 91, toUserId: 92, toName: 'Recipient Example', toEmail: 'recipient@example.com',
+        sentAt: 1_800_000_000_000, status: 'declined', requesterShares: false,
+      }],
+    });
+    let release!: (value: any) => void;
+    mockCancelOutboundRequest.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+    const screen = await renderReady();
+    fireEvent.press(screen.getByText('Requests'));
+    await waitFor(() => expect(screen.getByTestId('sent-card-91')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('Dismiss declined request'));
+    expect(mockCancelOutboundRequest).toHaveBeenCalledWith(91);
+    expect(screen.queryByTestId('cancel-request-modal')).toBeNull();
+    expect(screen.getByTestId('btn-cancel-outbound-91').props.accessibilityState.disabled).toBe(true);
+
+    await act(async () => { release({ success: false, error: 'Couldn’t dismiss. Try again.' }); });
+    await waitFor(() => expect(screen.getByText('Couldn’t dismiss. Try again.')).toBeTruthy());
+    expect(screen.getByTestId('sent-card-91')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('btn-cancel-outbound-91').props.accessibilityState.disabled).toBe(false));
+
+    mockCancelOutboundRequest.mockResolvedValueOnce({ success: true, serverCommitted: true });
+    fireEvent.press(screen.getByLabelText('Dismiss declined request'));
+    await waitFor(() => expect(mockCancelOutboundRequest).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('sent-card-91')).toBeNull());
+    expect(screen.queryByTestId('cancel-request-modal')).toBeNull();
   });
 
   test('accept uses independent OFF consent, returns to Friends, and marks the authoritative friend New', async () => {

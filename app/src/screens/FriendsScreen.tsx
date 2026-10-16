@@ -25,9 +25,8 @@ import Svg, { Path } from 'react-native-svg';
 import {
   useFriendStore, sendFriendRequest, fetchFriendRequests,
   acceptFriendRequestAPI, rejectFriendRequestAPI, blockUser,
-  fetchFriendProfileForNavigation,
   fetchOutboundRequests, cancelOutboundRequest, removeFriendAPI,
-  type OutboundRequest, type FriendProfile, type IncomingFriendRequest,
+  type OutboundRequest, type IncomingFriendRequest,
 } from '../store/useFriendStore';
 import { useAppStore } from '../store/useAppStore';
 import { useMarkerStore } from '../store/useMarkerStore';
@@ -242,9 +241,15 @@ function IncomingRow({
 
 // ── Sent (outbound) request row (F2/F4) ─────────────────────────────────────
 function SentRow({
-  id, toName, toEmail, status, onCancel,
+  id, toName, toEmail, status, busy, error, onCancel,
 }: {
-  id: string; toName: string; toEmail: string; status: OutboundRequest['status']; onCancel: () => void;
+  id: string;
+  toName: string;
+  toEmail: string;
+  status: OutboundRequest['status'];
+  busy: boolean;
+  error?: string;
+  onCancel: () => void;
 }) {
   const theme = useVisualTheme();
   return (
@@ -258,15 +263,19 @@ function SentRow({
         <Text style={[s.declinedStatus, { color: status === 'declined' ? theme.destructive : theme.foregroundSecondary }]}>
           {status === 'declined' ? 'Declined' : 'Pending'}
         </Text>
+        {error ? <Text style={[s.outboundError, { color: theme.destructive }]}>{error}</Text> : null}
       </View>
       <TouchableOpacity
         style={[s.sentCancel, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }]}
         onPress={onCancel}
+        disabled={busy}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         accessibilityLabel={status === 'declined' ? 'Dismiss declined request' : 'Cancel outbound request'}
         testID={`btn-cancel-outbound-${id}`}
       >
-        {status === 'declined'
+        {busy
+          ? <ActivityIndicator size="small" color={theme.primary} />
+          : status === 'declined'
           ? <Icon name="X" size={DS.ic_sm} color={theme.icon} strokeWidth={2} />
           : <Text style={[s.sentCancelText, { color: theme.foregroundSecondary }]}>Cancel request</Text>}
       </TouchableOpacity>
@@ -588,12 +597,8 @@ export function FriendsScreen() {
   const [requestsError, setRequestsError] = useState('');
   const [newFriendId, setNewFriendId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const profileRequestGeneration = useRef(0);
   const profileViewerId = useRef(viewerId);
   const [profileFriend, setProfileFriend] = useState<ProfileFriend | null>(null);
-  const [profileData, setProfileData] = useState<FriendProfile | null>(null);
-  const [profileOfflineFallback, setProfileOfflineFallback] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
   const [removeConfirming, setRemoveConfirming] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState('');
@@ -601,6 +606,8 @@ export function FriendsScreen() {
   const [cancelRequestTarget, setCancelRequestTarget] = useState<OutboundRequest | null>(null);
   const [cancelRequestBusy, setCancelRequestBusy] = useState(false);
   const [cancelRequestError, setCancelRequestError] = useState('');
+  const [outboundBusyId, setOutboundBusyId] = useState<number | null>(null);
+  const [outboundErrors, setOutboundErrors] = useState<Record<string, string>>({});
   const [friendActionTarget, setFriendActionTarget] = useState<ProfileFriend | null>(null);
   const [blockConfirming, setBlockConfirming] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
@@ -670,7 +677,25 @@ export function FriendsScreen() {
     else if (!result.superseded) setRequestsError(result.error || 'Could not decline request.');
   };
 
+  const dismissDeclinedOutbound = async (req: OutboundRequest) => {
+    if (outboundBusyId === req.id) return;
+    setOutboundBusyId(req.id);
+    setOutboundErrors(errors => Object.fromEntries(Object.entries(errors).filter(([id]) => id !== String(req.id))));
+    const result = await cancelOutboundRequest(req.id);
+    if (result.superseded) return;
+    setOutboundBusyId(null);
+    if (!result.success) {
+      setOutboundErrors(errors => ({ ...errors, [req.id]: result.error || 'Couldn’t dismiss. Try again.' }));
+      return;
+    }
+    setOutbound((prev) => prev.filter((item) => item.id !== req.id));
+  };
+
   const handleCancelOutbound = (req: OutboundRequest) => {
+    if (req.status === 'declined') {
+      void dismissDeclinedOutbound(req);
+      return;
+    }
     setCancelRequestError('');
     setCancelRequestTarget(req);
   };
@@ -690,31 +715,12 @@ export function FriendsScreen() {
   };
 
   // Bug-4: tap → open profile detail sheet
-  const handleFriendTap = async (friend: ProfileFriend) => {
-    const requestGeneration = ++profileRequestGeneration.current;
+  const handleFriendTap = (friend: ProfileFriend) => {
     setRemoveConfirming(false);
     setRemoveBusy(false);
     setRemoveError('');
     setRemoveServerCommitted(false);
     setProfileFriend(friend);
-    setProfileData(null);
-    setProfileOfflineFallback(false);
-    setProfileLoading(true);
-    const result = await fetchFriendProfileForNavigation(friend.id);
-    if (requestGeneration !== profileRequestGeneration.current) return;
-    if (result.status === 'superseded') {
-      setProfileFriend(null);
-      setProfileData(null);
-      setProfileOfflineFallback(false);
-      setProfileLoading(false);
-      return;
-    }
-    if (result.status === 'online') {
-      setProfileData(result.profile);
-    } else if (result.status === 'offline-fallback') {
-      setProfileOfflineFallback(true);
-    }
-    setProfileLoading(false);
   };
 
   const handleFriendLongPress = (friend: ProfileFriend) => {
@@ -759,11 +765,7 @@ export function FriendsScreen() {
 
   const closeProfile = () => {
     if (removeBusy) return;
-    profileRequestGeneration.current += 1;
     setProfileFriend(null);
-    setProfileData(null);
-    setProfileOfflineFallback(false);
-    setProfileLoading(false);
     setRemoveConfirming(false);
     setRemoveError('');
     setRemoveServerCommitted(false);
@@ -772,16 +774,10 @@ export function FriendsScreen() {
   useEffect(() => {
     if (profileViewerId.current === viewerId) return;
     profileViewerId.current = viewerId;
-    profileRequestGeneration.current += 1;
     setProfileFriend(null);
-    setProfileData(null);
-    setProfileOfflineFallback(false);
-    setProfileLoading(false);
+    setOutboundBusyId(null);
+    setOutboundErrors({});
   }, [viewerId]);
-
-  useEffect(() => () => {
-    profileRequestGeneration.current += 1;
-  }, []);
 
   const confirmRemoveFriend = async () => {
     if (!profileFriend || removeBusy) return;
@@ -800,8 +796,6 @@ export function FriendsScreen() {
       return;
     }
     setProfileFriend(null);
-    setProfileData(null);
-    setProfileOfflineFallback(false);
     setRemoveConfirming(false);
     setRemoveError('');
   };
@@ -933,6 +927,8 @@ export function FriendsScreen() {
                     toName={r.toName}
                     toEmail={r.toEmail}
                     status={r.status}
+                    busy={outboundBusyId === r.id}
+                    error={outboundErrors[r.id]}
                     onCancel={() => handleCancelOutbound(r)}
                   />
                 ))}
@@ -1009,55 +1005,6 @@ export function FriendsScreen() {
                 />
               )}
             </View>
-            {profileLoading ? (
-              <StateSurface
-                variant="loading"
-                title="Loading profile…"
-                material="embedded"
-                alignment="center"
-                style={s.profileState}
-              />
-            ) : profileData ? (
-              <View style={[s.profileStats, { borderColor: theme.borderSubtle }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.permittedContent.encounteredCairns}</Text>
-                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
-                      {profileData.permittedContent.encounteredCairns === 1 ? 'encountered Cairn' : 'encountered Cairns'}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={[s.profileStat, { color: theme.foreground }]}>{profileData.permittedContent.sharedRoutes}</Text>
-                    <Text style={[s.profileStatLabel, { color: theme.foregroundSecondary }]}>
-                      {profileData.permittedContent.sharedRoutes === 1 ? 'shared Route' : 'shared Routes'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[s.cardMeta, { color: theme.foregroundSecondary, textAlign: 'center', marginTop: Spacing.md }]}>
-                  {profileData.permittedContent.memoryAvailable ? 'Memory sharing is available' : 'No shared Memory layer'}
-                </Text>
-              </View>
-            ) : profileOfflineFallback ? (
-              <View testID="friend-profile-offline-fallback">
-                <StateSurface
-                  variant="unavailable"
-                  title="Profile details unavailable offline"
-                  body="Reconnect to refresh this friend’s details and sharing status."
-                  material="embedded"
-                  alignment="center"
-                  style={s.profileState}
-                />
-              </View>
-            ) : (
-              <StateSurface
-                variant="unavailable"
-                title="Profile unavailable"
-                body="Try opening this profile again in a moment."
-                material="embedded"
-                alignment="center"
-                style={s.profileState}
-              />
-            )}
             <View style={s.profileRemoveShell} testID="friend-profile-remove-region">
               {removeConfirming ? (
                 <View style={s.removeConfirmation} testID="friend-profile-remove-confirmation">
@@ -1096,17 +1043,13 @@ export function FriendsScreen() {
           testID="cancel-request-modal"
         >
           <ModalCardHeader
-            title={cancelRequestTarget.status === 'declined'
-              ? `Dismiss declined request from ${cancelRequestTarget.toName}?`
-              : `Cancel request to ${cancelRequestTarget.toName}?`}
-            body={cancelRequestTarget.status === 'declined'
-              ? 'This removes the Declined record from your Sent history.'
-              : 'They won’t receive this friend request.'}
+            title={`Cancel request to ${cancelRequestTarget.toName}?`}
+            body="They won’t receive this friend request."
             onClose={() => setCancelRequestTarget(null)}
           />
           {cancelRequestError ? <Text style={[s.dialogError, { color: theme.destructive }]}>{cancelRequestError}</Text> : null}
           <View style={s.dialogActions}>
-            <PrimaryButton label={cancelRequestTarget.status === 'declined' ? 'Dismiss' : 'Cancel request'} variant="destructive" onPress={confirmCancelOutbound} loading={cancelRequestBusy} style={s.dialogAction} testID="cancel-request-confirm" />
+            <PrimaryButton label="Cancel request" variant="destructive" onPress={confirmCancelOutbound} loading={cancelRequestBusy} style={s.dialogAction} testID="cancel-request-confirm" />
           </View>
         </ModalCard>
       )}
@@ -1247,6 +1190,7 @@ const s = StyleSheet.create({
   newBadge: { minWidth: 36, flexShrink: 0, textAlign: 'center', fontSize: FontSize.tiny, fontWeight: DS.fw_bold, paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
   sharingStatus: { fontSize: FontSize.tiny, fontWeight: DS.fw_semibold, maxWidth: 94, textAlign: 'right' },
   declinedStatus: { fontSize: FontSize.small, fontWeight: DS.fw_semibold, marginTop: 3 },
+  outboundError: { fontSize: FontSize.small, lineHeight: 17, marginTop: 3 },
 
   actionRow: {
     flexDirection: 'row',
@@ -1513,24 +1457,9 @@ const s = StyleSheet.create({
     padding: Spacing.md,
     marginBottom: Spacing.base,
   },
-  profileStats: {
-    paddingVertical: Spacing.base,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-  },
-  profileStat: {
-    fontSize: DS.fs_headerTitle,
-    fontWeight: DS.fw_bold,
-    color: T.textPrimary,
-  },
-  profileStatLabel: {
-    fontSize: DS.fs_meta,
-    color: T.textSecondary,
-  },
-  profileState: { paddingVertical: Spacing.base },
   profileRemoveShell: {
-    marginTop: DS.sp3,
-    paddingTop: Spacing.md,
+    marginTop: 0,
+    paddingTop: 0,
   },
   profileRemoveAction: { width: '100%' },
   removeConfirmation: { gap: Spacing.md },
