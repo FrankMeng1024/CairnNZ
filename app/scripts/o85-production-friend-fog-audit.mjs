@@ -21,6 +21,7 @@ const fixtureFile = path.resolve(fixtureArg >= 0
   ? process.argv[fixtureArg + 1]
   : '_review/o85-production-friend-fog-private.json');
 const apiBase = process.env.CAIRN_PRODUCTION_API || 'https://api.yiiling.cn';
+const EXPECTED_PROJECTION_POLICY_VERSION = 3;
 const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
 const hash = value => crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 12);
 
@@ -167,7 +168,7 @@ const sourceReceipts = projections.map(projection => ({
   projection_version_hash: hash(projection.projection_version),
 }));
 const receipt = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   generated_at: fixture.generated_at,
   production_access: 'public HTTPS API with five-minute internal-test tokens; one directional grant revoked and restored',
   evidenceClass: 'PRODUCTION_HTTPS_API_AUTHORIZATION_AND_PROJECTION',
@@ -189,7 +190,8 @@ const receipt = {
     endpoint_or_private_place_mask: false,
   },
   verdict: sourceReceipts.length === 2
-    && sourceReceipts.every(source => source.cell_count > 0 && source.projection_policy_version === 2)
+    && sourceReceipts.every(source => source.cell_count > 0
+      && source.projection_policy_version === EXPECTED_PROJECTION_POLICY_VERSION)
     ? 'REAL_TWO_FRIEND_API_CELLS_AVAILABLE'
     : 'REAL_FRIEND_API_PROJECTION_INCOMPLETE',
 };
