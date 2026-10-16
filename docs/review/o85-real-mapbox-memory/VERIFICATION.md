@@ -7,10 +7,14 @@ native iPhone proof.
 
 ## Automated results
 
-- `cd app && npm run verify:changed`: **PASS, 645/645** across continuity,
+- `cd app && npm run verify:changed`: **PASS, 676/676** across continuity,
   cadence, background, gap, elevation, matching, telemetry, integration,
   Memory, journal recovery, offline sync, simulator, server and static gates.
-- Focused O85 component/transaction set: **7 suites, 99 tests passed**.
+- Final independent focused set: **6 suites, 101 tests passed**; Public cache
+  authority/migration suite: **34/34 passed**.
+- Backend Node contract/regression set: **151/151 passed**.
+- Disposable MySQL/API: Friends/Memory **23/23**, Public **21/21**, Cairn
+  Memory **28/28**.
 - Wider Route/Memory regression: **26 ordinary suites, 283 tests passed**.
   The evidence-dependent integration was excluded from that count because it
   correctly fails closed without its required path.
@@ -45,9 +49,9 @@ provider response.
   zero runtime errors. It covers location puck, compact rows, automatic manual
   Draw, `Mine & Friends`, camera invariants and repeated traversal display.
 - Friends/Memory QA: **31 assertions passed**, zero runtime errors, 21 captures.
-  The isolated disposable backend's exact authorized 5+5 cells traverse the
-  production stores, `FogLayer`, web adapter and a live Mapbox style. Visible
-  region queries find 4 and 1 friend features. Mine→Friends sampling observes
+  The post-deploy production HTTPS payload's exact authorized 49+19 cells
+  traverse the production stores, `FogLayer`, web adapter and a live Mapbox
+  style. Visible region queries find 2 and 2 friend features. Mine→Friends sampling observes
   zero solid fallback frames, and Mine→Friends replay restores friend layers.
 - Responsive UI measurements cover 360/390/430 for F1 and 390 state transitions
   for M2/M4/F2.
@@ -58,18 +62,16 @@ RNGH, native Mapbox, production Friend geography or physical-iPhone proof.
 
 ## Production Friend boundary
 
-`app/scripts/o85-production-friend-fog-audit.mjs` is read only and persists
-only hashes/counts. Both active full-history grants derive zero projection
-cells. The selected source has zero delayed accepted rows. The other has nine
-delayed accepted rows, but all are removed by required endpoint/private-place
-masking and it is not selected. Verdict:
-`NO_REAL_SELECTED_FRIEND_CELLS_AVAILABLE`.
+`app/scripts/o85-production-friend-fog-audit.mjs` uses five-minute internal-test
+tokens and persists only a coordinate-free receipt plus a local mode-0600 render
+fixture. It verifies two selected sources, live revoke/restore, warm stability,
+policy v3, no endpoint/private-place mask and 49+19=68 cells. The deployment-
+postcheck Memory map renders 2/2 features in both source viewports. Route renders
+2/2 in both and restores 2 after a style reload.
 
-M3 therefore remains a release blocker. The smallest valid next proof is for
-an authorized selected friend to acquire exploration geographically outside
-the protected endpoint radius, wait at least 30 minutes, verify the production
-projection returns nonzero cells, then capture the same friend-only viewport
-on Build 65 in Memory and Route `Mine & Friends`.
+M3 is no longer a release blocker. The remaining gate is the repository's
+human-only OTA followed by a short Build 65 physical-iPhone replay; Web evidence
+is never labelled native proof.
 
 ## Reproduction commands
 

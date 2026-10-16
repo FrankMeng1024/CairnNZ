@@ -68,14 +68,22 @@ causing the first-tap flash. Second, the module cache stored the main combined
 mask but not its friend/overlap classification shapes. Reusing that cache after
 Mine→Friends made the build effect see an exact signature and exit with no
 visible friend color. Mine is now a safe transition fallback, while any scope
-with friend cells rebuilds the bounded classification shapes. Authorization,
-the 30-minute delay and 250 m privacy masks are unchanged.
+with friend cells rebuilds the bounded classification shapes.
 
-Production data still blocks M3 before rendering: the selected authorized
-source derives zero cells, and the other authorized source's nine delayed rows
-also derive zero cells after required masking. The isolated two-contributor
-fixture proves the fixed store/geometry/real-Mapbox path only; it is not called
-production or iPhone proof.
+The production-data failure had two separate causes. Source A's 16 historical
+Activities predated independent Memory collection; valid timestamped native GPS
+had never been attributed into cumulative Memory. An idempotent backfill
+recovered 415 accepted points and left 913 unprovable observations unknown.
+Source B had nine delayed accepted rows, but the retired 250 m endpoint/private-
+place mask removed every derived cell. O85 removes that obsolete mask, retains
+explicit one-way grants and the 30-minute delay, and rebuilds materialized
+projections. Production now returns 19 + 49 = 68 cells.
+
+Current-session reauthorization makes durable Fog fail closed across focus,
+logout and account switching. Passive source status and projection use the same
+server-accepted presence witnesses. Post-deploy production payloads render in
+both Memory and Route through live Mapbox WebGL; this is not represented as
+native iPhone proof.
 
 ## Bounded UI corrections
 
@@ -88,5 +96,6 @@ production or iPhone proof.
 - Duplicate accepted/outgoing/incoming emails are classified before mutation;
   the keyboard and sheet remain stable on inline errors.
 
-No icon, visual direction, app/runtime/build version, native dependency or
-backend source changed.
+No icon, visual direction, app/runtime/build version or native dependency
+changed. Backend source, migrations 049/050 and scoped Cairn internal test data
+did change under the Owner's authorization.

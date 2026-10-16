@@ -1,40 +1,45 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-10-16T14:14:16.416Z",
-  "access": "read-only; no account, grant, subscription, Route or Activity mutation",
-  "viewerHash": "482d9673cfee",
+  "schemaVersion": 3,
+  "generated_at": "2026-10-16T18:52:25.961Z",
+  "production_access": "public HTTPS API with five-minute internal-test tokens; one directional grant revoked and restored",
+  "evidenceClass": "PRODUCTION_HTTPS_API_AUTHORIZATION_AND_PROJECTION",
+  "viewer_hash": "482d9673cfee",
+  "selected_source_count": 2,
+  "initial_projection_count": 2,
+  "revoked_projection_count": 1,
+  "revoked_source_reported": [
+    "4b227777d4dd"
+  ],
+  "restored_projection_count": 2,
+  "warm_projection_stable": true,
+  "private_places_removed": true,
+  "bounded_real_viewer_points": 240,
   "sources": [
     {
-      "sourceHash": "4b227777d4dd",
-      "activeGrant": true,
-      "scope": "full_history_delayed_v1",
-      "authorizationVersion": 1,
-      "selected": true,
-      "delayedAcceptedRows": 0,
-      "finalizedSessions": 16,
-      "projectionCells": 0,
-      "projectionRegions": 0,
-      "projectionVersionHash": "65583a679c7d"
+      "source_hash": "872261620421",
+      "authorization_version": 3,
+      "projection_policy_version": 3,
+      "coverage_scope": "full_history_delayed_v1",
+      "cell_count": 49,
+      "region_count": 4,
+      "projection_version_hash": "bdfcf059dcae"
     },
     {
-      "sourceHash": "872261620421",
-      "activeGrant": true,
-      "scope": "full_history_delayed_v1",
-      "authorizationVersion": 1,
-      "selected": false,
-      "delayedAcceptedRows": 9,
-      "finalizedSessions": 20,
-      "projectionCells": 0,
-      "projectionRegions": 0,
-      "projectionVersionHash": "f8fc183bd1cf"
+      "source_hash": "4b227777d4dd",
+      "authorization_version": 1,
+      "projection_policy_version": 3,
+      "coverage_scope": "full_history_delayed_v1",
+      "cell_count": 19,
+      "region_count": 6,
+      "projection_version_hash": "b777d6baea37"
     }
   ],
-  "privacyPolicy": {
-    "delaySeconds": 1800,
-    "gridMercatorM": 200,
-    "endpointAndPrivateMaskGroundM": 250
+  "privacy_policy": {
+    "delay_seconds": 1800,
+    "cell_grid_mercator_m": 200,
+    "projection_policy_version": 3,
+    "endpoint_or_private_place_mask": false
   },
-  "evidenceClass": "PRODUCTION_READ_ONLY_SOURCE_AND_DERIVATION",
-  "verdict": "NO_REAL_SELECTED_FRIEND_CELLS_AVAILABLE",
-  "sourceReceiptSha256": "e7e0eed40a5e0cafd54c5b3059d94fee5b13b8b6889a9978437cab6d89aa0637"
+  "verdict": "REAL_TWO_FRIEND_API_CELLS_AVAILABLE",
+  "sha256": "2d685eac1acdde4e46a184dc7c263943c49f3c07c2b8d057ffcfe0a4357b6dd2"
 }
