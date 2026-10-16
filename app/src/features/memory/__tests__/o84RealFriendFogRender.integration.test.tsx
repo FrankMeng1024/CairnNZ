@@ -80,6 +80,8 @@ describe('O84 isolated real API Friend Fog render boundary', () => {
       };
     }
     const friendIds = Object.keys(projections);
+    const expectedAuthorizedCells = Object.values(projections)
+      .reduce((total, projection) => total + projection.cells.length, 0);
     const viewerPoints = fixture.viewer_points.map((point: any) => ({
       lat: point.lat,
       lng: point.lng,
@@ -126,7 +128,7 @@ describe('O84 isolated real API Friend Fog render boundary', () => {
 
     const visible = useFriendMemoryStore.getState().getVisibleCells();
     expect(new Set(visible.map(cell => cell.sourceFriendId))).toEqual(new Set(friendIds));
-    expect(visible).toHaveLength(10);
+    expect(visible).toHaveLength(expectedAuthorizedCells);
     const fogShape = mockRenderedSources.get('memory-fog-src');
     const friendShape = mockRenderedSources.get('memory-friend-union-src');
     expect(polygonCount(fogShape)).toBeGreaterThan(0);

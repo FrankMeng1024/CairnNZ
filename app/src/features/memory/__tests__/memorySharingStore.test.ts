@@ -44,49 +44,41 @@ describe('Memory sharing account and rollback fences', () => {
     expect(useMemorySharingStore.getState()).toMatchObject({ grants: [], loading: false, error: null });
   });
 
-  test('switching owner clears exact places immediately and fences a late account-A load', async () => {
+  test('switching owner clears sharing state immediately and fences a late account-A load', async () => {
     let resolveA!: (value: any) => void;
     const pendingA = new Promise(resolve => { resolveA = resolve; });
     mockAuthenticatedFetch
       .mockReturnValueOnce(pendingA)
-      .mockReturnValueOnce(pendingA)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ grants: [grant('b', true)], delay_seconds: 1800 }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ private_places: [] }) });
-    useMemorySharingStore.setState({
-      ownerId: 'account-a',
-      privatePlaces: [{ id: 9, label: 'A home', lat: -41.2, lng: 174.7, radius_m: 250 }],
-    });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ grants: [grant('b', true)], delay_seconds: 1800 }) });
 
     const loadA = useMemorySharingStore.getState().load('account-a');
     const loadB = useMemorySharingStore.getState().load('account-b');
     expect(useMemorySharingStore.getState()).toMatchObject({
-      ownerId: 'account-b', grants: [], privatePlaces: [], loading: true,
+      ownerId: 'account-b', grants: [], loading: true,
     });
     resolveA({ ok: true, json: async () => ({ grants: [grant('a', true)], private_places: [] }) });
     await loadA;
     await loadB;
 
     expect(useMemorySharingStore.getState()).toMatchObject({
-      ownerId: 'account-b', privatePlaces: [], loading: false,
+      ownerId: 'account-b', loading: false,
     });
     expect(useMemorySharingStore.getState().grants.map(item => item.friend_id)).toEqual(['b']);
   });
 
-  test('grant readiness succeeds even when optional private-place metadata fails', async () => {
-    mockAuthenticatedFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ grants: [grant('1', true)], delay_seconds: 1800 }) })
-      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+  test('grant readiness no longer requests removed private-place metadata', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ grants: [grant('1', true)], delay_seconds: 1800 }) });
 
     await useMemorySharingStore.getState().load('account-a');
 
     expect(useMemorySharingStore.getState()).toMatchObject({
       grantsLoading: false,
-      placesLoading: false,
       loading: false,
       error: null,
-      placesError: 'Private-place settings are unavailable.',
     });
     expect(useMemorySharingStore.getState().grants).toEqual([grant('1', true)]);
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(mockAuthenticatedFetch).toHaveBeenCalledWith('/api/friend-sharing/grants', { expectedUserId: 'account-a' });
   });
 
   test('a per-friend failure rolls back only that friend and rejects a rapid duplicate write', async () => {

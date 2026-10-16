@@ -4,7 +4,6 @@ import { ModalCard } from '../../../components/ModalCard';
 import { Icon } from '../../../components/Icon';
 import { Radius, Spacing } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
-import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySharingStore } from '../store/useMemorySharingStore';
 import { useAppStore } from '../../../store/useAppStore';
 
@@ -14,19 +13,14 @@ export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onC
   const sharingOwnerId = useMemorySharingStore(state => state.ownerId);
   const storedGrants = useMemorySharingStore(state => state.grants);
   const delaySeconds = useMemorySharingStore(state => state.delaySeconds);
-  const storedPlaces = useMemorySharingStore(state => state.privatePlaces);
   const loading = useMemorySharingStore(state => state.loading);
   const error = useMemorySharingStore(state => state.error);
   const load = useMemorySharingStore(state => state.load);
   const applyGrantSelection = useMemorySharingStore(state => state.applyGrantSelection);
-  const addPrivatePlace = useMemorySharingStore(state => state.addPrivatePlace);
-  const removePrivatePlace = useMemorySharingStore(state => state.removePrivatePlace);
-  const lastFix = useMemoryStore(state => state.lastWatcherFix);
   const [draftIds, setDraftIds] = useState<string[]>([]);
   const [draftDirty, setDraftDirty] = useState(false);
   const ownerMatches = Boolean(currentOwnerId && sharingOwnerId === currentOwnerId);
   const grants = ownerMatches ? storedGrants : [];
-  const places = ownerMatches ? storedPlaces : [];
 
   useEffect(() => {
     if (visible && currentOwnerId) {
@@ -115,38 +109,9 @@ export function MemorySharingSheet({ visible, onClose }: { visible: boolean; onC
           <Icon name="Map" size={18} color={theme.iconActive} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.rowTitle, { color: theme.foreground }]}>What friends receive</Text>
-            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>Coarse areas only, delayed by at least {Math.round(delaySeconds / 60)} minutes. Start, end, protected places, route lines, and timestamps stay hidden. Repeated areas may still let a friend infer habits.</Text>
+            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>Complete eligible exploration as coarse areas, delayed by at least {Math.round(delaySeconds / 60)} minutes. Raw GPS, route lines, precise visit points, and timestamps stay hidden. Repeated areas may still let a friend infer habits.</Text>
           </View>
         </View>
-
-        <View style={styles.sectionHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Protected places</Text>
-            <Text style={[styles.body, { color: theme.foregroundSecondary }]}>At least 250 m around each place is withheld.</Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.addButton, { borderColor: theme.borderStrong }]}
-            disabled={loading || !lastFix}
-            onPress={() => lastFix && void addPrivatePlace(lastFix.lat, lastFix.lng, 'Protected place')}
-          >
-            <Icon name="Plus" size={15} color={lastFix ? theme.iconActive : theme.iconInactive} />
-            <Text style={[styles.addLabel, { color: lastFix ? theme.primary : theme.muted }]}>Current</Text>
-          </TouchableOpacity>
-        </View>
-        {places.length === 0 ? (
-          <Text style={[styles.empty, { color: theme.muted }]}>{lastFix ? 'No protected places yet.' : 'A reliable location is needed to add this place.'}</Text>
-        ) : places.map(place => (
-          <View key={place.id} style={[styles.placeRow, { borderColor: theme.border }]}>
-            <Icon name="Shield" size={16} color={theme.iconActive} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rowTitle, { color: theme.foreground }]}>{place.label || 'Protected place'}</Text>
-              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{place.radius_m} m minimum mask</Text>
-            </View>
-            <TouchableOpacity onPress={() => void removePrivatePlace(place.id)} accessibilityLabel="Remove protected place">
-              <Icon name="Trash2" size={16} color={theme.iconInactive} />
-            </TouchableOpacity>
-          </View>
-        ))}
         {loading ? <ActivityIndicator color={theme.primary} /> : null}
         {error ? <Text style={[styles.error, { color: theme.destructive }]}>{error}</Text> : null}
       </ScrollView>
@@ -170,10 +135,5 @@ const styles = StyleSheet.create({
   body: { fontSize: 12, lineHeight: 17, marginTop: 3 },
   context: { fontSize: 11 },
   preview: { borderWidth: 1, borderRadius: Radius.card, padding: Spacing.md, flexDirection: 'row', gap: 10 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center' },
-  addButton: { borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', gap: 5 },
-  addLabel: { fontSize: 12, fontWeight: '700' },
-  empty: { fontSize: 12, paddingVertical: 8 },
-  placeRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
   error: { fontSize: 12, lineHeight: 17 },
 });

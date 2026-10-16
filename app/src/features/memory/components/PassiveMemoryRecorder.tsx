@@ -150,9 +150,9 @@ export function PassiveMemoryRecorder() {
         atMs: observation.t,
         source: 'passive_real',
         ownerUserId,
-        // Projection-only provenance: lets the server mask the first/last
-        // coarse Friend-Fog cells for each real acquisition lifecycle. It is
-        // never used to join points into canonical Activity geometry.
+        // Projection-only provenance preserves acquisition continuity for
+        // delayed eligibility and audit. It is never used to join points into
+        // canonical Activity geometry or exposed as a raw observation.
         sourceSegmentId: foregroundGeneration,
         horizontalAccuracyM: observation.accuracy ?? undefined,
         continuityState: 'accepted',

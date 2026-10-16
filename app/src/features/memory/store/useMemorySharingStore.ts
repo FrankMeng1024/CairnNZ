@@ -1,15 +1,6 @@
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
 
-export interface MemoryPrivatePlace {
-  id: number;
-  label: string | null;
-  lat: number;
-  lng: number;
-  radius_m: number;
-  created_at?: string;
-}
-
 export interface MemoryFriendGrant {
   friend_id: string;
   friend_name: string;
@@ -23,19 +14,14 @@ interface State {
   ownerId: string | null;
   grants: MemoryFriendGrant[];
   delaySeconds: number;
-  privatePlaces: MemoryPrivatePlace[];
   loading: boolean;
   grantsLoading: boolean;
-  placesLoading: boolean;
   grantPendingIds: string[];
   grantErrors: Record<string, string>;
-  placesError: string | null;
   error: string | null;
   load: (ownerId: string) => Promise<void>;
   setGrant: (friendId: string, enabled: boolean) => Promise<boolean>;
   applyGrantSelection: (friendIds: string[]) => Promise<boolean>;
-  addPrivatePlace: (lat: number, lng: number, label?: string) => Promise<boolean>;
-  removePrivatePlace: (id: number) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -48,29 +34,26 @@ export const useMemorySharingStore = create<State>((set, get) => ({
   ownerId: null,
   grants: [],
   delaySeconds: 1800,
-  privatePlaces: [],
   loading: false,
   grantsLoading: false,
-  placesLoading: false,
   grantPendingIds: [],
   grantErrors: {},
-  placesError: null,
   error: null,
 
   load: async (ownerId) => {
     const normalizedOwnerId = String(ownerId || '');
     if (!normalizedOwnerId) {
       sessionGeneration += 1;
-      set({ ownerId: null, grants: [], privatePlaces: [], loading: false, grantsLoading: false, placesLoading: false, grantPendingIds: [], grantErrors: {}, placesError: null, error: null });
+      set({ ownerId: null, grants: [], loading: false, grantsLoading: false, grantPendingIds: [], grantErrors: {}, error: null });
       return;
     }
     if (get().ownerId !== normalizedOwnerId) {
       sessionGeneration += 1;
-      set({ ownerId: normalizedOwnerId, grants: [], privatePlaces: [], loading: false, grantsLoading: false, placesLoading: false, grantPendingIds: [], grantErrors: {}, placesError: null, error: null });
+      set({ ownerId: normalizedOwnerId, grants: [], loading: false, grantsLoading: false, grantPendingIds: [], grantErrors: {}, error: null });
     }
     if (get().loading) return;
     const requestGeneration = sessionGeneration;
-    set({ loading: true, grantsLoading: true, placesLoading: true, error: null, placesError: null });
+    set({ loading: true, grantsLoading: true, error: null });
     const grantsTask = (async () => {
       try {
         const response = await authenticatedFetch('/api/friend-sharing/grants', { expectedUserId: normalizedOwnerId });
@@ -88,19 +71,7 @@ export const useMemorySharingStore = create<State>((set, get) => ({
         set({ grantsLoading: false, error: 'Connect to manage sharing.' });
       }
     })();
-    const placesTask = (async () => {
-      try {
-        const response = await authenticatedFetch('/api/friend-sharing/private-places', { expectedUserId: normalizedOwnerId });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const body = await response.json();
-        if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
-        set({ privatePlaces: Array.isArray(body.private_places) ? body.private_places : [], placesLoading: false, placesError: null });
-      } catch {
-        if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
-        set({ placesLoading: false, placesError: 'Private-place settings are unavailable.' });
-      }
-    })();
-    await Promise.allSettled([grantsTask, placesTask]);
+    await grantsTask;
     if (requestGeneration === sessionGeneration && get().ownerId === normalizedOwnerId) set({ loading: false });
   },
 
@@ -171,51 +142,8 @@ export const useMemorySharingStore = create<State>((set, get) => ({
     }
   },
 
-  addPrivatePlace: async (lat, lng, label) => {
-    const ownerId = get().ownerId;
-    if (!ownerId) return false;
-    const requestGeneration = sessionGeneration;
-    set({ loading: true, error: null });
-    try {
-      const response = await authenticatedFetch('/api/friend-sharing/private-places', {
-        method: 'POST',
-        body: JSON.stringify({ lat, lng, radius_m: 250, label }),
-        expectedUserId: ownerId,
-      });
-      if (!response.ok) throw new Error('private_place_failed');
-      const place = await response.json();
-      if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
-      set({ privatePlaces: [place, ...get().privatePlaces], loading: false });
-      return true;
-    } catch {
-      if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
-      set({ loading: false, error: 'Could not protect this place. Connect and try again.' });
-      return false;
-    }
-  },
-
-  removePrivatePlace: async (id) => {
-    const ownerId = get().ownerId;
-    if (!ownerId) return false;
-    const requestGeneration = sessionGeneration;
-    set({ loading: true, error: null });
-    try {
-      const response = await authenticatedFetch(`/api/friend-sharing/private-places/${id}`, {
-        method: 'DELETE', expectedUserId: ownerId,
-      });
-      if (!response.ok) throw new Error('private_place_remove_failed');
-      if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
-      set({ privatePlaces: get().privatePlaces.filter(place => place.id !== id), loading: false });
-      return true;
-    } catch {
-      if (requestGeneration !== sessionGeneration || get().ownerId !== ownerId) return false;
-      set({ loading: false, error: 'Could not update protected places.' });
-      return false;
-    }
-  },
-
   reset: () => {
     sessionGeneration += 1;
-    set({ ownerId: null, grants: [], delaySeconds: 1800, privatePlaces: [], loading: false, grantsLoading: false, placesLoading: false, grantPendingIds: [], grantErrors: {}, placesError: null, error: null });
+    set({ ownerId: null, grants: [], delaySeconds: 1800, loading: false, grantsLoading: false, grantPendingIds: [], grantErrors: {}, error: null });
   },
 }));

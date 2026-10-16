@@ -366,7 +366,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O84 (2026-10-16): durable directional friend-request lifecycle, explicit
 // per-friend Memory grants, multi-friend Fog projection, and nonblocking
 // Memory preparation on the unchanged Build 65 / 0.2.6-o66 runtime.
-export const OTA_VERSION = 'O84';
+// O85 (2026-10-17): non-destructive Route closure, complete delayed Friends
+// Memory history, historical Activity recovery, and verified production Fog
+// rendering on the unchanged Build 65 / 0.2.6-o66 runtime.
+export const OTA_VERSION = 'O85';
 
 
 type OtaState =
