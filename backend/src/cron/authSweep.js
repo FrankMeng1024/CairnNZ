@@ -114,7 +114,8 @@ async function run({ verbose = false, graceMinutes = 7 * 24 * 60 } = {}) {
     while (iter < MAX_ITER) {
       const [r] = await pool.execute(
         `DELETE FROM friend_requests
-         WHERE status IN ('rejected','accepted')
+         WHERE (status IN ('accepted','cancelled','blocked')
+                OR (status = 'rejected' AND sender_dismissed_at IS NOT NULL))
            AND resolved_at IS NOT NULL
            AND resolved_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
          LIMIT ${BATCH}`,
