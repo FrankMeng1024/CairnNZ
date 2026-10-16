@@ -56,6 +56,7 @@ const base = git('merge-base', 'HEAD', 'origin/main');
 const productionBackend = git('rev-parse', 'origin/master');
 const branch = git('branch', '--show-current');
 const changedFiles = git('diff', '--name-only', `${base}..${head}`).split('\n').filter(Boolean);
+const deletedFiles = changedFiles.filter(relativePath => !existsSync(path.join(repoRoot, relativePath)));
 const status = git('status', '--porcelain');
 if (status) throw new Error('evidence build requires a clean tracked worktree');
 
@@ -65,7 +66,11 @@ try {
   mkdirSync(path.dirname(contractDestination), { recursive: true });
   copyFileSync(promptPath, contractDestination);
 
-  for (const relativePath of changedFiles) copyRelative(relativePath, path.join('source', 'changed-files', relativePath));
+  for (const relativePath of changedFiles) {
+    if (!deletedFiles.includes(relativePath)) {
+      copyRelative(relativePath, path.join('source', 'changed-files', relativePath));
+    }
+  }
   for (const relativePath of [
     'app/package.json', 'app/package-lock.json', 'app/app.config.js', 'app/eas.json',
     'backend/src/routes/friend-sharing.js', 'backend/src/routes/memory-subscriptions.js',
@@ -99,6 +104,7 @@ try {
     promptFile: path.basename(promptPath),
     promptSha256: sha256(readFileSync(promptPath)),
     changedFiles,
+    deletedFiles,
   }, null, 2)}\n`);
 
   for (const name of [
