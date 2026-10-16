@@ -273,12 +273,27 @@ async function processOwner(owner, viewerId) {
       const session = byId.get(Number(entry.session_id));
       if (!session) throw new Error('manifest_session_not_owned_or_finalized');
       const [[prior]] = await conn.execute(
-        'SELECT backfill_version,decision FROM memory_activity_backfill_audit WHERE session_id=? FOR UPDATE',
+        'SELECT backfill_version,decision,strategy,reason FROM memory_activity_backfill_audit WHERE session_id=? FOR UPDATE',
         [session.id],
       );
       if (prior) {
-        if (Number(prior.backfill_version) !== BACKFILL_VERSION || prior.decision !== entry.decision) {
+        if (Number(prior.backfill_version) !== BACKFILL_VERSION
+          || prior.decision !== entry.decision
+          || prior.strategy !== (entry.strategy || 'conservative_exclusion')
+          || prior.reason !== entry.reason) {
           throw new Error('existing_backfill_audit_conflicts_with_manifest');
+        }
+        if (prior.decision === 'recovered') {
+          const priorEvidence = canonicalActivityEvidence(
+            session.route_points_canonical,
+            session.route_points_raw,
+          );
+          if (priorEvidence.length >= 2) {
+            const priorFirstTs = priorEvidence[0].ts;
+            const priorLastTs = priorEvidence[priorEvidence.length - 1].ts;
+            minTs = minTs === null ? priorFirstTs : Math.min(minTs, priorFirstTs);
+            maxTs = maxTs === null ? priorLastTs : Math.max(maxTs, priorLastTs);
+          }
         }
         summary.skipped_audited_sessions += 1;
         continue;

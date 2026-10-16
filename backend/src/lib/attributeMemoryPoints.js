@@ -32,6 +32,8 @@ async function attributeMemoryPoints(conn, userId, tsStart, tsEnd) {
        FROM memory_points mp
        JOIN regions r
          ON r.level = 3
+        AND mp.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng
+        AND mp.lat BETWEEN r.bbox_min_lat AND r.bbox_max_lat
         AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', mp.lng, ' ', mp.lat, ')'), 4326, 'axis-order=long-lat'))
       WHERE mp.user_id = ? AND mp.ts BETWEEN ? AND ?`,
     [userId, tsStart, tsEnd]
@@ -57,6 +59,8 @@ async function attributeMemoryPoints(conn, userId, tsStart, tsEnd) {
          FROM memory_points mp
          JOIN regions r ON r.id = ?
         WHERE mp.user_id = ?
+          AND mp.lng BETWEEN r.bbox_min_lng AND r.bbox_max_lng
+          AND mp.lat BETWEEN r.bbox_min_lat AND r.bbox_max_lat
           AND ST_Contains(r.geom, ST_GeomFromText(CONCAT('POINT(', mp.lng, ' ', mp.lat, ')'), 4326, 'axis-order=long-lat'))`,
       [r.region_id, userId]
     );
