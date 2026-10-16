@@ -288,6 +288,16 @@ await resetRoute('Friends');
 await page.getByTestId(`friend-card-${ownerIds[0]}`).waitFor({ state: 'visible' });
 captures.push(await capture('friends-day'));
 const friendsText = await page.locator('body').innerText();
+const friendStatusLayouts = [];
+for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 800 }, { width: 430, height: 932 }]) {
+  await page.setViewportSize(viewport);
+  await settle(180);
+  const shared = await page.getByText('My Memory: Shared', { exact: true }).boundingBox();
+  const notShared = await page.getByText('My Memory: Not shared', { exact: true }).boundingBox();
+  friendStatusLayouts.push({ viewport, shared, notShared });
+  captures.push(await capture(`friends-${viewport.width}-day`));
+}
+await page.setViewportSize({ width: 390, height: 844 });
 await page.getByRole('tab', { name: 'Requests', exact: true }).click();
 await page.getByTestId('incoming-card-801').waitFor({ state: 'visible' });
 captures.push(await capture('requests-pending-declined-day'));
@@ -310,6 +320,22 @@ await page.getByTestId('sent-card-903').waitFor({ state: 'visible', timeout: 10_
 const sendLandedOnRequests = await page.getByTestId('sent-card-903').isVisible();
 
 await page.getByRole('tab', { name: 'Friends', exact: true }).click();
+await page.getByRole('button', { name: 'Add friend', exact: true }).click();
+await page.getByTestId('add-friend-sheet').waitFor({ state: 'visible' });
+await page.getByTestId('add-friend-email').fill('MIA@example.org');
+await settle(400);
+const duplicateSheetBefore = await page.getByTestId('add-friend-sheet').boundingBox();
+const duplicateRequestCountBefore = requests.filter(request => request.pathname === '/api/friends/request').length;
+await page.getByRole('button', { name: 'Send request', exact: true }).click();
+await page.getByText('Already friends.', { exact: true }).waitFor({ state: 'visible' });
+await settle(220);
+const duplicateSheetAfter = await page.getByTestId('add-friend-sheet').boundingBox();
+const duplicateRequestCountAfter = requests.filter(request => request.pathname === '/api/friends/request').length;
+const duplicateStayedInForm = await page.getByTestId('add-friend-email').isVisible();
+captures.push(await capture('add-friend-existing-inline-390-day'));
+await page.getByTestId('add-friend-close').click();
+await page.getByTestId('add-friend-sheet').waitFor({ state: 'hidden' });
+
 await page.getByTestId(`friend-card-${ownerIds[0]}`).click();
 await page.getByTestId('friend-profile-modal').waitFor({ state: 'visible' });
 await settle(450);
@@ -384,13 +410,61 @@ const centerBeforeSelection = await page.evaluate(() => {
   const center = globalThis.__cairnMap.getCenter();
   return [center.lng, center.lat];
 });
+const readFriendRowGeometry = async id => page.evaluate(friendId => {
+  const rect = testId => {
+    const element = document.querySelector(`[data-testid="${testId}"]`);
+    if (!element) return null;
+    const value = element.getBoundingClientRect();
+    return { x: value.x, y: value.y, width: value.width, height: value.height };
+  };
+  return {
+    row: rect(`memory-friend-row-${friendId}`),
+    statusSlot: rect(`memory-friend-row-status-slot-${friendId}`),
+    accessory: rect(`memory-friend-row-accessory-${friendId}`),
+  };
+}, id);
+const friendRowBefore = await readFriendRowGeometry(ownerIds[0]);
+await page.evaluate(() => {
+  const samples = [];
+  const shapeState = () => {
+    const stores = globalThis.__cairnStores;
+    const source = globalThis.__cairnMap?.getSource?.('memory-fog-src');
+    let data = source?._data ?? null;
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch { data = null; }
+    }
+    const geometry = data?.geometry;
+    const rings = geometry?.type === 'Polygon'
+      ? geometry.coordinates?.length ?? 0
+      : geometry?.type === 'MultiPolygon'
+        ? geometry.coordinates?.reduce((total, polygon) => total + polygon.length, 0) ?? 0
+        : 0;
+    return {
+      at: performance.now(),
+      scope: stores.useMemoryScopeStore.getState().scope,
+      friendCells: stores.useFriendMemoryStore.getState().getVisibleCells().length,
+      hasEvidenceSignature: Number.isFinite(Number(data?.properties?.cairnEvidencePointCount)),
+      rings,
+    };
+  };
+  globalThis.__o85FogTransitionSamples = samples;
+  globalThis.__o85FogTransitionTimer = setInterval(() => samples.push(shapeState()), 8);
+});
 await page.getByTestId(`memory-friend-row-${ownerIds[0]}`).click();
 await page.waitForFunction(id => globalThis.__cairnStores.useMemorySubscriptionsStore.getState().isSubscribed(Number(id)), ownerIds[0]);
+await page.getByText('Loading shared places…', { exact: true }).waitFor({ state: 'visible' });
+const friendRowLoading = await readFriendRowGeometry(ownerIds[0]);
 await page.getByTestId(`memory-friend-row-${ownerIds[1]}`).click();
 await page.waitForFunction(id => globalThis.__cairnStores.useMemorySubscriptionsStore.getState().isSubscribed(Number(id)), ownerIds[1]);
 const perFriendLoadingVisible = await page.getByText('Loading shared places…', { exact: true }).count() > 0;
 captures.push(await capture('memory-picker-two-selected-loading'));
 await page.waitForFunction(ids => ids.every(id => globalThis.__cairnStores.useFriendMemoryStore.getState().sourceStates[id]?.status === 'loaded'), ownerIds, { timeout: 20_000 });
+await settle(420);
+const fogTransitionSamples = await page.evaluate(() => {
+  clearInterval(globalThis.__o85FogTransitionTimer);
+  return globalThis.__o85FogTransitionSamples;
+});
+const friendRowLoaded = await readFriendRowGeometry(ownerIds[0]);
 const loadedPickerText = await page.getByTestId('memory-friend-pick-modal').innerText();
 captures.push(await capture('memory-picker-two-loaded'));
 const pickerStillOpen = await page.getByTestId('memory-friend-pick-modal').isVisible();
@@ -401,12 +475,34 @@ const centerAfterSelection = await page.evaluate(() => {
 await page.getByTestId('memory-friend-pick-close').click();
 await page.getByTestId('memory-friend-pick-modal').waitFor({ state: 'hidden' });
 const activeFriendsCountVisible = await page.getByTestId('memory-scope-combined').getByText(String(ownerIds.length), { exact: true }).count() === 1;
+const memoryScopeCluster = await page.evaluate(() => {
+  const friendsSegment = document.querySelector('[data-testid="memory-scope-combined"]')?.getBoundingClientRect();
+  const picker = document.querySelector('[data-testid="memory-scope-pick"]')?.getBoundingClientRect();
+  if (!friendsSegment || !picker) return null;
+  return {
+    friends: { x: friendsSegment.x, width: friendsSegment.width },
+    picker: { x: picker.x, width: picker.width },
+    visualGap: picker.x - (friendsSegment.x + friendsSegment.width),
+  };
+});
 await page.getByTestId('memory-scope-self').click();
 const inactiveFriendsCountHidden = await page.getByTestId('memory-scope-combined').getByText(String(ownerIds.length), { exact: true }).count() === 0;
 captures.push(await capture('memory-mine-inactive-friends-no-count'));
 await page.getByTestId('memory-scope-combined').click();
-await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.getSource?.('memory-friend-union-src'))
-  && Boolean(globalThis.__cairnMap?.getLayer?.('memory-friend-union')), null, { timeout: 20_000 });
+const friendUnionReadyAfterScopeReplay = await page.waitForFunction(
+  () => Boolean(globalThis.__cairnMap?.getSource?.('memory-friend-union-src'))
+    && Boolean(globalThis.__cairnMap?.getLayer?.('memory-friend-union')),
+  null,
+  { timeout: 30_000 },
+).then(() => true).catch(() => false);
+const friendUnionReplayState = await page.evaluate(() => ({
+  scope: globalThis.__cairnStores.useMemoryScopeStore.getState().scope,
+  subscriptions: globalThis.__cairnStores.useMemorySubscriptionsStore.getState().subscriptions.map(item => String(item.friend_id)),
+  visibleCells: globalThis.__cairnStores.useFriendMemoryStore.getState().getVisibleCells().length,
+  sourceStates: globalThis.__cairnStores.useFriendMemoryStore.getState().sourceStates,
+  sourcePresent: Boolean(globalThis.__cairnMap?.getSource?.('memory-friend-union-src')),
+  layerPresent: Boolean(globalThis.__cairnMap?.getLayer?.('memory-friend-union')),
+}));
 
 const renderRegions = [];
 const friendCenters = fixture.owners.map(owner => {
@@ -419,11 +515,11 @@ const friendCenters = fixture.owners.map(owner => {
 for (const [index, center] of friendCenters.entries()) {
   await page.evaluate(value => globalThis.__cairnMap.jumpTo({ center: value, zoom: 16 }), center);
   await settle(600);
-  const rendered = await page.evaluate(() => ({
+  const rendered = friendUnionReadyAfterScopeReplay ? await page.evaluate(() => ({
     renderedFeatures: globalThis.__cairnMap.queryRenderedFeatures({ layers: ['memory-friend-union'] }).length,
     sourceFeatures: globalThis.__cairnMap.querySourceFeatures('memory-friend-union-src').length,
     layerVisible: Boolean(globalThis.__cairnMap.getLayer('memory-friend-union')),
-  }));
+  })) : { renderedFeatures: 0, sourceFeatures: 0, layerVisible: false };
   renderRegions.push({ ownerId: ownerIds[index], center, ...rendered });
   captures.push(await capture(index === 0 ? 'memory-friend-fog-wellington' : 'memory-friend-fog-queenstown'));
 }
@@ -453,19 +549,38 @@ const centerDelta = Math.max(
   Math.abs(centerBeforeSelection[0] - centerAfterSelection[0]),
   Math.abs(centerBeforeSelection[1] - centerAfterSelection[1]),
 );
+const rectDelta = (before, after) => Math.max(
+  Math.abs((before?.x ?? 0) - (after?.x ?? 0)),
+  Math.abs((before?.y ?? 0) - (after?.y ?? 0)),
+  Math.abs((before?.width ?? 0) - (after?.width ?? 0)),
+  Math.abs((before?.height ?? 0) - (after?.height ?? 0)),
+);
+const friendRowStable = [friendRowLoading, friendRowLoaded].every(state => (
+  rectDelta(friendRowBefore.row, state.row) <= 1
+  && rectDelta(friendRowBefore.statusSlot, state.statusSlot) <= 1
+  && rectDelta(friendRowBefore.accessory, state.accessory) <= 1
+));
+const fogSamplesWithFriendCells = fogTransitionSamples.filter(sample => sample.scope === 'combined' && sample.friendCells > 0);
 const assertions = {
   backendEvidencePass: evidence.result === 'PASS',
   noBulkSharing: !friendsText.includes('Memory sharing'),
   noProtectedPlaces: !friendsText.includes('Protected Places'),
   noOpenSharedContent: !friendsText.includes('Open shared content'),
   directionalFriendLabels: friendsText.includes('My Memory: Shared') && friendsText.includes('My Memory: Not shared'),
+  directionalStatusSingleLineAtCommonWidths: friendStatusLayouts.every(layout => (
+    layout.shared && layout.notShared && layout.shared.height <= 20 && layout.notShared.height <= 20
+  )),
   sendLandedOnRequests,
+  duplicateFriendStaysInlineWithoutRequestOrSheetJump: duplicateStayedInForm
+    && duplicateRequestCountAfter === duplicateRequestCountBefore
+    && rectDelta(duplicateSheetBefore, duplicateSheetAfter) <= 1,
   acceptedLandedOnFriendsWithNew: acceptedLandedOnFriends,
   declinedDismissedWithoutModal,
   friendProfileIsActionOnly,
   initialListFailureVisible,
   pickerStayedOpenAfterListRetry,
   pickerStayedOpenForTwoSelections: pickerStillOpen,
+  friendRowDoesNotReflowAcrossLoading: friendRowStable,
   perFriendLoadingVisible,
   loadedPickerHidesTechnicalCounts: !/\d+ delayed areas? loaded/i.test(loadedPickerText)
     && !loadedPickerText.includes('Shared · no delayed area available yet'),
@@ -475,9 +590,15 @@ const assertions = {
   exactAuthorizedCellsVisible: finalState.visibleCells === 10,
   exactAuthorizedSourceIds: JSON.stringify(finalState.visibleSourceFriendIds) === JSON.stringify([...ownerIds].sort()),
   productionFriendSourcePresent: finalState.friendSourcePolygons > 0,
+  friendUnionReturnsAfterMineReplay: friendUnionReadyAfterScopeReplay,
+  firstFriendsTransitionRetainsMineFog: fogSamplesWithFriendCells.length > 0
+    && fogSamplesWithFriendCells.every(sample => sample.rings > 1),
   bothRegionsRendered: renderRegions.every(region => region.layerVisible && region.renderedFeatures > 0),
   selectionDidNotMoveCamera: centerDelta < 0.0001,
   stableScopeLabels: finalState.labels.includes('Mine') && finalState.labels.includes('Friends'),
+  pickerIconFormsCompactFriendsCluster: Boolean(memoryScopeCluster)
+    && memoryScopeCluster.visualGap <= 4
+    && memoryScopeCluster.picker.width === 40,
   noAllControl: !finalState.labels.includes('All available friends'),
   noNormalSelectionToast: !finalState.labels.includes('Friend added to map') && !finalState.labels.includes('Friend removed from map'),
   noRuntimeErrors: runtimeErrors.length === 0,
@@ -496,6 +617,21 @@ const report = {
   centerAfterSelection,
   centerDelta,
   renderRegions,
+  friendStatusLayouts,
+  duplicateFriend: {
+    requestCountBefore: duplicateRequestCountBefore,
+    requestCountAfter: duplicateRequestCountAfter,
+    sheetBefore: duplicateSheetBefore,
+    sheetAfter: duplicateSheetAfter,
+  },
+  friendRowGeometry: { before: friendRowBefore, loading: friendRowLoading, loaded: friendRowLoaded },
+  fogTransition: {
+    sampleCount: fogTransitionSamples.length,
+    samplesWithFriendCells: fogSamplesWithFriendCells.length,
+    solidFallbackSamplesWithFriendCells: fogSamplesWithFriendCells.filter(sample => sample.rings <= 1).length,
+  },
+  memoryScopeCluster,
+  friendUnionReplayState,
   finalState: { ...finalState, labels: undefined },
   assertions,
   failures,

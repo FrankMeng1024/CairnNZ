@@ -12,6 +12,9 @@ const MAX_POINT_SNAP_M = 18;
 const MIN_POINT_SNAP_M = 3;
 const POINT_SNAP_PIXELS = 18;
 const MAX_PROVIDER_START_SHIFT_M = 12;
+const NEARBY_TARGET_MAX_DIRECT_M = 250;
+const NEARBY_TARGET_MAX_ROUTE_M = 400;
+const NEARBY_TARGET_MAX_INFLATION = 5;
 const TERMINAL_SPUR_MIN_TURN_DEG = 65;
 const CONTINUATION_MAX_TURN_DEG = 42;
 const MAPPED_RESOLUTIONS = new Set(['point', 'draw-matched', 'recorded']);
@@ -23,7 +26,8 @@ export interface PointCandidateSelection {
   points: RoutePoint[];
   source: PointCandidateSource;
   reason: 'provider-faithful' | 'provider-moved-start' | 'provider-moved-target'
-    | 'no-provider-route' | 'known-retrace-faithful' | 'known-retrace-local' | 'continuity-terminal-spur';
+    | 'provider-absurd-detour' | 'no-provider-route' | 'known-retrace-faithful'
+    | 'known-retrace-local' | 'continuity-terminal-spur';
   requiresChoice: false;
   rawTarget: RoutePoint;
   effectiveTarget: RoutePoint | null;
@@ -221,6 +225,15 @@ export function selectPointRouteCandidate(input: {
   if (provider.length < 2) return rejected('no-provider-route');
   if (base.providerStartShiftM > MAX_PROVIDER_START_SHIFT_M) return rejected('provider-moved-start');
   if (base.providerTargetShiftM > base.snapToleranceM) return rejected('provider-moved-target');
+  // A nearby closure may legitimately cross a barrier, but accepting a
+  // kilometres-long provider detour for a target a few metres away is never
+  // a safe Point edit. Leave the canonical Route unchanged and let Draw make
+  // the intended local connection explicit.
+  if (base.directDistanceM <= NEARBY_TARGET_MAX_DIRECT_M
+    && base.networkDistanceM > Math.max(
+      NEARBY_TARGET_MAX_ROUTE_M,
+      base.directDistanceM * NEARBY_TARGET_MAX_INFLATION,
+    )) return rejected('provider-absurd-detour');
 
   const draftPoints = input.draft.parts.flatMap(part => part.points);
   const routeDirection = latestDirection(draftPoints);

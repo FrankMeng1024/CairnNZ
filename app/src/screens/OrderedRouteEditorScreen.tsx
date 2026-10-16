@@ -112,6 +112,7 @@ let LineLayer: any = null;
 let CircleLayer: any = null;
 let SymbolLayer: any = null;
 let StyleImport: any = null;
+let UserLocation: any = null;
 if (Platform.OS === 'web') {
   const Mapbox = getMapbox();
   MapView = Mapbox.MapView;
@@ -121,6 +122,7 @@ if (Platform.OS === 'web') {
   CircleLayer = Mapbox.CircleLayer;
   SymbolLayer = Mapbox.SymbolLayer;
   StyleImport = Mapbox.StyleImport ?? null;
+  UserLocation = Mapbox.UserLocation;
 } else {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -132,6 +134,7 @@ if (Platform.OS === 'web') {
     CircleLayer = Mapbox.CircleLayer;
     SymbolLayer = Mapbox.SymbolLayer;
     StyleImport = Mapbox.StyleImport ?? null;
+    UserLocation = Mapbox.UserLocation;
   } catch { /* explicit fallback below */ }
 }
 
@@ -212,6 +215,7 @@ function editFailure(code: string): string {
     case 'ZERO_LENGTH': return 'Move farther before confirming this edit.';
     case 'DISCONNECTED': return 'Start at a Route end, or reconnect your stroke to the Route.';
     case 'AMBIGUOUS_INTERVAL': return 'Redraw from clearer positions so Cairn can preserve the right path.';
+    case 'DESTRUCTIVE_ACTIVITY_REPLACEMENT': return 'That edit would remove the recorded Activity. Use Point or Draw from the Route end instead.';
     case 'STALE_TRANSACTION': return 'This Route changed. The unfinished stroke was cancelled without changing your Route.';
     case 'INVALID_COORDINATE': return 'The map could not read that position. Your Route is unchanged.';
     default: return 'Your Route is unchanged. Try again while connected.';
@@ -241,6 +245,8 @@ type SearchState = 'idle' | 'requesting' | 'results' | 'no-results' | 'error' | 
 type InitialLocationState =
   | { status: 'idle' | 'locating' | 'unavailable' }
   | { status: 'ready'; point: RoutePoint };
+
+const COMPACT_ACTION_HIT_SLOP = { top: 6, bottom: 6, left: 4, right: 4 };
 
 export function OrderedRouteEditorScreen() {
   const nav = useNavigation<any>();
@@ -306,6 +312,7 @@ export function OrderedRouteEditorScreen() {
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [initialLocation, setInitialLocation] = useState<InitialLocationState>({ status: 'idle' });
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
   const [briefStatus, setBriefStatus] = useState<string | null>(null);
   const [bottomWorkspaceHeight, setBottomWorkspaceHeight] = useState(0);
   const mapViewRef = useRef<any>(null);
@@ -364,6 +371,33 @@ export function OrderedRouteEditorScreen() {
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => { mounted = false; subscription.remove(); };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Location.getForegroundPermissionsAsync()
+      .then(result => { if (!cancelled) setLocationPermissionGranted(result.status === 'granted'); })
+      .catch(() => { if (!cancelled) setLocationPermissionGranted(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!ownerId || readOnlyShared) return undefined;
+    let cancelled = false;
+    void (async () => {
+      const friendMemory = useFriendMemoryStore.getState();
+      if (friendMemory.userId !== ownerId && friendMemory.hydrate) {
+        await friendMemory.hydrate(ownerId);
+      }
+      await loadMemorySubscriptions();
+      if (!cancelled) await useFriendMemoryStore.getState().loadSelectedProjections();
+    })();
+    return () => { cancelled = true; };
+  }, [loadMemorySubscriptions, ownerId, readOnlyShared]);
+
+  useEffect(() => {
+    if (!ownerId || readOnlyShared) return;
+    void useFriendMemoryStore.getState().loadSelectedProjections();
+  }, [memorySubscriptions, ownerId, readOnlyShared]);
 
   const finishRouteAnimation = useCallback((reason: 'complete' | 'superseded' | 'user-camera' | 'tool-switch' | 'undo' | 'camera-action' = 'superseded') => {
     routeAnimationGenerationRef.current += 1;
@@ -792,6 +826,7 @@ export function OrderedRouteEditorScreen() {
     void (async () => {
       try {
         const permissionState = await Location.getForegroundPermissionsAsync();
+        if (!cancelled) setLocationPermissionGranted(permissionState.status === 'granted');
         if (permissionState.status !== 'granted') {
           if (!cancelled) {
             setInitialLocation({ status: 'unavailable' });
@@ -848,6 +883,7 @@ export function OrderedRouteEditorScreen() {
   const showCurrentLocation = useCallback(async () => {
     try {
       const permissionState = await Location.getForegroundPermissionsAsync();
+      setLocationPermissionGranted(permissionState.status === 'granted');
       if (permissionState.status !== 'granted') {
         setError('Location permission is needed to center the planning map. You can still search or browse another city.');
         return;
@@ -1138,15 +1174,19 @@ export function OrderedRouteEditorScreen() {
       if (resolved.outcome === 'accepted') {
         applyResolvedDraw(resolved.points, 'draw-matched', intent);
       } else if (resolved.outcome === 'review') {
-        setPendingReview({
-          kind: 'draw',
-          points: resolved.points,
-          resolution: 'draw-matched',
-          intent,
-          reason: resolved.reason,
-          baseRevision: live.present.revision,
-        });
-        setMode('AwaitFreehandChoice');
+        if (resolved.reason === 'shape-deviation') {
+          applyResolvedDraw(transactionPoints, 'draw-manual', intent);
+        } else {
+          setPendingReview({
+            kind: 'draw',
+            points: resolved.points,
+            resolution: 'draw-matched',
+            intent,
+            reason: resolved.reason,
+            baseRevision: live.present.revision,
+          });
+          setMode('AwaitFreehandChoice');
+        }
       } else if (resolved.outcome === 'manual-available') {
         if (resolved.reason === 'provider-unavailable') {
           setPendingProviderRetry({
@@ -1166,15 +1206,7 @@ export function OrderedRouteEditorScreen() {
             preservedRawPoints: resolved.rawPoints,
           }, 'state');
         } else {
-          setManualRecovery({
-            kind: 'draw',
-            points: resolved.rawPoints,
-            resolution: 'draw-manual',
-            intent,
-            reason: resolved.reason,
-            baseRevision: live.present.revision,
-          });
-          setMode('AwaitFreehandChoice');
+          applyResolvedDraw(resolved.rawPoints, 'draw-manual', intent);
         }
       } else {
         recordRouteDrawingTrace('route_draw_rejected', {
@@ -1349,7 +1381,9 @@ export function OrderedRouteEditorScreen() {
           selectedGeometry: selection.points,
         }, 'selection');
         if (!selection.accepted) {
-          setError('No nearby path found. You can draw this section.');
+          setError(selection.reason === 'provider-absurd-detour'
+            ? 'That nearby Point would take a long detour. Move it or Draw the short connection.'
+            : 'No nearby path found. Move the Point or draw this section.');
           setMode('PointTargeting');
         } else {
           applyResolvedPoint(selection.points, intent, baseRevision);
@@ -1446,6 +1480,13 @@ export function OrderedRouteEditorScreen() {
     finishRouteAnimation('undo');
     const current = historyRef.current;
     if (!current) return;
+    setTrimStart(0);
+    setTrimEnd(1);
+    setMode('Browse');
+    if (current.past.length === 0) {
+      setError(null);
+      return;
+    }
     const next = undoRouteHistory(current);
     historyRef.current = next;
     setHistory(next);
@@ -1667,6 +1708,7 @@ export function OrderedRouteEditorScreen() {
       </View>
         <TouchableOpacity
           style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }, trimStart <= 0.001 && trimEnd >= 0.999 && styles.disabled]}
+          hitSlop={COMPACT_ACTION_HIT_SLOP}
           onPress={applyTrim}
           disabled={trimStart <= 0.001 && trimEnd >= 0.999}
           accessibilityRole="button"
@@ -1682,7 +1724,16 @@ export function OrderedRouteEditorScreen() {
           : 'Matching unavailable. Your line is kept.'}
       </Text>
       <TouchableOpacity
+        style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]}
+        hitSlop={COMPACT_ACTION_HIT_SLOP}
+        onPress={() => { invalidatePendingOperation(); setMode('Browse'); setError(null); }}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel Route retry"
+        testID="route-provider-retry-cancel"
+      ><Text style={[styles.compactActionText, { color: theme.foreground }]}>Cancel</Text></TouchableOpacity>
+      <TouchableOpacity
         style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]}
+        hitSlop={COMPACT_ACTION_HIT_SLOP}
         onPress={retryPendingProviderOperation}
         accessibilityRole="button"
         accessibilityLabel="Retry Route request"
@@ -1692,7 +1743,7 @@ export function OrderedRouteEditorScreen() {
   ) : pendingAttachmentChoice ? (
     <View style={styles.decisionInlineRow} testID="route-attachment-choice">
       <Text style={[styles.contextText, { color: contextInk }]}>Use the highlighted section?</Text>
-      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setPendingAttachmentChoice(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} hitSlop={COMPACT_ACTION_HIT_SLOP} onPress={() => { setPendingAttachmentChoice(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
       <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
         const pending = pendingAttachmentChoice;
         setPendingAttachmentChoice(null);
@@ -1701,22 +1752,22 @@ export function OrderedRouteEditorScreen() {
           setMode('Browse');
           return;
         }
-        void handleDrawStroke(pending.raw, pending.capture, pending.intent);
-      }} testID="route-use-highlighted-interval"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use highlight</Text></TouchableOpacity>
+        applyResolvedDraw(pending.raw, 'draw-manual', pending.intent);
+      }} hitSlop={COMPACT_ACTION_HIT_SLOP} testID="route-use-highlighted-interval"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use highlight</Text></TouchableOpacity>
     </View>
   ) : manualRecovery ? (
     <View style={styles.decisionInlineRow} testID="route-freehand-choice">
       <Text style={[styles.contextText, { color: contextInk }]}>Keep the line you drew?</Text>
-      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => { setManualRecovery(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
-      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => { const pending = manualRecovery; setManualRecovery(null); applyResolvedDraw(pending.points, 'draw-manual', pending.intent); }} testID="route-use-drawing"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use line</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} hitSlop={COMPACT_ACTION_HIT_SLOP} onPress={() => { setManualRecovery(null); setMode('DrawArmed'); }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>Redraw</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} hitSlop={COMPACT_ACTION_HIT_SLOP} onPress={() => { const pending = manualRecovery; setManualRecovery(null); applyResolvedDraw(pending.points, 'draw-manual', pending.intent); }} testID="route-use-drawing"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use line</Text></TouchableOpacity>
     </View>
   ) : pendingReview || pendingPointReview ? (
     <View style={styles.decisionInlineRow} testID="route-inline-review">
       <Text style={[styles.contextText, { color: contextInk }]}>{pendingPointReview ? 'Keep this road path?' : 'Keep this path?'}</Text>
-      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} onPress={() => {
+      <TouchableOpacity style={[styles.compactSecondaryAction, { borderColor: theme.borderSubtle }]} hitSlop={COMPACT_ACTION_HIT_SLOP} onPress={() => {
         setPendingReview(null); setPendingPointReview(null); setMode(pendingPointReview ? 'PointTargeting' : 'DrawArmed');
       }}><Text style={[styles.compactActionText, { color: theme.foreground }]}>{pendingPointReview ? 'Cancel' : 'Redraw'}</Text></TouchableOpacity>
-      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={() => {
+      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} hitSlop={COMPACT_ACTION_HIT_SLOP} onPress={() => {
         if (pendingReview) { const pending = pendingReview; setPendingReview(null); applyResolvedDraw(pending.points, pending.resolution, pending.intent); }
         else if (pendingPointReview) { const pending = pendingPointReview; setPendingPointReview(null); applyResolvedPoint(pending.points, pending.intent, pending.baseRevision, pending.resolution); }
       }}><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Use path</Text></TouchableOpacity>
@@ -1731,7 +1782,7 @@ export function OrderedRouteEditorScreen() {
   ) : tool === 'point' ? (
     <View style={styles.pointInlineRow} testID="route-point-context">
       <Text style={[styles.contextText, { color: contextInk }]}>Move map to choose.</Text>
-      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} onPress={confirmPointTarget} disabled={providerBusy} accessibilityRole="button" accessibilityLabel={pointActionLabel} testID="route-point-confirm"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{pointActionLabel}</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} hitSlop={COMPACT_ACTION_HIT_SLOP} onPress={confirmPointTarget} disabled={providerBusy} accessibilityRole="button" accessibilityLabel={pointActionLabel} testID="route-point-confirm"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{pointActionLabel}</Text></TouchableOpacity>
     </View>
   ) : tool === 'draw' ? (
     <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: contextInk }]}>{draft.gaps.length > 0 ? 'Draw across the dotted gap to join your route.' : 'Draw to reshape your route.'}</Text></View>
@@ -1801,6 +1852,28 @@ export function OrderedRouteEditorScreen() {
               }}
             />
           ) : <Camera ref={cameraRef} defaultSettings={{ centerCoordinate: initialLocationCenter, zoomLevel: initialLocation.status === 'ready' ? 14 : Math.max(region.defaultZoom, 10), animationDuration: 0 }} /> : null}
+          {UserLocation && locationPermissionGranted ? (
+            <UserLocation visible={mapReady} animated>
+              <CircleLayer
+                id="ordered-route-user-location-ring"
+                slot="top"
+                style={{
+                  circleRadius: ['interpolate', ['linear'], ['zoom'], 4, 2.5, 10, 4.5, 14, 7, 18, 9],
+                  circleColor: '#FFFFFF',
+                  circlePitchAlignment: 'map',
+                }}
+              />
+              <CircleLayer
+                id="ordered-route-user-location-dot"
+                slot="top"
+                style={{
+                  circleRadius: ['interpolate', ['linear'], ['zoom'], 4, 1.6, 10, 3, 14, 5, 18, 6.5],
+                  circleColor: 'rgba(51, 181, 229, 1)',
+                  circlePitchAlignment: 'map',
+                }}
+              />
+            </UserLocation>
+          ) : null}
           <FogLayer scopeOverride={planningMemoryScope} opacityScale={0.42} />
           {ShapeSource && LineLayer && trimOriginalFeature ? (
             <ShapeSource id="ordered-route-trim-original" shape={trimOriginalFeature}>
@@ -1927,7 +2000,7 @@ export function OrderedRouteEditorScreen() {
               style={[styles.popoverChoice, { borderColor: planningMemoryScope === 'combined' ? theme.primary : theme.borderSubtle, backgroundColor: planningMemoryScope === 'combined' ? theme.controlSelected : theme.surface }, memorySubscriptions.length === 0 && styles.disabled]}
               disabled={memorySubscriptions.length === 0}
               onPress={() => { setPlanningMemoryScope('combined'); void useFriendMemoryStore.getState().loadSelectedProjections(); }}
-            ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine + Friends</Text></TouchableOpacity>
+            ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine &amp; Friends</Text></TouchableOpacity>
           </View>
           {memorySubscriptions.length === 0 ? <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>No shared Friend Fog is available. Mine stays visible.</Text> : null}
         </View>
@@ -2000,22 +2073,22 @@ export function OrderedRouteEditorScreen() {
                 <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'draw' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'draw' ? theme.controlSelected : theme.surface }]} onPress={() => selectEditorTool(tool === 'draw' ? 'browse' : 'draw')} accessibilityRole="button" accessibilityState={{ selected: tool === 'draw' }} testID="route-tool-draw">
                   <Icon name="Pencil" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Draw</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'point' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'point' ? theme.controlSelected : theme.surface }]} onPress={() => selectEditorTool('point')} accessibilityRole="button" accessibilityState={{ selected: tool === 'point' }} testID="route-tool-point">
+                <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'point' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'point' ? theme.controlSelected : theme.surface }]} onPress={() => selectEditorTool(tool === 'point' ? 'browse' : 'point')} accessibilityRole="button" accessibilityState={{ selected: tool === 'point' }} testID="route-tool-point">
                   <Icon name="MapPin" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Point</Text>
                 </TouchableOpacity>
                 <TouchableOpacity disabled={draft.parts.length === 0} style={[styles.toolButton, { borderColor: tool === 'trim' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'trim' ? theme.controlSelected : theme.surface }, draft.parts.length === 0 && styles.disabled]} onPress={() => selectEditorTool(tool === 'trim' ? 'browse' : 'trim')} accessibilityRole="button" accessibilityState={{ selected: tool === 'trim', disabled: draft.parts.length === 0 }} testID="route-tool-trim">
                   <Icon name="Move" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Trim</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.undoButton, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }, (!history || history.past.length === 0 || hasUncommittedRouteEdit) && styles.disabled]}
+                  style={[styles.undoButton, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }, (!history || (history.past.length === 0 && !trimOpen) || hasUncommittedRouteEdit) && styles.disabled]}
                   onPress={handleUndo}
-                  disabled={!history || history.past.length === 0 || hasUncommittedRouteEdit}
+                  disabled={!history || (history.past.length === 0 && !trimOpen) || hasUncommittedRouteEdit}
                   accessibilityRole="button"
                   accessibilityLabel="Undo last Route edit"
-                  accessibilityState={{ disabled: !history || history.past.length === 0 || hasUncommittedRouteEdit }}
+                  accessibilityState={{ disabled: !history || (history.past.length === 0 && !trimOpen) || hasUncommittedRouteEdit }}
                   testID="route-undo"
                 >
-                  <Icon name="Undo2" size={18} color={!history || history.past.length === 0 || hasUncommittedRouteEdit ? theme.iconInactive : theme.iconActive} strokeWidth={2.2} />
+                  <Icon name="Undo2" size={18} color={!history || (history.past.length === 0 && !trimOpen) || hasUncommittedRouteEdit ? theme.iconInactive : theme.iconActive} strokeWidth={2.2} />
                 </TouchableOpacity>
               </View>
               <View style={styles.nameSaveRow} testID="route-name-save-row">
@@ -2148,17 +2221,17 @@ const styles = StyleSheet.create({
   linkText: { fontSize: FontSize.small, fontWeight: '700', padding: Spacing.xs },
   trimStrip: { borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.sm, paddingTop: Spacing.sm, paddingBottom: Spacing.xs },
   trimHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
-  contextPanel: { minHeight: 52, borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.sm, paddingVertical: 8, justifyContent: 'center' },
+  contextPanel: { minHeight: 44, borderWidth: 1, borderRadius: RadiusRole.card, paddingHorizontal: Spacing.sm, paddingVertical: 4, justifyContent: 'center' },
   contextContent: { justifyContent: 'center', gap: 8 },
-  pointInlineRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
-  trimInlineRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  pointInlineRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  trimInlineRow: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   trimSliderFrame: { flex: 1, minWidth: 0, paddingHorizontal: 2 },
   contextProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   contextText: { flexShrink: 1, fontSize: FontSize.small, lineHeight: 18, fontWeight: '600' },
   compactActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.sm },
-  decisionInlineRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  compactSecondaryAction: { minHeight: 44, alignSelf: 'flex-end', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
-  compactPrimaryAction: { minHeight: 44, alignSelf: 'flex-end', borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  decisionInlineRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  compactSecondaryAction: { minHeight: 32, alignSelf: 'center', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
+  compactPrimaryAction: { minHeight: 32, alignSelf: 'center', borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
   compactActionText: { fontSize: FontSize.caption, fontWeight: '800' },
   inlineReview: { borderWidth: 1, borderRadius: RadiusRole.card, padding: Spacing.sm, gap: Spacing.sm },
   editorFooterRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },

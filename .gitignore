@@ -136,6 +136,8 @@ scripts/r113/.testuser.json
 /docs/review/**/*home-size*.png
 /docs/review/**/*validation*.png
 /app/_review/overnight-*/
+/app/_review/o85-*/
+/app/_review/o85-production-friend-fog.json
 
 # These audits have no proven tracked generator and retain unique visual
 # authority; keep them eligible for tracking until reproducibility is proven.

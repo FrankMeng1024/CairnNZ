@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-16T13:45:26.468Z",
+  "access": "read-only production query plus real Mapbox walking APIs",
+  "privacy": "token and precise coordinates are not persisted",
+  "evidenceClass": ["SOURCE", "PROVIDER_INTEGRATION", "WEB_REAL_BASEMAP"],
+  "routes": [
+    {
+      "id": 92,
+      "name": "test1",
+      "origin": "manual",
+      "savedVertices": 133,
+      "parts": 2,
+      "savedLengthM": 1897.71,
+      "savedHash": "b6b5a7f38e3bdf91a01b6b3d6445561e798e62ce2038d27727a0c018270a5799",
+      "currentMatching": {"code": "Ok", "vertices": 101, "lengthM": 1891.17, "nullTracepoints": 18}
+    },
+    {
+      "id": 93,
+      "name": "test2",
+      "origin": "manual",
+      "savedVertices": 85,
+      "parts": 1,
+      "savedLengthM": 1163.87,
+      "savedHash": "82fa04e164161f2fbdcf5b1e42973d90c327328f5eede913515e4e7b4bac7642",
+      "currentMatching": {"code": "Ok", "vertices": 83, "lengthM": 1162.98, "nullTracepoints": 28}
+    },
+    {
+      "id": 94,
+      "name": "test3",
+      "origin": "manual",
+      "savedVertices": 111,
+      "parts": 2,
+      "savedLengthM": 1933.13,
+      "savedHash": "58e5e2c5badd0c156462cae09378e05f7b3f0ea8c01efa6a97e82e6360191eaa",
+      "currentMatching": {"code": "Ok", "vertices": 118, "lengthM": 1944.49, "nullTracepoints": 23}
+    },
+    {
+      "id": 95,
+      "name": "test a 1",
+      "origin": "activity",
+      "sourceSessionId": 2134,
+      "savedVertices": 103,
+      "parts": 6,
+      "savedLengthM": 3977.33,
+      "savedHash": "fd8d5dc666b6323546fdcd963f1bb71066282c3a2de0aed884f4a3bfee5e7881"
+    },
+    {
+      "id": 96,
+      "name": "test a 2",
+      "origin": "activity",
+      "sourceSessionId": 2134,
+      "savedVertices": 2,
+      "parts": 1,
+      "savedLengthM": 18.37,
+      "savedHash": "f2aba10c7722064a0408b56a105d99974770e68651e7f12e031e0e4418212432"
+    }
+  ],
+  "immutableActivity": {
+    "sessionId": 2134,
+    "sourceHash": "95fcdeb7b1dbf0c7954eb62e48ea9e5dd4b729141250fac5e7b198d082c70d2c",
+    "rawVertices": 203,
+    "filteredVertices": 21,
+    "canonicalVertices": 197,
+    "canonicalLengthM": 281.58,
+    "canonicalHash": "586a0c7c3317be2e6568728f1f7cedb3961e3bc1550fac06df53bc7eaf1d51d7"
+  },
+  "nearClosureDirections": {
+    "code": "Ok",
+    "directDistanceM": 198.88,
+    "routedDistanceM": 1528.71,
+    "detourRatio": 7.69,
+    "vertices": 27,
+    "startShiftM": 11.48,
+    "targetShiftM": 16.55,
+    "geometryHash": "8252907185520843d7cbb19a3f58db7a3575e55e9df1bc775d1019baf4cf45c6"
+  },
+  "historicalTraceBoundary": {
+    "Test1": "saved canonical Route only; native finger and original provider evidence absent",
+    "Test2": "saved canonical Route only; native finger and original provider evidence absent",
+    "Test3": "saved canonical Route only; native finger and original provider evidence absent",
+    "ActivityEditor": "immutable Activity evidence exists; post-import Draw/Point trace absent"
+  }
+}

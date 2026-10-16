@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-16T14:14:16.416Z",
+  "access": "read-only; no account, grant, subscription, Route or Activity mutation",
+  "viewerHash": "482d9673cfee",
+  "sources": [
+    {
+      "sourceHash": "4b227777d4dd",
+      "activeGrant": true,
+      "scope": "full_history_delayed_v1",
+      "authorizationVersion": 1,
+      "selected": true,
+      "delayedAcceptedRows": 0,
+      "finalizedSessions": 16,
+      "projectionCells": 0,
+      "projectionRegions": 0,
+      "projectionVersionHash": "65583a679c7d"
+    },
+    {
+      "sourceHash": "872261620421",
+      "activeGrant": true,
+      "scope": "full_history_delayed_v1",
+      "authorizationVersion": 1,
+      "selected": false,
+      "delayedAcceptedRows": 9,
+      "finalizedSessions": 20,
+      "projectionCells": 0,
+      "projectionRegions": 0,
+      "projectionVersionHash": "f8fc183bd1cf"
+    }
+  ],
+  "privacyPolicy": {
+    "delaySeconds": 1800,
+    "gridMercatorM": 200,
+    "endpointAndPrivateMaskGroundM": 250
+  },
+  "evidenceClass": "PRODUCTION_READ_ONLY_SOURCE_AND_DERIVATION",
+  "verdict": "NO_REAL_SELECTED_FRIEND_CELLS_AVAILABLE",
+  "sourceReceiptSha256": "e7e0eed40a5e0cafd54c5b3059d94fee5b13b8b6889a9978437cab6d89aa0637"
+}

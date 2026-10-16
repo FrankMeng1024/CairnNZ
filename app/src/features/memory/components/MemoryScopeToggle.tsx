@@ -56,7 +56,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
     }).start();
   }, [scope]);
 
-  const expandWidth = expand.interpolate({ inputRange: [0, 1], outputRange: [0, 44] });
+  const expandWidth = expand.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
   const expandOpacity = expand;
 
   const opts: { id: MemoryScope; label: string }[] = [
@@ -101,6 +101,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
         <Animated.View style={{ width: expandWidth, opacity: expandOpacity, overflow: 'hidden' }}>
           <TouchableOpacity
             style={styles.pickSegment}
+            hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
             onPress={() => { if (scope !== 'self') onPickPress(); }}
             disabled={scope === 'self'}
             activeOpacity={0.7}
@@ -151,10 +152,10 @@ const styles = StyleSheet.create({
   countBadge: { minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   countText: { fontSize: 10, fontWeight: '700' },
   // v376: Pick segment — same vertical metrics as Mine/Friends so the
-  // pill height is unchanged. Width 44 = comfortable tap target while
-  // matching the segment padding rhythm.
+  // pill height is unchanged. The visible 40pt cluster uses hitSlop for a
+  // 44pt target, keeping the action close to its Friends label.
   pickSegment: {
-    width: 44,
+    width: 40,
     paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',

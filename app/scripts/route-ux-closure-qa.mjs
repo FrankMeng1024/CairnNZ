@@ -68,6 +68,8 @@ for (const scenario of matrix) {
   const context = await browser.newContext({
     viewport: { width: scenario.width, height: scenario.height },
     deviceScaleFactor: 1, locale: 'en-NZ', colorScheme: scenario.theme === 'night' ? 'dark' : 'light',
+    geolocation: { latitude: -36.8480, longitude: 174.7650, accuracy: 12 },
+    permissions: ['geolocation'],
   });
   const page = await context.newPage();
   const caseErrors = [];
@@ -127,6 +129,7 @@ for (const scenario of matrix) {
       { timeout: 12_000 },
     ).then(() => true).catch(() => false);
     await page.waitForTimeout(250);
+    const locationPuckVisible = await page.getByTestId('web-user-location-puck').isVisible().catch(() => false);
 
     const prefix = `route-${scenario.width}-${scenario.theme}`;
     await page.screenshot({ path: path.join(outputDir, `${prefix}-browse.png`) });
@@ -157,6 +160,7 @@ for (const scenario of matrix) {
     const layersBackgroundBefore = await page.getByTestId('route-more').evaluate(element => getComputedStyle(element).backgroundColor);
     await page.getByTestId('route-more').click();
     await page.screenshot({ path: path.join(outputDir, `${prefix}-layers.png`) });
+    const mineAndFriendsLabelVisible = await page.getByText('Mine & Friends', { exact: true }).isVisible();
     const resetDraftAbsent = !/Reset Draft/i.test(await page.locator('body').innerText());
     const layersSelected = await page.getByTestId('route-more').evaluate(element => ({
       selected: element.getAttribute('aria-selected'),
@@ -170,13 +174,10 @@ for (const scenario of matrix) {
       start: C,
       finish: { lng: C.lng + 0.0010, lat: C.lat + 0.00055 },
     });
-    await page.getByTestId('route-freehand-choice').waitFor({ state: 'visible', timeout: 15_000 });
+    await page.getByText('Line added. Move the map, or tap Draw to continue.').waitFor({ state: 'visible', timeout: 15_000 });
     await page.screenshot({ path: path.join(outputDir, `${prefix}-freehand.png`) });
-    const fallbackBoxes = await Promise.all([
-      box(page.getByText('Keep the line you drew?')),
-      box(page.getByText('Redraw', { exact: true })),
-      box(page.getByText('Use line', { exact: true })),
-    ]);
+    const fallbackChoiceAbsent = await page.getByTestId('route-freehand-choice').count() === 0;
+    const undoEnabledAfterManualFallback = await page.getByTestId('route-undo').isEnabled();
 
     const editorPanelBox = await box(page.getByTestId('route-context-slot'));
     const editorLogo = await box(page.locator('.mapboxgl-ctrl-logo:visible').last());
@@ -277,18 +278,22 @@ for (const scenario of matrix) {
     const assertions = {
       browseHasNoReservedContext,
       basemapTilesReady,
+      locationPuckVisible,
       nameAndSaveHorizontal: Math.abs(centerY(nameBox) - centerY(saveBox)) <= 8 && !overlaps(nameBox, saveBox),
       drawMessageVisible,
       pointEntryCameraInvariant: ['center', 'zoom', 'bearing', 'pitch'].every(key => JSON.stringify(cameraBeforePoint?.[key]) === JSON.stringify(cameraAfterPoint?.[key])),
-      pointRowHorizontal: Math.abs(centerY(pointTextBox) - centerY(pointActionBox)) <= 9 && !overlaps(pointTextBox, pointActionBox) && (pointActionBox?.height ?? 0) >= 44,
+      pointRowCompact: Math.abs(centerY(pointTextBox) - centerY(pointActionBox)) <= 9
+        && !overlaps(pointTextBox, pointActionBox)
+        && (pointActionBox?.height ?? 0) >= 28
+        && (pointActionBox?.height ?? Infinity) <= 36,
       trimRowHorizontal: Boolean(trimStrip && trimApply && trimApply.y >= trimStrip.y && trimApply.y + trimApply.height <= trimStrip.y + trimStrip.height + 1),
       trimCancelAbsent,
       resetDraftAbsent,
+      mineAndFriendsLabelVisible,
       layersActionSelected: layersSelected.selected === 'true'
         || layersSelected.expanded === 'true'
         || layersSelected.background !== layersBackgroundBefore,
-      fallbackOneRow: fallbackBoxes.every(Boolean) && Math.max(...fallbackBoxes.map(centerY)) - Math.min(...fallbackBoxes.map(centerY)) <= 9
-        && !overlaps(fallbackBoxes[0], fallbackBoxes[1]) && !overlaps(fallbackBoxes[1], fallbackBoxes[2]),
+      fallbackAutoCommitsWithoutDecisionRow: fallbackChoiceAbsent && undoEnabledAfterManualFallback,
       editorOrnamentsAboveDock,
       detailOrnamentsAboveSheet,
       detailRouteFits,
@@ -301,7 +306,7 @@ for (const scenario of matrix) {
       detailPanelCompact: panelCompact,
     };
     results.push({ scenario, assertions, measurements: {
-      nameBox, saveBox, pointTextBox, pointActionBox, trimStrip, trimApply, fallbackBoxes,
+      nameBox, saveBox, pointTextBox, pointActionBox, trimStrip, trimApply,
       editorPanelBox, editorLogo, editorAttribution, detailPanel, detailLogo, detailAttribution, repeatLayerCount,
       layersBackgroundBefore, layersSelected, detailRuntime,
     }, runtimeErrors: caseErrors, pass: Object.values(assertions).every(Boolean) && caseErrors.length === 0 });

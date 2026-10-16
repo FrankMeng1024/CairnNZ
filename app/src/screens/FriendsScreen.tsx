@@ -170,10 +170,13 @@ function FriendRow({
             {isNew ? <Text style={[s.newBadge, { color: theme.onPrimary, backgroundColor: theme.primary }]}>New</Text> : null}
           </View>
           <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{email}</Text>
+          <Text
+            style={[s.sharingStatus, { color: sharingEnabled ? theme.primary : theme.foregroundSecondary }]}
+            numberOfLines={1}
+          >
+            My Memory: {sharingEnabled ? 'Shared' : 'Not shared'}
+          </Text>
         </View>
-        <Text style={[s.sharingStatus, { color: sharingEnabled ? theme.primary : theme.foregroundSecondary }]}>
-          My Memory: {sharingEnabled ? 'Shared' : 'Not shared'}
-        </Text>
         <Icon name="ChevronRight" size={IconSize.sm} color={theme.iconInactive} strokeWidth={1.8} />
       </ContentSurface>
     </TouchableOpacity>
@@ -291,7 +294,19 @@ function SentRow({
 // whole hero area; the rest of the sheet's top curve remains soft paper.
 type AddState = 'idle' | 'loading' | 'error';
 
-function AddFriendPage({ onDismiss, onRequestSent }: { onDismiss: () => void; onRequestSent: (request: OutboundRequest) => void }) {
+function AddFriendPage({
+  onDismiss,
+  onRequestSent,
+  existingFriendEmails,
+  outgoingPendingEmails,
+  incomingPendingEmails,
+}: {
+  onDismiss: () => void;
+  onRequestSent: (request: OutboundRequest) => void;
+  existingFriendEmails: string[];
+  outgoingPendingEmails: string[];
+  incomingPendingEmails: string[];
+}) {
   const theme = useVisualTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -348,9 +363,22 @@ function AddFriendPage({ onDismiss, onRequestSent }: { onDismiss: () => void; on
   };
 
   const submit = async () => {
+    if (state === 'loading') return;
     const trimmed = email.trim();
     if (!isValidEmail(trimmed)) { setErr('Enter a valid email address.'); return; }
-    dismissKeyboard();
+    const normalized = trimmed.toLowerCase();
+    if (existingFriendEmails.some(value => value.trim().toLowerCase() === normalized)) {
+      setErr('Already friends.');
+      return;
+    }
+    if (outgoingPendingEmails.some(value => value.trim().toLowerCase() === normalized)) {
+      setErr('Request already pending.');
+      return;
+    }
+    if (incomingPendingEmails.some(value => value.trim().toLowerCase() === normalized)) {
+      setErr('They already sent you a request. Open Requests to respond.');
+      return;
+    }
     setErr('');
     setState('loading');
     const r = await sendFriendRequest(trimmed, shareMemory);
@@ -958,6 +986,9 @@ export function FriendsScreen() {
       {showAdd && (
         <AddFriendPage
           onDismiss={() => setShowAdd(false)}
+          existingFriendEmails={friends.map(friend => friend.email)}
+          outgoingPendingEmails={visibleOutbound.filter(request => request.status === 'pending').map(request => request.toEmail)}
+          incomingPendingEmails={visibleIncoming.map(request => request.from_email)}
           onRequestSent={(request) => {
             setRequestsViewerId(viewerId);
             setOutbound(current => [request, ...current.filter(item => item.id !== request.id)]);
@@ -1188,7 +1219,7 @@ const s = StyleSheet.create({
   friendNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   friendNameText: { flexShrink: 1 },
   newBadge: { minWidth: 36, flexShrink: 0, textAlign: 'center', fontSize: FontSize.tiny, fontWeight: DS.fw_bold, paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
-  sharingStatus: { fontSize: FontSize.tiny, fontWeight: DS.fw_semibold, maxWidth: 94, textAlign: 'right' },
+  sharingStatus: { fontSize: FontSize.tiny, fontWeight: DS.fw_semibold, marginTop: 3, alignSelf: 'flex-start' },
   declinedStatus: { fontSize: FontSize.small, fontWeight: DS.fw_semibold, marginTop: 3 },
   outboundError: { fontSize: FontSize.small, lineHeight: 17, marginTop: 3 },
 

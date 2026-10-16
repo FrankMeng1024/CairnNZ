@@ -424,4 +424,48 @@ describe('Route edit transaction classification', () => {
     expect(continueDrawTransaction(changed, pending, [p(130.1, 35), p(250, 0)]))
       .toEqual({ kind: 'reject', code: 'STALE_TRANSACTION' });
   });
+
+  test('A3 a near-closed Activity endpoint owns Draw append before coincident replacement occurrences', () => {
+    const recorded = Array.from({ length: 120 }, (_, index) => p(
+      index < 60 ? index * 12 : (120 - index) * 12,
+      index < 60 ? Math.sin(index / 5) * 80 : 360 + Math.cos(index / 5) * 80,
+    ));
+    recorded.push(p(5, 0));
+    const imported = createImportedOrderedDraft({
+      draftId: 'activity-near-closure', ownerId: 'owner-a', segments: [recorded],
+    });
+    const raw = [recorded.at(-1)!, p(3, -8), recorded[0]];
+    const intent = classifyDrawTransaction(imported, raw, undefined, 20);
+    expect(intent).toEqual({ kind: 'append' });
+    if (intent.kind !== 'append') return;
+    const result = applyDrawTransaction(imported, intent, raw, 'draw-manual');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.parts[0].points).toEqual(imported.parts[0].points);
+    expect(result.draft.parts).toHaveLength(2);
+  });
+
+  test('A3 forced whole-Activity short-chord replacement fails closed before mutation', () => {
+    const recorded = Array.from({ length: 160 }, (_, index) => {
+      const angle = index / 159 * Math.PI * 2;
+      return p(Math.cos(angle) * 700, Math.sin(angle) * 500);
+    });
+    recorded[recorded.length - 1] = p(695, 2);
+    const imported = createImportedOrderedDraft({
+      draftId: 'activity-collapse-guard', ownerId: 'owner-a', segments: [recorded],
+    });
+    const part = imported.parts[0];
+    const before = JSON.stringify(imported);
+    const result = applyDrawTransaction(imported, {
+      kind: 'replace',
+      option: {
+        id: 'forced-whole-interval',
+        start: { partId: part.id, pointIndex: 0 },
+        end: { partId: part.id, pointIndex: part.points.length - 1 },
+        reverseCandidate: false,
+      },
+    }, [part.points[0], part.points.at(-1)!], 'draw-manual');
+    expect(result).toMatchObject({ ok: false, code: 'DESTRUCTIVE_ACTIVITY_REPLACEMENT' });
+    expect(JSON.stringify(imported)).toBe(before);
+  });
 });

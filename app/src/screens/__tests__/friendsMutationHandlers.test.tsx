@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Keyboard } from 'react-native';
 
 jest.setTimeout(15_000);
 
@@ -142,6 +143,48 @@ describe('FriendsScreen mutation result handling', () => {
     expect(mockSetGrant).toHaveBeenCalledWith('owner-a', true);
     expect(mockFetchProfileForNavigation).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('F1 keeps the directional Memory status with the identity on one line', async () => {
+    const screen = await renderReady();
+    const status = screen.getByText('My Memory: Not shared');
+    expect(status.props.numberOfLines).toBe(1);
+    expect(screen.getByText('alice@example.com').props.numberOfLines).toBe(1);
+    expect(status).toBeTruthy();
+  });
+
+  test('F2 rejects an existing friend locally without dismissing the keyboard or flashing a duplicate request', async () => {
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
+    const screen = await renderReady();
+    fireEvent.press(screen.getByText('Add friend'));
+    await waitFor(() => expect(screen.getByTestId('add-friend-email')).toBeTruthy());
+    fireEvent.changeText(screen.getByTestId('add-friend-email'), ' ALICE@example.com ');
+    fireEvent.press(screen.getByText('Send request'));
+
+    expect(await screen.findByText('Already friends.')).toBeTruthy();
+    expect(screen.getByTestId('add-friend-email')).toBeTruthy();
+    expect(mockSendFriendRequest).not.toHaveBeenCalled();
+    expect(dismissSpy).not.toHaveBeenCalled();
+    dismissSpy.mockRestore();
+  });
+
+  test('F2 rejects an already-pending outbound email before any duplicate network call', async () => {
+    mockFetchOutboundRequests.mockResolvedValueOnce({
+      success: true,
+      items: [{
+        id: 91, toUserId: 92, toName: 'Recipient Example', toEmail: 'recipient@example.com',
+        sentAt: 1_800_000_000_000, status: 'pending', requesterShares: false,
+      }],
+    });
+    const screen = await renderReady();
+    await waitFor(() => expect(mockFetchOutboundRequests).toHaveBeenCalled());
+    fireEvent.press(screen.getByText('Add friend'));
+    await waitFor(() => expect(screen.getByTestId('add-friend-email')).toBeTruthy());
+    fireEvent.changeText(screen.getByTestId('add-friend-email'), 'recipient@example.com');
+    fireEvent.press(screen.getByText('Send request'));
+
+    expect(await screen.findByText('Request already pending.')).toBeTruthy();
+    expect(mockSendFriendRequest).not.toHaveBeenCalled();
   });
 
   test('an account switch clears the local friend detail', async () => {

@@ -222,6 +222,39 @@ function terminalPoint(draft: OrderedRouteDraft): RoutePoint | undefined {
   return draft.parts.at(-1)?.points.at(-1) ?? draft.startPoint;
 }
 
+function routeLengthM(points: RoutePoint[]): number {
+  return points.slice(1).reduce(
+    (sum, point, index) => sum + routePointDistanceM(points[index], point),
+    0,
+  );
+}
+
+/**
+ * Activity imports are immutable evidence templates. A Draw replacement may
+ * reshape an identifiable interior interval, but it may not turn almost the
+ * entire recorded journey into a short chord. This guard lives immediately
+ * before the mutating primitive so classifier regressions and forced intents
+ * fail closed as well.
+ */
+export function isDestructiveActivityReplacement(
+  draft: OrderedRouteDraft,
+  option: RouteIntervalCandidate,
+  candidate: RoutePoint[],
+): boolean {
+  if (draft.origin !== 'activity') return false;
+  const wholeRoute = orderedDraftPoints(draft);
+  const replaced = intervalPoints(draft, option);
+  const normalizedCandidate = normalizeOrderedPoints(candidate);
+  if (wholeRoute.length < 8 || replaced.length < 6 || normalizedCandidate.length < 2) return false;
+  const wholeLengthM = routeLengthM(wholeRoute);
+  const replacedLengthM = routeLengthM(replaced);
+  const candidateLengthM = routeLengthM(normalizedCandidate);
+  if (wholeLengthM <= 0 || replacedLengthM <= 0) return false;
+  return replaced.length >= Math.max(6, Math.floor(wholeRoute.length * 0.8))
+    && replacedLengthM >= wholeLengthM * 0.8
+    && candidateLengthM < replacedLengthM * 0.35;
+}
+
 function initialPoint(draft: OrderedRouteDraft): RoutePoint | undefined {
   return draft.parts[0]?.points[0] ?? draft.startPoint;
 }
@@ -454,6 +487,14 @@ export function classifyDrawTransaction(
 
   const starts = nearestOrderedPositions(draft, first, toleranceM);
   const ends = nearestOrderedPositions(draft, last, toleranceM);
+  const terminal = terminalPoint(draft);
+  // Endpoint ownership is stronger than a coincident interior occurrence.
+  // In particular, a long Activity whose end is close to its beginning must
+  // append a closure; treating the same gesture as a whole-route replacement
+  // destroys the immutable recorded interior.
+  if (terminal && routePointDistanceM(first, terminal) <= toleranceM) {
+    return { kind: 'append' };
+  }
   const options = intervalOptions(draft, starts, ends);
   if (options.length > 0) {
     const selected = unambiguousInterval(draft, raw, options);
@@ -463,7 +504,6 @@ export function classifyDrawTransaction(
       draftId: draft.draftId, baseRevision: draft.revision, ambiguity: 'overlap',
     };
   }
-  const terminal = terminalPoint(draft);
   const beginning = initialPoint(draft);
   if (ends.length === 0 && terminal && routePointDistanceM(first, terminal) <= toleranceM) {
     return { kind: 'append' };
@@ -525,6 +565,9 @@ export function applyDrawTransaction(
   }
   if (intent.kind === 'bridge') {
     return bridgeOrderedGap(draft, intent.gapId, orient(candidate, intent.reverseCandidate), resolution);
+  }
+  if (isDestructiveActivityReplacement(draft, intent.option, candidate)) {
+    return { ok: false, code: 'DESTRUCTIVE_ACTIVITY_REPLACEMENT', draft };
   }
   return replaceOrderedInterval(
     draft,

@@ -108,11 +108,25 @@ describe('Point continuity-aware walking candidates', () => {
   test('a nearby earlier coordinate does not automatically reverse a remote old route', () => {
     const draft = route([p(0), p(500), p(500, 500), p(0, 500), p(0, 10)]);
     const target = p(5, 0);
-    const provider = [p(0, 10), p(120, 180), p(5, 0)];
+    const provider = [p(0, 10), p(40, 40), p(5, 0)];
     const selected = selectPointRouteCandidate({ draft, target, provider, zoom: 17 });
     expect(selected.accepted).toBe(true);
     expect(selected.source).toBe('provider');
     expect(selected.points).toEqual(provider);
+  });
+
+  test('A2 rejects an enormous provider detour for a nearby closure without retracing the Activity', () => {
+    const draft = route([p(0), p(50), p(100)]);
+    const selected = selectPointRouteCandidate({
+      draft,
+      target: p(5),
+      provider: [p(100), p(100, 600), p(-100, 600), p(-100), p(5)],
+      zoom: 17,
+    });
+    expect(selected.accepted).toBe(false);
+    expect(selected.reason).toBe('provider-absurd-detour');
+    expect(selected.points).toEqual([]);
+    expect(selected.knownRetraceLengthM).toBeGreaterThan(90);
   });
 
   test('A → B → A reuses a provider-confirmed known traversal and preserves distance', () => {

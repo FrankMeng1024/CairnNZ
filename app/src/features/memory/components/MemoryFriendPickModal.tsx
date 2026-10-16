@@ -217,6 +217,7 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
                     >
                       <View style={styles.rowMain}>
                         <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
+                        <View style={styles.rowStatusSlot} testID={`memory-friend-row-status-slot-${item.friend_id}`}>
                         {stateCopy ? (
                           <Text
                             style={[styles.rowEmail, { color: theme.foregroundSecondary }]}
@@ -225,16 +226,19 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
                             {stateCopy}
                           </Text>
                         ) : null}
-                      </View>
-                      {pending ? (
-                        <ActivityIndicator size="small" color={theme.primary} />
-                      ) : unavailable ? (
-                        <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
-                      ) : (
-                        <View style={[styles.checkbox, { borderColor: subscribed ? theme.primary : theme.borderStrong, backgroundColor: subscribed ? theme.primary : 'transparent' }]}>
-                          {subscribed ? <Icon name="Check" size={14} color={theme.onPrimary} strokeWidth={2.5} /> : null}
                         </View>
-                      )}
+                      </View>
+                      <View style={styles.rowAccessory} testID={`memory-friend-row-accessory-${item.friend_id}`}>
+                        {pending ? (
+                          <ActivityIndicator size="small" color={theme.primary} />
+                        ) : unavailable ? (
+                          <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
+                        ) : (
+                          <View style={[styles.checkbox, { borderColor: subscribed ? theme.primary : theme.borderStrong, backgroundColor: subscribed ? theme.primary : 'transparent' }]}>
+                            {subscribed ? <Icon name="Check" size={14} color={theme.onPrimary} strokeWidth={2.5} /> : null}
+                          </View>
+                        )}
+                      </View>
                     </TouchableOpacity>
                     {mutationErrors[friendId] ? <Text style={[styles.rowError, { color: theme.destructive }]}>{mutationErrors[friendId]}</Text> : null}
                   </View>
@@ -310,9 +314,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.card,
   },
   rowActive: { backgroundColor: Colors.primaryBg },
-  rowMain: { flex: 1 },
+  rowMain: { flex: 1, minWidth: 0 },
   rowName: { fontSize: FontSize.body, color: Colors.textPrimary, fontWeight: '600' },
   rowEmail: { fontSize: FontSize.caption, color: Colors.textSecondary, marginTop: 2 },
+  rowStatusSlot: { minHeight: 18, justifyContent: 'center' },
+  rowAccessory: { width: 32, minHeight: 44, marginLeft: Spacing.sm, alignItems: 'center', justifyContent: 'center' },
   addCircle: {
     width: 28, height: 28, borderRadius: 14,
     backgroundColor: Colors.primaryBg,

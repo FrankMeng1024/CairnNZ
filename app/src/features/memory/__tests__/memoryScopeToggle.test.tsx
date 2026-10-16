@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { Animated } from 'react-native';
+import { Animated, StyleSheet } from 'react-native';
 
 jest.mock('../../../hooks/useVisualTheme', () => {
   const { DAY_VISUAL_THEME } = jest.requireActual('../../../components/tokens');
@@ -46,6 +46,11 @@ describe('Memory scope presentation', () => {
     expect(screen.getByText('2')).toBeTruthy();
     expect(useMemorySubscriptionsStore.getState().subscriptions).toHaveLength(2);
     expect(onPickPress).not.toHaveBeenCalled();
+    const picker = screen.getByTestId('memory-scope-pick');
+    expect(StyleSheet.flatten(picker.props.style)).toMatchObject({ width: 40 });
+    expect(picker.props.hitSlop).toEqual({ top: 2, bottom: 2, left: 2, right: 2 });
+    expect(screen.queryByText('First Friend')).toBeNull();
+    expect(screen.queryByText('Second Friend')).toBeNull();
 
     fireEvent.press(screen.getByTestId('memory-scope-self'));
     expect(screen.queryByText('2')).toBeNull();

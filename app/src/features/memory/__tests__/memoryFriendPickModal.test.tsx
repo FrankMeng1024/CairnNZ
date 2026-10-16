@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 const mockAuthenticatedFetch = jest.fn();
 
@@ -86,9 +87,13 @@ describe('Memory friend picker interaction owner', () => {
     const onClose = jest.fn();
     const screen = render(<MemoryFriendPickModal visible onClose={onClose} />);
     await waitFor(() => expect(screen.getByTestId('memory-friend-row-11')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-status-slot-11').props.style)).toMatchObject({ minHeight: 18 });
+    expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-accessory-11').props.style)).toMatchObject({ width: 32, minHeight: 44 });
 
     fireEvent.press(screen.getByTestId('memory-friend-row-11'));
     await waitFor(() => expect(screen.getByText('Loading shared places…')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-status-slot-11').props.style)).toMatchObject({ minHeight: 18 });
+    expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-accessory-11').props.style)).toMatchObject({ width: 32, minHeight: 44 });
     expect(screen.getByTestId('memory-friend-pick-modal')).toBeTruthy();
     fireEvent.press(screen.getByTestId('memory-friend-row-22'));
 
@@ -103,6 +108,8 @@ describe('Memory friend picker interaction owner', () => {
     expect(screen.queryByText(/no delayed area available/i)).toBeNull();
     expect(screen.queryByTestId('memory-friend-row-status-11')).toBeNull();
     expect(screen.queryByTestId('memory-friend-row-status-22')).toBeNull();
+    expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-status-slot-11').props.style)).toMatchObject({ minHeight: 18 });
+    expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-accessory-11').props.style)).toMatchObject({ width: 32, minHeight: 44 });
     expect(new Set(useFriendMemoryStore.getState().getVisibleCells().map(cell => cell.sourceFriendId)))
       .toEqual(new Set(['11', '22']));
     expect(useMemoryScopeStore.getState().scope).toBe('combined');

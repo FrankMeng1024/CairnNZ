@@ -1258,22 +1258,23 @@ export function FogLayer({
   // classification layers. Rebuild bounded friend tiles on remount so a
   // cached fog can never silently lose or misclassify Friend/overlap color.
   const exactCachedAuthority = _moduleFogAuthority === authority && friendCells.length === 0;
-  const exactCachedSelf = !syntheticQaAuthority
-    && friendCells.length === 0
+  const reusableCachedSelf = !syntheticQaAuthority
     && _moduleSelfAccount === accountId
     && _moduleSelfSig === selfContentSignature
     && Boolean(_moduleSelfFogShape);
-  const hasInitialCache = exactCachedAuthority || exactCachedSelf;
+  const hasInitialCache = exactCachedAuthority || reusableCachedSelf;
   const lastAuthorityRef = useRef<string>(hasInitialCache ? authority : '');
-  const lastSigRef = useRef<string>(hasInitialCache ? contentSignature : '');
+  const lastSigRef = useRef<string>(exactCachedAuthority || (reusableCachedSelf && friendCells.length === 0)
+    ? contentSignature
+    : '');
   const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(
-    exactCachedAuthority ? _moduleFogShape : exactCachedSelf ? _moduleSelfFogShape : null,
+    exactCachedAuthority ? _moduleFogShape : reusableCachedSelf ? _moduleSelfFogShape : null,
   );
   const lastEvidenceRef = useRef<Feature<Polygon | MultiPolygon> | null>(
-    exactCachedAuthority ? _moduleEvidenceShape : exactCachedSelf ? _moduleSelfEvidenceShape : null,
+    exactCachedAuthority ? _moduleEvidenceShape : reusableCachedSelf ? _moduleSelfEvidenceShape : null,
   );
   const lastDisplayGeometryCacheRef = useRef<DisplayGeometryCache | null>(
-    exactCachedAuthority ? _moduleDisplayGeometryCache : exactCachedSelf ? _moduleSelfDisplayGeometryCache : null,
+    exactCachedAuthority ? _moduleDisplayGeometryCache : reusableCachedSelf ? _moduleSelfDisplayGeometryCache : null,
   );
   // v359 diagnostic: count build invocations for this FogLayer instance.
   // Lets us tell apart "first build after mount" vs "rebuild on points
@@ -1293,7 +1294,7 @@ export function FogLayer({
   const [fogShape, setFogShape] = useState<Feature<Polygon | MultiPolygon>>(
     exactCachedAuthority && _moduleFogShape
       ? _moduleFogShape
-      : exactCachedSelf && _moduleSelfFogShape ? _moduleSelfFogShape : solidFogShape(),
+      : reusableCachedSelf && _moduleSelfFogShape ? _moduleSelfFogShape : solidFogShape(),
   );
   const [friendDisplayShape, setFriendDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
   const [overlapDisplayShape, setOverlapDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
@@ -1330,7 +1331,16 @@ export function FogLayer({
       setGeometryReady(false);
       return undefined;
     }
-    if (_moduleFogAuthority === authority && _moduleFogSig === contentSignature && _moduleFogShape) {
+    // Combined Fog's module cache intentionally omits friend/overlap
+    // classification shapes. Reusing only its main mask here makes the
+    // Friends color layer disappear after Mine → Friends replay because the
+    // build effect sees an exact signature and exits. Only self-only geometry
+    // is complete enough for this synchronous cache path; friend scopes must
+    // rebuild their bounded classification layers.
+    if (friendCells.length === 0
+      && _moduleFogAuthority === authority
+      && _moduleFogSig === contentSignature
+      && _moduleFogShape) {
       lastAuthorityRef.current = authority;
       lastSigRef.current = contentSignature;
       lastShapeRef.current = _moduleFogShape;
@@ -1374,11 +1384,10 @@ export function FogLayer({
     if (authorityChanged) {
       lastAuthorityRef.current = authority;
       const canRestoreMine = !syntheticQaAuthority
-        && friendCells.length === 0
         && _moduleSelfAccount === accountId
         && _moduleSelfSig === selfContentSignature
         && Boolean(_moduleSelfFogShape);
-      lastSigRef.current = canRestoreMine ? contentSignature : '';
+      lastSigRef.current = canRestoreMine && friendCells.length === 0 ? contentSignature : '';
       lastShapeRef.current = canRestoreMine ? _moduleSelfFogShape : null;
       lastEvidenceRef.current = canRestoreMine ? _moduleSelfEvidenceShape : null;
       lastDisplayGeometryCacheRef.current = canRestoreMine ? _moduleSelfDisplayGeometryCache : null;
@@ -1559,7 +1568,6 @@ export function FogLayer({
     ? (exactShapeReady ? fogShape : lastShapeRef.current)
     : null;
   const mineFallbackShape = !syntheticQaAuthority
-    && friendCells.length === 0
     && _moduleSelfAccount === accountId
     && _moduleSelfSig === selfContentSignature
     ? _moduleSelfFogShape

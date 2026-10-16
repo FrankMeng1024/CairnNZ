@@ -50,4 +50,14 @@ describe('Memory fog readiness authority', () => {
     expect(web).toContain('onDidFinishRenderingFrameFully?: () => void;');
     expect(web).toContain('onDidFinishRenderingFrameFully?.();');
   });
+
+  test('the first Friends transition retains exact Mine fog while authorized union geometry builds', () => {
+    const fog = read('src/features/memory/components/FogLayer.tsx');
+    expect(fog).toMatch(/const reusableCachedSelf = !syntheticQaAuthority\s+&& _moduleSelfAccount/);
+    expect(fog).not.toMatch(/const reusableCachedSelf[\s\S]{0,140}friendCells\.length === 0/);
+    expect(fog).toMatch(/const mineFallbackShape = !syntheticQaAuthority\s+&& _moduleSelfAccount/);
+    expect(fog).not.toMatch(/const mineFallbackShape[\s\S]{0,140}friendCells\.length === 0/);
+    expect(fog).toContain('sameAuthorityShape ?? mineFallbackShape ?? solidFogShape()');
+    expect(fog).toMatch(/if \(friendCells\.length === 0\s+&& _moduleFogAuthority === authority/);
+  });
 });
