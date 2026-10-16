@@ -679,7 +679,11 @@ async function main() {
     const selectedSecond = await api(actors.B, '/api/public-cairns/scene', { expected: 200 });
     assert.ok(selectedFirst.body.entries.length <= 3);
     assert.ok(selectedFirst.body.newly_surfaced.length <= 1);
-    assert.equal(new Set(selectedFirst.body.entries.map(item => item.author.id)).size, selectedFirst.body.entries.length);
+    assert.ok(selectedFirst.body.entries.every(item => item.author.id === 'anonymous'
+      && item.author.name === 'Anonymous explorer'));
+    const selectedAuthorIds = selectedFirst.body.entries.map(entry =>
+      selectionMarkers.find(item => String(item.id) === String(entry.id))?.authorId ?? actors.A.id);
+    assert.equal(new Set(selectedAuthorIds).size, selectedAuthorIds.length);
     assert.deepEqual(selectedSecond.body.entries.map(item => item.id), selectedFirst.body.entries.map(item => item.id));
     assert.equal(selectedFirst.body.entries.some(item => Object.hasOwn(item, 'text')), false);
     const duplicateIds = selectionMarkers.filter(item => item.text === 'One shared duplicate').map(item => item.id);
@@ -838,8 +842,8 @@ async function main() {
     assert.equal(hiddenScene.body.entries.some(item => item.id === staleMarker.id), false);
     pass('PUB-09.hide', 'Hide committed once and removed the Cairn from both scene and Detail authority');
 
-    // Block uses the existing server-side identity authority and Public queries
-    // enforce it even though the two users were never friends.
+    // Public payloads stay anonymous; the resource-scoped block endpoint
+    // resolves the author server-side and enforces the shared block authority.
     const ownerEActivity = await completeActivity(actors.E, place.lat + 0.0002, place.lng, Date.now() - 50_000);
     const markerE = await createPublicCairn(actors.E, ownerEActivity, place.lat + 0.0002, place.lng, 'A second author');
     const pubE = await pendingSubmission(actors.C, markerE.id);
@@ -849,12 +853,21 @@ async function main() {
       method: 'POST', expected: 200, body: { source_activity_client_id: seeE.clientActivityId },
     });
     assert.equal(seeEVerified.body.encountered_marker_ids.includes(markerE.id), true);
-    await api(actors.D, `/api/public-cairns/cairns/${markerE.id}`, { expected: 200 });
-    await api(actors.D, `/api/friends/${actors.E.id}/block`, { method: 'POST', body: {}, expected: 200 });
+    const anonymousDetail = await api(actors.D, `/api/public-cairns/cairns/${markerE.id}`, { expected: 200 });
+    assert.deepEqual(anonymousDetail.body.cairn.author, { id: 'anonymous', name: 'Anonymous explorer' });
+    const blockedByResource = await api(actors.D, `/api/public-cairns/cairns/${markerE.id}/block-author`, {
+      method: 'POST', body: {}, expected: 200,
+    });
+    assert.deepEqual(blockedByResource.body, { blocked: true, cairn_id: String(markerE.id) });
+    const [[blockRow]] = await db.execute(
+      'SELECT COUNT(*) AS n FROM blocked_users WHERE blocker_id=? AND blocked_id=?',
+      [actors.D.id, actors.E.id],
+    );
+    assert.equal(Number(blockRow.n), 1);
     await api(actors.D, `/api/public-cairns/cairns/${markerE.id}`, { expected: 404 });
     const sceneAfterBlock = await api(actors.D, '/api/public-cairns/scene', { expected: 200 });
     assert.equal(sceneAfterBlock.body.entries.some(item => item.id === markerE.id), false);
-    pass('PUB-10.block', 'the shared block authority removes Public discovery and Detail access for non-friends too');
+    pass('PUB-10.block', 'an anonymous Cairn resource resolved its author only on the server; shared block authority then removed Public discovery and Detail access for non-friends');
 
     const legacyBbox = await api(actors.B, '/api/markers/public?bbox=-42,173,-40,176', { expected: 410 });
     assert.equal(legacyBbox.body.code, 'PUBLIC_DISCOVERY_DEFERRED');

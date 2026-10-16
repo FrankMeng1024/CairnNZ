@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { eligibleSourceProvenanceSql } = require('./activitySourceProvenance');
 
 const CELL_SIZE_M = 200;
-const FRIEND_PROJECTION_POLICY_VERSION = 2;
+const FRIEND_PROJECTION_POLICY_VERSION = 3;
 const EARTH_RADIUS_M = 6378137;
 const FRIEND_VISIBILITY_DELAY_SECONDS = 30 * 60;
 
@@ -70,7 +70,7 @@ async function loadFriendProjectionEvidence(db, ownerId, grant) {
                 'presence_first' AS evidence_kind
            FROM memory_presence_witnesses witness
           WHERE witness.user_id = ?
-            AND witness.evidence_source = 'activity_real'
+            AND witness.evidence_source IN ('activity_real','passive_real')
             AND witness.continuity_state = 'accepted'
             AND witness.horizontal_accuracy_m <= 50
          UNION ALL
@@ -81,7 +81,7 @@ async function loadFriendProjectionEvidence(db, ownerId, grant) {
                 witness.source_activity_client_id,witness.source_segment_id,'presence_latest' AS evidence_kind
            FROM memory_presence_witnesses witness
           WHERE witness.user_id = ?
-            AND witness.evidence_source = 'activity_real'
+            AND witness.evidence_source IN ('activity_real','passive_real')
             AND witness.continuity_state = 'accepted'
             AND witness.horizontal_accuracy_m <= 50
             AND witness.observed_at_ms > witness.first_observed_at_ms
@@ -208,7 +208,7 @@ async function deriveFriendProjection(db, ownerId, viewerId, grant) {
     grid_cell_size_mercator_m: CELL_SIZE_M,
     projection_policy_version: FRIEND_PROJECTION_POLICY_VERSION,
     contribution_delay_seconds: FRIEND_VISIBILITY_DELAY_SECONDS,
-    coverage_scope: grant.coverage_scope || 'legacy_activity_since_grant',
+    coverage_scope: 'full_history_delayed_v1',
     // City/country presence is derived only from the same delayed coarse cells
     // returned below. It cannot reveal a more recent or more precise area than
     // the authorized map projection.

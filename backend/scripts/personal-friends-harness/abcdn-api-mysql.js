@@ -174,23 +174,28 @@ async function main() {
     const returnCoverageCid = crypto.randomUUID();
     const returnWitnessA = crypto.randomUUID();
     const returnWitnessB = crypto.randomUUID();
+    const returnSegmentA = `passive-return-a-${crypto.randomUUID()}`;
+    const returnSegmentB = `passive-return-b-${crypto.randomUUID()}`;
     const returnUpload = await api(actors.B, '/api/memory/points', {
       method: 'POST',
       body: {
         points: [{
           lat: returnLat, lng: returnLng, ts: firstReturnAt, cid: returnCoverageCid,
-          evidence_source: 'passive_real', horizontal_accuracy_m: 8, continuity_state: 'accepted',
+          evidence_source: 'passive_real', source_segment_id: returnSegmentA,
+          horizontal_accuracy_m: 8, continuity_state: 'accepted',
         }],
         presence_witnesses: [{
           cid: returnWitnessA, first_lat: returnLat, first_lng: returnLng,
-          first_observed_at_ms: firstReturnAt, lat: returnLat, lng: returnLng,
+          first_observed_at_ms: firstReturnAt - 20_000, lat: returnLat, lng: returnLng,
           observed_at_ms: firstReturnAt, evidence_source: 'passive_real',
-          source_activity_client_id: null, horizontal_accuracy_m: 8, continuity_state: 'accepted',
+          source_activity_client_id: null, source_segment_id: returnSegmentA,
+          horizontal_accuracy_m: 8, continuity_state: 'accepted',
         }, {
           cid: returnWitnessB, first_lat: returnLat, first_lng: returnLng,
-          first_observed_at_ms: laterReturnAt, lat: returnLat, lng: returnLng,
+          first_observed_at_ms: laterReturnAt - 20_000, lat: returnLat, lng: returnLng,
           observed_at_ms: laterReturnAt, evidence_source: 'passive_real',
-          source_activity_client_id: null, horizontal_accuracy_m: 8, continuity_state: 'accepted',
+          source_activity_client_id: null, source_segment_id: returnSegmentB,
+          horizontal_accuracy_m: 8, continuity_state: 'accepted',
         }],
       },
       expected: 200,
@@ -205,6 +210,35 @@ async function main() {
     assert.equal(Number(returnCounts.coverage_n), 1);
     assert.equal(Number(returnCounts.presence_n), 2);
     pass('PF-R3.presence-return', 'same-place later-day presence stores two immutable witnesses alongside one exploration-coverage row');
+
+    const unqualifiedPassiveCid = crypto.randomUUID();
+    const unqualifiedPassiveSegment = `passive-unqualified-${crypto.randomUUID()}`;
+    const unqualifiedPassiveAt = Date.now() - 60_000;
+    const unqualifiedPassive = await api(actors.B, '/api/memory/points', {
+      method: 'POST',
+      body: {
+        points: [{
+          lat: -45.02, lng: 168.64, ts: unqualifiedPassiveAt, cid: unqualifiedPassiveCid,
+          evidence_source: 'passive_real', source_segment_id: unqualifiedPassiveSegment,
+          horizontal_accuracy_m: 8, continuity_state: 'accepted',
+        }],
+        presence_witnesses: [{
+          cid: crypto.randomUUID(), first_lat: -45.02, first_lng: 168.64,
+          first_observed_at_ms: unqualifiedPassiveAt, lat: -45.02, lng: 168.64,
+          observed_at_ms: unqualifiedPassiveAt, evidence_source: 'passive_real',
+          source_activity_client_id: null, source_segment_id: unqualifiedPassiveSegment,
+          horizontal_accuracy_m: 8, continuity_state: 'accepted',
+        }],
+      },
+      expected: 200,
+    });
+    assert.deepEqual(unqualifiedPassive.body.presence_witnesses, []);
+    const [[unqualifiedStored]] = await admin.execute(
+      'SELECT continuity_state FROM memory_points WHERE user_id=? AND client_id=?',
+      [actors.B.id, unqualifiedPassiveCid],
+    );
+    assert.equal(unqualifiedStored.continuity_state, 'unknown');
+    pass('O85.passive-server-continuity', 'a zero-duration passive client claim stayed unknown and did not create an accepted witness or fail the request');
 
     await api(actors.B, '/api/friends/request', {
       method: 'POST', body: { email: actors.D.email, shareMemory: true }, expected: 201,
@@ -221,19 +255,19 @@ async function main() {
     assert.equal(grantsB.body.grants.find(item => item.friend_id === actors.D.id)?.enabled, true);
     assert.equal(grantsD.body.grants.find(item => item.friend_id === actors.B.id)?.enabled, true);
     await api(actors.B, '/api/friend-sharing/grants', {
-      method: 'PUT', body: { friend_ids: [] }, expected: 200,
-    });
-    grantsB = await api(actors.B, '/api/friend-sharing/grants', { expected: 200 });
-    assert.equal(grantsB.body.grants.find(item => item.friend_id === actors.D.id)?.enabled, false);
-    await api(actors.B, '/api/friend-sharing/grants', {
-      method: 'PUT', body: { friend_ids: [Number(actors.D.id)] }, expected: 200,
+      method: 'PUT', body: { friend_ids: [] }, expected: 410,
     });
     grantsB = await api(actors.B, '/api/friend-sharing/grants', { expected: 200 });
     assert.equal(grantsB.body.grants.find(item => item.friend_id === actors.D.id)?.enabled, true);
+    await api(actors.B, `/api/friend-sharing/grants/${actors.D.id}`, {
+      method: 'PUT', body: { enabled: false }, expected: 200,
+    });
+    grantsB = await api(actors.B, '/api/friend-sharing/grants', { expected: 200 });
+    assert.equal(grantsB.body.grants.find(item => item.friend_id === actors.D.id)?.enabled, false);
     await api(actors.B, `/api/friends/${actors.D.id}`, { method: 'DELETE', expected: 200 });
     grantsD = await api(actors.D, '/api/friend-sharing/grants', { expected: 200 });
     assert.equal(grantsD.body.grants.length, 0);
-    pass('FR-03a.request-accept-bulk', 'requester and accepter intents became independent grants only on acceptance; atomic clear/apply affected only the then-current friend set and unfriend revoked both directions');
+    pass('FR-03a.request-accept-explicit', 'requester and accepter intents became independent grants only on acceptance; retired bulk authority could not mutate them, an explicit per-friend revoke worked, and unfriend revoked both directions');
 
     const [historicalPublicMarker] = await admin.execute(
       `INSERT INTO markers (user_id,type,text,lat,lng,permission,created_at,updated_at)
@@ -277,7 +311,7 @@ async function main() {
       [actors.A.id, actors.A.id],
     );
 
-    await api(actors.A, '/api/friend-sharing/policy', { method: 'PUT', body: { enabled: true }, expected: 200 });
+    await api(actors.A, '/api/friend-sharing/policy', { method: 'PUT', body: { enabled: true }, expected: 410 });
     await becomeFriends(actors.B, actors.A);
     const sourcesB = await api(actors.B, '/api/friend-sharing/sources', { expected: 200 });
     assert.equal(sourcesB.body.sources.length, 1);
@@ -289,11 +323,53 @@ async function main() {
     await api(actors.A, `/api/friend-sharing/grants/${actors.B.id}`, {
       method: 'PUT', body: { enabled: true }, expected: 200,
     });
-    pass('FR-03.explicit-directional-grant', 'a pre-existing global preference does not grant a new friend; A explicitly grants full delayed history to B without reciprocal access');
+    pass('FR-03.explicit-directional-grant', 'the retired global preference cannot grant a new friend; A explicitly grants full delayed history to B without reciprocal access');
 
     await api(actors.B, '/api/memory-subscriptions', {
       method: 'POST', body: { friend_id: Number(actors.A.id) }, expected: 201,
     });
+    const passiveWitnessSegment = `passive-witness-only-${crypto.randomUUID()}`;
+    const passiveWitnessAt = Date.now() - 45 * 60 * 1000;
+    const passiveWitnessLat = -42.25;
+    const passiveWitnessLng = 173.75;
+    const passiveWitnessUpload = await api(actors.A, '/api/memory/points', {
+      method: 'POST',
+      body: {
+        points: [],
+        presence_witnesses: [{
+          cid: crypto.randomUUID(),
+          first_lat: passiveWitnessLat,
+          first_lng: passiveWitnessLng,
+          first_observed_at_ms: passiveWitnessAt - 20_000,
+          lat: passiveWitnessLat,
+          lng: passiveWitnessLng,
+          observed_at_ms: passiveWitnessAt,
+          evidence_source: 'passive_real',
+          source_activity_client_id: null,
+          source_segment_id: passiveWitnessSegment,
+          horizontal_accuracy_m: 8,
+          continuity_state: 'accepted',
+        }],
+      },
+      expected: 200,
+    });
+    assert.equal(passiveWitnessUpload.body.presence_witnesses.length, 1);
+    await admin.execute(
+      `UPDATE memory_presence_witnesses
+          SET received_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 31 MINUTE),
+              updated_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 31 MINUTE)
+        WHERE user_id=? AND source_segment_id=?`,
+      [actors.A.id, passiveWitnessSegment],
+    );
+    const witnessOnlySources = await api(actors.B, '/api/friend-sharing/sources', { expected: 200 });
+    assert.equal(witnessOnlySources.body.sources.find(source => source.friend_id === actors.A.id)?.sharing_status, 'shared');
+    const witnessOnlyProjection = await api(actors.B, '/api/friend-sharing/projections', {
+      method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
+    });
+    const passiveWitnessCell = cellFor(passiveWitnessLat, passiveWitnessLng).id;
+    assert.equal(witnessOnlyProjection.body.projections[0].cells.some(cell => cell.id === passiveWitnessCell), true);
+    pass('O85.passive-witness-projection-parity', 'a server-accepted delayed passive witness without a coverage row is shared by both source status and projection');
+
     const activityA = await completeActivity(actors.A, {
       lat: revisitLat, lng: revisitLng, includeCoverage: false,
     });
@@ -452,7 +528,7 @@ async function main() {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
     assert.equal(unmasked.body.projections[0].cells.length, cellsBeforeRemovedSetting);
-    assert.equal(unmasked.body.projections[0].projection_policy_version, 2);
+    assert.equal(unmasked.body.projections[0].projection_policy_version, 3);
     assert.equal('mask_radius_ground_m' in unmasked.body.projections[0], false);
     pass('O85-FRIENDS.full-history-unmasked', 'retired Protected Places cannot remove endpoint or interior cells from the complete delayed projection');
 

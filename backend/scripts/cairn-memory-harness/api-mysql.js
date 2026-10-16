@@ -162,6 +162,7 @@ async function publishRevision(db, cairn, owner, operator, { text, revision, epo
 
 async function acceptedPresence(viewer, lat, lng, observedAt = Date.now()) {
   const cid = crypto.randomUUID();
+  const sourceSegmentId = `passive-harness-${crypto.randomUUID()}`;
   const firstObservedAt = observedAt - 15_000;
   const body = await api(viewer, '/api/memory/points', {
     method: 'POST',
@@ -176,7 +177,7 @@ async function acceptedPresence(viewer, lat, lng, observedAt = Date.now()) {
         observed_at_ms: observedAt,
         evidence_source: 'passive_real',
         source_activity_client_id: null,
-        source_segment_id: null,
+        source_segment_id: sourceSegmentId,
         horizontal_accuracy_m: 9,
         continuity_state: 'accepted',
       }],

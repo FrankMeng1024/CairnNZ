@@ -15,7 +15,7 @@ const {
 
 test('projection cells remain fixed coarse polygons under the full-history policy', () => {
   assert.equal(CELL_SIZE_M, 200);
-  assert.equal(FRIEND_PROJECTION_POLICY_VERSION, 2);
+  assert.equal(FRIEND_PROJECTION_POLICY_VERSION, 3);
   const cell = cellFor(-41.2865, 174.7762);
   const polygon = cellPolygon(cell);
   assert.equal(polygon.length, 5);
@@ -50,7 +50,7 @@ test('server projection returns every eligible coarse cell and emits no source r
   assert.equal(projection.cell_size_m, 200);
   assert.equal(projection.grid_cell_size_mercator_m, 200);
   assert.equal(projection.cell_size_basis, 'EPSG:3857_projected_grid');
-  assert.equal(projection.projection_policy_version, 2);
+  assert.equal(projection.projection_policy_version, 3);
   assert.equal('mask_radius_ground_m' in projection, false);
   assert.equal(projection.authorization_version, 3);
   assert.match(projection.projection_version, /^[0-9a-f]{64}$/);
