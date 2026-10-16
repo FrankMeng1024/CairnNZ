@@ -124,8 +124,8 @@ try {
     'friends-430-day-430x932.jpg', 'add-friend-existing-inline-390-day-390x844.jpg',
     'memory-picker-two-selected-loading-390x844.jpg',
     'memory-picker-two-loaded-390x844.jpg',
-    'memory-friend-fog-wellington-390x844.jpg',
-    'memory-friend-fog-queenstown-390x844.jpg',
+    'memory-friend-fog-source-1-390x844.jpg',
+    'memory-friend-fog-source-2-390x844.jpg',
   ]) copyArtifact(path.join('o85-friends-memory-phase2-final', name), path.join('friends-memory-web-real-basemap', name));
   for (const name of [
     'visual-qa.json', 'memory-friend-fog-source-1-390x844.jpg',
