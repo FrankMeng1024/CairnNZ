@@ -6,6 +6,9 @@ packaged in the final ZIP rather than committed to deploy-bearing Git.
 
 ## Results
 
+- Final UX closure: **5 suites, 24 tests passed** (natural picker states,
+  active-only count badge, action-only Friend Detail and single-tap declined
+  dismissal included).
 - Friends/Memory/O84 marker: **8 suites, 42 tests passed**.
 - Friend content/account-local authorization: **4 suites, 56 tests passed**.
 - O83 Route: **14 suites, 191 tests passed** (Draw, Point continuity,
@@ -16,8 +19,8 @@ packaged in the final ZIP rather than committed to deploy-bearing Git.
 - Backend authorization/projection: **16 Node tests passed** plus syntax checks.
 - Isolated multi-account API/database harness: **PASS**; migration 047 forward,
   rollback and forward reapply all passed.
-- Mobile Expo Web visual QA: **19 assertions passed**, no page/runtime console
-  errors, 15 current screenshots at 360/390/430 widths across themes.
+- Mobile Expo Web visual QA: **24 assertions passed**, no page/runtime console
+  errors, 16 current screenshots at 360/390/430 widths across themes.
 - `git diff --check`: passed.
 - Full `tsc --noEmit`: exit 2 with **159 existing repository errors** (missing
   Playwright declarations, Activity-test typing, generated preview icon keys,
@@ -53,3 +56,26 @@ packaged in the final ZIP rather than committed to deploy-bearing Git.
 
 These are synthetic/local geometry measurements, not native iPhone frame
 timings, cold production-history timings or proof of OS work after force quit.
+
+## Production backend verification
+
+- Backend-only `origin/master` integration:
+  `f35f2b745d2c9d145a49a902c595d3611673bc35`; eight reviewed backend files
+  matched the O84 client candidate byte-for-byte.
+- Preflight: ledger 046, 14 request rows (13 accepted / 1 rejected), zero
+  opposite-pending conflicts, self requests or orphan requests; backend and DB
+  healthy; tracked production checkout clean.
+- Verified pre-migration backup: 84,079,811 bytes, gzip-valid, mode 600,
+  SHA-256 `33ae6643ff6a2b61acf5ce8dda99da91d756d84716344af55d934110f881ce9f`.
+- Canonical deployment completed. Ledger 047 and every verifier postcondition
+  passed; all 14 rows remained, every pair key is populated, and there are no
+  duplicate active pairs.
+- Production checkout and `origin/master` match the backend SHA; container and
+  built image both use
+  `sha256:08ce4ad4a5fb6464f51e329eddbbc02b044cd3fa52180985252305a76b208b18`.
+  Local/external health passed; authenticated read-only Requests, Outbound,
+  Grants, Sources and empty Projection calls returned 200; recent error-log
+  count was zero.
+- A mutable two-account production journey was deliberately not substituted
+  with Public pilot smoke identities. Dedicated Owner test credentials remain
+  required before OTA publication/device acceptance.

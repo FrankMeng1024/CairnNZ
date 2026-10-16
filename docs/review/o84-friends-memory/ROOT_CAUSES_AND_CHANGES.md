@@ -33,6 +33,14 @@ directional copy and per-friend toggle. The approved Pro image informed spacing
 and hierarchy only. Existing artwork and icons remain; the only Home glyph
 change is an optional weight passed to the existing Leave a Cairn path.
 
+The final independent-review closure removes projection cell counts and the
+delay-disclosing empty copy from the picker. Loaded selections rely on the
+checked state; Mine hides the inactive Friends count. Friend Detail is reduced
+to identity, the one directional Memory switch and Remove Friend; Cairn/Route
+content remains available through its existing authorized surfaces. Dismissing
+a declined historical attempt is now one row-local action, while cancelling a
+pending invitation retains its separate confirmation.
+
 ## Friend Fog
 
 O83 coupled the visible result to close-time picker behavior and fetched all

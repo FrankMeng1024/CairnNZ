@@ -11,36 +11,30 @@
 
 ## Current disposition
 
-**OTA NOT PUBLISHED. BACKEND NOT DEPLOYED.** Repository rules reserve both
-operations for the human workflow. O84 also changes the backend schema and API,
-so publishing the client before migration 047 and matching backend source are
-live is prohibited.
+**BACKEND DEPLOYED; OTA NOT PUBLISHED.** Production is running backend-only
+commit `f35f2b745d2c9d145a49a902c595d3611673bc35`; migration ledger 047,
+schema verification, backup, image/checkout identity, internal/external health
+and authenticated read-only Friends/Memory APIs passed. Repository instructions
+still reserve EAS Update publication for the human workflow.
 
-## Human backend sequence
+## Completed backend sequence
 
-The Owner/operator must follow `docs/operations/PRODUCTION_BACKEND_DEPLOY.md`.
 The verified O84 candidate is based on `origin/main`, while the deploy-bearing
-branch is `origin/master`; do not push the mixed client/backend candidate to the
-deployment branch as an incidental shortcut:
+branch is `origin/master`. A scoped backend-only commit was created from the
+latest master, verified byte-for-byte against O84, pushed by fast-forward, and
+deployed through the only documented command:
 
-1. From current `origin/master`, create and review the required scoped
-   backend-only commit containing the exact O84 backend changes. Push normally;
-   never force push. Record both that deployment SHA and the source O84 SHA.
-2. Confirm the backend files match the reviewed O84 candidate, then complete
-   the read-only production precheck and database backup.
-3. Confirm migration 047 and its rollback archive procedure are present.
-4. Run only the canonical deployment command:
+```sh
+ssh ubuntu@122.51.174.118 'sudo -n bash /opt/githubRepos/Cairn/docker/deploy.sh'
+```
 
-   ```sh
-   ssh ubuntu@122.51.174.118 'sudo -n bash /opt/githubRepos/Cairn/docker/deploy.sh'
-   ```
+The immutable receipt, backup hash, schema counts and image ID are in
+`PRODUCTION_DEPLOYMENT_RECEIPT.md`. A mutable production Journey A was not run
+without dedicated account credentials; it remains the final production smoke
+before publishing/installing the client.
 
-5. Record checkout SHA, migration ledger including 047, image digest, health
-   responses and post-deploy logs. Re-run Journey A and the authorized sharing
-   API checks against production test accounts before OTA publication.
-
-If rollout fails, stop before OTA. For an authorized database rollback, first
-revert server/client compatibility, then run
+For an authorized database rollback, first revert server/client compatibility,
+then run
 `backend/src/migrations/rollback/047_friend_request_lifecycle.down.sql`; it
 archives every O84 attempt before the unavoidable legacy-history collapse.
 
