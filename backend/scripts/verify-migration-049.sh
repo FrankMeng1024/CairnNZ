@@ -20,4 +20,5 @@ query() {
 [ "$(query "SELECT COUNT(*) FROM memory_share_policies WHERE enabled=1")" = "0" ]
 [ "$(query "SELECT COUNT(*) FROM memory_share_grants WHERE status='active' AND coverage_scope='legacy_activity_since_grant'")" = "0" ]
 [ "$(query "SELECT COUNT(*) FROM memory_subscriptions subscription WHERE EXISTS (SELECT 1 FROM memory_share_grants legacy WHERE legacy.owner_id=subscription.friend_id AND legacy.viewer_id=subscription.user_id AND legacy.status='revoked' AND legacy.revoked_reason='legacy_contract_retired') AND NOT EXISTS (SELECT 1 FROM memory_share_grants current_grant WHERE current_grant.owner_id=subscription.friend_id AND current_grant.viewer_id=subscription.user_id AND current_grant.status='active' AND current_grant.revoked_at IS NULL AND current_grant.coverage_scope='full_history_delayed_v1')")" = "0" ]
+[ "$(query "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='memory_share_grants' AND COLUMN_NAME='revoked_reason' AND COLUMN_TYPE LIKE '%legacy_contract_retired%'")" = "1" ]
 echo "049 postconditions verified"
