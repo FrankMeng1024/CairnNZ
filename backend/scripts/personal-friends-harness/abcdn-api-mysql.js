@@ -97,7 +97,10 @@ async function completeActivity(actor, {
     },
     expected: 200,
   });
-  assert.equal(save.body.memory.accepted, includeCoverage ? points.length : 0);
+  // O85 server repair makes canonical accepted GPS authoritative even when
+  // the independent client Memory batch is empty; an overlapping explicit
+  // batch must still deduplicate to the same point count.
+  assert.equal(save.body.memory.accepted, points.length);
   const witnesses = points.map((point) => ({
     cid: crypto.randomUUID(),
     first_lat: point.lat,
@@ -320,8 +323,8 @@ async function main() {
            WHERE user_id=? AND source_activity_client_id=?) AS revisit_presence_n`,
       [actors.A.id, actors.A.id, actors.A.id, activityA.clientActivityId],
     );
-    assert.equal(Number(postRevisitEvidence.coverage_n), Number(preGrantEvidence.coverage_n));
-    assert.equal(Number(postRevisitEvidence.coverage_latest_ts), Number(preGrantEvidence.coverage_latest_ts));
+    assert.equal(Number(postRevisitEvidence.coverage_n), Number(preGrantEvidence.coverage_n) + activityA.points.length);
+    assert.equal(Number(postRevisitEvidence.coverage_latest_ts), activityA.points[activityA.points.length - 1].t);
     assert.equal(Number(postRevisitEvidence.revisit_presence_n), activityA.points.length);
     const [[revisitBinding]] = await admin.execute(
       `SELECT session.source_provenance,JSON_LENGTH(session.route_points_canonical) AS canonical_n,
@@ -436,18 +439,22 @@ async function main() {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
     assert.equal(justAfterDelay.body.projections[0].cells.some(cell => cell.id === middlePassiveCell), true);
-    pass('FR-30M.before-at-after', 'server SQL withheld a passive lifecycle at 29:59, released its non-endpoint coarse cell at 30:00, and retained it after 30:00');
+    pass('FR-30M.before-at-after', 'server SQL withheld a passive lifecycle at 29:59, released its coarse cells at 30:00, and retained them after 30:00');
 
-    const cellsBeforeMask = justAfterDelay.body.projections[0].cells.length;
+    const cellsBeforeRemovedSetting = justAfterDelay.body.projections[0].cells.length;
+    const removedPlaces = await api(actors.A, '/api/friend-sharing/private-places', { expected: 200 });
+    assert.deepEqual(removedPlaces.body.private_places, []);
+    assert.equal(removedPlaces.body.removed, true);
     await api(actors.A, '/api/friend-sharing/private-places', {
-      method: 'POST', body: { label: 'Synthetic private place', lat: -41.2865, lng: 174.7852, radius_m: 250 }, expected: 201,
+      method: 'POST', body: { label: 'Retired setting', lat: -41.2865, lng: 174.7852, radius_m: 250 }, expected: 410,
     });
-    const masked = await api(actors.B, '/api/friend-sharing/projections', {
+    const unmasked = await api(actors.B, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
-    assert.ok(masked.body.projections[0].cells.length < cellsBeforeMask);
-    assert.ok(masked.body.projections[0].authorization_version > projection.body.projections[0].authorization_version);
-    pass('SAFE-01.private-mask', 'private-place change bumps authorization version and removes intersecting whole cells');
+    assert.equal(unmasked.body.projections[0].cells.length, cellsBeforeRemovedSetting);
+    assert.equal(unmasked.body.projections[0].projection_policy_version, 2);
+    assert.equal('mask_radius_ground_m' in unmasked.body.projections[0], false);
+    pass('O85-FRIENDS.full-history-unmasked', 'retired Protected Places cannot remove endpoint or interior cells from the complete delayed projection');
 
     const markerCreate = await api(actors.A, '/api/markers', {
       method: 'POST',
@@ -458,8 +465,8 @@ async function main() {
       expected: 201,
     });
     const markerId = String(markerCreate.body.id);
-    const beforeEvidence = await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
-    assert.equal(beforeEvidence.body.encountered_marker_ids.includes(markerId), false);
+    const beforeEvidence = await api(actors.B, '/api/cairn-memory/discover', { method: 'POST', body: {}, expected: 200 });
+    assert.equal(beforeEvidence.body.acquired.some(item => item.marker_id === markerId), false);
     // Controlled starting state for the exact revision-03 regression: one
     // retained observation from 40 minutes earlier and a qualifying recent
     // pair belong to the same finalized Activity and legal authorization
@@ -479,11 +486,11 @@ async function main() {
       `UPDATE markers marker
          JOIN marker_audience_epochs audience
            ON audience.marker_id=marker.id AND audience.audience_epoch=marker.audience_epoch
-          SET marker.created_at=?, audience.starts_at=?
+          SET marker.created_at=?, marker.content_changed_at=?, audience.starts_at=?
         WHERE marker.id=?`,
-      [authorizationStartedAt, authorizationStartedAt, markerId],
+      [authorizationStartedAt, authorizationStartedAt, authorizationStartedAt, markerId],
     );
-    await completeActivity(actors.B, {
+    const encounterActivity = await completeActivity(actors.B, {
       lat: -43.5321,
       lng: 172.6362,
       includeCoverage: false,
@@ -491,32 +498,35 @@ async function main() {
       startedAtMs: encounterStartedAt,
       pointOffsetsMs: [0, 40 * 60 * 1000, 40 * 60 * 1000 + 15_000],
     });
-    const encounter = await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
-    assert.equal(encounter.body.encountered_marker_ids.includes(markerId), true);
-    await api(actors.B, '/api/friend-content/encounters/verify', { method: 'POST', body: {}, expected: 200 });
+    await api(actors.B, '/api/memory/points', {
+      method: 'POST', body: { presence_witnesses: encounterActivity.witnesses }, expected: 200,
+    });
+    const encounter = await api(actors.B, '/api/cairn-memory/discover', { method: 'POST', body: {}, expected: 200 });
+    assert.equal(encounter.body.acquired.some(item => item.marker_id === markerId), true);
+    const duplicateEncounter = await api(actors.B, '/api/cairn-memory/discover', { method: 'POST', body: {}, expected: 200 });
+    assert.equal(duplicateEncounter.body.acquired.some(item => item.marker_id === markerId), false);
     const [[encounterCount]] = await actorConnections.B.execute(
-      'SELECT COUNT(*) AS n FROM friend_cairn_encounters WHERE viewer_id=? AND marker_id=?',
+      'SELECT COUNT(*) AS n FROM cairn_acquisitions WHERE viewer_id=? AND marker_id=?',
       [actors.B.id, markerId],
     );
     assert.equal(Number(encounterCount.n), 1);
     const [[encounterEvidence]] = await actorConnections.B.execute(
-      'SELECT evidence_kind,evidence_source FROM friend_cairn_encounters WHERE viewer_id=? AND marker_id=?',
+      'SELECT evidence_kind,acquired_via FROM cairn_acquisitions WHERE viewer_id=? AND marker_id=?',
       [actors.B.id, markerId],
     );
     assert.equal(encounterEvidence.evidence_kind, 'presence_witness');
-    assert.equal(encounterEvidence.evidence_source, 'activity_real');
+    assert.equal(encounterEvidence.acquired_via, 'friends');
     const friendCairn = await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 200 });
     assert.equal(friendCairn.body.cairn.read_only, true);
     assert.match(friendCairn.body.cairn.resource_revision, /^[0-9a-f]{64}$/);
     assert.match(friendCairn.body.cairn.authorization_revision, /^friendship:/);
     await api(actors.D, `/api/friend-content/cairns/${markerId}`, { expected: 404 });
     await api(actors.B, `/api/markers/${markerId}`, { method: 'PUT', body: { text: 'viewer mutation' }, expected: 404 });
-    pass('R03-C4/FR-10/FR-11.encounter', 'one old same-Activity observation cannot suppress the qualifying recent 15-second pair; the actual API creates one idempotent encounter, while a non-friend is denied and the viewer cannot mutate');
+    pass('R03-C4/FR-10/FR-11.encounter', 'one old same-Activity observation cannot suppress the qualifying recent 15-second pair; durable discovery creates one idempotent acquisition, while a non-friend is denied and the viewer cannot mutate');
 
-    // Hold a real authorized response at the transport boundary while the
-    // author changes the resource. The client ordering suite consumes the
-    // same sequence through its actual store methods; this server-side half
-    // proves the held and current payloads came from the isolated API/MySQL.
+    // Hold a real acquired response while the author changes the live source.
+    // The acquired revision is immutable; a later genuine revisit is the only
+    // path to a newer revision.
     const changedReadCaptured = deferred();
     const releaseChangedRead = deferred();
     const delayedChangedRead = (async () => {
@@ -532,11 +542,11 @@ async function main() {
     const currentChangedRead = await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 200 });
     releaseChangedRead.resolve();
     const staleChangedRead = await delayedChangedRead;
-    assert.notEqual(
+    assert.equal(
       staleChangedRead.body.cairn.resource_revision,
       currentChangedRead.body.cairn.resource_revision,
     );
-    pass('FR-08.resource-change-read-barrier', 'a real old detail response was held until after a newer resource revision was read');
+    pass('FR-08.acquired-revision-stability', 'an author edit did not mutate the already acquired Cairn revision across held and current reads');
 
     const revokeReadCaptured = deferred();
     const releaseRevokeRead = deferred();
@@ -547,14 +557,23 @@ async function main() {
       return response;
     })();
     await revokeReadCaptured.promise;
-    await api(actors.A, `/api/markers/${markerId}`, {
-      method: 'PUT', body: { permission: 'personal' }, expected: 200,
-    });
+    // A later audience edit must not rewrite an already acquired immutable
+    // Cairn revision. Exercise the actual read-authority barrier with a
+    // temporary block instead, then remove only this harness row so the
+    // remaining friendship/grant cases can continue in the same episode.
+    await admin.execute(
+      'INSERT INTO blocked_users (blocker_id, blocked_id) VALUES (?, ?)',
+      [actors.A.id, actors.B.id],
+    );
     await api(actors.B, `/api/friend-content/cairns/${markerId}`, { expected: 404 });
     releaseRevokeRead.resolve();
     const staleRevokedRead = await delayedRevokedRead;
     assert.equal(staleRevokedRead.body.cairn.read_only, true);
-    pass('FR-08.revoke-read-barrier', 'a real authorized detail response was held until after revoke and an authoritative 404');
+    await admin.execute(
+      'DELETE FROM blocked_users WHERE blocker_id=? AND blocked_id=?',
+      [actors.A.id, actors.B.id],
+    );
+    pass('FR-08.revoke-read-barrier', 'a real authorized detail response was held until after an authorization block and an authoritative 404; the acquired revision remained immutable');
 
     const routeCreate = await api(actors.A, '/api/routes', {
       method: 'POST', body: {
@@ -708,7 +727,7 @@ async function main() {
     });
     assert.equal(newEpochProjection.body.projections.length, 1);
     assert.equal(newEpochProjection.body.projections[0].coverage_scope, 'full_history_delayed_v1');
-    pass('FR-07.re-friend', 'unfriend revokes selection; re-friend creates no automatic authority, while a later explicit full-history grant uses a fresh epoch and recomputes delay/mask-eligible coverage');
+    pass('FR-07.re-friend', 'unfriend revokes selection; re-friend creates no automatic authority, while a later explicit full-history grant uses a fresh epoch and recomputes delayed eligible coverage');
 
     await becomeFriends(actors.C, actors.A);
     const sourcesC = await api(actors.C, '/api/friend-sharing/sources', { expected: 200 });
