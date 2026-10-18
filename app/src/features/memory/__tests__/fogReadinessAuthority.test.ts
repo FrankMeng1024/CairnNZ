@@ -7,14 +7,20 @@ const read = (relative: string) => fs.readFileSync(path.join(appRoot, relative),
 describe('Memory fog readiness authority', () => {
   test('Cairns cannot be revealed by a timer or a previous account/mount', () => {
     const map = read('src/features/memory/components/MemoryMap.tsx');
+    const fog = read('src/features/memory/components/FogLayer.tsx');
     const screen = read('src/features/memory/screens/MemoryScreen.tsx');
 
     expect(map).toContain('{fogReady && pinsAuthorityReady && (');
     expect(map).not.toMatch(/setTimeout\(\(\) => setFogReady/);
     expect(map).toContain('onDidFinishRenderingFrameFully');
     expect(map).toContain('fogGeometryReadyKeyRef.current !== readinessKey');
-    expect(map).toContain('confirmCurrentFogPaintRef.current();');
+    expect(map).toContain('memoryFogPaintEvidenceReady({');
+    expect(map).toContain('renderedProbe(layerIds, readinessKey)');
+    expect(map).toContain('A timer is not paint evidence.');
+    expect(map).not.toContain('confirmCurrentFogPaintRef.current();');
     expect(map).toContain('fogReadinessKeyRef.current === expectedKey');
+    expect(fog).toContain("displayedFogShape.properties?.cairnReadinessKey ?? 'pending'");
+    expect(fog).toContain('id="memory-fog-src"');
     expect(map).toContain('localHydration.ownerUserId === activeAccountId');
     expect(map).toContain("localHydration.initialReconcile === 'success'");
     expect(screen).not.toContain('_fogEverReady');
@@ -54,6 +60,7 @@ describe('Memory fog readiness authority', () => {
     expect(fog).toContain('fog.display_cache_write_failed');
     expect(web).toContain('onDidFinishRenderingFrameFully?: () => void;');
     expect(web).toContain('onDidFinishRenderingFrameFully?.();');
+    expect(fog).toMatch(/const displayedFogShape = authoritativeEmpty\s+\? sameAuthorityShape \?\? solidFogShape\(\)/);
   });
 
   test('the first Friends transition retains exact Mine fog while authorized union geometry builds', () => {

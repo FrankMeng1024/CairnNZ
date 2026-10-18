@@ -369,7 +369,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O85 (2026-10-17): non-destructive Route closure, complete delayed Friends
 // Memory history, historical Activity recovery, and verified production Fog
 // rendering on the unchanged Build 65 / 0.2.6-o66 runtime.
-export const OTA_VERSION = 'O85';
+// O86 (2026-10-19): continuous Point following, bounded Memory preparation,
+// exact-authority Friends paint, and cross-feature quality closure on the
+// unchanged Build 65 / 0.2.6-o66 runtime.
+export const OTA_VERSION = 'O86';
 
 
 type OtaState =

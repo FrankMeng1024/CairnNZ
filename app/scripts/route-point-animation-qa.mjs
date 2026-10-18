@@ -10,6 +10,8 @@ const recordVideo = process.env.CAIRN_POINT_QA_RECORD_VIDEO !== '0';
 const diagnosticDisableCameraWrites = process.env.CAIRN_POINT_QA_DISABLE_CAMERA_WRITES === '1';
 const diagnosticDisableGrowthWrites = process.env.CAIRN_POINT_QA_DISABLE_GROWTH_WRITES === '1';
 const diagnosticHideSymbols = process.env.CAIRN_POINT_QA_HIDE_SYMBOLS === '1';
+const diagnosticHideDetail = process.env.CAIRN_POINT_QA_HIDE_DETAIL === '1';
+const diagnosticSymbolProfile = String(process.env.CAIRN_POINT_QA_SYMBOL_PROFILE || 'all');
 const foregroundBrowser = process.env.CAIRN_POINT_QA_FOREGROUND === '1';
 const localQaStyle = process.env.CAIRN_POINT_QA_LOCAL_STYLE === '1';
 const fixturePath = process.env.CAIRN_POINT_QA_FIXTURE_FILE;
@@ -116,7 +118,7 @@ if (foregroundBrowser && process.platform === 'darwin') {
 const page = await context.newPage();
 const video = page.video();
 const runtimeErrors = [];
-page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
+page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.stack ?? error.message}`));
 page.on('console', message => {
   if (message.type() === 'error') runtimeErrors.push(`console: ${message.text()}`);
 });
@@ -173,6 +175,7 @@ await page.route('**/directions/v5/mapbox/walking/**', async route => {
 });
 
 const results = [];
+let mapStyleProfile = null;
 try {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.waitForFunction(
@@ -225,7 +228,10 @@ try {
       .waitFor({ state: 'visible', timeout: 2_000 })
       .then(() => page.getByTestId('route-editor-confirm-leave').click())
       .catch(() => {});
-    await page.getByText('Edit Route', { exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
+    await page.getByText('Edit Route', { exact: true }).waitFor({ state: 'visible', timeout: 30_000 }).catch(async cause => {
+      const visibleText = await page.locator('body').innerText().catch(() => 'unavailable');
+      throw new Error(`Route editor did not open: ${JSON.stringify({ runtimeErrors, visibleText: visibleText.slice(0, 500) })}`, { cause });
+    });
     await page.getByTestId('ordered-route-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
     await page.waitForFunction(
       () => Boolean(
@@ -243,6 +249,25 @@ try {
       }));
       throw new Error(`Route editor QA bridge unavailable: ${JSON.stringify(state)}`, { cause });
     });
+    if (!mapStyleProfile) {
+      mapStyleProfile = await page.evaluate(() => ({
+        styleName: globalThis.__cairnMap?.getStyle?.()?.name ?? null,
+        symbolLayers: (globalThis.__cairnMap?.getStyle?.()?.layers ?? [])
+          .filter(layer => layer.type === 'symbol')
+          .map(layer => ({
+            id: layer.id,
+            sourceLayer: layer['source-layer'] ?? null,
+            placement: layer.layout?.['symbol-placement'] ?? 'point',
+            hasText: Boolean(layer.layout?.['text-field']),
+            hasIcon: Boolean(layer.layout?.['icon-image']),
+            minzoom: layer.minzoom ?? null,
+            maxzoom: layer.maxzoom ?? null,
+          })),
+        contextLayers: (globalThis.__cairnMap?.getStyle?.()?.layers ?? [])
+          .filter(layer => layer.type !== 'symbol')
+          .map(layer => ({ id: layer.id, type: layer.type, sourceLayer: layer['source-layer'] ?? null })),
+      }));
+    }
     // Do not attribute first-load tile decode to the Point reveal itself.
     // The user can only confirm a visible target after this map is drawable;
     // later frame-gap assertions still fail genuine animation stalls.
@@ -287,12 +312,22 @@ try {
       globalThis.__o86RevealFrames = [];
       globalThis.__o86InterruptedStable = null;
       const map = globalThis.__cairnMap;
+      globalThis.__o86LastProgrammaticCameraSampleAt = Number.NEGATIVE_INFINITY;
       map.on('move', event => {
+        const now = performance.now();
+        const userEvent = Boolean(event?.originalEvent);
+        // The product already samples programmatic camera telemetry at 10 Hz.
+        // Recording every raw Mapbox move frame here allocated hundreds of
+        // coordinate objects per case and occasionally introduced the very GC
+        // pauses the probe was meant to measure. User gestures remain
+        // immediate; 10 Hz is sufficient for late-recenter detection.
+        if (!userEvent && now - globalThis.__o86LastProgrammaticCameraSampleAt < 100) return;
+        globalThis.__o86LastProgrammaticCameraSampleAt = now;
         const center = map.getCenter();
         globalThis.__o86CameraEvents.push({
           tMs: performance.now() - globalThis.__o86CaseStart,
           center: [center.lng, center.lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(),
-          userEvent: Boolean(event?.originalEvent),
+          userEvent,
         });
       });
       overlay.textContent = `${id} · 0 ms`;
@@ -338,11 +373,60 @@ try {
       globalThis.__o86CameraEvents = [];
       globalThis.__o86RevealFrames = [];
     });
-    await page.evaluate(({ disableCameraWrites, disableGrowthWrites, hideSymbols }) => {
+    await page.evaluate(({ disableCameraWrites, disableGrowthWrites, hideSymbols, hideDetail, symbolProfile }) => {
       const map = globalThis.__cairnMap;
-      if (hideSymbols) {
+      if (hideDetail) {
         for (const layer of map.getStyle()?.layers ?? []) {
-          if (layer.type === 'symbol') map.setLayoutProperty(layer.id, 'visibility', 'none');
+          const sourceLayer = layer['source-layer'];
+          const keepWalkingContext = sourceLayer === 'water' || sourceLayer === 'waterway'
+            || /^(tunnel|road|bridge)-(path-trail|path-cycleway-piste|path|steps|pedestrian|minor|street)$/.test(layer.id)
+            || layer.id === 'ferry';
+          if ((sourceLayer != null && !keepWalkingContext)
+            || /hillshade|terrain/.test(layer.id)) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+          }
+        }
+      }
+      if (hideSymbols || symbolProfile !== 'all') {
+        for (const layer of map.getStyle()?.layers ?? []) {
+          if (layer.type !== 'symbol') continue;
+          const placement = layer.layout?.['symbol-placement'] ?? 'point';
+          const noiseSourceLayers = new Set(['poi_label', 'transit_stop_label', 'airport_label', 'housenum_label']);
+          const essentialRouteLabels = new Set([
+            'road-label',
+            'path-pedestrian-label',
+            'waterway-label',
+            'natural-line-label',
+            'water-line-label',
+            'water-point-label',
+            'settlement-subdivision-label',
+            'settlement-minor-label',
+            'settlement-major-label',
+            'state-label',
+            'country-label',
+            'continent-label',
+            'ordered-route-endpoint-labels',
+          ]);
+          if (hideSymbols
+            || (symbolProfile === 'hide-line' && placement === 'line')
+            || (symbolProfile === 'hide-point' && placement !== 'line')
+            || (symbolProfile === 'hide-noise' && noiseSourceLayers.has(layer['source-layer']))) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+          }
+          if ((symbolProfile === 'route-essential' || symbolProfile === 'route-static')
+            && !essentialRouteLabels.has(layer.id)) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+          }
+          if (symbolProfile === 'route-static' && essentialRouteLabels.has(layer.id)) {
+            if (layer.layout?.['text-field']) {
+              map.setLayoutProperty(layer.id, 'text-allow-overlap', true);
+              map.setLayoutProperty(layer.id, 'text-ignore-placement', true);
+            }
+            if (layer.layout?.['icon-image']) {
+              map.setLayoutProperty(layer.id, 'icon-allow-overlap', true);
+              map.setLayoutProperty(layer.id, 'icon-ignore-placement', true);
+            }
+          }
         }
       }
       if (disableCameraWrites && !map.__o86OriginalJumpTo) {
@@ -381,6 +465,8 @@ try {
       disableCameraWrites: diagnosticDisableCameraWrites,
       disableGrowthWrites: diagnosticDisableGrowthWrites,
       hideSymbols: diagnosticHideSymbols,
+      hideDetail: diagnosticHideDetail,
+      symbolProfile: diagnosticSymbolProfile,
     });
     const cameraBeforePoint = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCameraSnapshot());
     await page.getByTestId('route-tool-point').click();
@@ -437,6 +523,17 @@ try {
       continue;
     }
     await page.waitForFunction(() => Boolean(globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot()), null, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => (globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot?.()?.progress ?? 0) >= 0.1,
+      null,
+      { timeout: 4_000, polling: 25 },
+    ).catch(() => {});
+    const symbolStateDuringFollow = await page.evaluate(() => {
+      const layers = (globalThis.__cairnMap?.getStyle?.()?.layers ?? [])
+        .filter(layer => layer.type === 'symbol' && layer['source-layer'] != null);
+      const hidden = layers.filter(layer => globalThis.__cairnMap.getLayoutProperty(layer.id, 'visibility') === 'none');
+      return { basemapSymbolCount: layers.length, hiddenBasemapSymbolCount: hidden.length };
+    });
 
     const observedFrames = [];
     let interruptedAt = null;
@@ -473,11 +570,19 @@ try {
       // Avoid a cross-process page.evaluate every 32 ms during ordinary
       // motion. That old observer traffic was itself capable of stalling the
       // renderer and made the application-frame metric self-contaminating.
-      await page.waitForFunction(
-        () => !globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot?.(),
-        null,
-        { timeout: 12_000, polling: 100 },
-      );
+      try {
+        await page.waitForFunction(
+          () => !globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot?.(),
+          null,
+          { timeout: 12_000, polling: 100 },
+        );
+      } catch (cause) {
+        const stalledState = await page.evaluate(() => ({
+          animation: globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot?.() ?? null,
+          camera: globalThis.__cairnRouteEditorQa?.getCameraSnapshot?.() ?? null,
+        })).catch(() => null);
+        throw new Error(`Point animation did not finish: ${JSON.stringify({ runtimeErrors, stalledState })}`, { cause });
+      }
     }
     await page.waitForTimeout(scenario.interrupt ? 520 : 220);
     await page.evaluate(() => { globalThis.__o86PointAnimationMeasuring = false; });
@@ -495,6 +600,7 @@ try {
       })(),
       appFrameHistory: globalThis.__cairnRouteEditorQa?.getPointAnimationFrameHistory?.() ?? [],
     }));
+    browserState.symbolStateDuringFollow = symbolStateDuringFollow;
     const committedDraft = await page.evaluate(() => globalThis.__cairnRouteEditorQa?.getCurrentDraft?.() ?? null);
     const frames = browserState.revealFrames.length ? browserState.revealFrames : observedFrames;
     const progressMonotonic = frames.every((frame, index) => index === 0 || frame.progress >= frames[index - 1].progress);
@@ -593,6 +699,7 @@ try {
       entryTransitionHoldMs,
       tilesReadyBeforeMeasurement,
       baselineFramePacing,
+      symbolStateDuringFollow,
       committedDraft,
       assertions: {
         cameraInvariantOnPointEntry: cameraInvariant,
@@ -651,6 +758,7 @@ const report = {
     : 'REAL_MAPBOX_HOSTED_BASEMAP',
   evidenceClass: fixtureDocument?.evidenceClass ?? 'SYNTHETIC_INVARIANT_ONLY',
   providerReceipt: fixtureDocument?.providerReceipt ?? null,
+  mapStyleProfile,
   repeatCount,
   scenarios: results,
   runtimeErrors,

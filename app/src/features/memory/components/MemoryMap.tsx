@@ -40,6 +40,7 @@ import { AcquiredCairnClusterLayer } from './AcquiredCairnClusterLayer';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { excludeAcquiredFriendMarkers } from '../services/cairnMapPresentation';
 import { memoryCoverageViewport, type MemoryCoverageViewport } from '../services/memoryCoverageViewport';
+import { memoryFogPaintEvidenceReady } from '../services/memoryFogReadiness';
 
 let memoryMapHasRendered = false;
 const MEMORY_MAP_ORNAMENTS = mapOrnamentsAbove(76);
@@ -227,7 +228,6 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const fogPreparingAtRef = useRef(0);
   const fogGeometryReadyAtRef = useRef(0);
   const fogPaintProbeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const confirmCurrentFogPaintRef = useRef<() => boolean>(() => false);
   const localHydration = useMemoryStore((s) => s.localHydration) ?? {
     ownerUserId: null,
     status: 'detached' as const,
@@ -367,7 +367,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     if (!Mapbox.available) onMapUnavailable?.();
   }, [Mapbox.available, onMapUnavailable]);
 
-  const confirmCurrentFogPaint = useCallback(() => {
+  const confirmCurrentFogPaint = useCallback((fullyRenderedFrame = false) => {
     const readinessKey = fogReadinessKeyRef.current;
     if (!readinessKey
       || fogGeometryReadyKeyRef.current !== readinessKey
@@ -379,7 +379,28 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     const sourceProbe = mapViewRef.current?.isSourceLoaded;
     const sourcesLoaded = typeof sourceProbe !== 'function'
       || fogRequiredSourceIdsRef.current.every(sourceId => sourceProbe(sourceId));
-    if (!sourcesLoaded) {
+    const layerIds = fogRequiredSourceIdsRef.current.map(sourceId => {
+      if (sourceId === 'memory-fog-src') return 'memory-fog';
+      if (sourceId === 'memory-friend-union-src') return 'memory-friend-union';
+      if (sourceId === 'memory-overlap-src') return 'memory-overlap';
+      return sourceId;
+    });
+    // GL JS can transiently report a GeoJSON source as reloading after the
+    // exact data is already present in a rendered frame (notably when three
+    // correlated Fog sources commit together). A positive rendered-feature
+    // probe is stronger evidence of user-visible completion than that worker
+    // bookkeeping flag. Native has no optional probe and retains its genuine
+    // fully-rendered callback path.
+    const renderedProbe = mapViewRef.current?.areLayersRendered;
+    const hasRenderedLayerProbe = typeof renderedProbe === 'function';
+    const exactLayersRendered = hasRenderedLayerProbe
+      && renderedProbe(layerIds, readinessKey);
+    if (!memoryFogPaintEvidenceReady({
+      hasRenderedLayerProbe,
+      exactLayersRendered,
+      fullyRenderedFrame,
+      sourcesLoaded,
+    })) {
       mapViewRef.current?.requestRender?.();
       // A GeoJSON worker becoming ready does not itself guarantee another
       // react-map-gl `render` callback after a Standard-style load. Keep one
@@ -392,12 +413,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           if (fogReadinessKeyRef.current === expectedKey
             && fogPaintReadyKeyRef.current !== expectedKey) {
             mapViewRef.current?.requestRender?.();
-            // Source workers may become ready after Mapbox's final natural
-            // render callback. Re-probe the same authority here instead of
-            // relying on triggerRepaint to emit another React callback. If
-            // the worker is still busy, confirmCurrentFogPaint schedules the
-            // next single bounded probe; preparation changes/unmount cancel it.
-            confirmCurrentFogPaintRef.current();
+            // A timer is not paint evidence. It only asks Mapbox for another
+            // frame; the ensuing render callback must prove that this exact
+            // readiness key, rather than stale warm-source contents, is on
+            // screen before the veil can be retired.
           }
         }, 120);
       }
@@ -428,7 +447,6 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     onFogReady?.();
     return true;
   }, [mapFirstRender, memoryScope, onFogReady, onMapFullyReady]);
-  confirmCurrentFogPaintRef.current = confirmCurrentFogPaint;
 
   useEffect(() => () => {
     if (fogPaintProbeTimerRef.current) clearTimeout(fogPaintProbeTimerRef.current);
@@ -594,7 +612,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             mapFullyReadyFiredRef.current = true;
             onMapFullyReady();
           }
-          confirmCurrentFogPaint();
+          confirmCurrentFogPaint(false);
         }}
         onDidFinishRenderingMapFully={() => {
           log('v357.mapbox_didFinishRenderingMapFully', {});
@@ -610,7 +628,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           }
           // Mapbox `load` is a fully painted initial-style boundary and the
           // fallback for geometry committed after the prior Web render.
-          confirmCurrentFogPaint();
+          confirmCurrentFogPaint(true);
         }}
         onDidFinishRenderingFrameFully={() => {
           // A correlated fully-rendered frame containing the exact Fog is a
@@ -619,7 +637,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // pending for seconds after the current viewport and our sources
           // have already painted. Do not hold the blocking entry veil once
           // this exact-authority frame exists.
-          confirmCurrentFogPaint();
+          confirmCurrentFogPaint(true);
         }}
         onMapLoadingError={(event: unknown) => {
           log('memory.map_loading_error', { event: (() => { try { return JSON.stringify(event).slice(0, 500); } catch { return String(event); } })() });

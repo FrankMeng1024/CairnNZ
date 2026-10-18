@@ -8,6 +8,7 @@ const mockCameraSet = jest.fn();
 const mockCameraFit = jest.fn();
 const mockCameraCancel = jest.fn();
 const mockGetPointInView = jest.fn(async () => [195, 300]);
+const mockPointMotionBasemapActive = jest.fn<Promise<void>, [boolean]>(async (_active: boolean) => undefined);
 const mockNavReplace = jest.fn();
 let mockBeforeRemove: ((event: any) => void) | null = null;
 const mockNavGoBack = jest.fn(() => {
@@ -75,6 +76,7 @@ jest.mock('@rnmapbox/maps', () => {
     ReactModule.useImperativeHandle(ref, () => ({
       getCoordinateFromView: jest.fn(),
       getPointInView: mockGetPointInView,
+      setPointMotionBasemapActive: mockPointMotionBasemapActive,
     }));
     ReactModule.useEffect(() => {
       onCameraChanged?.({ properties: { center: [174.7772, -41.2865] } });
@@ -254,6 +256,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       ],
     });
     mockGetPointInView.mockResolvedValue([195, 300]);
+    mockPointMotionBasemapActive.mockResolvedValue(undefined);
   });
 
   test('mounts real editor controls, endpoints and the shared theme line above Standard basemap', async () => {
@@ -877,6 +880,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.queryByText('Cancel')).toBeNull();
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(true);
     fireEvent.press(screen.getByTestId('route-tool-point'));
+    await waitFor(() => expect(mockPointMotionBasemapActive).toHaveBeenLastCalledWith(false));
     await act(async () => {
       resolveSlow({ outcome: 'accepted', points: mockStroke });
       await Promise.resolve();
@@ -885,6 +889,35 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     const rendered = screen.getByTestId('source-ordered-route-parts').props.shape.features;
     expect(rendered).toHaveLength(1);
     expect(rendered[0].geometry.coordinates).toHaveLength(5);
+    expect(mockPointMotionBasemapActive.mock.calls.map(([active]) => active)).toEqual([true, false]);
+  });
+
+  test('N03 tool switch restores the normal basemap even while Point motion setup is pending', async () => {
+    let finishMotionSetup!: () => void;
+    mockPointMotionBasemapActive.mockImplementation((active: boolean) => active
+      ? new Promise<void>(resolve => { finishMotionSetup = resolve; })
+      : Promise.resolve());
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+
+    fireEvent.press(screen.getByTestId('route-tool-point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    expect(await screen.findByTestId('route-provider-progress')).toBeTruthy();
+    expect(screen.getByTestId('source-ordered-route-pending-endpoint')).toBeTruthy();
+    expect(mockPointMotionBasemapActive).toHaveBeenCalledWith(true);
+
+    fireEvent.press(screen.getByTestId('route-tool-trim'));
+    await waitFor(() => expect(mockPointMotionBasemapActive).toHaveBeenLastCalledWith(false));
+    expect(screen.getByTestId('route-trim-strip')).toBeTruthy();
+    expect(screen.queryByTestId('route-provider-progress')).toBeNull();
+
+    await act(async () => {
+      finishMotionSetup();
+      await Promise.resolve();
+    });
+    expect(mockResolvePoint).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('source-ordered-route-pending-endpoint')).toBeNull();
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features).toHaveLength(1);
   });
 
   test('N04 Point pending can transition through Trim Apply and Draw without a stuck or late commit', async () => {
@@ -1022,7 +1055,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       action.props.onPress();
       action.props.onPress();
     });
-    expect(mockResolvePoint).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(1));
     fireEvent.press(screen.getByTestId('route-tool-point'));
     await act(async () => {
       resolveSlow({ outcome: 'accepted', points: mockStroke });

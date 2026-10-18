@@ -43,6 +43,8 @@ import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
+const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
+const POINT_MOTION_RASTER_LAYER_ID = 'cairn-point-motion-basemap-layer';
 // Non-secret sentinel used only with the source-free development QA style.
 // Its session request is intercepted by the visual harness; it is never used
 // to access Mapbox tiles or emitted by production builds.
@@ -181,6 +183,8 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   const mapRef = useRef<MapRef | null>(null);
   const loadingStartedRef = useRef(false);
   const lastProgrammaticCameraEventAtRef = useRef(0);
+  const pointMotionVisibilityRef = useRef(new Map<string, unknown>());
+  const pointMotionGenerationRef = useRef(0);
 
   React.useImperativeHandle(ref, () => ({
     requestRender: () => {
@@ -194,6 +198,18 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
         ? Boolean(inner.isSourceLoaded(sourceId))
         : true;
     },
+    areLayersRendered: (layerIds: string[], readinessKey?: string) => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!inner?.queryRenderedFeatures || !Array.isArray(layerIds) || layerIds.length === 0) return false;
+      try {
+        return layerIds.every(layerId => inner.getLayer?.(layerId)
+          && inner.queryRenderedFeatures(undefined, { layers: [layerId] }).some((feature: any) => (
+            !readinessKey || feature?.properties?.cairnReadinessKey === readinessKey
+          )));
+      } catch {
+        return false;
+      }
+    },
     getPointInView: async (coordinate: [number, number]) => {
       const inner = mapRef.current?.getMap?.() ?? mapRef.current;
       const point = inner?.project?.(coordinate);
@@ -203,6 +219,102 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
       const inner = mapRef.current?.getMap?.() ?? mapRef.current;
       const coordinate = inner?.unproject?.(screenPoint);
       return coordinate ? [coordinate.lng, coordinate.lat] : null;
+    },
+    setPointMotionBasemapActive: async (active: boolean) => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!inner) return;
+      const generation = ++pointMotionGenerationRef.current;
+      const remembered = pointMotionVisibilityRef.current;
+      if (active) {
+        let rasterReady = false;
+        try {
+          if (WEB_MAPBOX_AVAILABLE && !inner.getSource?.(POINT_MOTION_RASTER_SOURCE_ID)) {
+            inner.addSource(POINT_MOTION_RASTER_SOURCE_ID, {
+              type: 'raster',
+              tiles: [`https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/512/{z}/{x}/{y}?access_token=${encodeURIComponent(MAPBOX_ACCESS_TOKEN)}`],
+              tileSize: 512,
+              // Overscale zoom-14 imagery during the short follow. One tile
+              // covers the complete representative Point corridor at phone
+              // scale, avoiding mid-animation raster decode churn while the
+              // live route/endpoint layers remain full-resolution vectors.
+              maxzoom: 14,
+            });
+          }
+          if (inner.getSource?.(POINT_MOTION_RASTER_SOURCE_ID)
+            && !inner.getLayer?.(POINT_MOTION_RASTER_LAYER_ID)) {
+            const beforeId = inner.getLayer?.('memory-fog')
+              ? 'memory-fog'
+              : inner.getLayer?.('ordered-route-casing') ? 'ordered-route-casing' : undefined;
+            inner.addLayer({
+              id: POINT_MOTION_RASTER_LAYER_ID,
+              type: 'raster',
+              source: POINT_MOTION_RASTER_SOURCE_ID,
+              paint: { 'raster-fade-duration': 0, 'raster-resampling': 'nearest' },
+            }, beforeId);
+          }
+          rasterReady = Boolean(inner.getLayer?.(POINT_MOTION_RASTER_LAYER_ID));
+          if (rasterReady) {
+            await new Promise<void>(resolve => {
+              let timeoutId: ReturnType<typeof setTimeout> | null = null;
+              const finish = () => {
+                if (timeoutId != null) clearTimeout(timeoutId);
+                inner.off?.('idle', finish);
+                resolve();
+              };
+              inner.once?.('idle', finish);
+              timeoutId = setTimeout(finish, 900);
+            });
+          }
+        } catch { rasterReady = false; }
+        if (generation !== pointMotionGenerationRef.current) return;
+        let layers: any[] = [];
+        try { layers = inner.getStyle?.()?.layers ?? []; } catch { return; }
+        for (const layer of layers) {
+          const sourceLayer = layer['source-layer'];
+          const keepWalkingContext = sourceLayer === 'water' || sourceLayer === 'waterway'
+            || /^(tunnel|road|bridge)-(path-trail|path-cycleway-piste|path|steps|pedestrian|minor|street|secondary-tertiary|primary|motorway-trunk)$/.test(layer.id)
+            || layer.id === 'ferry';
+          const suppress = (layer.type === 'symbol' && sourceLayer != null)
+            || (sourceLayer != null && (rasterReady || !keepWalkingContext))
+            || /hillshade|terrain/.test(layer.id);
+          if (!suppress) continue;
+          if (!remembered.has(layer.id)) {
+            remembered.set(layer.id, inner.getLayoutProperty?.(layer.id, 'visibility'));
+          }
+          try { inner.setLayoutProperty(layer.id, 'visibility', 'none'); } catch { /* style replacement */ }
+        }
+        await new Promise<void>(resolve => {
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+          const finish = () => {
+            if (timeoutId != null) clearTimeout(timeoutId);
+            inner.off?.('idle', finish);
+            resolve();
+          };
+          inner.once?.('idle', finish);
+          timeoutId = setTimeout(finish, 350);
+        });
+        return;
+      }
+      for (const [layerId, visibility] of remembered) {
+        if (!inner.getLayer?.(layerId)) continue;
+        try { inner.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible'); } catch { /* style replacement */ }
+      }
+      remembered.clear();
+      await new Promise<void>(resolve => {
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const finish = () => {
+          if (timeoutId != null) clearTimeout(timeoutId);
+          inner.off?.('idle', finish);
+          resolve();
+        };
+        inner.once?.('idle', finish);
+        timeoutId = setTimeout(finish, 500);
+      });
+      if (generation !== pointMotionGenerationRef.current) return;
+      try {
+        if (inner.getLayer?.(POINT_MOTION_RASTER_LAYER_ID)) inner.removeLayer(POINT_MOTION_RASTER_LAYER_ID);
+        if (inner.getSource?.(POINT_MOTION_RASTER_SOURCE_ID)) inner.removeSource(POINT_MOTION_RASTER_SOURCE_ID);
+      } catch { /* style may be unmounting */ }
     },
   }), []);
 
@@ -532,8 +644,8 @@ export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(p
           if (center) inner.jumpTo({
             center,
             zoom: z ?? inner.getZoom(),
-            bearing,
-            pitch,
+            ...(typeof bearing === 'number' ? { bearing } : {}),
+            ...(typeof pitch === 'number' ? { pitch } : {}),
             ...(padding ? { padding, retainPadding: true } : {}),
           });
           else if (typeof z === 'number') inner.setZoom(z);
@@ -571,7 +683,11 @@ export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(p
             applyStop(centerOnlyStop, Math.max(0, plannedEndMs - elapsedMs));
           };
           if (plannedStartMs <= 0) run();
-          else setTimeout(run, plannedStartMs);
+          // Hand the next bend to Mapbox just before the previous ease ends.
+          // Timer wake-up and style work can otherwise leave a visible idle
+          // frame at every stop. The duration is still pinned to plannedEndMs,
+          // so the single route clock and final endpoint remain unchanged.
+          else setTimeout(run, Math.max(0, plannedStartMs - 60));
           startOffsetMs = plannedEndMs;
         }
         return;
@@ -870,6 +986,95 @@ export function MarkerView({ coordinate, children }: MarkerViewProps) {
 // mapboxAdapter.ts 里的 sprite/circle 是否 web-supported。
 const NoopComponent = () => null;
 
+interface WebStyleImportProps {
+  config?: Record<string, string | boolean>;
+}
+
+/**
+ * Mapbox GL JS v2 cannot render Standard style imports, but the Web fallback
+ * still needs to honour Standard's label visibility contract. In particular,
+ * Activity/Route maps can disable label categories; Point temporarily hides
+ * basemap symbols while its camera is continuously moving so Mapbox does not
+ * spend the reveal frame budget repeatedly placing labels. Road, path, land
+ * and water geometry remain visible, and Cairn's own endpoint labels use a
+ * source-less layer that is intentionally left untouched.
+ */
+function WebStyleImport({ config = {} }: WebStyleImportProps) {
+  const mapCtx = React.useContext(MapInstanceContext);
+  useEffect(() => {
+    let map: any = null;
+    let attachFrame: number | null = null;
+    let disposed = false;
+    const originalVisibility = new Map<string, unknown>();
+    const suppressedSourceLayers = new Set<string>();
+    const suppressAllBasemapSymbols = config.showPointOfInterestLabels === false
+      && config.showTransitLabels === false
+      && config.showPlaceLabels === false
+      && config.showRoadLabels === false;
+    if (config.showPointOfInterestLabels === false) {
+      suppressedSourceLayers.add('poi_label');
+      suppressedSourceLayers.add('airport_label');
+      suppressedSourceLayers.add('housenum_label');
+    }
+    if (config.showTransitLabels === false) suppressedSourceLayers.add('transit_stop_label');
+    const apply = () => {
+      // Mapbox GL JS may expose the Map instance before the imported style is
+      // serializable. Calling getStyle() in that window throws inside the v2
+      // serializer (the import has no resolved `version` yet), so wait for the
+      // real style-ready boundary instead of crashing the whole map screen.
+      if (!map || !map.isStyleLoaded?.()) return;
+      for (const layer of map.getStyle?.()?.layers ?? []) {
+        if (layer.type !== 'symbol'
+          || layer['source-layer'] == null
+          || (!suppressAllBasemapSymbols && !suppressedSourceLayers.has(layer['source-layer']))) continue;
+        if (!originalVisibility.has(layer.id)) {
+          originalVisibility.set(layer.id, map.getLayoutProperty?.(layer.id, 'visibility'));
+        }
+        try { map.setLayoutProperty(layer.id, 'visibility', 'none'); } catch { /* style may be replacing */ }
+      }
+    };
+    const applyWhenReady = () => {
+      if (disposed || !map) return;
+      if (map.isStyleLoaded?.()) {
+        attachFrame = null;
+        apply();
+        return;
+      }
+      attachFrame = requestAnimationFrame(applyWhenReady);
+    };
+    const attach = () => {
+      if (disposed) return;
+      map = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      if (!map) {
+        attachFrame = requestAnimationFrame(attach);
+        return;
+      }
+      map.on?.('style.load', apply);
+      applyWhenReady();
+    };
+    attach();
+    return () => {
+      disposed = true;
+      if (attachFrame != null) cancelAnimationFrame(attachFrame);
+      if (!map) return;
+      map.off?.('style.load', apply);
+      for (const [layerId, visibility] of originalVisibility) {
+        try {
+          if (!map.getLayer?.(layerId)) continue;
+          map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
+        } catch { /* unmounted style */ }
+      }
+    };
+  }, [
+    config.showPlaceLabels,
+    config.showPointOfInterestLabels,
+    config.showRoadLabels,
+    config.showTransitLabels,
+    mapCtx,
+  ]);
+  return null;
+}
+
 export function makeWebMapboxAdapter() {
   const localQaAvailable = process.env.NODE_ENV !== 'production'
     && typeof window !== 'undefined'
@@ -887,10 +1092,9 @@ export function makeWebMapboxAdapter() {
     Images: NoopComponent,
     Image: NoopComponent,
     MarkerView,
-    // R21-v3 (2026-08-30): StyleImport is native-only (Mapbox v11 API);
-    // web shim renders nothing so callers can still `<Mapbox.StyleImport>`
-    // unconditionally.
-    StyleImport: NoopComponent,
+    // Native Mapbox v11 owns real imports. The v2 Web fallback applies the
+    // supported label-visibility subset to its equivalent hosted style.
+    StyleImport: WebStyleImport,
     // A mounted canvas without a usable token is not a working map. Let
     // callers show their explicit unavailable state instead of treating a
     // blank Web rectangle as evidence that Mapbox rendered successfully.

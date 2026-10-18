@@ -49,6 +49,13 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       && get().coverage?.viewportKey === viewport.key
       && get().status === 'ready'
       && !force) return;
+    // The same Fog authority can mount in more than one visible map wrapper
+    // during navigation. Do not abort and restart an identical healthy read;
+    // the in-flight request will publish into this shared store once.
+    if (get().userId === userId
+      && get().viewport?.key === viewport.key
+      && get().status === 'loading'
+      && !force) return;
     const sequence = ++requestSequence;
     activeRequestController?.abort();
     const controller = new AbortController();

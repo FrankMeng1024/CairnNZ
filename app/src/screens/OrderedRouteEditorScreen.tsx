@@ -163,6 +163,22 @@ interface RouteGrowthAnimation {
   expectedScreenCenter: { x: number; y: number };
 }
 
+interface RouteGrowthFrameHistory {
+  count: number;
+  atMs: Float64Array;
+  progress: Float64Array;
+}
+
+const ROUTE_GROWTH_FRAME_HISTORY_CAPACITY = 1_000;
+
+function createRouteGrowthFrameHistory(): RouteGrowthFrameHistory {
+  return {
+    count: 0,
+    atMs: new Float64Array(ROUTE_GROWTH_FRAME_HISTORY_CAPACITY),
+    progress: new Float64Array(ROUTE_GROWTH_FRAME_HISTORY_CAPACITY),
+  };
+}
+
 function providerReason(reason: RouteProviderReason): string {
   switch (reason) {
     case 'no-route': return 'No nearby path found. You can draw this section.';
@@ -275,6 +291,7 @@ export function OrderedRouteEditorScreen() {
   const [memoryCoverageView, setMemoryCoverageView] = useState<MemoryCoverageViewport | null>(null);
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
   const routeGrowthAnimationRef = useRef<RouteGrowthAnimation | null>(null);
+  const routeGrowthSampleRef = useRef<ReturnType<typeof pointGrowthSample> | null>(null);
   const routeGrowthSourceRef = useRef<any>(null);
   const routeGrowthLineRef = useRef<any>(null);
   const [initialLocation, setInitialLocation] = useState<InitialLocationState>({ status: 'idle' });
@@ -297,7 +314,15 @@ export function OrderedRouteEditorScreen() {
   const routePointEntryArrivedRef = useRef(false);
   const routePointEntryFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeGrowthLastPaintAtRef = useRef(0);
-  const routeGrowthFrameHistoryRef = useRef<Array<{ atMs: number; progress: number }>>([]);
+  // The lightweight Point-motion basemap begins before the provider returns,
+  // so its lifetime is wider than the accepted-route reveal animation. Keep
+  // independent ownership: cancelling while the request is still pending
+  // must restore the normal map even though no animation frame ever started.
+  const pointMotionBasemapActiveRef = useRef(false);
+  const routeGrowthFrameHistoryRef = useRef<RouteGrowthFrameHistory | null>(null);
+  if (!routeGrowthFrameHistoryRef.current) {
+    routeGrowthFrameHistoryRef.current = createRouteGrowthFrameHistory();
+  }
   const animationTraceBucketRef = useRef(-1);
   const lastAnimationCameraTraceAtRef = useRef(0);
   const initializedKeyRef = useRef('');
@@ -362,7 +387,25 @@ export function OrderedRouteEditorScreen() {
     return () => { cancelled = true; };
   }, [loadMemorySubscriptions, ownerId, readOnlyShared]);
 
-  const finishRouteAnimation = useCallback((reason: 'complete' | 'superseded' | 'user-camera' | 'tool-switch' | 'undo' | 'camera-action' = 'superseded') => {
+  const setPointMotionBasemapActive = useCallback(async (active: boolean) => {
+    pointMotionBasemapActiveRef.current = active;
+    try {
+      await mapViewRef.current?.setPointMotionBasemapActive?.(active);
+    } catch (cause) {
+      if (pointMotionBasemapActiveRef.current === active) {
+        pointMotionBasemapActiveRef.current = false;
+      }
+      recordRouteDrawingTrace('route_point_motion_basemap_failed', {
+        active,
+        error: String(cause).slice(0, 120),
+      }, 'state');
+    }
+  }, []);
+
+  const finishRouteAnimation = useCallback((
+    reason: 'complete' | 'superseded' | 'user-camera' | 'tool-switch' | 'undo' | 'camera-action' = 'superseded',
+    preserveMotionBasemap = false,
+  ) => {
     const hadActiveAnimation = routeGrowthAnimationRef.current !== null;
     routeAnimationGenerationRef.current += 1;
     if (routeAnimationFrameRef.current != null) cancelAnimationFrame(routeAnimationFrameRef.current);
@@ -395,8 +438,12 @@ export function OrderedRouteEditorScreen() {
     }
     recordRouteDrawingTrace('route_point_animation_ended', { reason }, 'state');
     routeGrowthAnimationRef.current = null;
+    routeGrowthSampleRef.current = null;
     setRouteGrowthAnimation(null);
-  }, []);
+    if (!preserveMotionBasemap && pointMotionBasemapActiveRef.current) {
+      void setPointMotionBasemapActive(false);
+    }
+  }, [setPointMotionBasemapActive]);
 
   const invalidatePendingOperation = useCallback(() => {
     if (activeOperationIdRef.current) {
@@ -443,7 +490,7 @@ export function OrderedRouteEditorScreen() {
   }, [invalidatePendingOperation, mode, saving, setTool, trimEnd, trimStart]);
 
   const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
-    finishRouteAnimation('superseded');
+    finishRouteAnimation('superseded', true);
     const timeline = preparePointGrowthTimeline(points);
     if (!timeline) return;
     const animationTopClearance = insets.top + 60;
@@ -488,8 +535,18 @@ export function OrderedRouteEditorScreen() {
       },
     };
     routeGrowthLastPaintAtRef.current = 0;
-    routeGrowthFrameHistoryRef.current = [{ atMs: performance.now(), progress: 0 }];
+    const frameHistory = routeGrowthFrameHistoryRef.current!;
+    frameHistory.count = 1;
+    frameHistory.atMs[0] = performance.now();
+    frameHistory.progress[0] = 0;
     routeGrowthAnimationRef.current = initialAnimation;
+    routeGrowthSampleRef.current = {
+      progress: 0,
+      head: initialAnimation.head,
+      visiblePointCount: initialAnimation.visiblePointCount,
+      travelledM: 0,
+      totalM: timeline.totalM,
+    };
     setRouteGrowthAnimation(initialAnimation);
     recordRouteDrawingTrace('route_point_animation_started', {
       animationId: key,
@@ -529,20 +586,21 @@ export function OrderedRouteEditorScreen() {
       }
       const elapsed = now - startedAt;
       const progress = Math.min(1, elapsed / durationMs);
-      if (debugMode && Platform.OS === 'web' && routeGrowthFrameHistoryRef.current.length < 1_000) {
-        routeGrowthFrameHistoryRef.current.push({ atMs: now, progress });
+      const activeFrameHistory = routeGrowthFrameHistoryRef.current!;
+      if (debugMode && Platform.OS === 'web' && activeFrameHistory.count < ROUTE_GROWTH_FRAME_HISTORY_CAPACITY) {
+        const index = activeFrameHistory.count;
+        activeFrameHistory.atMs[index] = now;
+        activeFrameHistory.progress[index] = progress;
+        activeFrameHistory.count = index + 1;
       }
-      const frame = pointGrowthSample(timeline, progress);
+      const activeAnimation = routeGrowthAnimationRef.current;
+      const frame = pointGrowthSample(timeline, progress, routeGrowthSampleRef.current ?? undefined);
+      routeGrowthSampleRef.current = frame;
       if (!frame) { finishRouteAnimation('complete'); return; }
-      const nextAnimation = {
-        key,
-        hiddenPartId,
-        pathPoints: timeline.points,
-        visiblePointCount: frame.visiblePointCount,
-        head: frame.head,
-        progress,
-        expectedScreenCenter: initialAnimation.expectedScreenCenter,
-      };
+      const nextAnimation = activeAnimation ?? initialAnimation;
+      nextAnimation.visiblePointCount = frame.visiblePointCount;
+      nextAnimation.head = frame.head;
+      nextAnimation.progress = progress;
       routeGrowthAnimationRef.current = nextAnimation;
       // Updating a Mapbox paint property faster than the map can present a
       // frame queues redundant style work and starves both the reveal clock
@@ -581,7 +639,7 @@ export function OrderedRouteEditorScreen() {
           progress,
           travelledM: frame.travelledM,
           totalM: frame.totalM,
-          head: frame.head,
+          head: { ...frame.head },
           cameraCommand: {
             reason: 'arc-length-simplified-keyframes',
             stopIndex: null,
@@ -1283,7 +1341,13 @@ export function OrderedRouteEditorScreen() {
         pitch: cameraPitchRef.current,
         generation: cameraGenerationRef.current,
       }),
-      getPointAnimationFrameHistory: () => [...routeGrowthFrameHistoryRef.current],
+      getPointAnimationFrameHistory: () => {
+        const history = routeGrowthFrameHistoryRef.current!;
+        return Array.from({ length: history.count }, (_, index) => ({
+          atMs: history.atMs[index],
+          progress: history.progress[index],
+        }));
+      },
     };
     qaRoot.__cairnRouteEditorQa = bridge;
     return () => {
@@ -1384,11 +1448,19 @@ export function OrderedRouteEditorScreen() {
     providerTransactionRef.current = true;
     operationAbortRef.current = controller;
     activeOperationIdRef.current = operationId;
+    // Web Mapbox GL v2 performs expensive symbol collision placement while a
+    // continuously-following camera moves. Freeze basemap symbols before the
+    // Point provider turn begins (while keeping roads, paths, water and
+    // Cairn's own endpoint layer visible), then restore on every terminal path.
     setProviderBusy(true);
     setMode('MatchPending');
     setError(null);
     const providerStartedAtMs = Date.now();
     try {
+      await setPointMotionBasemapActive(true);
+      if (controller.signal.aborted
+        || operationAbortRef.current !== controller
+        || activeOperationIdRef.current !== operationId) return;
       const result = await resolvePointPlan(start, target, { signal: controller.signal });
       recordRouteDrawingTrace('route_point_provider_response', {
         strokeId: operationId,
@@ -1514,9 +1586,12 @@ export function OrderedRouteEditorScreen() {
         if (activeOperationIdRef.current === operationId) activeOperationIdRef.current = null;
         providerTransactionRef.current = false;
         setProviderBusy(false);
+        if (routeGrowthAnimationRef.current === null) {
+          void setPointMotionBasemapActive(false);
+        }
       }
     }
-  }, [applyResolvedPoint, finishRouteAnimation, ownerId]);
+  }, [applyResolvedPoint, finishRouteAnimation, ownerId, setPointMotionBasemapActive]);
 
   const confirmPointTarget = useCallback(() => {
     const current = historyRef.current;
@@ -1842,8 +1917,8 @@ export function OrderedRouteEditorScreen() {
           zoomEnabled={tool !== 'draw'}
           rotateEnabled={tool !== 'draw'}
           pitchEnabled={tool !== 'draw'}
-          onDidFinishLoadingMap={() => setMapReady(true)}
-          onDidFinishRenderingMapFully={() => setMapReady(true)}
+          onDidFinishLoadingMap={mapReady ? undefined : () => setMapReady(true)}
+          onDidFinishRenderingMapFully={mapReady ? undefined : () => setMapReady(true)}
           onMapLoadingError={() => setMapLoadState('error')}
           onCameraChanged={(event: any) => {
             const center = event?.properties?.center;
@@ -1947,7 +2022,20 @@ export function OrderedRouteEditorScreen() {
             setMemoryCoverageView(current => current?.key === next.key ? current : next);
           }}
         >
-          {StyleImport ? <StyleImport key={lightPreset} id="basemap" existing config={buildStandardConfig(mapTheme) as any} /> : null}
+          {StyleImport ? <StyleImport
+            key={lightPreset}
+            id="basemap"
+            existing
+            config={{
+              ...buildStandardConfig(mapTheme),
+              ...((Platform.OS !== 'web' && (routeGrowthAnimation || (providerBusy && tool === 'point'))) ? {
+                showTransitLabels: false,
+                showPlaceLabels: false,
+                showPointOfInterestLabels: false,
+                showRoadLabels: false,
+              } : {}),
+            } as any}
+          /> : null}
           {Camera ? initialBoundsRef.current ? (
             <Camera
               ref={cameraRef}

@@ -32,22 +32,40 @@ describe('friend Memory authorization cache ordering', () => {
     jest.resetModules();
   });
 
-  test('keeps a durable projection hidden until this session re-authorizes it', async () => {
+  test('never hydrates durable Friend geometry and retires the legacy payload', async () => {
     let now = 1_000_100;
     jest.spyOn(Date, 'now').mockImplementation(() => now);
-    const values = new Map([[`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', projection())]]);
+    const values = new Map([
+      [`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', projection())],
+      [`${CACHE_PREFIX}signed-out-old-account`, persisted('signed-out-old-account', projection('22'))],
+      ['unrelated-key', 'keep'],
+    ]);
+    const removeItem = jest.fn(async (key: string) => { values.delete(key); });
+    const removeItemsStrict = jest.fn(async (keys: string[]) => keys.forEach(key => values.delete(key)));
     jest.doMock('../../../store/storage', () => ({
       storage: {
         getItem: jest.fn(async (key: string) => values.get(key) ?? null),
         setItem: jest.fn(async (key: string, value: string) => { values.set(key, value); }),
+        removeItem,
+        getAllKeysStrict: jest.fn(async () => [...values.keys()]),
+        removeItemsStrict,
       },
     }));
     jest.doMock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
     await useFriendMemoryStore.getState().hydrate('viewer-a');
-    expect(useFriendMemoryStore.getState().projections['11'].cells).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().projections).toEqual({});
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(removeItem).not.toHaveBeenCalled();
+    expect(removeItemsStrict).toHaveBeenCalledWith([
+      `${CACHE_PREFIX}viewer-a`,
+      `${CACHE_PREFIX}signed-out-old-account`,
+    ]);
+    expect(values.has(`${CACHE_PREFIX}viewer-a`)).toBe(false);
+    expect(values.has(`${CACHE_PREFIX}signed-out-old-account`)).toBe(false);
+    expect(values.get('unrelated-key')).toBe('keep');
 
     now = 1_000_000 + 24 * 60 * 60 * 1000 + 1;
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
@@ -165,32 +183,82 @@ describe('friend Memory authorization cache ordering', () => {
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
   });
 
-  test('drops a slower prior-account hydration after a newer account switch', async () => {
+  test('a verified session geometry is fenced and cannot reappear after a wall-clock rollback', async () => {
+    let now = 1_000_100;
+    jest.spyOn(Date, 'now').mockImplementation(() => now);
+    const appState = { user: { id: 'viewer-a' } };
+    const authenticatedFetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        revoked_friend_ids: [],
+        projections: [{
+          source_friend_id: 11,
+          authorization_version: 4,
+          projection_version: 'geometry-4',
+          cell_size_m: 200,
+          server_authorized_at: new Date(1_000_000).toISOString(),
+          authorization_expires_at: new Date(1_000_000 + 86_400_000).toISOString(),
+          cells: [],
+          geometry: {
+            type: 'MultiPolygon',
+            coordinates: [[[[174.7, -41.3], [174.8, -41.3], [174.8, -41.2], [174.7, -41.2], [174.7, -41.3]]]],
+          },
+          regions: [],
+        }],
+      }),
+    }));
+    jest.doMock('../../../store/storage', () => ({
+      storage: { removeItem: jest.fn(async () => undefined) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    const { useMemorySubscriptionsStore } = require('../store/useMemorySubscriptionsStore');
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 11, friend_name: 'Mia' }],
+      availableSources: [{
+        friend_id: '11', friend_name: 'Mia', selected: true,
+        authorization_version: 4, effective_at: new Date(0).toISOString(),
+        sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+      }],
+    });
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+
+    now = 999_000;
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toEqual([]);
+    expect(useFriendMemoryStore.getState().projections).toEqual({});
+    now = 1_000_100;
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toEqual([]);
+    expect(authenticatedFetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('an account switch never restores either account durable Friend geometry', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
-    let releaseViewerA!: (value: string) => void;
-    const viewerARead = new Promise<string>(resolve => { releaseViewerA = resolve; });
     const viewerA = projection('11');
     const viewerB = projection('22');
+    const values = new Map([
+      [`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', viewerA)],
+      [`${CACHE_PREFIX}viewer-b`, persisted('viewer-b', viewerB)],
+    ]);
     jest.doMock('../../../store/storage', () => ({
       storage: {
-        getItem: jest.fn((key: string) => {
-          if (key === `${CACHE_PREFIX}viewer-a`) return viewerARead;
-          return Promise.resolve(persisted('viewer-b', viewerB));
-        }),
+        getItem: jest.fn(async (key: string) => values.get(key) ?? null),
         setItem: jest.fn(async () => undefined),
+        removeItem: jest.fn(async (key: string) => { values.delete(key); }),
       },
     }));
     jest.doMock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const slow = useFriendMemoryStore.getState().hydrate('viewer-a');
-    const fast = useFriendMemoryStore.getState().hydrate('viewer-b');
-    await fast;
-    releaseViewerA(persisted('viewer-a', viewerA));
-    await slow;
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().hydrate('viewer-b');
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(useFriendMemoryStore.getState().userId).toBe('viewer-b');
-    expect(Object.keys(useFriendMemoryStore.getState().projections)).toEqual(['22']);
+    expect(useFriendMemoryStore.getState().projections).toEqual({});
+    expect(values.size).toBe(0);
   });
 
   test('an old-account network response cannot populate or strand the new account cache', async () => {
@@ -250,11 +318,13 @@ describe('friend Memory authorization cache ordering', () => {
     const response = new Promise(resolve => { releaseResponse = resolve; });
     let markFetchStarted!: () => void;
     const fetchStarted = new Promise<void>(resolve => { markFetchStarted = resolve; });
-    const values = new Map<string, string>();
+    const values = new Map<string, string>([[`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', projection())]]);
+    const setItem = jest.fn(async (key: string, value: string) => { values.set(key, value); });
     jest.doMock('../../../store/storage', () => ({
       storage: {
         getItem: jest.fn(async (key: string) => values.get(key) ?? null),
-        setItem: jest.fn(async (key: string, value: string) => { values.set(key, value); }),
+        setItem,
+        removeItem: jest.fn(async (key: string) => { values.delete(key); }),
       },
     }));
     jest.doMock('../../../services/apiService', () => ({
@@ -293,8 +363,8 @@ describe('friend Memory authorization cache ordering', () => {
     await pending;
 
     expect(useFriendMemoryStore.getState().projections).toEqual({});
-    const persistedAfterRace = JSON.parse(values.get(`${CACHE_PREFIX}viewer-a`) ?? '{}');
-    expect(persistedAfterRace.projections ?? {}).toEqual({});
+    expect(values.has(`${CACHE_PREFIX}viewer-a`)).toBe(false);
+    expect(setItem).not.toHaveBeenCalled();
   });
 
   test('two same-source reads resolving out of order retain only the later request', async () => {
@@ -342,7 +412,7 @@ describe('friend Memory authorization cache ordering', () => {
     expect(useFriendMemoryStore.getState().projections['11'].projectionVersion).toBe('newer-request');
   });
 
-  test('a purge ordered behind a slow cache write wins durably and survives relaunch hydration', async () => {
+  test('loads and purges remain session-only and relaunch cannot restore borrowed geometry', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
     const appState = { user: { id: 'viewer-a' } };
     const subscriptionState = {
@@ -350,16 +420,14 @@ describe('friend Memory authorization cache ordering', () => {
       availableSources: [{ friend_id: '11', authorization_version: 4 }],
     };
     const values = new Map<string, string>();
-    let releaseFirstWrite!: () => void;
-    const firstWriteGate = new Promise<void>(resolve => { releaseFirstWrite = resolve; });
-    let writeCount = 0;
-    const setItem = jest.fn(async (key: string, value: string) => {
-      writeCount += 1;
-      if (writeCount === 1) await firstWriteGate;
-      values.set(key, value);
-    });
+    values.set(`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', projection()));
+    const setItem = jest.fn(async (key: string, value: string) => { values.set(key, value); });
     jest.doMock('../../../store/storage', () => ({
-      storage: { getItem: jest.fn(async (key: string) => values.get(key) ?? null), setItem },
+      storage: {
+        getItem: jest.fn(async (key: string) => values.get(key) ?? null),
+        setItem,
+        removeItem: jest.fn(async (key: string) => { values.delete(key); }),
+      },
     }));
     jest.doMock('../../../services/apiService', () => ({
       authenticatedFetch: jest.fn(async () => ({
@@ -384,17 +452,17 @@ describe('friend Memory authorization cache ordering', () => {
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const load = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
-    while (setItem.mock.calls.length < 1) await Promise.resolve();
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+    expect(useFriendMemoryStore.getState().projections['11']).toBeDefined();
     subscriptionState.subscriptions = [];
-    const purge = useFriendMemoryStore.getState().purgeFriend('11');
-    releaseFirstWrite();
-    await Promise.all([load, purge]);
+    await useFriendMemoryStore.getState().purgeFriend('11');
 
     useFriendMemoryStore.getState().reset();
     await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await Promise.resolve();
     expect(useFriendMemoryStore.getState().projections).toEqual({});
-    expect(JSON.parse(values.get(`${CACHE_PREFIX}viewer-a`) ?? '{}').projections).toEqual({});
+    expect(values.has(`${CACHE_PREFIX}viewer-a`)).toBe(false);
+    expect(setItem).not.toHaveBeenCalled();
   });
 
   test('one contributor failure is isolated while another contributor remains loaded and visible', async () => {
@@ -499,7 +567,8 @@ describe('friend Memory authorization cache ordering', () => {
     subscriptionState.subscriptions = [{ friend_id: 11 }, { friend_id: 22 }];
     await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     expect(useFriendMemoryStore.getState().projections['11'].projectionVersion).toBe('a-2');
-    expect(useFriendMemoryStore.getState().projections['22'].projectionVersion).toBe('b-2');
+    expect(useFriendMemoryStore.getState().projections['22'].projectionVersion).toBe('b-1');
+    expect(authenticatedFetch).toHaveBeenCalledTimes(3);
   });
 
   test('revoke or block purge fences an in-flight source even before selection state catches up', async () => {

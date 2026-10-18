@@ -41,6 +41,7 @@ if (!overlapId || !sourceById.has(denseId) || !sourceById.has(overlapId) || !sou
 }
 
 const allScenarios = [
+  { id: 'empty-mine', scope: 'self', viewport: fixture.dense_viewport, selected: [], expectFriend: false, expectOverlap: false },
   { id: 'mine-2k', scope: 'self', viewport: fixture.dense_viewport, selected: [], expectFriend: false, expectOverlap: false },
   { id: 'mine-plus-one-friend-10k', scope: 'combined', viewport: fixture.dense_viewport, selected: [denseId], expectFriend: true, expectOverlap: true },
   { id: 'mine-plus-two-friends-12k', scope: 'combined', viewport: fixture.dense_viewport, selected: [denseId, overlapId], expectFriend: true, expectOverlap: true },
@@ -82,6 +83,7 @@ const browser = await chromium.launch({
   ...(fs.existsSync(chromePath) ? { executablePath: chromePath } : {}),
 });
 const results = [];
+const warmReplacementResults = [];
 try {
   for (const scenario of scenarios) {
     const [west, south, east, north] = scenario.viewport;
@@ -156,7 +158,7 @@ try {
           }, 64);
         }
         if (endpoint === '/api/memory/coverage') {
-          if (scenario.id === 'friend-only-distinct-1k') {
+          if (scenario.id === 'empty-mine' || scenario.id === 'friend-only-distinct-1k') {
             return fulfill({
               coverage_rule_version: 4,
               coverage_version: 'qa-empty-mine-distinct',
@@ -306,6 +308,69 @@ try {
           return globalThis.__o86MemoryStages ?? [];
         });
         if (trial === 0) await page.screenshot({ path: path.join(outputDir, `${scenario.id}-actual-mapbox-390x844.png`) });
+        if (trial === 0 && scenario.id === 'mine-plus-two-friends-12k') {
+          const warmStart = await page.evaluate(async ({ removedFriendId }) => {
+            const map = globalThis.__cairnMap;
+            const oldReadinessKey = map?.getSource?.('memory-fog-src')?._data?.properties?.cairnReadinessKey ?? null;
+            const startedAt = performance.now();
+            const status = await globalThis.__cairnStores.useMemorySubscriptionsStore.getState()
+              .unsubscribe(Number(removedFriendId));
+            return { oldReadinessKey, startedAt, status };
+          }, { removedFriendId: overlapId });
+          try {
+            const warmHandle = await page.waitForFunction(({ oldReadinessKey, startedAt, retainedFriendId, removedFriendId }) => {
+              const stores = globalThis.__cairnStores;
+              const map = globalThis.__cairnMap;
+              if (!map || document.querySelector('[data-testid="memory-entry-veil"]')) return false;
+              const visible = stores.useFriendMemoryStore.getState().getVisibleGeometries();
+              if (visible.length !== 1 || String(visible[0]?.sourceFriendId) !== retainedFriendId
+                || stores.useFriendMemoryStore.getState().projections[removedFriendId]) return false;
+              const sourceIds = ['memory-fog-src', 'memory-friend-union-src', 'memory-overlap-src']
+                .filter(id => map.getSource?.(id));
+              const readinessKey = map.getSource?.('memory-fog-src')?._data?.properties?.cairnReadinessKey ?? null;
+              if (!readinessKey || readinessKey === oldReadinessKey) return false;
+              const layerIds = sourceIds.map(id => id === 'memory-fog-src'
+                ? 'memory-fog'
+                : id === 'memory-friend-union-src' ? 'memory-friend-union' : 'memory-overlap');
+              const renderedKeys = {};
+              for (const layerId of layerIds) {
+                try {
+                  renderedKeys[layerId] = [...new Set(map.queryRenderedFeatures(undefined, { layers: [layerId] })
+                    .map(feature => feature?.properties?.cairnReadinessKey ?? null))];
+                } catch { return false; }
+                if (!renderedKeys[layerId].includes(readinessKey)) return false;
+              }
+              return {
+                visibleAtMs: performance.now() - startedAt,
+                oldReadinessKey,
+                readinessKey,
+                renderedKeys,
+                sourceIds,
+                visibleFriendSources: visible.map(value => value.sourceFriendId),
+              };
+            }, {
+              oldReadinessKey: warmStart.oldReadinessKey,
+              startedAt: warmStart.startedAt,
+              retainedFriendId: denseId,
+              removedFriendId: overlapId,
+            }, { timeout: 10_000, polling: 25 });
+            const warmMeasurement = await warmHandle.jsonValue();
+            warmReplacementResults.push({
+              scenario: 'two-friends-to-one-revoke',
+              subscriptionStatus: warmStart.status,
+              measurement: warmMeasurement,
+              pass: warmStart.status === 200 && warmMeasurement.visibleAtMs < 5_000,
+            });
+            await page.screenshot({ path: path.join(outputDir, 'warm-two-to-one-revoke-actual-mapbox-390x844.png') });
+          } catch (error) {
+            warmReplacementResults.push({
+              scenario: 'two-friends-to-one-revoke',
+              subscriptionStatus: warmStart.status,
+              error: error?.stack || String(error),
+              pass: false,
+            });
+          }
+        }
       } catch (error) {
         runtimeErrors.push(error?.stack || String(error));
         measurement = await page.evaluate(() => {
@@ -324,6 +389,17 @@ try {
               fogSource: Boolean(map?.getSource?.('memory-fog-src')),
               friendSource: Boolean(map?.getSource?.('memory-friend-union-src')),
               overlapSource: Boolean(map?.getSource?.('memory-overlap-src')),
+              sourceReadinessKeys: Object.fromEntries(['memory-fog-src', 'memory-friend-union-src', 'memory-overlap-src']
+                .map(id => [id, map?.getSource?.(id)?._data?.properties?.cairnReadinessKey ?? null])),
+              renderedReadinessKeys: Object.fromEntries(['memory-fog', 'memory-friend-union', 'memory-overlap']
+                .map(id => {
+                  try {
+                    return [id, map?.getLayer?.(id)
+                      ? [...new Set(map.queryRenderedFeatures(undefined, { layers: [id] })
+                        .map(feature => feature?.properties?.cairnReadinessKey ?? null))]
+                      : null];
+                  } catch { return [id, ['probe-error']]; }
+                })),
               veil: Boolean(document.querySelector('[data-testid="memory-entry-veil"]')),
             },
           };
@@ -358,7 +434,12 @@ const scenarioSummaries = Object.fromEntries(scenarios.map(scenario => {
     ...summarize(timings),
     pass_count: rows.filter(result => result.pass).length,
     fail_count: rows.filter(result => !result.pass).length,
-    gate: timings.length === trialCount && percentile(timings, 0.95) < 5_000 ? 'PASS' : 'FAIL',
+    all_under_10_seconds: timings.length === trialCount && Math.max(...timings) < 10_000,
+    gate: timings.length === trialCount
+      && percentile(timings, 0.95) <= 5_000
+      && Math.max(...timings) < 10_000
+      ? 'PASS'
+      : 'FAIL',
   }];
 }));
 const report = {
@@ -373,11 +454,15 @@ const report = {
     basemap: 'real hosted Mapbox style/tiles',
     transport: 'captured isolated real-API JSON with recorded healthy p95 delay injected (names 64ms, Mine 140ms, Friends 224/255ms)',
     finish: 'entry/selection to actual production Mapbox sources/layers present, expected source count, queryRenderedFeatures nonzero, and entry veil absent',
+    acceptance: 'healthy-profile p95 <= 5000ms and every complete visible trial < 10000ms; each individual row also retains the stricter existing <5000ms PASS flag',
     diagnostic_sampling: '100ms correlated stage sampler + 50ms completion probe; each probe still requires real basemap and every expected Mapbox layer to return visible features',
   },
   scenario_summaries: scenarioSummaries,
+  warm_replacement_results: warmReplacementResults,
   results,
-  verdict: Object.values(scenarioSummaries).every(summary => summary.gate === 'PASS') ? 'PASS' : 'FAIL',
+  verdict: Object.values(scenarioSummaries).every(summary => summary.gate === 'PASS')
+    && warmReplacementResults.every(result => result.pass)
+    ? 'PASS' : 'FAIL',
 };
 fs.writeFileSync(path.join(outputDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({ outputDir, verdict: report.verdict, scenarioSummaries }, null, 2));

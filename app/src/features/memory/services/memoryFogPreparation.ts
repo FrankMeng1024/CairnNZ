@@ -1,6 +1,8 @@
 /**
- * Account/content keyed single-flight coordinator shared by Home prewarm and
- * the visible FogLayer. It owns no geometry and mounts no Mapbox component.
+ * Account/content keyed single-flight coordinator for concurrent visible Fog
+ * consumers. It owns no geometry and mounts no Mapbox component; O86 avoids
+ * speculative whole-history work on Home because viewport coverage is the
+ * interactive source of truth.
  */
 const inFlight = new Map<string, Promise<unknown>>();
 

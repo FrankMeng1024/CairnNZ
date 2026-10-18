@@ -57,6 +57,20 @@ describe('prepared Memory viewport handoff', () => {
     expect(mockAcknowledgePreparedCoverage).toHaveBeenCalledTimes(2);
   });
 
+  test('coalesces an identical in-flight viewport instead of restarting it', async () => {
+    let resolveRequest!: (value: ReturnType<typeof response>) => void;
+    mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { resolveRequest = resolve; }));
+
+    const first = usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    const duplicate = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport });
+    await duplicate;
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+
+    resolveRequest(response('coalesced'));
+    await first;
+    expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('coalesced');
+  });
+
   test('an account change drops the prior account geometry before accepting a response', async () => {
     mockAuthenticatedFetch.mockResolvedValueOnce(response('viewer-a'));
     await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);

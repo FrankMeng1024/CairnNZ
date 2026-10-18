@@ -12,7 +12,7 @@
  * to touch here unless a new prop appears.
  */
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, StyleSheet, LayoutChangeEvent, TouchableOpacity, Text, Platform, InteractionManager } from 'react-native';
+import { View, StyleSheet, LayoutChangeEvent, TouchableOpacity, Text, Platform } from 'react-native';
 import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -46,7 +46,6 @@ import {
   resolveDiscoveryHomeDestination,
   resolveHomeStateWindow,
 } from '../features/cairns/homeStateWindow';
-import { runSharedMemoryFogPreparation } from '../features/memory/services/memoryFogPreparation';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -127,7 +126,6 @@ export function HomeScreen() {
   const saveLostSessionId = useTrackingStore(s => s.saveLostSessionId);
   const saveLostPayload = useTrackingStore(s => s.saveLostPayload);
   const memoryPointCount = useMemoryStore(s => s.points.length);
-  const memoryGeometryVersion = useMemoryStore(s => s.geometryVersion);
   const ownedCairnCount = useMarkerStore(s => s.markers.length);
   const presentationViewerId = useCairnPresentationStore(s => s.viewerId);
   const presentationPendingCount = useCairnPresentationStore(s => s.pendingGroups.length);
@@ -152,88 +150,6 @@ export function HomeScreen() {
   const qaToolsAvailable = activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__);
   const hikingIconCandidate = useWeatherStore(s => s.hikingIconCandidate);
   const runningIconCandidate = useWeatherStore(s => s.runningIconCandidate);
-
-  // Prepare only the account-scoped Mine geometry after Home is interactive.
-  // This is a cooperative CPU/cache job: it mounts no map, requests no
-  // location, emits no toast, and the visible FogLayer joins the same promise.
-  useEffect(() => {
-    if (!isHomeFocused || !currentUserId || liveStatus !== 'idle'
-      || liveTransitionState !== 'idle' || liveIsFinishing || memoryPointCount === 0) return undefined;
-    let cancelledBeforeStart = false;
-    let started = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const interaction = InteractionManager.runAfterInteractions(() => {
-      timer = setTimeout(() => {
-        timer = null;
-        if (cancelledBeforeStart
-          || String(useAppStore.getState().user?.id ?? '') !== currentUserId
-          || useTrackingStore.getState().status !== 'idle'
-          || useTrackingStore.getState().transitionState !== 'idle'
-          || useTrackingStore.getState().isFinishing) return;
-        started = true;
-        void (async () => {
-          const points = useMemoryStore.getState().points.slice();
-          const geometryVersion = useMemoryStore.getState().geometryVersion;
-          const [{
-            buildTiledMemoryDisplayEvidence,
-            prepareMemoryFogContent,
-            restoreDisplayGeometryCache,
-            serializeDisplayGeometryCache,
-          }, { readFogDisplayCache, writeFogDisplayCache }] = await Promise.all([
-            import('../features/memory/components/FogLayer'),
-            import('../features/memory/services/fogDisplayCache'),
-          ]);
-          if (String(useAppStore.getState().user?.id ?? '') !== currentUserId
-            || useMemoryStore.getState().geometryVersion !== geometryVersion) return;
-          const authority = `${currentUserId}|self`;
-          const contentSignature = prepareMemoryFogContent(authority, points, []).contentSignature;
-          const cached = await readFogDisplayCache(currentUserId);
-          if (cached?.authority === authority && cached.contentSignature === contentSignature) return;
-          const previous = cached?.authority === authority
-            ? restoreDisplayGeometryCache(cached.displayTiles)
-            : null;
-          const built = await runSharedMemoryFogPreparation(
-            currentUserId,
-            contentSignature,
-            () => buildTiledMemoryDisplayEvidence(
-              points,
-              () => String(useAppStore.getState().user?.id ?? '') === currentUserId
-                && useMemoryStore.getState().geometryVersion === geometryVersion
-                && useTrackingStore.getState().status === 'idle'
-                && useTrackingStore.getState().transitionState === 'idle'
-                && !useTrackingStore.getState().isFinishing,
-              previous,
-            ),
-          );
-          if (!built || String(useAppStore.getState().user?.id ?? '') !== currentUserId
-            || useMemoryStore.getState().geometryVersion !== geometryVersion
-            || useTrackingStore.getState().status !== 'idle'
-            || useTrackingStore.getState().transitionState !== 'idle'
-            || useTrackingStore.getState().isFinishing) return;
-          await writeFogDisplayCache({
-            version: 3,
-            accountId: currentUserId,
-            authority,
-            contentSignature,
-            pointCount: points.length,
-            displayTiles: serializeDisplayGeometryCache(built.cache),
-            savedAt: Date.now(),
-          });
-        })().catch(() => { /* visible Memory retains its own explicit error path */ });
-      }, 600);
-    });
-    return () => {
-      // Blur after work starts (most importantly Home → Memory) must not
-      // poison the shared promise that the visible FogLayer is about to join.
-      // Account, evidence revision and active-tracking checks still fence the
-      // running cooperative build at every yielded slice.
-      if (!started) {
-        cancelledBeforeStart = true;
-        interaction.cancel();
-        if (timer) clearTimeout(timer);
-      }
-    };
-  }, [currentUserId, isHomeFocused, liveIsFinishing, liveStatus, liveTransitionState, memoryGeometryVersion, memoryPointCount]);
 
   // The bounded registry exposes at most one unfinished Activity for the
   // signed-in user. Home may show it without blocking unrelated browsing;

@@ -97,13 +97,45 @@ export function pointCameraStops(
     keep.add(furthestIndex);
     ranges.push([startIndex, furthestIndex], [furthestIndex, endIndex]);
   }
-  return [...keep]
+  const stops = [...keep]
     .sort((a, b) => a - b)
     .map(sourceIndex => ({
       point: points[sourceIndex],
       progress: cumulativeM[sourceIndex] / totalM,
       sourceIndex,
     }));
+  if (stops.length <= 2) return stops;
+  // Provider geometry can place two RDP bends only a few animation frames
+  // apart around a tight return. Starting a second camera transaction before
+  // the first has presented is both visually redundant and was the first
+  // incorrect stage in Test3's periodic pause. Only collapse a genuine sharp
+  // reversal; Test2's close consecutive 90-degree street turns must remain.
+  const collapsed: PointCameraStop[] = [stops[0]];
+  for (let index = 1; index < stops.length - 1; index += 1) {
+    const priorStop = collapsed.at(-1)!;
+    const priorPriorStop = collapsed.at(-2);
+    if (priorPriorStop && stops[index].progress - priorStop.progress < 0.045) {
+      const incoming = {
+        x: priorStop.point.lng - priorPriorStop.point.lng,
+        y: priorStop.point.lat - priorPriorStop.point.lat,
+      };
+      const outgoing = {
+        x: stops[index].point.lng - priorStop.point.lng,
+        y: stops[index].point.lat - priorStop.point.lat,
+      };
+      const denominator = Math.hypot(incoming.x, incoming.y) * Math.hypot(outgoing.x, outgoing.y);
+      const turnDegrees = denominator > 1e-12
+        ? Math.acos(Math.max(-1, Math.min(1,
+          (incoming.x * outgoing.x + incoming.y * outgoing.y) / denominator,
+        ))) * 180 / Math.PI
+        : 0;
+      if (turnDegrees >= 135) continue;
+    }
+    collapsed.push(stops[index]);
+  }
+  const finalStop = stops.at(-1)!;
+  collapsed.push(finalStop);
+  return collapsed;
 }
 
 export function pointCameraToleranceM(points: RoutePoint[], zoom: number): number {
@@ -123,7 +155,11 @@ export function pointCameraToleranceM(points: RoutePoint[], zoom: number): numbe
  * Allocation-light animation sample. The hot path does not rebuild the
  * already-committed provider polyline on every display frame.
  */
-export function pointGrowthSample(timeline: PointGrowthTimeline, progress: number): PointGrowthSample {
+export function pointGrowthSample(
+  timeline: PointGrowthTimeline,
+  progress: number,
+  reusable?: PointGrowthSample,
+): PointGrowthSample {
   const { points, cumulativeM: cumulative, totalM } = timeline;
   const normalized = Math.max(0, Math.min(1, progress));
   const travelledM = normalized * totalM;
@@ -140,16 +176,20 @@ export function pointGrowthSample(timeline: PointGrowthTimeline, progress: numbe
   const fraction = Math.max(0, Math.min(1, (travelledM - segmentStartM) / segmentLengthM));
   const start = points[endIndex - 1];
   const end = points[endIndex];
-  return {
-    progress: normalized,
-    head: {
-      lat: start.lat + (end.lat - start.lat) * fraction,
-      lng: start.lng + (end.lng - start.lng) * fraction,
-    },
-    visiblePointCount: endIndex + 1,
-    travelledM,
+  const sample = reusable ?? {
+    progress: 0,
+    head: { lat: start.lat, lng: start.lng },
+    visiblePointCount: 2,
+    travelledM: 0,
     totalM,
   };
+  sample.progress = normalized;
+  sample.head.lat = start.lat + (end.lat - start.lat) * fraction;
+  sample.head.lng = start.lng + (end.lng - start.lng) * fraction;
+  sample.visiblePointCount = endIndex + 1;
+  sample.travelledM = travelledM;
+  sample.totalM = totalM;
+  return sample;
 }
 
 /** One arc-length clock owns both the revealed line and camera head. */

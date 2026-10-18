@@ -3,6 +3,7 @@ import {
   pointCameraToleranceM,
   pointGrowthDurationMs,
   pointGrowthFrame,
+  pointGrowthSample,
   pointInsideUsableMap,
   preparePointGrowthTimeline,
 } from '../pointGrowthTimeline';
@@ -56,10 +57,42 @@ describe('Point reveal and camera share one arc-length timeline', () => {
     expect(stops.map(stop => stop.progress)).toEqual([...stops.map(stop => stop.progress)].sort((a, b) => a - b));
   });
 
+  test('camera stops collapse near-simultaneous handoffs but preserve the exact endpoint', () => {
+    const points = [
+      p(0, 0),
+      p(0.001, 0),
+      p(0.00098, 0.000005),
+      p(0, 0.0001),
+    ];
+    const stops = pointCameraStops(preparePointGrowthTimeline(points)!, 1);
+    expect(stops[0].sourceIndex).toBe(0);
+    expect(stops.at(-1)?.sourceIndex).toBe(points.length - 1);
+    expect(stops.map(stop => stop.sourceIndex)).not.toContain(2);
+    for (let index = 1; index < stops.length; index += 1) {
+      expect(stops[index].progress - stops[index - 1].progress).toBeGreaterThanOrEqual(0.045);
+    }
+  });
+
   test('camera simplification stays within two screen pixels across ordinary phone zooms', () => {
     const points = [p(174.77, -36.85), p(174.78, -36.84)];
     expect(pointCameraToleranceM(points, 14)).toBe(8);
     expect(pointCameraToleranceM(points, 18)).toBeGreaterThanOrEqual(0.5);
     expect(pointCameraToleranceM(points, 18)).toBeLessThan(1.1);
+  });
+
+  test('the animation hot path can reuse one sample without changing arc-length truth', () => {
+    const timeline = preparePointGrowthTimeline([
+      p(174.77, -36.85),
+      p(174.771, -36.85),
+      p(174.771, -36.849),
+    ])!;
+    const reusable = pointGrowthSample(timeline, 0.25);
+    const firstHead = reusable.head;
+    const result = pointGrowthSample(timeline, 0.75, reusable);
+    expect(result).toBe(reusable);
+    expect(result.head).toBe(firstHead);
+    expect(result.progress).toBe(0.75);
+    expect(result.travelledM).toBeCloseTo(timeline.totalM * 0.75, 8);
+    expect(result.visiblePointCount).toBe(3);
   });
 });

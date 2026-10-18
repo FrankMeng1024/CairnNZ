@@ -40,14 +40,6 @@ export interface FriendProjectionSourceState {
   error?: string;
 }
 
-interface PersistedCache {
-  v: 1;
-  userId: string;
-  savedAtMs: number;
-  lastObservedWallClockMs: number;
-  projections: Record<string, FriendProjection>;
-}
-
 interface FriendMemoryState {
   userId: string | null;
   projections: Record<string, FriendProjection>;
@@ -62,7 +54,7 @@ interface FriendMemoryState {
   /** Synchronously fence in-flight work for a source without changing product selection. */
   invalidateFriend: (friendId: string | number) => void;
   purgeFriend: (friendId: string | number, expectedUserId?: string) => Promise<void>;
-  /** Reconcile durable projections with a fresh authoritative sources read. */
+  /** Reconcile session projections with a fresh authoritative sources read. */
   reconcileAuthorizedSources: (sources: Array<{ friend_id: string | number; authorization_version: number; selected?: boolean }>) => Promise<void>;
   /** Hide every cached source after an authorization refresh failure. */
   suspendVisibility: () => void;
@@ -76,21 +68,24 @@ interface FriendMemoryState {
   reset: () => void;
 }
 
-const CACHE_PREFIX = 'cairn:friend-memory-projections:v1:';
+// O84 briefly persisted Friend cell polygons. O86 keeps every borrowed
+// geometry in the current authorized process only; this prefix remains solely
+// so upgraded clients can retire the former durable payload without reading it.
+const LEGACY_CACHE_PREFIX = 'cairn:friend-memory-projections:v1:';
 const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000;
 let hydrationSequence = 0;
 let accountGeneration = 0;
 let requestSequence = 0;
 const activeLoadCounts = new Map<number, number>();
-let persistenceTail: Promise<void> = Promise.resolve();
+let legacyPurgeTail: Promise<void> = Promise.resolve();
 const sourceGenerations = new Map<string, number>();
 const latestSourceRequests = new Map<string, number>();
 const verifiedSourceVersions = new Map<string, number>();
 const activeSourceControllers = new Map<string, AbortController>();
 export const FRIEND_MEMORY_PROJECTION_TIMEOUT_MS = 5_000;
 
-function cacheKey(userId: string) {
-  return `${CACHE_PREFIX}${userId}`;
+function legacyCacheKey(userId: string) {
+  return `${LEGACY_CACHE_PREFIX}${userId}`;
 }
 
 function validProjection(value: any, now: number): value is FriendProjection {
@@ -160,32 +155,32 @@ function invalidateSource(friendId: string): void {
   latestSourceRequests.delete(friendId);
 }
 
-/**
- * Serialize writes to one durable cache. A purge is enqueued after any write
- * already touching storage, so even a slow older setItem must complete before
- * the authoritative purged snapshot overwrites it. Normal writes also carry
- * the account generation that produced them and are skipped after a switch.
- */
-function persist(state: FriendMemoryState, options?: { authoritative?: boolean }): Promise<void> {
-  if (!state.userId) return Promise.resolve();
-  const generationAtSchedule = accountGeneration;
-  const payload: PersistedCache = {
-    v: 1,
-    userId: state.userId,
-    savedAtMs: Date.now(),
-    lastObservedWallClockMs: state.lastObservedWallClockMs,
-    // O86 prepared viewport geometry is intentionally in-session only. M03
-    // does not authorize a new large persistent Friends cache.
-    projections: Object.fromEntries(Object.entries(state.projections)
-      .filter(([, projection]) => !projection.geometry)),
-  };
-  const serialized = JSON.stringify(payload);
-  const write = persistenceTail.catch(() => {}).then(async () => {
-    if (!options?.authoritative && generationAtSchedule !== accountGeneration) return;
-    await storage.setItem(cacheKey(payload.userId), serialized, { strict: true });
+function fenceAllProjectionAuthority(): void {
+  accountGeneration += 1;
+  activeLoadCounts.clear();
+  verifiedSourceVersions.clear();
+  latestSourceRequests.clear();
+  sourceGenerations.clear();
+  for (const controller of activeSourceControllers.values()) controller.abort();
+  activeSourceControllers.clear();
+}
+
+function retireLegacyPersistentGeometry(userId: string): Promise<void> {
+  if (!userId) return Promise.resolve();
+  const purge = legacyPurgeTail.catch(() => {}).then(async () => {
+    if (typeof storage.getAllKeysStrict === 'function'
+      && typeof storage.removeItemsStrict === 'function') {
+      const legacyKeys = (await storage.getAllKeysStrict())
+        .filter(key => key.startsWith(LEGACY_CACHE_PREFIX));
+      await storage.removeItemsStrict(legacyKeys);
+      return;
+    }
+    // Compatibility for a partially upgraded storage adapter. This path is
+    // also deliberately strict about never reading the retired geometry.
+    await storage.removeItem(legacyCacheKey(userId));
   });
-  persistenceTail = write.catch(() => {});
-  return write;
+  legacyPurgeTail = purge.catch(() => {});
+  return purge;
 }
 
 export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
@@ -208,28 +203,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     for (const controller of activeSourceControllers.values()) controller.abort();
     activeSourceControllers.clear();
     const now = Date.now();
-    let projections: Record<string, FriendProjection> = {};
-    let lastObservedWallClockMs = now;
-    try {
-      const raw = await storage.getItem(cacheKey(userId));
-      if (raw) {
-        const parsed = JSON.parse(raw) as PersistedCache;
-        const clockRolledBack = parsed.v !== 1
-          || parsed.userId !== userId
-          || now < Number(parsed.savedAtMs)
-          || now < Number(parsed.lastObservedWallClockMs);
-        if (!clockRolledBack && parsed.projections && typeof parsed.projections === 'object') {
-          projections = Object.fromEntries(
-            Object.entries(parsed.projections).filter(([, projection]) => validProjection(projection, now)),
-          );
-          lastObservedWallClockMs = Math.max(now, Number(parsed.lastObservedWallClockMs) || 0);
-        }
-      }
-    } catch {
-      projections = {};
-    }
+    // Never hydrate borrowed exploration from disk. Removal is best-effort
+    // and deliberately does not hold up the fresh authorization/API path.
+    void retireLegacyPersistentGeometry(userId).catch(() => {});
     if (hydrateRequest !== hydrationSequence || hydrateAccountGeneration !== accountGeneration) return;
-    set({ userId, projections, sourceStates: {}, activeViewport: null, lastObservedWallClockMs, version: get().version + 1, loading: false, error: null });
+    set({ userId, projections: {}, sourceStates: {}, activeViewport: null, lastObservedWallClockMs: now, version: get().version + 1, loading: false, error: null });
   },
 
   loadSelectedProjections: async (friendIds, viewport) => {
@@ -246,34 +224,58 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     if (!get().activeViewport || get().activeViewport?.key !== requestedViewport.key) {
       set({ activeViewport: requestedViewport });
     }
-    const allSelectedIds: number[] = useMemorySubscriptionsStore.getState().subscriptions
+    const subscriptionState = useMemorySubscriptionsStore.getState();
+    const allSelectedIds: number[] = subscriptionState.subscriptions
       .map((subscription: { friend_id: number }) => Number(subscription.friend_id))
       .filter(Number.isInteger);
     const selectedSet = new Set(allSelectedIds);
     const selectedIds = friendIds === undefined
       ? allSelectedIds
       : [...new Set(friendIds.map(Number).filter(id => Number.isInteger(id) && selectedSet.has(id)))];
-    const requestAccountGeneration = accountGeneration;
     const now = Date.now();
     if (now < get().lastObservedWallClockMs) {
-      set({ projections: {}, sourceStates: {}, version: get().version + 1, lastObservedWallClockMs: now });
-      await persist(get()).catch(() => {});
+      fenceAllProjectionAuthority();
+      set({
+        projections: {}, sourceStates: {}, loading: false, error: null,
+        version: get().version + 1, lastObservedWallClockMs: now,
+      });
     }
+    const requestAccountGeneration = accountGeneration;
     if (selectedIds.length === 0) {
       const retained = Object.fromEntries(Object.entries(get().projections).filter(([id]) => selectedSet.has(Number(id))));
       set({ projections: retained, loading: false, error: null, version: get().version + 1 });
-      await persist(get()).catch(() => {});
+      return;
+    }
+    const reusableIds = new Set(selectedIds.filter(friendId => {
+      const id = String(friendId);
+      const existing = get().projections[id];
+      const availableSources = Array.isArray(subscriptionState.availableSources)
+        ? subscriptionState.availableSources
+        : [];
+      const source = availableSources.find(
+        (item: { friend_id: string | number }) => String(item.friend_id) === id,
+      );
+      const requiredAuthorizationVersion = Number(source?.authorization_version);
+      return existing?.viewportKey === requestedViewport.key
+        && validProjection(existing, now)
+        && verifiedSourceVersions.get(id) === existing.authorizationVersion
+        && (!Number.isFinite(requiredAuthorizationVersion)
+          || existing.authorizationVersion === requiredAuthorizationVersion);
+    }));
+    const idsToLoad = selectedIds.filter(friendId => !reusableIds.has(friendId));
+    if (idsToLoad.length === 0) {
+      set({ loading: false, error: null, lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs) });
       return;
     }
     activeLoadCounts.set(
       requestAccountGeneration,
       (activeLoadCounts.get(requestAccountGeneration) ?? 0) + 1,
     );
-    const requests = selectedIds.map(friendId => {
+    const requests = idsToLoad.map(friendId => {
       const id = String(friendId);
       // A focus/reconnect refresh must fail closed while its fresh request is
-      // outstanding. The durable copy remains available for a successful
-      // response to replace, but it is no longer render authority.
+      // outstanding. An older session value remains stored only in memory,
+      // but it is no longer render authority until the response succeeds.
       verifiedSourceVersions.delete(id);
       const sequence = ++requestSequence;
       const generation = sourceGeneration(id);
@@ -421,7 +423,6 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         const next = Object.fromEntries(Object.entries(get().projections)
           .filter(([id, projection]) => currentlySelected.has(id) && validProjection(projection, Date.now())));
         set({ projections: next, version: get().version + 1, error: hadNetworkError ? 'offline' : null });
-        await persist(get()).catch(() => {});
       }
     } finally {
       const remainingLoads = Math.max(
@@ -448,9 +449,13 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     const next = { ...get().projections };
     delete next[String(friendId)];
     const nextStates = { ...get().sourceStates };
-    delete nextStates[String(friendId)];
+    // Keep an explicit terminal state until the authoritative subscription
+    // list catches up. Revocation/unfriend can fence the projection before
+    // that parallel read completes; an absent state is otherwise
+    // indistinguishable from a selected source that has not loaded yet and
+    // would hold combined Fog preparation indefinitely.
+    nextStates[String(friendId)] = { status: 'unauthorized', cellCount: 0 };
     set({ projections: next, sourceStates: nextStates, version: get().version + 1 });
-    await persist(get(), { authoritative: true }).catch(() => {});
   },
 
   reconcileAuthorizedSources: async (sources) => {
@@ -468,7 +473,6 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       if (!(id in next)) invalidateSource(id);
     }
     set({ projections: next, version: get().version + 1 });
-    await persist(get(), { authoritative: true }).catch(() => {});
   },
 
   suspendVisibility: () => {
@@ -479,8 +483,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
   getVisibleCells: (friendId) => {
     const now = Date.now();
     if (now < get().lastObservedWallClockMs) {
-      set({ projections: {}, version: get().version + 1, lastObservedWallClockMs: now });
-      void persist(get()).catch(() => {});
+      fenceAllProjectionAuthority();
+      set({
+        projections: {}, sourceStates: {}, loading: false, error: null,
+        version: get().version + 1, lastObservedWallClockMs: now,
+      });
       return [];
     }
     const current = get().projections;
@@ -489,7 +496,6 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     );
     if (Object.keys(retained).length !== Object.keys(current).length) {
       set({ projections: retained, version: get().version + 1, lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs) });
-      void persist(get()).catch(() => {});
     }
     const selected = friendId
       ? [retained[friendId]].filter(Boolean)
@@ -510,6 +516,14 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
 
   getVisibleGeometries: (friendId) => {
     const now = Date.now();
+    if (now < get().lastObservedWallClockMs) {
+      fenceAllProjectionAuthority();
+      set({
+        projections: {}, sourceStates: {}, loading: false, error: null,
+        version: get().version + 1, lastObservedWallClockMs: now,
+      });
+      return [];
+    }
     const currentViewportKey = get().activeViewport?.key;
     const selected = friendId
       ? [get().projections[friendId]].filter(Boolean)

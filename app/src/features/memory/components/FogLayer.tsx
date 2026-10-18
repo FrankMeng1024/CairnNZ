@@ -106,6 +106,30 @@ export const CORRIDOR_WIDTH_M = UnlockConfig.radiusMeters;
 // older persistent/module cache for the same accepted evidence.
 export const MEMORY_FOG_GEOMETRY_REVISION = 'memory-fog-geodesic-v2';
 
+export function memoryFogCombinedPreparationSettled(input: {
+  scope: MemoryScope;
+  subscriptionsLoading: boolean;
+  selectedFriendIds: string[];
+  friendLoading: boolean;
+  activeViewportKey?: string;
+  requiredViewportKey?: string;
+  sourceStates: Record<string, { status?: string }>;
+}): boolean {
+  if (input.scope !== 'combined') return true;
+  if (input.subscriptionsLoading) return false;
+  if (input.selectedFriendIds.length === 0) return true;
+  if (!input.requiredViewportKey
+    || input.activeViewportKey !== input.requiredViewportKey
+    || input.friendLoading) return false;
+  return input.selectedFriendIds.every(friendId => {
+    const status = input.sourceStates[friendId]?.status;
+    return status === 'loaded'
+      || status === 'empty'
+      || status === 'error'
+      || status === 'unauthorized';
+  });
+}
+
 export function selectFogEvidencePoints<T>(points: T[]): T[] {
   // Coverage rows are already spatially culled at the write boundary. Only
   // exact coordinate duplicates are presentation-redundant. A global stride
@@ -337,6 +361,30 @@ export function composeFogShape(
     return fog?.geometry ? fog as Feature<Polygon | MultiPolygon> : null;
   } catch (error: any) {
     log('fog.difference_failed', { err: String(error?.message ?? error).slice(0, 100) });
+    return null;
+  }
+}
+
+/**
+ * Compose the exact prepared Mine + authorized Friends complement without
+ * first unioning those two already bounded read models. Turf difference
+ * subtracts every later feature from the world in one operation; doing a
+ * Mine/Friends union and then differencing the same boundary duplicated a
+ * whole-viewport polygon clip on every combined cold entry.
+ */
+export function composePreparedCoverageFog(
+  selfEvidence: Feature<Polygon | MultiPolygon> | null,
+  friendEvidence: Feature<Polygon | MultiPolygon> | null,
+): Feature<Polygon | MultiPolygon> | null {
+  if (!friendEvidence) return composeFogShape(selfEvidence);
+  try {
+    const cutouts: Array<Feature<Polygon | MultiPolygon>> = [];
+    if (selfEvidence) cutouts.push(selfEvidence);
+    cutouts.push(friendEvidence);
+    const fog = differenceTurf(featureCollection([solidFogShape(), ...cutouts]) as any);
+    return fog?.geometry ? fog as Feature<Polygon | MultiPolygon> : null;
+  } catch (error: any) {
+    log('fog.prepared_difference_failed', { err: String(error?.message ?? error).slice(0, 100) });
     return null;
   }
 }
@@ -1202,7 +1250,7 @@ async function combinePreparedCoverage(
   selfEvidence: Feature<Polygon | MultiPolygon> | null,
   friendGeometries: MultiPolygon[],
 ): Promise<{
-  evidence: Feature<Polygon | MultiPolygon> | null;
+  fogShape: Feature<Polygon | MultiPolygon> | null;
   friendEvidence: Feature<Polygon | MultiPolygon> | null;
   overlapEvidence: Feature<Polygon | MultiPolygon> | null;
   sliceDurationsMs: number[];
@@ -1226,7 +1274,7 @@ async function combinePreparedCoverage(
     startedAt = Date.now();
   }
   if (!friendEvidence) return {
-    evidence: selfEvidence,
+    fogShape: composeFogShape(selfEvidence),
     friendEvidence: null,
     overlapEvidence: null,
     sliceDurationsMs,
@@ -1234,15 +1282,13 @@ async function combinePreparedCoverage(
   const overlapEvidence = selfEvidence
     ? intersectTurf(featureCollection([selfEvidence, friendEvidence])) as Feature<Polygon | MultiPolygon> | null
     : null;
-  const evidence = selfEvidence
-    ? unionTurf(featureCollection([selfEvidence, friendEvidence])) as Feature<Polygon | MultiPolygon> | null
-    : friendEvidence;
+  const fogShape = composePreparedCoverageFog(selfEvidence, friendEvidence);
   sliceDurationsMs.push(Date.now() - startedAt);
   // Paint the complete de-duplicated Friend union once, then let the single
   // overlap layer above it replace the colour where Mine intersects. Computing
   // `friend - mine` produced the same pixels but added a third expensive
   // polygon-clipping pass on every selection/viewport change.
-  return { evidence, friendEvidence, overlapEvidence, sliceDurationsMs };
+  return { fogShape, friendEvidence, overlapEvidence, sliceDurationsMs };
 }
 
 export function FogLayer({
@@ -1291,6 +1337,10 @@ export function FogLayer({
     .map(subscription => String(subscription.friend_id))
     .sort()
     .join(','));
+  const subscriptionsLoading = useMemorySubscriptionsStore((s) => s.loading);
+  const friendMemoryLoading = useFriendMemoryStore((s) => s.loading);
+  const friendSourceStates = useFriendMemoryStore((s) => s.sourceStates);
+  const friendActiveViewportKey = useFriendMemoryStore((s) => s.activeViewport?.key);
   const preparedMemoryVersion = usePreparedMemoryCoverageStore((s) => s.version);
   const preparedMemoryStatus = usePreparedMemoryCoverageStore((s) => s.status);
   const preparedMemoryCoverage = usePreparedMemoryCoverageStore((s) => s.coverage);
@@ -1345,6 +1395,26 @@ export function FogLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [friendMemoryVersion, scope, syntheticQaAuthority, viewport?.key],
   );
+  const selectedFriendIds = useMemo(
+    () => selectedFriendIdsKey ? selectedFriendIdsKey.split(',') : [],
+    [selectedFriendIdsKey],
+  );
+  // A combined cold entry used to prepare and submit Mine as soon as its
+  // viewport response arrived, then cancel/rebuild/submit the complete Union
+  // when the selected Friends finished moments later. The entry veil never
+  // exposed that partial result. Wait for every selected source to reach a
+  // terminal state and make the first Mapbox source update the complete,
+  // authoritative presentation. This retains fail-closed authorization and
+  // does not cache borrowed geometry.
+  const combinedPreparationSettled = memoryFogCombinedPreparationSettled({
+    scope,
+    subscriptionsLoading,
+    selectedFriendIds,
+    friendLoading: friendMemoryLoading,
+    activeViewportKey: friendActiveViewportKey,
+    requiredViewportKey: viewport?.key,
+    sourceStates: friendSourceStates,
+  });
 
   // Exact content hashing prevents a hydrated array with unchanged evidence
   // from rebuilding the display. Geometry itself is assembled asynchronously
@@ -1376,9 +1446,10 @@ export function FogLayer({
   // The authenticated, source-owned prepared read model can paint before a
   // large local journal has finished hydrating. Local hydration still gates
   // its small live overlay and Cairn pins, not historical viewport coverage.
-  const fogAuthorityReady = syntheticQaAuthority
+  const fogAuthorityReady = (syntheticQaAuthority
     ? localHydrationReady
-    : preparedSelfReady || (!viewport && localHydrationReady);
+    : preparedSelfReady || (!viewport && localHydrationReady))
+    && combinedPreparationSettled;
   const hasAnyEvidence = points.length > 0 || preparedSelfHasCoverage || friendGeometries.length > 0;
   const presentationKey = `${authority}|${contentSignature}`;
   // Cancellation follows rendered content and evidence authority, not the
@@ -1548,6 +1619,10 @@ export function FogLayer({
     }
     if (coverageReadReady && !hasAnyEvidence) {
       const solid = solidFogShape();
+      solid.properties = {
+        ...(solid.properties ?? {}),
+        cairnReadinessKey: presentationKey,
+      };
       lastSigRef.current = contentSignature;
       lastShapeRef.current = solid;
       setFogShape(solid);
@@ -1595,13 +1670,18 @@ export function FogLayer({
         ? await combinePreparedCoverage(selfEvidence, friendSnapshot)
         : null;
       if (friendSnapshot.length > 0 && !combined) return;
-      const displayEvidence = combined?.evidence ?? selfEvidence;
+      // The exact combined complement is composed directly from the two
+      // authoritative prepared sources. `selfEvidence` remains the only
+      // durable/module evidence cache; borrowed geometry never enters it.
+      const displayEvidence = selfEvidence;
       const nextFriendDisplay = combined?.friendEvidence ?? null;
       const nextOverlapDisplay = combined?.overlapEvidence ?? null;
       const selfShape = selfEvidence ? composeFogShape(selfEvidence) : solidFogShape();
-      const shape = hasAnyEvidence && !displayEvidence
-        ? null
-        : composeFogShape(displayEvidence);
+      const shape = combined
+        ? combined.fogShape
+        : hasAnyEvidence && !displayEvidence
+          ? null
+          : composeFogShape(displayEvidence);
       buildCountRef.current += 1;
       const buildMs = Date.now() - startedAt;
       if (!shape) {
@@ -1614,9 +1694,22 @@ export function FogLayer({
       shape.properties = {
         ...shape.properties,
         cairnContentSignature: contentSignature,
+        cairnReadinessKey: presentationKey,
         cairnEvidencePointCount: pointSnapshot.length,
         cairnGeometryRevision: MEMORY_FOG_GEOMETRY_REVISION,
       };
+      if (nextFriendDisplay) {
+        nextFriendDisplay.properties = {
+          ...(nextFriendDisplay.properties ?? {}),
+          cairnReadinessKey: presentationKey,
+        };
+      }
+      if (nextOverlapDisplay) {
+        nextOverlapDisplay.properties = {
+          ...(nextOverlapDisplay.properties ?? {}),
+          cairnReadinessKey: presentationKey,
+        };
+      }
       let components = 1;
       let innerRings = 0;
       if (shape.geometry.type === 'Polygon') {
@@ -1725,8 +1818,11 @@ export function FogLayer({
   // shape instead of briefly re-covering the user's entire history. Readiness
   // remains exact-signature gated, so pins and completion signals still wait
   // for the new geometry to paint. Authority changes always render solid.
+  // The zero-evidence build tagged its authoritative solid shape with this
+  // presentation key. Recreating an untagged world polygon here would make
+  // exact Mapbox paint readiness impossible for a new/empty account.
   const displayedFogShape = authoritativeEmpty
-    ? solidFogShape()
+    ? sameAuthorityShape ?? solidFogShape()
     : sameAuthorityShape ?? mineFallbackShape ?? solidFogShape();
 
   // v359: detect when fogShape first contains holes (corridor cutouts from
@@ -1767,7 +1863,15 @@ export function FogLayer({
 
   return (
     <>
-    <ShapeSource id="memory-fog-src" shape={displayedFogShape}>
+    {/* Keep the last proven mask visible in Route/Memory while preparation is
+        pending, but remount the Web GeoJSON source when the correlated
+        authority arrives. This closes a GL worker race where setData could
+        leave the untagged cold placeholder painted indefinitely. */}
+    <ShapeSource
+      key={`memory-fog-src:${String(displayedFogShape.properties?.cairnReadinessKey ?? 'pending')}`}
+      id="memory-fog-src"
+      shape={displayedFogShape}
+    >
       <FillLayer
         id="memory-fog"
         style={{

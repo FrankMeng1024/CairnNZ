@@ -10,8 +10,10 @@ jest.mock('../store/useFriendMemoryStore', () => ({
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import {
   buildFogShape,
+  composePreparedCoverageFog,
   MEMORY_FOG_GEOMETRY_REVISION,
   memoryFogContentSignature,
+  memoryFogCombinedPreparationSettled,
   memoryFogRenderAuthority,
   selectLocalCoverageOverlayPoints,
   selectFogEvidencePoints,
@@ -26,6 +28,65 @@ function isStillFogged(shape: NonNullable<ReturnType<typeof buildFogShape>>, lng
 }
 
 describe('Memory evidence rendering continuity', () => {
+  test('combined cold entry waits for one complete authoritative Union preparation', () => {
+    const base = {
+      scope: 'combined' as const,
+      subscriptionsLoading: false,
+      selectedFriendIds: ['31', '32'],
+      friendLoading: false,
+      activeViewportKey: 'auckland',
+      requiredViewportKey: 'auckland',
+      sourceStates: {
+        '31': { status: 'loaded' },
+        '32': { status: 'loading' },
+      },
+    };
+    expect(memoryFogCombinedPreparationSettled(base)).toBe(false);
+    expect(memoryFogCombinedPreparationSettled({
+      ...base,
+      sourceStates: {
+        '31': { status: 'loaded' },
+        '32': { status: 'empty' },
+      },
+    })).toBe(true);
+    expect(memoryFogCombinedPreparationSettled({
+      ...base,
+      activeViewportKey: 'wellington',
+      sourceStates: {
+        '31': { status: 'loaded' },
+        '32': { status: 'loaded' },
+      },
+    })).toBe(false);
+    expect(memoryFogCombinedPreparationSettled({
+      ...base,
+      scope: 'self',
+      subscriptionsLoading: true,
+      friendLoading: true,
+    })).toBe(true);
+  });
+
+  test('prepared Mine and Friends are subtracted exactly without a redundant union', () => {
+    const mine = {
+      type: 'Feature' as const,
+      properties: {},
+      geometry: { type: 'Polygon' as const, coordinates: [[
+        [0, 0], [0.001, 0], [0.001, 0.001], [0, 0.001], [0, 0],
+      ]] },
+    };
+    const friend = {
+      type: 'Feature' as const,
+      properties: {},
+      geometry: { type: 'Polygon' as const, coordinates: [[
+        [0.0005, 0], [0.0015, 0], [0.0015, 0.001], [0.0005, 0.001], [0.0005, 0],
+      ]] },
+    };
+    const fog = composePreparedCoverageFog(mine, friend);
+    expect(fog).not.toBeNull();
+    expect(isStillFogged(fog!, 0.00025, 0.0005)).toBe(false);
+    expect(isStillFogged(fog!, 0.00125, 0.0005)).toBe(false);
+    expect(isStillFogged(fog!, 0.01, 0.01)).toBe(true);
+  });
+
   test('overlapping accepted evidence footprints form a continuous component', () => {
     const shape = buildFogShape([
       { lat: 0, lng: 0, ts: 1 },
