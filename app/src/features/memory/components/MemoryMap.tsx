@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
 import { getMapbox } from '../services/mapboxAdapter';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { markersForVisibleWorkspace } from '../../cairns/cairnWorkspace';
@@ -39,6 +39,7 @@ import { useAppStore } from '../../../store/useAppStore';
 import { AcquiredCairnClusterLayer } from './AcquiredCairnClusterLayer';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { excludeAcquiredFriendMarkers } from '../services/cairnMapPresentation';
+import { memoryCoverageViewport, type MemoryCoverageViewport } from '../services/memoryCoverageViewport';
 
 let memoryMapHasRendered = false;
 const MEMORY_MAP_ORNAMENTS = mapOrnamentsAbove(76);
@@ -118,6 +119,8 @@ export type MemoryMapHandle = {
    * Returns null if map not ready.
    */
   getCurrentCenter: () => Promise<{ lat: number; lng: number } | null>;
+  /** The exact settled viewport authority currently owned by Memory. */
+  getCoverageViewport: () => MemoryCoverageViewport;
   /** Capture the fully rendered local map+Fog frame for one bounded warm-entry preview. */
   captureAuthorizedPreview: () => Promise<string | null>;
 };
@@ -127,6 +130,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   ref,
 ) {
   const theme = useVisualTheme();
+  const windowDimensions = useWindowDimensions();
   const memoryMapTheme = useMapTheme();
   const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
   const memoryLightPreset = themeToStandardPreset(memoryMapTheme);
@@ -139,7 +143,6 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const friendMarkers = useMarkerStore((s) => s.circleMarkers);
   const acquiredMarkers = useCairnPresentationStore((s) => s.acquiredMarkers);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
-  const selectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const allMarkers = useMemo(() => {
     if (memoryScope === 'self') return ownMarkers;
     // Acquired Friend Cairns have one authoritative map presentation in
@@ -147,22 +150,31 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     // immutable acquisition revisions for legacy consumers, so omit those
     // stable ids here instead of rendering two overlapping features with
     // different press/archive semantics.
-    const visibleFriends = memoryScope === 'friend'
-      ? friendMarkers.filter(marker => String(marker.authorId) === String(selectedFriendId))
-      : friendMarkers;
     const seen = new Set(ownMarkers.map(marker => String(marker.id)));
     return [...ownMarkers, ...excludeAcquiredFriendMarkers(
-      visibleFriends.filter(marker => !seen.has(String(marker.id))),
+      friendMarkers.filter(marker => !seen.has(String(marker.id))),
       acquiredMarkers,
     )];
-  }, [acquiredMarkers, friendMarkers, memoryScope, ownMarkers, selectedFriendId]);
+  }, [acquiredMarkers, friendMarkers, memoryScope, ownMarkers]);
   const mapViewRef = useRef<any>(null);
+  const mapSizeRef = useRef({
+    width: Math.max(1, windowDimensions.width),
+    height: Math.max(1, windowDimensions.height),
+  });
+  const [coverageViewport, setCoverageViewport] = useState(() => memoryCoverageViewport(
+    { lat: centerLat, lng: centerLng },
+    INITIAL_ZOOM,
+    Math.max(1, windowDimensions.width),
+    Math.max(1, windowDimensions.height),
+  ));
+  const coverageViewportRef = useRef(coverageViewport);
 
   // v447: expose getCurrentCenter so parent can pull the true current
   // map center at panel-open time. This is the reliable source, unlike
   // onCameraChanged which never fired e.properties.center on native
   // during a plain pan (root cause of v445 KL→Shanghai stale ref bug).
   useImperativeHandle(ref, () => ({
+    getCoverageViewport: () => coverageViewportRef.current,
     getCurrentCenter: async () => {
       try {
         const m = mapViewRef.current;
@@ -211,6 +223,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const fogReadinessKeyRef = useRef('');
   const fogGeometryReadyKeyRef = useRef('');
   const fogPaintReadyKeyRef = useRef('');
+  const fogRequiredSourceIdsRef = useRef<string[]>(['memory-fog-src']);
+  const fogPreparingAtRef = useRef(0);
+  const fogGeometryReadyAtRef = useRef(0);
+  const fogPaintProbeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirmCurrentFogPaintRef = useRef<() => boolean>(() => false);
   const localHydration = useMemoryStore((s) => s.localHydration) ?? {
     ownerUserId: null,
     status: 'detached' as const,
@@ -270,6 +287,16 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     if (idleThrottleTimerRef.current) clearTimeout(idleThrottleTimerRef.current);
     idleThrottleTimerRef.current = setTimeout(() => {
       idleThrottleTimerRef.current = null;
+      const nextCoverageViewport = memoryCoverageViewport(
+        { lat: Number(center[1]), lng: Number(center[0]) },
+        zoom,
+        mapSizeRef.current.width,
+        mapSizeRef.current.height,
+      );
+      coverageViewportRef.current = nextCoverageViewport;
+      setCoverageViewport(current => current.key === nextCoverageViewport.key
+        ? current
+        : nextCoverageViewport);
       // v425 fix: skip pan-detect during 1s post-recenter window.
       // Prior bug: onRegionIsChanging checked suppressPanDetectUntilRef
       // (line ~327) but onMapIdle didn't. Result: after user tapped
@@ -340,6 +367,73 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     if (!Mapbox.available) onMapUnavailable?.();
   }, [Mapbox.available, onMapUnavailable]);
 
+  const confirmCurrentFogPaint = useCallback(() => {
+    const readinessKey = fogReadinessKeyRef.current;
+    if (!readinessKey
+      || fogGeometryReadyKeyRef.current !== readinessKey
+      || fogPaintReadyKeyRef.current === readinessKey) return false;
+    // Web Mapbox may commit a large GeoJSON source after the style's last
+    // natural render event. Do not retire the veil while its worker is still
+    // parsing. Native has no optional source probe and reaches this helper
+    // from its genuine fully-rendered callback instead.
+    const sourceProbe = mapViewRef.current?.isSourceLoaded;
+    const sourcesLoaded = typeof sourceProbe !== 'function'
+      || fogRequiredSourceIdsRef.current.every(sourceId => sourceProbe(sourceId));
+    if (!sourcesLoaded) {
+      mapViewRef.current?.requestRender?.();
+      // A GeoJSON worker becoming ready does not itself guarantee another
+      // react-map-gl `render` callback after a Standard-style load. Keep one
+      // bounded probe in flight for this authority; it stops immediately once
+      // every required source is ready or when a new preparation supersedes it.
+      if (!fogPaintProbeTimerRef.current) {
+        const expectedKey = readinessKey;
+        fogPaintProbeTimerRef.current = setTimeout(() => {
+          fogPaintProbeTimerRef.current = null;
+          if (fogReadinessKeyRef.current === expectedKey
+            && fogPaintReadyKeyRef.current !== expectedKey) {
+            mapViewRef.current?.requestRender?.();
+            // Source workers may become ready after Mapbox's final natural
+            // render callback. Re-probe the same authority here instead of
+            // relying on triggerRepaint to emit another React callback. If
+            // the worker is still busy, confirmCurrentFogPaint schedules the
+            // next single bounded probe; preparation changes/unmount cancel it.
+            confirmCurrentFogPaintRef.current();
+          }
+        }, 120);
+      }
+      return false;
+    }
+    if (fogPaintProbeTimerRef.current) {
+      clearTimeout(fogPaintProbeTimerRef.current);
+      fogPaintProbeTimerRef.current = null;
+    }
+    fogPaintReadyKeyRef.current = readinessKey;
+    setMapReady(true);
+    memoryMapHasRendered = true;
+    if (!mapFirstRender) setMapFirstRender(true);
+    if (!mapFullyReadyFiredRef.current && onMapFullyReady) {
+      mapFullyReadyFiredRef.current = true;
+      onMapFullyReady();
+    }
+    log('o86.memory.mapbox_fog_visible', {
+      geometry_to_paint_ms: fogGeometryReadyAtRef.current
+        ? Date.now() - fogGeometryReadyAtRef.current
+        : null,
+      prepare_to_paint_ms: fogPreparingAtRef.current
+        ? Date.now() - fogPreparingAtRef.current
+        : null,
+      scope: memoryScope,
+    });
+    setFogReady(true);
+    onFogReady?.();
+    return true;
+  }, [mapFirstRender, memoryScope, onFogReady, onMapFullyReady]);
+  confirmCurrentFogPaintRef.current = confirmCurrentFogPaint;
+
+  useEffect(() => () => {
+    if (fogPaintProbeTimerRef.current) clearTimeout(fogPaintProbeTimerRef.current);
+  }, []);
+
   // v336: when recenterToken bumps, fly the camera back to the current
   // GPS coord WITHOUT remounting Camera (the old cameraKey strategy
   // caused a one-frame fog reset on every tap). setCamera on the same
@@ -409,7 +503,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const { MapView, Camera, UserLocation, CircleLayer, StyleImport } = Mapbox as any;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={event => {
+        const { width, height } = event.nativeEvent.layout;
+        if (width > 0 && height > 0) mapSizeRef.current = { width, height };
+      }}
+    >
       <MapView
         key={`memory-map-${mapEpoch}`}
         ref={mapViewRef}
@@ -494,6 +594,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             mapFullyReadyFiredRef.current = true;
             onMapFullyReady();
           }
+          confirmCurrentFogPaint();
         }}
         onDidFinishRenderingMapFully={() => {
           log('v357.mapbox_didFinishRenderingMapFully', {});
@@ -507,15 +608,18 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             mapFullyReadyFiredRef.current = true;
             onMapFullyReady();
           }
+          // Mapbox `load` is a fully painted initial-style boundary and the
+          // fallback for geometry committed after the prior Web render.
+          confirmCurrentFogPaint();
         }}
         onDidFinishRenderingFrameFully={() => {
-          const readinessKey = fogReadinessKeyRef.current;
-          if (!readinessKey
-            || fogGeometryReadyKeyRef.current !== readinessKey
-            || fogPaintReadyKeyRef.current === readinessKey) return;
-          fogPaintReadyKeyRef.current = readinessKey;
-          setFogReady(true);
-          onFogReady?.();
+          // A correlated fully-rendered frame containing the exact Fog is a
+          // stronger user-facing readiness signal than waiting for Mapbox's
+          // all-style `load` event. Standard-style imports can keep `load`
+          // pending for seconds after the current viewport and our sources
+          // have already painted. Do not hold the blocking entry veil once
+          // this exact-authority frame exists.
+          confirmCurrentFogPaint();
         }}
         onMapLoadingError={(event: unknown) => {
           log('memory.map_loading_error', { event: (() => { try { return JSON.stringify(event).slice(0, 500); } catch { return String(event); } })() });
@@ -617,18 +721,38 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         </UserLocation> : null}
         <FogLayer
           userCenter={{ lat: centerLat, lng: centerLng }}
+          viewport={coverageViewport}
           onFogPreparing={(readinessKey) => {
+            if (fogPaintProbeTimerRef.current) {
+              clearTimeout(fogPaintProbeTimerRef.current);
+              fogPaintProbeTimerRef.current = null;
+            }
             fogReadinessKeyRef.current = readinessKey;
             fogGeometryReadyKeyRef.current = '';
             fogPaintReadyKeyRef.current = '';
+            fogPreparingAtRef.current = Date.now();
+            fogGeometryReadyAtRef.current = 0;
+            fogRequiredSourceIdsRef.current = ['memory-fog-src'];
             setFogReady(false);
             onFogPreparing?.(readinessKey);
           }}
-          onFogReady={(readinessKey) => {
+          onFogReady={(readinessKey, requiredSourceIds) => {
             if (fogReadinessKeyRef.current !== readinessKey) return;
             // Geometry has committed in JS. Cairns remain gated until Mapbox
             // reports a fully rendered frame for this same readiness key.
             fogGeometryReadyKeyRef.current = readinessKey;
+            fogRequiredSourceIdsRef.current = requiredSourceIds;
+            fogGeometryReadyAtRef.current = Date.now();
+            log('o86.memory.fog_geometry_committed', {
+              prepare_to_geometry_ms: fogGeometryReadyAtRef.current - fogPreparingAtRef.current,
+              scope: memoryScope,
+            });
+            // A source update normally schedules a frame. Under a cold,
+            // imported Mapbox style it can instead land immediately after
+            // the last style frame, leaving otherwise rendered Fog behind
+            // the entry veil. Requesting one frame is idempotent and keeps
+            // readiness correlated with this exact geometry authority.
+            mapViewRef.current?.requestRender?.();
           }}
           onFogUnavailable={(readinessKey) => {
             if (fogReadinessKeyRef.current !== readinessKey) return;

@@ -208,6 +208,59 @@ describe('Memory server reconciliation', () => {
     memorySync.detachMemorySync();
   });
 
+  test('MEM-RESET-PREPARED-01 a successful wipe immediately clears and fences prepared viewport geometry', async () => {
+    const state: any = {
+      points: [{ cid: 'delete-me', synced: true }],
+      presenceWitnesses: [],
+      _unsyncedCount: 0,
+      _unsyncedPresenceCount: 0,
+      clearAll: jest.fn(() => { state.points = []; }),
+    };
+    const resetPreparedCoverage = jest.fn();
+    jest.doMock('../store/useMemoryStore', () => ({
+      useMemoryStore: {
+        getState: () => state,
+        subscribe: jest.fn(() => jest.fn()),
+      },
+    }));
+    jest.doMock('../store/usePreparedMemoryCoverageStore', () => ({
+      usePreparedMemoryCoverageStore: {
+        getState: () => ({ reset: resetPreparedCoverage }),
+      },
+    }));
+    jest.doMock('../../../store/useAppStore', () => ({
+      useAppStore: { getState: () => ({ isLoggedIn: true, user: { id: 'account-a' } }) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({
+      authenticatedFetch: jest.fn(async () => ({ ok: true, status: 200 })),
+    }));
+    jest.doMock('../services/memoryPersistence', () => ({
+      beginMemoryPersistenceReset: jest.fn(() => 7),
+      commitMemoryPersistenceReset: jest.fn(async () => { state.clearAll(); }),
+      flushMemoryNow: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../services/memoryEvidenceJournal', () => ({
+      purgeDurableMemoryEvidence: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../services/fogDisplayCache', () => ({
+      purgeFogDisplayCache: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../services/h3Persistence', () => ({
+      resetH3PersistenceForUser: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../../../services/bootDiagnostics', () => ({ markBootPhase: jest.fn() }));
+    jest.doMock('../../../services/appLog', () => ({ log: jest.fn() }));
+
+    const memorySync = require('../../../services/memorySync');
+    memorySync.attachMemorySync('account-a');
+    await expect(memorySync.deleteAllMemoryFromServer('account-a')).resolves.toBe(true);
+
+    expect(state.clearAll).toHaveBeenCalledTimes(1);
+    expect(resetPreparedCoverage).toHaveBeenCalledTimes(1);
+    expect(state.points).toEqual([]);
+    memorySync.detachMemorySync();
+  });
+
   test('MEM-SYNC-PARTIAL-01 a partial 2xx echo retains unacknowledged evidence and is retryable', async () => {
     jest.useFakeTimers();
     const pending = { lat: -41, lng: 174, ts: 1_000, cid: 'pending-a', synced: false };

@@ -51,11 +51,12 @@ describe('Friends production proof contract', () => {
     expect(source).not.toContain('label="Keep friend"');
   });
 
-  it('silently discards stale block and unfriend completions after an account boundary', () => {
-    expect(source.match(/if \(result\.superseded\) return;/g)).toHaveLength(3);
+  it('silently discards stale request and unfriend completions after an account boundary', () => {
+    expect(source.match(/if \(result\.superseded\) return;/g)).toHaveLength(2);
     expect(source).toMatch(/cancelOutboundRequest\(req\.id\);\s+if \(result\.superseded\) return;\s+setOutboundBusyId\(null\)/);
-    expect(source).toMatch(/blockUser\(friendActionTarget\.id\);\s+if \(result\.superseded\) return;\s+setBlockBusy\(false\)/);
     expect(source).toMatch(/removeFriendAPI\(profileFriend\.id\);\s+if \(result\.superseded\) return;\s+setRemoveBusy\(false\)/);
+    expect(source).not.toContain('friend-actions-modal');
+    expect(source).not.toContain('Block friend');
   });
 
   it('closes Add friend without an artificial success delay and immediately shows the authoritative request', () => {

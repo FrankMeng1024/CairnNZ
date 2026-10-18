@@ -141,6 +141,10 @@ interface MemoryState {
    */
   _unsyncedCount: number;
   _unsyncedPresenceCount: number;
+  /** Server-ACKed point identities retained in the live overlay until a
+   * prepared viewport read has incorporated the same accepted evidence. This
+   * is process-local handoff state, not a second persistent Memory cache. */
+  pendingPreparedCoverageCids: string[];
   initialRevealDone: boolean;
   syncState: SyncState;
   /** Local disk/journal authority. Empty points are meaningful only at ready. */
@@ -184,6 +188,7 @@ interface MemoryState {
   applyServerEchoForPushAligned: (batch: VisitedPoint[], echo: Array<{ batch_index?: number; ts?: number; cid?: string } | null>) => void;
 
   markPresenceWitnessesSynced: (batch: MemoryPresenceWitness[], acceptedCids: string[]) => void;
+  acknowledgePreparedCoverage: () => void;
 
   /** Replace all points (called by persistence on hydrate / by sync on download). */
   replacePoints: (points: VisitedPoint[], initialRevealDone: boolean) => void;
@@ -350,6 +355,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   presenceVersion: 0,
   _unsyncedCount: 0,
   _unsyncedPresenceCount: 0,
+  pendingPreparedCoverageCids: [],
   initialRevealDone: false,
   syncState: { inFlightCount: 0, lastSyncAt: 0 },
   localHydration: {
@@ -564,6 +570,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       points: newPoints,
       // _bucketIndex unchanged.
       _unsyncedCount: Math.max(0, get()._unsyncedCount - flippedCount),
+      pendingPreparedCoverageCids: [...new Set([
+        ...get().pendingPreparedCoverageCids,
+        ...cids.filter(Boolean),
+      ])],
       // geometryVersion intentionally NOT bumped.
       syncState: { ...get().syncState, lastSyncAt: Date.now() },
     });
@@ -611,6 +621,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     set({
       points: newPoints,
       _unsyncedCount: Math.max(0, get()._unsyncedCount - updates.size),
+      pendingPreparedCoverageCids: [...new Set([
+        ...get().pendingPreparedCoverageCids,
+        ...updates.values(),
+      ])],
       syncState: { ...get().syncState, lastSyncAt: Date.now() },
     });
   },
@@ -635,6 +649,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       _unsyncedPresenceCount: bounded.reduce((count, witness) => count + (witness.synced ? 0 : 1), 0),
       syncState: { ...get().syncState, lastSyncAt: Date.now() },
     });
+  },
+
+  acknowledgePreparedCoverage: () => {
+    if (get().pendingPreparedCoverageCids.length > 0) {
+      set({ pendingPreparedCoverageCids: [] });
+    }
   },
 
   // O1: applyServerEchoForPush (M11 legacy) removed — memorySync uses
@@ -732,6 +752,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       presenceVersion: get().presenceVersion + 1,
       _unsyncedCount: 0,
       _unsyncedPresenceCount: 0,
+      pendingPreparedCoverageCids: [],
       initialRevealDone: false,
       lastWatcherFix: null,
       // N1 fix (v0.2.6.3): reset syncState too. Otherwise a logout
@@ -803,6 +824,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       presenceVersion: get().presenceVersion + 1,
       _unsyncedCount: 0,
       _unsyncedPresenceCount: 0,
+      pendingPreparedCoverageCids: [],
       initialRevealDone: false,
       syncState: { inFlightCount: 0, lastSyncAt: 0 },
       localHydration: {

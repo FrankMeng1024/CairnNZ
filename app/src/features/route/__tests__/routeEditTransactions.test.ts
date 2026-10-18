@@ -1,5 +1,6 @@
 import {
   applyDrawTransaction,
+  applyDrawTransactionParts,
   classifyDrawTransaction,
   classifyDrawTransactionWithDiagnostics,
   continueDrawTransaction,
@@ -11,6 +12,8 @@ import {
   appendOrderedSegment,
   createEmptyOrderedDraft,
   createImportedOrderedDraft,
+  orderedDraftDistanceM,
+  orderedDraftPoints,
 } from '../orderedRouteDraft';
 
 const origin = { lat: -41.2865, lng: 174.7762 };
@@ -75,6 +78,63 @@ describe('Route edit transaction classification', () => {
     expect(appended.ok).toBe(true);
     if (!appended.ok) return;
     expect(appended.draft.parts).toHaveLength(2);
+  });
+
+  test('a consecutive terminal stroke appends when it ends near an earlier loop occurrence', () => {
+    const base = appendOrderedSegment(
+      empty(),
+      [p(0, 0), p(40, 30), p(80, 0), p(120, 30)],
+      'draw-manual',
+    );
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const raw = [p(120, 30), p(95, 10), p(80, 1)];
+    const intent = classifyDrawTransaction(base.draft, raw, undefined, 12);
+    expect(intent).toEqual({ kind: 'append' });
+    const applied = applyDrawTransaction(base.draft, intent as any, raw, 'draw-manual');
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect(applied.draft.parts[0].points).toEqual(base.draft.parts[0].points);
+    expect(applied.draft.parts.at(-1)?.points.at(-1)).toEqual(raw.at(-1));
+  });
+
+  test('a materially different End-to-earlier stroke corrects only the local suffix', () => {
+    const base = appendOrderedSegment(
+      empty(),
+      [p(0, 0), p(40, 0), p(80, 0), p(120, 0)],
+      'draw-manual',
+    );
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const raw = [p(120, 0), p(105, 30), p(80, 0)];
+    const intent = classifyDrawTransaction(base.draft, raw, undefined, 12);
+    expect(intent.kind).toBe('replace');
+    if (intent.kind !== 'replace') return;
+    const applied = applyDrawTransaction(
+      base.draft,
+      { kind: 'replace', option: intent.options[0] },
+      raw,
+      'draw-manual',
+    );
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect(orderedDraftPoints(applied.draft).slice(0, 3)).toEqual([p(0, 0), p(40, 0), p(80, 0)]);
+    expect(orderedDraftPoints(applied.draft).at(-1)).toEqual(p(120, 0));
+    expect(orderedDraftPoints(applied.draft)).toContainEqual(p(105, 30));
+  });
+
+  test('an ambiguous End-to-retraced occurrence stays pending without mutation', () => {
+    const base = appendOrderedSegment(
+      empty(),
+      [p(0, 0), p(50, 0), p(100, 0), p(50, 0), p(100, 0)],
+      'draw-manual',
+    );
+    expect(base.ok).toBe(true);
+    if (!base.ok) return;
+    const before = JSON.stringify(base.draft);
+    const intent = classifyDrawTransaction(base.draft, [p(100, 0), p(75, 20), p(50, 0)]);
+    expect(intent).toMatchObject({ kind: 'pending-replace', ambiguity: 'overlap' });
+    expect(JSON.stringify(base.draft)).toBe(before);
   });
 
   test('middle crossings do not terminate a Draw; only its endpoints choose replacement', () => {
@@ -423,6 +483,32 @@ describe('Route edit transaction classification', () => {
     const changed = { ...base.draft, revision: base.draft.revision + 1 };
     expect(continueDrawTransaction(changed, pending, [p(130.1, 35), p(250, 0)]))
       .toEqual({ kind: 'reject', code: 'STALE_TRANSACTION' });
+  });
+
+  test('consecutive multipart Draws replace only their newly inserted segment', () => {
+    const base = empty();
+    base.startPoint = p(0, 0);
+    const first = applyDrawTransactionParts(base, { kind: 'append' }, [
+      { points: [p(0, 0), p(100, 0)], resolution: 'draw-matched' },
+      { points: [p(100, 0), p(200, 0)], resolution: 'draw-manual' },
+    ]);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const firstIds = first.draft.parts.map(part => part.id);
+
+    const second = applyDrawTransactionParts(first.draft, { kind: 'append' }, [
+      { points: [p(200, 0), p(300, 0)], resolution: 'draw-matched' },
+      { points: [p(300, 0), p(400, 0)], resolution: 'draw-manual' },
+    ]);
+
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.draft.revision).toBe(2);
+    expect(second.draft.parts).toHaveLength(4);
+    expect(second.draft.parts.slice(0, 2).map(part => part.id)).toEqual(firstIds);
+    expect(orderedDraftPoints(second.draft).at(-1)).toEqual(p(400, 0));
+    expect(orderedDraftDistanceM(second.draft)).toBeGreaterThan(398);
+    expect(orderedDraftDistanceM(second.draft)).toBeLessThan(402);
   });
 
   test('A3 a near-closed Activity endpoint owns Draw append before coincident replacement occurrences', () => {

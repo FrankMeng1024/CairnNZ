@@ -14,6 +14,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
+import { usePreparedMemoryCoverageStore } from '../store/usePreparedMemoryCoverageStore';
+import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { log } from '../../../services/appLog';
@@ -29,6 +31,7 @@ import polygonSmoothTurf from '@turf/polygon-smooth';
 import unionTurf from '@turf/union';
 import { bboxPolygon, polygon, multiPoint, multiPolygon, featureCollection } from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
+import type { MemoryCoverageViewport } from '../services/memoryCoverageViewport';
 import {
   readFogDisplayCache,
   writeFogDisplayCache,
@@ -44,7 +47,7 @@ interface Props {
    * uses this as one of two gates for hiding the loading overlay.
    */
   onFogPreparing?: (readinessKey: string) => void;
-  onFogReady?: (readinessKey: string) => void;
+  onFogReady?: (readinessKey: string, requiredSourceIds: string[]) => void;
   onFogUnavailable?: (readinessKey: string) => void;
   /**
    * Planning screens may render an authorized read-only scope without
@@ -52,9 +55,10 @@ interface Props {
    * geometry, sharing grants, or the server-enforced projection delay.
    */
   scopeOverride?: MemoryScope;
-  selectedFriendIdOverride?: string | null;
   /** Presentation-only dimming used to keep roads/labels legible in planning. */
   opacityScale?: number;
+  /** Settled Mapbox viewport used by the bounded O86 prepared read model. */
+  viewport?: MemoryCoverageViewport | null;
 }
 
 // Bug-6 fix: module-level cache so FogLayer unmount/remount (tab switch)
@@ -115,6 +119,24 @@ export function selectFogEvidencePoints<T>(points: T[]): T[] {
   });
 }
 
+export function selectLocalCoverageOverlayPoints<T extends {
+  cid?: string;
+  lat: number;
+  lng: number;
+  synced?: boolean;
+}>(
+  points: T[],
+  pendingPreparedCoverageCids: string[],
+  viewport?: MemoryCoverageViewport | null,
+): T[] {
+  const pending = new Set(pendingPreparedCoverageCids);
+  const candidates = points.filter(point => !point.synced || Boolean(point.cid && pending.has(point.cid)));
+  if (!viewport) return candidates;
+  const [west, south, east, north] = viewport.bbox;
+  return candidates.filter(point => point.lng >= west && point.lng <= east
+    && point.lat >= south && point.lat <= north);
+}
+
 function hashText(seed: number, text: string): number {
   let hash = seed >>> 0;
   for (let index = 0; index < text.length; index += 1) {
@@ -139,13 +161,31 @@ export function prepareMemoryFogContent(
   friendCells: Array<{ id: string; polygon: Array<[number, number]>; sourceFriendId?: string; authorizationVersion?: number; projectionVersion?: string }>,
 ): { contentSignature: string } {
   let hash = hashText(2166136261, `${MEMORY_FOG_GEOMETRY_REVISION}|${authority}`);
-  for (const point of points) {
+  // This runs synchronously in render preparation. Keep the exact historic
+  // FNV order while avoiding iterator records and three helper calls per row;
+  // the 10k diagnostic must leave real headroom below the 150 ms JS slice.
+  for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+    const point = points[pointIndex];
     const lat = Math.round(point.lat * 1e7);
     const lng = Math.round(point.lng * 1e7);
-    hash = hashText(hash, point.cid ?? '');
-    hash = hashInteger(hash, lat);
-    hash = hashInteger(hash, lng);
-    hash = hashInteger(hash, Number.isFinite(point.ts) ? Number(point.ts) : -1);
+    const cid = point.cid ?? '';
+    for (let charIndex = 0; charIndex < cid.length; charIndex += 1) {
+      hash ^= cid.charCodeAt(charIndex);
+      hash = Math.imul(hash, 16777619);
+    }
+    hash ^= lat >>> 0;
+    hash = Math.imul(hash, 16777619);
+    hash ^= Math.floor(lat / 0x1_0000_0000) >>> 0;
+    hash = Math.imul(hash, 16777619) >>> 0;
+    hash ^= lng >>> 0;
+    hash = Math.imul(hash, 16777619);
+    hash ^= Math.floor(lng / 0x1_0000_0000) >>> 0;
+    hash = Math.imul(hash, 16777619) >>> 0;
+    const timestamp = Math.trunc(Number.isFinite(point.ts) ? Number(point.ts) : -1);
+    hash ^= timestamp >>> 0;
+    hash = Math.imul(hash, 16777619);
+    hash ^= Math.floor(timestamp / 0x1_0000_0000) >>> 0;
+    hash = Math.imul(hash, 16777619) >>> 0;
   }
   for (const cell of friendCells) {
     hash = hashText(hash, `${cell.sourceFriendId ?? ''}|${cell.authorizationVersion ?? ''}|${cell.projectionVersion ?? ''}|${cell.id}|`);
@@ -170,7 +210,6 @@ export function memoryFogContentSignature(
 export function memoryFogRenderAuthority(
   accountId: string,
   scope: MemoryScope,
-  selectedFriendId: string | null,
   friendAuthority: string,
   friendCellCount: number,
   syntheticQaAuthority = false,
@@ -180,7 +219,7 @@ export function memoryFogRenderAuthority(
   // Keeping one authority prevents the renderer from clearing a proven Mine
   // shape to solid fog while an empty/error/loading friend response settles.
   if (friendCellCount === 0) return `${accountId}|self`;
-  return `${accountId}|${scope}|${selectedFriendId ?? ''}|${friendAuthority}`;
+  return `${accountId}|${scope}|${friendAuthority}`;
 }
 
 function solidFogShape(): Feature<Polygon> {
@@ -1159,20 +1198,68 @@ export function buildFogShape(
   return null;
 }
 
+async function combinePreparedCoverage(
+  selfEvidence: Feature<Polygon | MultiPolygon> | null,
+  friendGeometries: MultiPolygon[],
+): Promise<{
+  evidence: Feature<Polygon | MultiPolygon> | null;
+  friendEvidence: Feature<Polygon | MultiPolygon> | null;
+  overlapEvidence: Feature<Polygon | MultiPolygon> | null;
+  sliceDurationsMs: number[];
+}> {
+  const sliceDurationsMs: number[] = [];
+  let startedAt = Date.now();
+  const friendFeatures = friendGeometries
+    .filter(geometry => geometry.coordinates.length > 0)
+    .map(geometry => multiPolygon(geometry.coordinates));
+  let friendEvidence: Feature<Polygon | MultiPolygon> | null = null;
+  for (let index = 0; index < friendFeatures.length; index += 8) {
+    const group = friendFeatures.slice(index, index + 8);
+    const addition = group.length === 1
+      ? group[0]
+      : unionTurf(featureCollection(group)) as Feature<Polygon | MultiPolygon> | null;
+    friendEvidence = friendEvidence && addition
+      ? unionTurf(featureCollection([friendEvidence, addition])) as Feature<Polygon | MultiPolygon> | null
+      : addition ?? friendEvidence;
+    sliceDurationsMs.push(Date.now() - startedAt);
+    await yieldToEventLoop();
+    startedAt = Date.now();
+  }
+  if (!friendEvidence) return {
+    evidence: selfEvidence,
+    friendEvidence: null,
+    overlapEvidence: null,
+    sliceDurationsMs,
+  };
+  const overlapEvidence = selfEvidence
+    ? intersectTurf(featureCollection([selfEvidence, friendEvidence])) as Feature<Polygon | MultiPolygon> | null
+    : null;
+  const evidence = selfEvidence
+    ? unionTurf(featureCollection([selfEvidence, friendEvidence])) as Feature<Polygon | MultiPolygon> | null
+    : friendEvidence;
+  sliceDurationsMs.push(Date.now() - startedAt);
+  // Paint the complete de-duplicated Friend union once, then let the single
+  // overlap layer above it replace the colour where Mine intersects. Computing
+  // `friend - mine` produced the same pixels but added a third expensive
+  // polygon-clipping pass on every selection/viewport change.
+  return { evidence, friendEvidence, overlapEvidence, sliceDurationsMs };
+}
+
 export function FogLayer({
   userCenter: _userCenter,
   onFogPreparing,
   onFogReady,
   onFogUnavailable,
   scopeOverride,
-  selectedFriendIdOverride,
   opacityScale = 1,
+  viewport,
 }: Props) {
   const theme = useVisualTheme();
   const Mapbox = getMapbox();
   // v346: drive geometry from useMemoryStore.points (real GPS path),
   // not from useH3VisitedStore.cells (hex mosaic — wrong abstraction).
   const selfPoints = useMemoryStore((s) => s.points);
+  const pendingPreparedCoverageCids = useMemoryStore((s) => s.pendingPreparedCoverageCids);
   const syntheticTestPoints = useMemoryStore((s) => s.testPoints);
   const debugMode = useSettingsStore((s) => s.debugMode);
   const simulatorEnabled = useActivitySimulatorStore((s) => s.enabled);
@@ -1196,12 +1283,41 @@ export function FogLayer({
   // v413 (4-eye fix E2): union 只在 Friends tab 生效, Mine tab 保 self-only
   // 尊重 useMemoryScopeStore.ts:5-8 已文档化的契约 + 用户口述"打开 Memory 首先看到自己"
   const storedScope = useMemoryScopeStore((s) => s.scope);
-  const storedSelectedFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
   const scope = scopeOverride ?? storedScope;
-  const selectedFriendId = scopeOverride ? (selectedFriendIdOverride ?? null) : storedSelectedFriendId;
   const clampedOpacityScale = Math.max(0, Math.min(1, opacityScale));
   const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
   const friendMemoryRef = useFriendMemoryStore.getState;
+  const selectedFriendIdsKey = useMemorySubscriptionsStore((s) => s.subscriptions
+    .map(subscription => String(subscription.friend_id))
+    .sort()
+    .join(','));
+  const preparedMemoryVersion = usePreparedMemoryCoverageStore((s) => s.version);
+  const preparedMemoryStatus = usePreparedMemoryCoverageStore((s) => s.status);
+  const preparedMemoryCoverage = usePreparedMemoryCoverageStore((s) => s.coverage);
+  const loadPreparedViewport = usePreparedMemoryCoverageStore((s) => s.loadViewport);
+  const viewportKey = viewport?.key;
+
+  useEffect(() => {
+    if (!viewport || syntheticQaAuthority) return;
+    void loadPreparedViewport(viewport);
+    if (scope === 'combined') {
+      void friendMemoryRef().loadSelectedProjections(undefined, viewport);
+    }
+    // Map camera callbacks intentionally replace the viewport value as they
+    // update. The stable quantized key, not object identity, owns network work;
+    // otherwise each store update can trigger another request/render cycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friendMemoryRef, loadPreparedViewport, scope, selectedFriendIdsKey, syntheticQaAuthority, viewportKey]);
+
+  const preparedSelfReady = !syntheticQaAuthority
+    && preparedMemoryStatus === 'ready'
+    && preparedMemoryCoverage?.viewportKey === viewport?.key;
+  const preparedSelfEvidence = useMemo(
+    () => preparedSelfReady && preparedMemoryCoverage
+      ? multiPolygon(preparedMemoryCoverage.geometry.coordinates)
+      : null,
+    [preparedMemoryCoverage, preparedSelfReady],
+  );
 
   // v413: union self ∪ enabled friend points. 每次 self 或 friend 变化都重算.
   // 用 useMemo 只依赖 version 号避免 array ref instability.
@@ -1212,59 +1328,76 @@ export function FogLayer({
     // It is never merged into self points or friend projections and therefore
     // cannot become shareable exploration.
     if (syntheticQaAuthority) return syntheticTestPoints;
-    // Mine remains visible in every scope. Friend projections are a derived
-    // overlay and never replace or weaken the user's canonical Memory.
-    return selfPoints;
+    if (!localHydrationReady) return [];
+    // Prepared server geometry owns historical truth in the current viewport.
+    // A small local overlay keeps unsynchronized/new evidence visible without
+    // rebuilding every historical footprint on screen entry.
+    // With a real viewport, the prepared read model is authoritative. Do not
+    // make a cold entry synchronously rebuild the owner's entire history while
+    // its bounded response is in flight; the last committed map remains shown.
+    return selectLocalCoverageOverlayPoints(selfPoints, pendingPreparedCoverageCids, viewport);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selfPoints, scope, syntheticQaAuthority, syntheticTestPoints]);
-  const friendCells = useMemo(
+  }, [localHydrationReady, pendingPreparedCoverageCids, preparedMemoryVersion, selfPoints, syntheticQaAuthority, syntheticTestPoints, viewport]);
+  const friendGeometries = useMemo(
     () => syntheticQaAuthority || scope === 'self'
       ? []
-      : friendMemoryRef().getVisibleCells(scope === 'friend' ? selectedFriendId : null),
+      : friendMemoryRef().getVisibleGeometries(null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [friendMemoryVersion, scope, selectedFriendId, syntheticQaAuthority],
+    [friendMemoryVersion, scope, syntheticQaAuthority, viewport?.key],
   );
 
   // Exact content hashing prevents a hydrated array with unchanged evidence
   // from rebuilding the display. Geometry itself is assembled asynchronously
   // in bounded tile-local slices; a module cache makes same-process remounts
   // immediate without weakening account/source authority.
-  const friendAuthority = [...new Set(friendCells.map(cell => [
-    cell.sourceFriendId ?? '',
-    cell.authorizationVersion ?? '',
-    cell.projectionVersion ?? '',
+  const friendAuthority = [...new Set(friendGeometries.map(source => [
+    source.sourceFriendId,
+    source.authorizationVersion,
+    source.projectionVersion,
   ].join(':')))].sort().join(',');
   const authority = memoryFogRenderAuthority(
     accountId,
     scope,
-    selectedFriendId,
     friendAuthority,
-    friendCells.length,
+    friendGeometries.length,
     syntheticQaAuthority,
   );
-  const preparedContent = useMemo(
-    () => prepareMemoryFogContent(authority, points, friendCells),
-    [authority, friendCells, points],
+  const overlaySignature = useMemo(
+    () => prepareMemoryFogContent(authority, points, []).contentSignature,
+    [authority, points],
   );
-  const { contentSignature } = preparedContent;
+  const contentSignature = `${overlaySignature}|viewport:${viewport?.key ?? 'legacy'}|mine:${preparedMemoryCoverage?.coverageVersion ?? 'local'}|friends:${friendAuthority}`;
   const selfContentSignature = useMemo(
-    () => prepareMemoryFogContent(`${accountId}|self`, points, []).contentSignature,
-    [accountId, points],
+    () => `${prepareMemoryFogContent(`${accountId}|self`, points, []).contentSignature}|viewport:${viewport?.key ?? 'legacy'}|mine:${preparedMemoryCoverage?.coverageVersion ?? 'local'}`,
+    [accountId, points, preparedMemoryCoverage?.coverageVersion, viewport?.key],
   );
-  const readinessKey = `${authority}|local:${localHydration.ownerUserId ?? 'none'}:${localHydration.status}:${localHydration.requiresInitialReconcile ? 'needs-reconcile' : 'durable'}:${localHydration.initialReconcile}:${localHydration.revision}|${contentSignature}`;
+  const preparedSelfHasCoverage = Boolean(preparedSelfEvidence?.geometry.coordinates.length);
+  const coverageReadReady = !viewport || syntheticQaAuthority || preparedSelfReady;
+  // The authenticated, source-owned prepared read model can paint before a
+  // large local journal has finished hydrating. Local hydration still gates
+  // its small live overlay and Cairn pins, not historical viewport coverage.
+  const fogAuthorityReady = syntheticQaAuthority
+    ? localHydrationReady
+    : preparedSelfReady || (!viewport && localHydrationReady);
+  const hasAnyEvidence = points.length > 0 || preparedSelfHasCoverage || friendGeometries.length > 0;
+  const presentationKey = `${authority}|${contentSignature}`;
+  // Cancellation follows rendered content and evidence authority, not the
+  // local journal's bookkeeping revision. A revision-only hydration update
+  // cannot change pixels and must not cancel/restart the same large build.
+  const readinessKey = `${presentationKey}|authority-ready:${fogAuthorityReady ? 'yes' : 'no'}`;
   const readinessKeyRef = useRef(readinessKey);
   readinessKeyRef.current = readinessKey;
   // The module cache stores canonical fog but not the two derived Union
   // classification layers. Rebuild bounded friend tiles on remount so a
   // cached fog can never silently lose or misclassify Friend/overlap color.
-  const exactCachedAuthority = _moduleFogAuthority === authority && friendCells.length === 0;
+  const exactCachedAuthority = _moduleFogAuthority === authority && friendGeometries.length === 0;
   const reusableCachedSelf = !syntheticQaAuthority
     && _moduleSelfAccount === accountId
     && _moduleSelfSig === selfContentSignature
     && Boolean(_moduleSelfFogShape);
   const hasInitialCache = exactCachedAuthority || reusableCachedSelf;
   const lastAuthorityRef = useRef<string>(hasInitialCache ? authority : '');
-  const lastSigRef = useRef<string>(exactCachedAuthority || (reusableCachedSelf && friendCells.length === 0)
+  const lastSigRef = useRef<string>(exactCachedAuthority || (reusableCachedSelf && friendGeometries.length === 0)
     ? contentSignature
     : '');
   const lastShapeRef = useRef<Feature<Polygon | MultiPolygon> | null>(
@@ -1299,14 +1432,22 @@ export function FogLayer({
   const [friendDisplayShape, setFriendDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
   const [overlapDisplayShape, setOverlapDisplayShape] = useState<Feature<Polygon | MultiPolygon> | null>(null);
   const [geometryReady, setGeometryReady] = useState(
-    localHydrationReady && ((hasInitialCache)
-      || (points.length === 0 && friendCells.length === 0)),
+    fogAuthorityReady && ((hasInitialCache)
+      || (coverageReadReady && !hasAnyEvidence)),
   );
   const [displayCacheChecked, setDisplayCacheChecked] = useState(
-    hasInitialCache,
+    hasInitialCache || (preparedSelfReady && points.length === 0),
   );
-  // Reset the parent gate synchronously before a new account/scope/content
-  // authority can paint with the prior geometry.
+  useEffect(() => {
+    if (syntheticQaAuthority || !viewport || preparedMemoryStatus !== 'error') return;
+    setGeometryReady(false);
+    onFogUnavailableRef.current?.(presentationKey);
+  }, [preparedMemoryStatus, presentationKey, syntheticQaAuthority, viewport]);
+  // Reset borrowed presentation only when its actual account/scope/content
+  // authority changes. Local hydration can finish or bump its journal revision
+  // after the exact prepared geometry has painted; treating that bookkeeping
+  // update as new Fog content removed Friend/overlap sources permanently
+  // because the main mask cache then short-circuited the rebuild.
   useLayoutEffect(() => {
     fogReadyFiredRef.current = '';
     // Revocation/selection changes remove borrowed color before async geometry
@@ -1314,11 +1455,15 @@ export function FogLayer({
     setFriendDisplayShape(null);
     setOverlapDisplayShape(null);
     setGeometryReady(false);
-    onFogPreparingRef.current?.(readinessKey);
-  }, [readinessKey]);
+    onFogPreparingRef.current?.(presentationKey);
+  // Internal `readinessKey` still cancels stale async work, while callbacks
+  // use the stable presentation authority. Hydration journal revisions do not
+  // change a rendered pixel and must not make Preparing(old) mismatch Ready(new).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presentationKey]);
   // v357 diagnostic: mount/unmount of this FogLayer instance.
   useEffect(() => {
-    log('v357.fog_layer_mount', { points_n: points.length, friend_cells_n: friendCells.length });
+    log('v357.fog_layer_mount', { points_n: points.length, friend_sources_n: friendGeometries.length });
     return () => {
       log('v357.fog_layer_unmount', {});
     };
@@ -1326,9 +1471,16 @@ export function FogLayer({
   }, []);
   useEffect(() => {
     const generation = ++cacheReadGenerationRef.current;
-    if (!localHydrationReady) {
+    if (!fogAuthorityReady) {
       setDisplayCacheChecked(true);
       setGeometryReady(false);
+      return undefined;
+    }
+    // A prepared server viewport plus no pending local overlay has no client
+    // display tiles to restore. Reading (and later rewriting) an empty
+    // AsyncStorage cache delayed every genuinely cold Mine entry for no data.
+    if (preparedSelfReady && points.length === 0) {
+      setDisplayCacheChecked(true);
       return undefined;
     }
     // Combined Fog's module cache intentionally omits friend/overlap
@@ -1337,7 +1489,7 @@ export function FogLayer({
     // build effect sees an exact signature and exits. Only self-only geometry
     // is complete enough for this synchronous cache path; friend scopes must
     // rebuild their bounded classification layers.
-    if (friendCells.length === 0
+    if (friendGeometries.length === 0
       && _moduleFogAuthority === authority
       && _moduleFogSig === contentSignature
       && _moduleFogShape) {
@@ -1369,11 +1521,11 @@ export function FogLayer({
       setDisplayCacheChecked(true);
     });
     return () => { cacheReadGenerationRef.current += 1; };
-  }, [accountId, authority, contentSignature, localHydrationReady, readinessKey]);
+  }, [accountId, authority, contentSignature, fogAuthorityReady, points.length, preparedSelfReady, readinessKey]);
   useEffect(() => {
     if (!displayCacheChecked) return undefined;
     const generation = ++buildGenerationRef.current;
-    if (!localHydrationReady) {
+    if (!fogAuthorityReady) {
       setFogShape(solidFogShape());
       setFriendDisplayShape(null);
       setOverlapDisplayShape(null);
@@ -1387,14 +1539,14 @@ export function FogLayer({
         && _moduleSelfAccount === accountId
         && _moduleSelfSig === selfContentSignature
         && Boolean(_moduleSelfFogShape);
-      lastSigRef.current = canRestoreMine && friendCells.length === 0 ? contentSignature : '';
+      lastSigRef.current = canRestoreMine && friendGeometries.length === 0 ? contentSignature : '';
       lastShapeRef.current = canRestoreMine ? _moduleSelfFogShape : null;
       lastEvidenceRef.current = canRestoreMine ? _moduleSelfEvidenceShape : null;
       lastDisplayGeometryCacheRef.current = canRestoreMine ? _moduleSelfDisplayGeometryCache : null;
       setFogShape(canRestoreMine && _moduleSelfFogShape ? _moduleSelfFogShape : solidFogShape());
       setGeometryReady(canRestoreMine);
     }
-    if (points.length === 0 && friendCells.length === 0) {
+    if (coverageReadReady && !hasAnyEvidence) {
       const solid = solidFogShape();
       lastSigRef.current = contentSignature;
       lastShapeRef.current = solid;
@@ -1416,7 +1568,7 @@ export function FogLayer({
     }
 
     const pointSnapshot = points.slice();
-    const friendSnapshot = friendCells.map(cell => cell.polygon);
+    const friendSnapshot = friendGeometries.map(source => source.geometry);
     let cancelled = false;
     const timer = setTimeout(() => {
       void (async () => {
@@ -1436,24 +1588,18 @@ export function FogLayer({
       );
       if (!built || cancelled || generation !== buildGenerationRef.current
         || lastAuthorityRef.current !== authority || readinessKeyRef.current !== readinessKey) return;
+      const selfEvidence = preparedSelfEvidence && built.evidence
+        ? unionTurf(featureCollection([preparedSelfEvidence, built.evidence])) as Feature<Polygon | MultiPolygon> | null
+        : preparedSelfEvidence ?? built.evidence;
       const combined = friendSnapshot.length > 0
-        ? await buildTiledCombinedDisplayEvidence(
-          built.cache,
-          friendSnapshot,
-          () => !cancelled
-            && generation === buildGenerationRef.current
-            && lastAuthorityRef.current === authority
-            && readinessKeyRef.current === readinessKey,
-        )
+        ? await combinePreparedCoverage(selfEvidence, friendSnapshot)
         : null;
       if (friendSnapshot.length > 0 && !combined) return;
-      const displayEvidence = combined?.evidence ?? built.evidence;
+      const displayEvidence = combined?.evidence ?? selfEvidence;
       const nextFriendDisplay = combined?.friendEvidence ?? null;
       const nextOverlapDisplay = combined?.overlapEvidence ?? null;
-      const selfShape = pointSnapshot.length > 0 && built.evidence
-        ? composeFogShape(built.evidence)
-        : pointSnapshot.length === 0 ? solidFogShape() : null;
-      const shape = (pointSnapshot.length > 0 || friendSnapshot.length > 0) && !displayEvidence
+      const selfShape = selfEvidence ? composeFogShape(selfEvidence) : solidFogShape();
+      const shape = hasAnyEvidence && !displayEvidence
         ? null
         : composeFogShape(displayEvidence);
       buildCountRef.current += 1;
@@ -1462,7 +1608,7 @@ export function FogLayer({
         log('fog.shape_unavailable', { n_points: pointSnapshot.length, build_ms: buildMs });
         if (!lastShapeRef.current) setFogShape(solidFogShape());
         setGeometryReady(false);
-        onFogUnavailableRef.current?.(readinessKey);
+        onFogUnavailableRef.current?.(presentationKey);
         return;
       }
       shape.properties = {
@@ -1492,7 +1638,8 @@ export function FogLayer({
         rebuilt_groups_n: built.rebuiltGroupCount,
         slices_n: built.sliceDurationsMs.length + (combined?.sliceDurationsMs.length ?? 0),
         slice_max_ms: Math.max(0, ...built.sliceDurationsMs, ...(combined?.sliceDurationsMs ?? [])),
-        rejected_friend_cells_n: combined?.rejectedFriendCellCount ?? 0,
+        prepared_memory: preparedSelfReady,
+        friend_sources_n: friendSnapshot.length,
       });
       lastSigRef.current = contentSignature;
       lastShapeRef.current = shape;
@@ -1537,10 +1684,12 @@ export function FogLayer({
       // Persist only after the correlated source has had a paint opportunity.
       // The cache encoder/storage path is independently chunked and bounded,
       // but it must never get ahead of the user-visible live Memory update.
-      if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(() => setTimeout(persistDisplayCache, 0));
-      } else {
-        setTimeout(persistDisplayCache, 0);
+      if (pointSnapshot.length > 0) {
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => setTimeout(persistDisplayCache, 0));
+        } else {
+          setTimeout(persistDisplayCache, 0);
+        }
       }
       })().catch(error => {
         if (cancelled
@@ -1553,14 +1702,14 @@ export function FogLayer({
         });
         if (!lastShapeRef.current) setFogShape(solidFogShape());
         setGeometryReady(false);
-        onFogUnavailableRef.current?.(readinessKey);
+        onFogUnavailableRef.current?.(presentationKey);
       });
-    }, 120);
+    }, pointSnapshot.length === 0 ? 0 : 120);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [accountId, authority, contentSignature, displayCacheChecked, friendCells, localHydrationReady, points, readinessKey, selfContentSignature, syntheticQaAuthority]);
+  }, [accountId, authority, contentSignature, coverageReadReady, displayCacheChecked, fogAuthorityReady, friendGeometries, hasAnyEvidence, points, preparedSelfEvidence, presentationKey, readinessKey, selfContentSignature, syntheticQaAuthority]);
 
 
-  const authoritativeEmpty = points.length === 0 && friendCells.length === 0;
+  const authoritativeEmpty = coverageReadReady && !hasAnyEvidence;
   const exactShapeReady = lastAuthorityRef.current === authority
     && lastSigRef.current === contentSignature
     && Boolean(lastShapeRef.current);
@@ -1591,8 +1740,8 @@ export function FogLayer({
   // MemoryMap stayed false forever → pins never rendered for new users.
   // Now: any non-null fogShape counts as "fog has finished rendering".
   useEffect(() => {
-    if (fogReadyFiredRef.current === readinessKey) return;
-    if (!localHydrationReady || !exactShapeReady || !geometryReady || !displayedFogShape.geometry) return;
+    if (fogReadyFiredRef.current === presentationKey) return;
+    if (!fogAuthorityReady || !exactShapeReady || !geometryReady || !displayedFogShape.geometry) return;
     let hasHoles = false;
     if (displayedFogShape.geometry.type === 'Polygon') {
       hasHoles = (displayedFogShape.geometry.coordinates as any[]).length > 1;
@@ -1602,11 +1751,15 @@ export function FogLayer({
     }
     // v380: fire on ANY non-null shape (hasHoles OR zero-point world rect).
     if (onFogReadyRef.current) {
-      fogReadyFiredRef.current = readinessKey;
+      fogReadyFiredRef.current = presentationKey;
       log('v359.fog_ready_fired', { n_points: points.length, has_holes: hasHoles });
-      onFogReadyRef.current(readinessKey);
+      onFogReadyRef.current(presentationKey, [
+        'memory-fog-src',
+        ...(friendDisplayShape ? ['memory-friend-union-src'] : []),
+        ...(overlapDisplayShape ? ['memory-overlap-src'] : []),
+      ]);
     }
-  }, [displayedFogShape, exactShapeReady, geometryReady, localHydrationReady, points.length, readinessKey]);
+  }, [displayedFogShape, exactShapeReady, fogAuthorityReady, friendDisplayShape, geometryReady, overlapDisplayShape, points.length, presentationKey]);
 
   if (!Mapbox.available) return null;
 

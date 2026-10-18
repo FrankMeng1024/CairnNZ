@@ -13,6 +13,7 @@ import {
   MEMORY_FOG_GEOMETRY_REVISION,
   memoryFogContentSignature,
   memoryFogRenderAuthority,
+  selectLocalCoverageOverlayPoints,
   selectFogEvidencePoints,
 } from '../components/FogLayer';
 
@@ -99,14 +100,28 @@ describe('Memory evidence rendering continuity', () => {
   });
 
   test.each(['day', 'sunset', 'night'])('%s Mine + Friends keeps the exact Mine authority when no friend cells exist', theme => {
-    const mine = memoryFogRenderAuthority('viewer-a', 'self', null, `ready:${theme}`, 0);
-    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, `loading:${theme}`, 0)).toBe(mine);
-    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, `error:${theme}`, 0)).toBe(mine);
-    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, `ready:${theme}`, 0)).toBe(mine);
+    const mine = memoryFogRenderAuthority('viewer-a', 'self', `ready:${theme}`, 0);
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', `loading:${theme}`, 0)).toBe(mine);
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', `error:${theme}`, 0)).toBe(mine);
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', `ready:${theme}`, 0)).toBe(mine);
   });
 
   test('combined authority changes only after eligible friend geometry is present', () => {
-    expect(memoryFogRenderAuthority('viewer-a', 'combined', null, 'ready:v4', 2))
-      .toBe('viewer-a|combined||ready:v4');
+    expect(memoryFogRenderAuthority('viewer-a', 'combined', 'ready:v4', 2))
+      .toBe('viewer-a|combined|ready:v4');
+  });
+
+  test('ACKed live evidence remains in the viewport overlay until prepared coverage takes ownership', () => {
+    const points = [
+      { cid: 'pending', lat: -41.2865, lng: 174.7762, synced: true },
+      { cid: 'server-owned', lat: -41.2866, lng: 174.7763, synced: true },
+      { cid: 'offline', lat: -41.2867, lng: 174.7764, synced: false },
+      { cid: 'outside', lat: -45, lng: 170, synced: false },
+    ];
+    const selected = selectLocalCoverageOverlayPoints(points, ['pending'], {
+      key: 'wellington',
+      bbox: [174.77, -41.29, 174.79, -41.28],
+    });
+    expect(selected.map(point => point.cid)).toEqual(['pending', 'offline']);
   });
 });

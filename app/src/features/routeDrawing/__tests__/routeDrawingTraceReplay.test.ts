@@ -26,6 +26,7 @@ describe('bounded multi-operation Route trace round-trip', () => {
     setRouteDrawingDiagnosticsEnabled(true);
     beginRouteDrawingTrace({
       sessionId: 'owner-session-a', routeId: 'activity:goood:create-a',
+      accountId: 'owner-a',
       source: { kind: 'activity', id: 'goood' }, initialGeometryRevision: 1,
       originalRoute: original, initialUndoDepth: 0,
     });
@@ -105,5 +106,42 @@ describe('bounded multi-operation Route trace round-trip', () => {
     expect(trace?.events.length).toBeLessThanOrEqual(600);
     expect(trace?.droppedEvents).toBeGreaterThan(0);
     expect(trace?.captureError).toBe('event-budget-exceeded');
+  });
+
+  test('exports account scope and replays cancelled Draw plus committed Trim terminal evidence', () => {
+    const cancelledDraw = selectRouteDrawingOperation('native-cancel');
+    recordRouteDrawingTrace('route_draw_raw_samples', {
+      strokeId: 'native-cancel',
+      samples: [{ x: 14, y: 28, geographic: original[0] }],
+      projectionFailures: 0,
+    }, 'raw-input');
+    recordRouteDrawingTrace('route_draw_geographic_stroke', {
+      strokeId: 'native-cancel', rawPoints: [original[0], original[1]],
+    }, 'geographic-stroke');
+    recordRouteDrawingTrace('route_operation_terminal', {
+      strokeId: 'native-cancel', outcome: 'cancelled', reason: 'gesture-interrupted',
+      finalGeometry: original,
+    }, 'state');
+
+    const trimOperation = selectRouteDrawingOperation('trim-one', 'trim');
+    const trimmed = original.slice(0, 2);
+    recordRouteDrawingTrace('route_trim_started', {
+      strokeId: 'trim-one', trimFractions: { start: 0, end: 0.5 }, preStateGeometry: original,
+    }, 'intent');
+    recordRouteDrawingTrace('route_draw_commit', {
+      strokeId: 'trim-one', operation: 'trim', finalGeometry: trimmed,
+    }, 'commit');
+    recordRouteDrawingTrace('route_operation_terminal', {
+      strokeId: 'trim-one', outcome: 'committed', finalGeometry: trimmed,
+    }, 'state');
+
+    const trace = parseRouteDrawingTrace(exportRouteDrawingTrace('owner-session-a')!);
+    expect(trace?.accountId).toBe('owner-a');
+    expect(replayRouteOperationEvidence(trace!, cancelledDraw)).toMatchObject({
+      kind: 'draw', outcome: 'cancelled', reason: 'gesture-interrupted', finalGeometry: original,
+    });
+    expect(replayRouteOperationEvidence(trace!, trimOperation)).toMatchObject({
+      kind: 'trim', outcome: 'committed', finalGeometry: trimmed,
+    });
   });
 });

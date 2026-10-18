@@ -173,6 +173,9 @@ async function purgeFriendNamespaces(
   // current. Never let a completion-time call implicitly bind to account B.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useMemorySubscriptionsStore } = require('../features/memory/store/useMemorySubscriptionsStore');
+  useMemorySubscriptionsStore.getState().removeFriendLocally(friendId);
   await Promise.all([
     useFriendMemoryStore.getState().purgeFriend(friendId, authority.viewerId),
     authority.friendContent.purgeFriendContent(friendId, authority.viewerId),
@@ -562,6 +565,10 @@ export async function removeFriendAPI(
       // Rollback only after the response body and initiating authority have
       // both been resolved. A late A body must never restore A under B.
       useFriendStore.setState({ friends: prev });
+      // Restore only from current server authority; a pre-unfriend async
+      // response is fenced by removeFriendLocally's generation increment.
+      void require('../features/memory/store/useMemorySubscriptionsStore')
+        .useMemorySubscriptionsStore.getState().load();
       return { success: false, error: (data as any).error || 'Remove failed' };
     }
     serverCommitted = true;
@@ -584,6 +591,8 @@ export async function removeFriendAPI(
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     if (serverCommitted) return committedCleanupUncertainResult('Unfriend');
     useFriendStore.setState({ friends: prev });
+    void require('../features/memory/store/useMemorySubscriptionsStore')
+      .useMemorySubscriptionsStore.getState().load();
     return { success: false, error: err.message || 'Network error' };
   }
 }

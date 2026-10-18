@@ -23,7 +23,7 @@ describe('Memory scope presentation', () => {
   afterAll(() => timingSpy.mockRestore());
 
   beforeEach(() => {
-    useMemoryScopeStore.setState({ scope: 'self', selectedFriendId: null });
+    useMemoryScopeStore.setState({ ownerUserId: 'viewer-a', scope: 'self' });
     useMemorySubscriptionsStore.setState({
       subscriptions: [
         { friend_id: 11, friend_name: 'First Friend' },
@@ -55,5 +55,15 @@ describe('Memory scope presentation', () => {
     fireEvent.press(screen.getByTestId('memory-scope-self'));
     expect(screen.queryByText('2')).toBeNull();
     expect(useMemorySubscriptionsStore.getState().subscriptions).toHaveLength(2);
+  });
+
+  test('keeps Friends within one account session and resets only at an account boundary', () => {
+    const scope = useMemoryScopeStore.getState();
+    scope.setScope('combined');
+    scope.activateOwner('viewer-a');
+    expect(useMemoryScopeStore.getState().scope).toBe('combined');
+
+    scope.activateOwner('viewer-b');
+    expect(useMemoryScopeStore.getState()).toMatchObject({ ownerUserId: 'viewer-b', scope: 'self' });
   });
 });

@@ -13,19 +13,24 @@ describe('Memory fog readiness authority', () => {
     expect(map).not.toMatch(/setTimeout\(\(\) => setFogReady/);
     expect(map).toContain('onDidFinishRenderingFrameFully');
     expect(map).toContain('fogGeometryReadyKeyRef.current !== readinessKey');
+    expect(map).toContain('confirmCurrentFogPaintRef.current();');
+    expect(map).toContain('fogReadinessKeyRef.current === expectedKey');
     expect(map).toContain('localHydration.ownerUserId === activeAccountId');
     expect(map).toContain("localHydration.initialReconcile === 'success'");
     expect(screen).not.toContain('_fogEverReady');
     expect(screen).toContain('onFogReady={() =>');
   });
 
-  test('revision-only authority changes rerun and stale-filter cache and geometry work', () => {
+  test('content changes stale-filter async work while hydration bookkeeping cannot invalidate painted fog', () => {
     const fog = read('src/features/memory/components/FogLayer.tsx');
-    expect(fog).toContain('localHydration.initialReconcile');
     expect(fog).toContain('readinessKeyRef.current !== readinessKey');
-    expect(fog).toMatch(/localHydrationReady, readinessKey\]\);/);
-    expect(fog).toContain('points, readinessKey, selfContentSignature, syntheticQaAuthority]);');
-    expect(fog).toContain('onFogUnavailableRef.current?.(readinessKey)');
+    expect(fog).toContain('preparedMemoryStatus !== \'error\'');
+    expect(fog).toContain('const presentationKey = `${authority}|${contentSignature}`');
+    expect(fog).toContain("const readinessKey = `${presentationKey}|authority-ready:${fogAuthorityReady ? 'yes' : 'no'}`");
+    expect(fog).toContain('onFogPreparingRef.current?.(presentationKey)');
+    expect(fog).toContain('onFogUnavailableRef.current?.(presentationKey)');
+    expect(fog).toContain('onFogReadyRef.current(presentationKey');
+    expect(fog).not.toMatch(/readinessKey = .*localHydration\.revision/);
   });
 
   test('durable Memory can center the map without claiming a live position puck', () => {
@@ -58,6 +63,6 @@ describe('Memory fog readiness authority', () => {
     expect(fog).toMatch(/const mineFallbackShape = !syntheticQaAuthority\s+&& _moduleSelfAccount/);
     expect(fog).not.toMatch(/const mineFallbackShape[\s\S]{0,140}friendCells\.length === 0/);
     expect(fog).toContain('sameAuthorityShape ?? mineFallbackShape ?? solidFogShape()');
-    expect(fog).toMatch(/if \(friendCells\.length === 0\s+&& _moduleFogAuthority === authority/);
+    expect(fog).toMatch(/if \(friendGeometries\.length === 0\s+&& _moduleFogAuthority === authority/);
   });
 });

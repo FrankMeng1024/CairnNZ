@@ -38,7 +38,7 @@ describe('Owner device Batch 01 source contracts', () => {
     expect(activityMap).toContain('delayMs={activityMapHasRendered ? 280 : 0}');
     expect(memoryMap).toContain('delayMs={memoryMapHasRendered ? 280 : 0}');
     expect(memory).toContain('testID="memory-entry-veil"');
-    expect(memory).toContain('delayMs={MEMORY_ENTRY_MESSAGE_DELAY_MS}');
+    expect(memory).toContain('delayMs={authorizedPreviewUri ? MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS : MEMORY_ENTRY_MESSAGE_DELAY_MS}');
     expect(memory).not.toContain('Map still loading…');
     expect(memory).not.toContain('PREPARING YOUR MAP');
     expect(memory).not.toContain('Restoring Memory…');

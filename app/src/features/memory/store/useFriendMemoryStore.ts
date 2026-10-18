@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
 import { storage } from '../../../store/storage';
+import type { MultiPolygon } from 'geojson';
+import type { MemoryCoverageViewport } from '../services/memoryCoverageViewport';
+import { log } from '../../../services/appLog';
 
 export interface FriendProjectionCell {
   id: string;
@@ -16,6 +19,8 @@ export interface FriendProjection {
   projectionVersion: string;
   cellSizeM: number;
   cells: FriendProjectionCell[];
+  geometry?: MultiPolygon;
+  viewportKey?: string;
   regions: Array<{
     id: string;
     parentId: string | null;
@@ -52,7 +57,8 @@ interface FriendMemoryState {
   sourceStates: Record<string, FriendProjectionSourceState>;
   lastObservedWallClockMs: number;
   hydrate: (userId: string) => Promise<void>;
-  loadSelectedProjections: (friendIds?: Array<string | number>) => Promise<void>;
+  activeViewport: MemoryCoverageViewport | null;
+  loadSelectedProjections: (friendIds?: Array<string | number>, viewport?: MemoryCoverageViewport) => Promise<void>;
   /** Synchronously fence in-flight work for a source without changing product selection. */
   invalidateFriend: (friendId: string | number) => void;
   purgeFriend: (friendId: string | number, expectedUserId?: string) => Promise<void>;
@@ -61,6 +67,12 @@ interface FriendMemoryState {
   /** Hide every cached source after an authorization refresh failure. */
   suspendVisibility: () => void;
   getVisibleCells: (friendId?: string | null) => FriendProjectionCell[];
+  getVisibleGeometries: (friendId?: string | null) => Array<{
+    sourceFriendId: string;
+    authorizationVersion: number;
+    projectionVersion: string;
+    geometry: MultiPolygon;
+  }>;
   reset: () => void;
 }
 
@@ -74,6 +86,8 @@ let persistenceTail: Promise<void> = Promise.resolve();
 const sourceGenerations = new Map<string, number>();
 const latestSourceRequests = new Map<string, number>();
 const verifiedSourceVersions = new Map<string, number>();
+const activeSourceControllers = new Map<string, AbortController>();
+export const FRIEND_MEMORY_PROJECTION_TIMEOUT_MS = 5_000;
 
 function cacheKey(userId: string) {
   return `${CACHE_PREFIX}${userId}`;
@@ -95,6 +109,8 @@ function validProjection(value: any, now: number): value is FriendProjection {
         && coordinate.length === 2
         && Number.isFinite(coordinate[0])
         && Number.isFinite(coordinate[1])))
+    && (value.geometry === undefined
+      || (value.geometry?.type === 'MultiPolygon' && Array.isArray(value.geometry.coordinates)))
     && Array.isArray(value.regions ?? [])
     && (value.regions ?? []).every((region: any) => typeof region?.id === 'string'
       && (region.level === 2 || region.level === 3)
@@ -107,7 +123,7 @@ function validProjection(value: any, now: number): value is FriendProjection {
       && region.anchor.every(Number.isFinite));
 }
 
-function parseProjection(incoming: any): FriendProjection {
+function parseProjection(incoming: any, viewportKey?: string): FriendProjection {
   const serverAuthorizedAtMs = Date.parse(incoming?.server_authorized_at);
   const parsedExpiry = Date.parse(incoming?.authorization_expires_at);
   return {
@@ -118,6 +134,8 @@ function parseProjection(incoming: any): FriendProjection {
     cells: (Array.isArray(incoming?.cells) ? incoming.cells : []).map((cell: any) => ({
       id: String(cell.id), polygon: cell.polygon,
     })),
+    geometry: incoming?.geometry?.type === 'MultiPolygon' ? incoming.geometry : undefined,
+    viewportKey,
     regions: (Array.isArray(incoming?.regions) ? incoming.regions : []).map((region: any) => ({
       id: String(region.id),
       parentId: region.parent_id == null ? null : String(region.parent_id),
@@ -136,6 +154,8 @@ function sourceGeneration(friendId: string): number {
 }
 
 function invalidateSource(friendId: string): void {
+  activeSourceControllers.get(friendId)?.abort();
+  activeSourceControllers.delete(friendId);
   sourceGenerations.set(friendId, sourceGeneration(friendId) + 1);
   latestSourceRequests.delete(friendId);
 }
@@ -154,7 +174,10 @@ function persist(state: FriendMemoryState, options?: { authoritative?: boolean }
     userId: state.userId,
     savedAtMs: Date.now(),
     lastObservedWallClockMs: state.lastObservedWallClockMs,
-    projections: state.projections,
+    // O86 prepared viewport geometry is intentionally in-session only. M03
+    // does not authorize a new large persistent Friends cache.
+    projections: Object.fromEntries(Object.entries(state.projections)
+      .filter(([, projection]) => !projection.geometry)),
   };
   const serialized = JSON.stringify(payload);
   const write = persistenceTail.catch(() => {}).then(async () => {
@@ -173,6 +196,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
   error: null,
   sourceStates: {},
   lastObservedWallClockMs: 0,
+  activeViewport: null,
 
   hydrate: async (userId) => {
     const hydrateRequest = ++hydrationSequence;
@@ -181,6 +205,8 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     sourceGenerations.clear();
     latestSourceRequests.clear();
     verifiedSourceVersions.clear();
+    for (const controller of activeSourceControllers.values()) controller.abort();
+    activeSourceControllers.clear();
     const now = Date.now();
     let projections: Record<string, FriendProjection> = {};
     let lastObservedWallClockMs = now;
@@ -203,10 +229,10 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       projections = {};
     }
     if (hydrateRequest !== hydrationSequence || hydrateAccountGeneration !== accountGeneration) return;
-    set({ userId, projections, sourceStates: {}, lastObservedWallClockMs, version: get().version + 1, loading: false, error: null });
+    set({ userId, projections, sourceStates: {}, activeViewport: null, lastObservedWallClockMs, version: get().version + 1, loading: false, error: null });
   },
 
-  loadSelectedProjections: async (friendIds) => {
+  loadSelectedProjections: async (friendIds, viewport) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useAppStore } = require('../../../store/useAppStore');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -215,6 +241,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     if (!userId) return;
     if (get().userId !== userId) await get().hydrate(userId);
     if (get().userId !== userId) return;
+    const requestedViewport = viewport ?? get().activeViewport;
+    if (!requestedViewport) return;
+    if (!get().activeViewport || get().activeViewport?.key !== requestedViewport.key) {
+      set({ activeViewport: requestedViewport });
+    }
     const allSelectedIds: number[] = useMemorySubscriptionsStore.getState().subscriptions
       .map((subscription: { friend_id: number }) => Number(subscription.friend_id))
       .filter(Number.isInteger);
@@ -255,7 +286,12 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs),
       sourceStates: {
         ...get().sourceStates,
-        ...Object.fromEntries(requests.map(request => [request.id, { status: 'loading', cellCount: get().projections[request.id]?.cells.length ?? 0 }])),
+        ...Object.fromEntries(requests.map(request => [request.id, {
+          status: 'loading',
+          cellCount: get().projections[request.id]?.geometry?.coordinates.length
+            ?? get().projections[request.id]?.cells.length
+            ?? 0,
+        }])),
       },
     });
     let hadNetworkError = false;
@@ -265,11 +301,21 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         const requestIndex = nextRequestIndex++;
         const request = requests[requestIndex];
         if (!request) return;
+      const requestStartedAtMs = Date.now();
+      const controller = new AbortController();
+      activeSourceControllers.get(request.id)?.abort();
+      activeSourceControllers.set(request.id, controller);
+      let timedOut = false;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, FRIEND_MEMORY_PROJECTION_TIMEOUT_MS);
       try {
-        const response = await authenticatedFetch('/api/friend-sharing/projections', {
+        const response = await authenticatedFetch('/api/friend-sharing/coverage', {
           method: 'POST',
-          body: JSON.stringify({ friend_ids: [request.friendId] }),
+          body: JSON.stringify({ friend_ids: [request.friendId], viewport_bbox: requestedViewport.bbox }),
           expectedUserId: userId,
+          signal: controller.signal,
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const body = await response.json();
@@ -290,7 +336,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         } else {
           const incoming = (Array.isArray(body?.projections) ? body.projections : [])
             .find((projection: any) => String(projection?.source_friend_id) === request.id);
-          const candidate = parseProjection(incoming);
+          const candidate = parseProjection(incoming, requestedViewport.key);
           const receivedAt = Date.now();
           const source = currentSubscriptions.availableSources.find((item: { friend_id: string }) => String(item.friend_id) === request.id);
           if (!incoming || !validProjection(candidate, receivedAt)
@@ -305,11 +351,22 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
               && candidate.serverAuthorizedAtMs >= existing.serverAuthorizedAtMs)) {
             next[request.id] = candidate;
           }
+          const featureCount = candidate.geometry?.coordinates.length ?? candidate.cells.length;
           nextStates[request.id] = {
-            status: candidate.cells.length > 0 ? 'loaded' : 'empty',
-            cellCount: candidate.cells.length,
+            status: featureCount > 0 ? 'loaded' : 'empty',
+            cellCount: featureCount,
           };
           verifiedSourceVersions.set(request.id, candidate.authorizationVersion);
+          log('o86.memory.friend_coverage_ready', {
+            selected_source_index: requestIndex,
+            request_ms: Date.now() - requestStartedAtMs,
+            total_ms: Number(body?.total_ms) || 0,
+            evidence_n: Number(incoming?.evidence_count) || 0,
+            tile_n: Number(incoming?.tile_count) || 0,
+            rebuilt_tile_n: Number(incoming?.rebuilt_tile_count) || 0,
+            geometry_components_n: candidate.geometry?.coordinates.length ?? 0,
+            stage_ms: incoming?.stage_ms ?? {},
+          });
         }
         set({
           projections: next,
@@ -324,6 +381,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           || request.generation !== sourceGeneration(request.id)
           || latestSourceRequests.get(request.id) !== request.sequence) return;
         hadNetworkError = true;
+        log('o86.memory.friend_coverage_failed', {
+          selected_source_index: requestIndex,
+          request_ms: Date.now() - requestStartedAtMs,
+          error: String(error?.message ?? error).slice(0, 100),
+        });
         verifiedSourceVersions.delete(request.id);
         const currentTime = Date.now();
         const retained = Object.fromEntries(Object.entries(get().projections)
@@ -332,11 +394,22 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           projections: retained,
           sourceStates: {
             ...get().sourceStates,
-            [request.id]: { status: 'error', cellCount: retained[request.id]?.cells.length ?? 0, error: error?.message || 'Unavailable' },
+            [request.id]: {
+              status: 'error',
+              cellCount: retained[request.id]?.geometry?.coordinates.length
+                ?? retained[request.id]?.cells.length
+                ?? 0,
+              error: timedOut ? 'Friend Memory timed out' : error?.message || 'Unavailable',
+            },
           },
           version: get().version + 1,
           lastObservedWallClockMs: Math.max(currentTime, get().lastObservedWallClockMs),
         });
+      } finally {
+        clearTimeout(timeout);
+        if (activeSourceControllers.get(request.id) === controller) {
+          activeSourceControllers.delete(request.id);
+        }
       }
         await runNext();
       };
@@ -435,6 +508,26 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     return [...cells.values()];
   },
 
+  getVisibleGeometries: (friendId) => {
+    const now = Date.now();
+    const currentViewportKey = get().activeViewport?.key;
+    const selected = friendId
+      ? [get().projections[friendId]].filter(Boolean)
+      : Object.values(get().projections);
+    return selected.flatMap(projection => {
+      if (!projection.geometry
+        || projection.viewportKey !== currentViewportKey
+        || !validProjection(projection, now)
+        || verifiedSourceVersions.get(projection.friendId) !== projection.authorizationVersion) return [];
+      return [{
+        sourceFriendId: projection.friendId,
+        authorizationVersion: projection.authorizationVersion,
+        projectionVersion: projection.projectionVersion,
+        geometry: projection.geometry,
+      }];
+    });
+  },
+
   reset: () => {
     hydrationSequence += 1;
     accountGeneration += 1;
@@ -442,6 +535,8 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     sourceGenerations.clear();
     latestSourceRequests.clear();
     verifiedSourceVersions.clear();
+    for (const controller of activeSourceControllers.values()) controller.abort();
+    activeSourceControllers.clear();
     set({
     userId: null,
     projections: {},
@@ -450,6 +545,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     error: null,
     sourceStates: {},
     lastObservedWallClockMs: 0,
+    activeViewport: null,
     });
   },
 }));

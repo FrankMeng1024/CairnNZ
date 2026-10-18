@@ -12,7 +12,10 @@ interface Props {
   mapViewRef: React.MutableRefObject<any>;
   onStroke: (points: RoutePoint[], capture: RouteDrawStrokeCapture) => void;
   onDrawingStart?: () => void;
-  onCancel: (reason: 'gesture-interrupted' | 'coordinate-unavailable') => void;
+  onCancel: (
+    reason: 'gesture-interrupted' | 'coordinate-unavailable',
+    capture?: RouteDrawStrokeCapture,
+  ) => void;
   bottomInset?: number;
   strokeColor?: string;
 }
@@ -236,16 +239,20 @@ export function RouteDrawOverlay({
         geographic: sample.geographic ? { ...sample.geographic } : undefined,
       })),
     };
+    // A missing interior projection breaks geographic continuity. Never join
+    // the successful samples on either side with an invented straight edge.
+    if (coordinateFailureRef.current) {
+      onCancel('coordinate-unavailable', capture);
+      pointsRef.current = [];
+      rawSamplesRef.current = [];
+      screenPointsRef.current = [];
+      setScreenPoints([]);
+      return;
+    }
     pointsRef.current = [];
     rawSamplesRef.current = [];
     screenPointsRef.current = [];
     setScreenPoints([]);
-    // A missing interior projection breaks geographic continuity. Never join
-    // the successful samples on either side with an invented straight edge.
-    if (coordinateFailureRef.current) {
-      onCancel('coordinate-unavailable');
-      return;
-    }
     onStroke(points, capture);
   }
 
@@ -254,12 +261,24 @@ export function RouteDrawOverlay({
     const generation = generationRef.current;
     await chainRef.current;
     if (generationRef.current !== generation || endedNormallyRef.current) return;
+    const endedAtMs = Date.now();
+    const capture: RouteDrawStrokeCapture = {
+      strokeId: strokeIdRef.current,
+      startedAtMs: startedAtMsRef.current,
+      endedAtMs,
+      sampleCapacity: MAX_NATIVE_SAMPLES,
+      droppedSampleCount: droppedSampleCountRef.current,
+      samples: rawSamplesRef.current.map(sample => ({
+        ...sample,
+        geographic: sample.geographic ? { ...sample.geographic } : undefined,
+      })),
+    };
     generationRef.current += 1;
     pointsRef.current = [];
     rawSamplesRef.current = [];
     screenPointsRef.current = [];
     setScreenPoints([]);
-    onCancel('gesture-interrupted');
+    onCancel('gesture-interrupted', capture);
   }
 
   const draw = Gesture.Pan()

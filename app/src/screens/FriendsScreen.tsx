@@ -24,7 +24,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import Svg, { Path } from 'react-native-svg';
 import {
   useFriendStore, sendFriendRequest, fetchFriendRequests,
-  acceptFriendRequestAPI, rejectFriendRequestAPI, blockUser,
+  acceptFriendRequestAPI, rejectFriendRequestAPI,
   fetchOutboundRequests, cancelOutboundRequest, removeFriendAPI,
   type OutboundRequest, type IncomingFriendRequest,
 } from '../store/useFriendStore';
@@ -108,9 +108,6 @@ function avatarColorFor(id: string): string {
 function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 }
-function firstNameOf(name: string): string {
-  return name.trim().split(/\s+/)[0] || name;
-}
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
@@ -145,18 +142,16 @@ function Backdrop() {
 
 // ── Friend row (F1) ─────────────────────────────────────────────────────────
 function FriendRow({
-  id, name, email, sharingState, isNew, onPress, onLongPress,
+  id, name, email, sharingState, isNew, onPress,
 }: {
   id: string; name: string; email: string;
   sharingState: 'shared' | 'not-shared' | 'checking' | 'unavailable'; isNew: boolean;
-  onPress?: () => void; onLongPress?: () => void;
+  onPress?: () => void;
 }) {
   const theme = useVisualTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={500}
       activeOpacity={0.85}
       testID={`friend-card-${id}`}
     >
@@ -639,11 +634,6 @@ export function FriendsScreen() {
   const [cancelRequestError, setCancelRequestError] = useState('');
   const [outboundBusyId, setOutboundBusyId] = useState<number | null>(null);
   const [outboundErrors, setOutboundErrors] = useState<Record<string, string>>({});
-  const [friendActionTarget, setFriendActionTarget] = useState<ProfileFriend | null>(null);
-  const [blockConfirming, setBlockConfirming] = useState(false);
-  const [blockBusy, setBlockBusy] = useState(false);
-  const [blockError, setBlockError] = useState('');
-  const [blockServerCommitted, setBlockServerCommitted] = useState(false);
 
   const loadRequests = async () => {
     const expectedViewerId = viewerId;
@@ -671,10 +661,8 @@ export function FriendsScreen() {
     setNewFriendId(null);
     setShowAdd(false);
     setProfileFriend(null);
-    setFriendActionTarget(null);
     setCancelRequestTarget(null);
     setRemoveConfirming(false);
-    setBlockConfirming(false);
     setInitialLoading(true);
     Promise.all([loadFriendsFromBackend(), loadRequests(), viewerId ? loadMemorySharing(viewerId) : Promise.resolve()]).finally(() => {
       if (active) setInitialLoading(false);
@@ -758,36 +746,6 @@ export function FriendsScreen() {
     setRemoveError('');
     setRemoveServerCommitted(false);
     setProfileFriend(friend);
-  };
-
-  const handleFriendLongPress = (friend: ProfileFriend) => {
-    setBlockConfirming(false);
-    setBlockBusy(false);
-    setBlockError('');
-    setBlockServerCommitted(false);
-    setFriendActionTarget(friend);
-  };
-
-  const confirmBlockFriend = async () => {
-    if (!friendActionTarget || blockBusy) return;
-    setBlockBusy(true);
-    setBlockError('');
-    const result = await blockUser(friendActionTarget.id);
-    if (result.superseded) return;
-    setBlockBusy(false);
-    if (result.serverCommitted) {
-      setBlockServerCommitted(true);
-      setBlockError(result.error || 'Block completed, but local cleanup could not be confirmed.');
-      return;
-    }
-    if (result.error) {
-      setBlockError(result.error);
-      return;
-    }
-    setFriendActionTarget(null);
-    setBlockConfirming(false);
-    await loadFriendsFromBackend();
-    void loadCircleMarkers();
   };
 
   const visibleIncoming = requestsViewerId === viewerId ? incoming : [];
@@ -922,7 +880,6 @@ export function FriendsScreen() {
                 })()}
                 isNew={newFriendId === f.id}
                 onPress={() => { setNewFriendId(current => current === f.id ? null : current); void handleFriendTap(f); }}
-                onLongPress={() => handleFriendLongPress(f)}
               />
             ))}
           </>
@@ -1081,17 +1038,6 @@ export function FriendsScreen() {
                 />
               )}
             </View>
-            <PrimaryButton
-              label="Block friend"
-              variant="secondary"
-              onPress={() => {
-                const friend = profileFriend;
-                closeProfile();
-                handleFriendLongPress(friend);
-              }}
-              style={s.profileRemoveAction}
-              testID="friend-profile-block-trigger"
-            />
         </ModalCard>
       )}
 
@@ -1114,45 +1060,6 @@ export function FriendsScreen() {
         </ModalCard>
       )}
 
-      {friendActionTarget && (
-        <ModalCard
-          visible
-          onDismiss={() => { if (!blockBusy) setFriendActionTarget(null); }}
-          dismissible={!blockBusy}
-          testID="friend-actions-modal"
-        >
-          <ModalCardHeader
-            title={blockConfirming ? `Block ${firstNameOf(friendActionTarget.name)}?` : friendActionTarget.name}
-            body={blockConfirming
-              ? 'This friendship will end, and they will no longer see your public cairns. You can unblock them later in Settings.'
-              : friendActionTarget.email}
-            onClose={() => setFriendActionTarget(null)}
-          />
-          {blockError ? <Text style={[s.dialogError, { color: theme.destructive }]}>{blockError}</Text> : null}
-          <View style={s.dialogActions}>
-            {blockConfirming ? (
-              <>
-                <PrimaryButton label="Back" variant="secondary" onPress={() => setBlockConfirming(false)} style={s.dialogAction} />
-                <PrimaryButton label={`Block ${firstNameOf(friendActionTarget.name)}`} variant="destructive" onPress={confirmBlockFriend} loading={blockBusy} disabled={blockServerCommitted} style={s.dialogAction} />
-              </>
-            ) : (
-              <>
-                <PrimaryButton
-                  label="View profile"
-                  variant="primary"
-                  onPress={() => {
-                    const friend = friendActionTarget;
-                    setFriendActionTarget(null);
-                    void handleFriendTap(friend);
-                  }}
-                  style={s.dialogAction}
-                />
-                <PrimaryButton label="Block friend" variant="secondary" onPress={() => setBlockConfirming(true)} style={s.dialogAction} />
-              </>
-            )}
-          </View>
-        </ModalCard>
-      )}
     </View>
   );
 }

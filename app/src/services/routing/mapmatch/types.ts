@@ -42,9 +42,15 @@ interface MatchRequestBuild {
  * callers continue to read `matchedPoints` / `confidence` which preserve
  * v262 behavior (= matchings[0] only).
  */
-interface MapboxMatchSegment {
+export interface MapboxMatchSegment {
   points: LngLat[];
   confidence: number;
+  /** Inclusive indices in the submitted trace. Present for O86 responses
+   * parsed from Mapbox tracepoints; omitted by legacy fixtures. */
+  inputStartIndex?: number;
+  inputEndIndex?: number;
+  /** Highest ambiguity count reported for the input run. */
+  alternativesCount?: number;
 }
 
 export type MatchResult =

@@ -1,5 +1,7 @@
 const mockStorageValues = new Map<string, string>();
 const mockPurgeFriendMemory = jest.fn(async () => undefined);
+const mockRemoveMemorySubscription = jest.fn();
+const mockReloadMemorySubscriptions = jest.fn(async () => true);
 const mockMarkerSetState = jest.fn();
 
 jest.mock('../../../store/useAppStore', () => ({
@@ -15,8 +17,17 @@ jest.mock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn()
 jest.mock('../../memory/store/useFriendMemoryStore', () => ({
   useFriendMemoryStore: { getState: () => ({ purgeFriend: mockPurgeFriendMemory }) },
 }));
+jest.mock('../../memory/store/useMemorySubscriptionsStore', () => ({
+  useMemorySubscriptionsStore: {
+    getState: () => ({
+      removeFriendLocally: mockRemoveMemorySubscription,
+      load: mockReloadMemorySubscriptions,
+    }),
+  },
+}));
 jest.mock('../../../store/useMarkerStore', () => ({
   useMarkerStore: { setState: mockMarkerSetState },
+  removeCircleMarkersByAuthor: jest.fn(),
 }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(async () => undefined),
@@ -111,6 +122,8 @@ describe('downloaded friend content authorization cache', () => {
     mockSetItem.mockClear();
     mockRemoveItem.mockClear();
     mockPurgeFriendMemory.mockClear();
+    mockRemoveMemorySubscription.mockClear();
+    mockReloadMemorySubscriptions.mockClear();
     mockMarkerSetState.mockClear();
     mockFriendListSetItem.mockReset().mockResolvedValue(undefined);
     mockFriendListRemoveItem.mockReset().mockResolvedValue(undefined);
@@ -503,7 +516,8 @@ describe('downloaded friend content authorization cache', () => {
     while (!releaseCairns || !releaseRoutes || !releaseDetail) await Promise.resolve();
 
     const action = await act();
-    expect(action).toMatchObject({ success: true });
+    expect(action).toEqual({ success: true });
+    expect(mockRemoveMemorySubscription).toHaveBeenCalledWith('owner-a');
     releaseCairns(response(200, { cairns: [cairn()] }));
     releaseRoutes(response(200, { routes: [route('v1')] }));
     releaseDetail(response(200, { route: route('v1', true) }));
@@ -838,6 +852,7 @@ describe('downloaded friend content authorization cache', () => {
     expect(friendProfileNavigationAuthorityIsCurrent(result.authority)).toBe(false);
     releaseBlock(response(200, { blocked: true }));
     await expect(blocking).resolves.toMatchObject({ success: true });
+    expect(mockRemoveMemorySubscription).toHaveBeenCalledWith('owner-a');
     expect(useFriendStore.getState().friends).toEqual([]);
   });
 });

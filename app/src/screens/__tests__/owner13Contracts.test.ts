@@ -30,9 +30,10 @@ describe('Owner 13 root-cause source contracts', () => {
 
   test('Route editor owns explicit modes, one context slot and no retired floating/multistroke copy', () => {
     const editor = read('screens/OrderedRouteEditorScreen.tsx');
-    for (const mode of ['Browse', 'DrawArmed', 'Drawing', 'MatchPending', 'AwaitFreehandChoice', 'PointTargeting', 'TrimPreview', 'Saving']) {
+    for (const mode of ['Browse', 'DrawArmed', 'Drawing', 'MatchPending', 'PointTargeting', 'TrimPreview', 'Saving']) {
       expect(editor).toContain(`'${mode}'`);
     }
+    expect(editor).not.toContain("'AwaitFreehandChoice'");
     expect(editor).toContain('testID="route-context-slot"');
     expect(editor).toContain('testID="route-name-save-row"');
     expect(editor).toContain('testID="route-undo"');
@@ -83,7 +84,8 @@ describe('Owner 13 root-cause source contracts', () => {
     expect(adapter).not.toMatch(/margin(?:Top|Bottom|Left|Right)/);
 
     const history = read('screens/MapHistoryScreen.tsx');
-    expect(history).toContain('HISTORY_ROUTE_ORNAMENT_CLEARANCE = 336');
+    expect(history).toContain('HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE = 248');
+    expect(history).toContain('ornamentBottomClearance={(routeDetailPanelHeight || HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE) + Spacing.sm}');
     expect(history).toContain('ornamentBottomClearance={Math.min(H * 0.68, 580) + Spacing.sm}');
     expect(history).not.toContain('mapOrnamentsAbove(196)');
   });

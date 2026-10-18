@@ -1,18 +1,21 @@
 import { create } from 'zustand';
 
-export type MemoryScope = 'self' | 'combined' | 'friend';
+export type MemoryScope = 'self' | 'combined';
 
 interface MemoryScopeState {
+  ownerUserId: string | null;
   scope: MemoryScope;
-  selectedFriendId: string | null;
-  setScope: (scope: MemoryScope, selectedFriendId?: string | null) => void;
+  activateOwner: (ownerUserId: string | null) => void;
+  setScope: (scope: MemoryScope) => void;
 }
 
 export const useMemoryScopeStore = create<MemoryScopeState>((set) => ({
+  ownerUserId: null,
   scope: 'self',
-  selectedFriendId: null,
-  setScope: (scope, selectedFriendId = null) => set({
-    scope,
-    selectedFriendId: scope === 'friend' ? selectedFriendId : null,
-  }),
+  activateOwner: (ownerUserId) => set((state) => (
+    state.ownerUserId === ownerUserId
+      ? state
+      : { ownerUserId, scope: 'self' }
+  )),
+  setScope: (scope) => set({ scope }),
 }));

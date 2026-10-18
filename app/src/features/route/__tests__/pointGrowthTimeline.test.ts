@@ -1,4 +1,11 @@
-import { pointGrowthDurationMs, pointGrowthFrame, pointInsideUsableMap } from '../pointGrowthTimeline';
+import {
+  pointCameraStops,
+  pointCameraToleranceM,
+  pointGrowthDurationMs,
+  pointGrowthFrame,
+  pointInsideUsableMap,
+  preparePointGrowthTimeline,
+} from '../pointGrowthTimeline';
 
 const p = (lng: number, lat: number) => ({ lng, lat });
 
@@ -16,12 +23,43 @@ describe('Point reveal and camera share one arc-length timeline', () => {
 
   test('duration scales with the visible task but stays bounded', () => {
     expect(pointGrowthDurationMs([p(0, 0), p(0.0001, 0)])).toBeGreaterThanOrEqual(720);
-    expect(pointGrowthDurationMs([p(0, 0), p(1, 0)])).toBe(2200);
+    expect(pointGrowthDurationMs([p(0, 0), p(1, 0)])).toBe(8000);
   });
 
   test('usable map bounds reserve the dock and top controls', () => {
     const viewport = { width: 390, height: 844, topInset: 0, bottomInset: 190 };
     expect(pointInsideUsableMap({ x: 195, y: 300 }, viewport)).toBe(true);
     expect(pointInsideUsableMap({ x: 195, y: 700 }, viewport)).toBe(false);
+  });
+
+  test('camera stops collapse dense straight provider samples onto one arc-length transition', () => {
+    const points = Array.from({ length: 101 }, (_, index) => p(index * 0.00001, 0));
+    const timeline = preparePointGrowthTimeline(points)!;
+    expect(pointCameraStops(timeline, 1)).toEqual([
+      { point: points[0], progress: 0, sourceIndex: 0 },
+      { point: points[100], progress: 1, sourceIndex: 100 },
+    ]);
+  });
+
+  test('camera stops retain real turns and a returning endpoint without chasing every provider vertex', () => {
+    const points = [
+      p(0, 0), p(0.0005, 0), p(0.001, 0),
+      p(0.001, 0.0005), p(0.001, 0.001),
+      p(0.0005, 0.001), p(0, 0.001),
+      p(0, 0.0005), p(0, 0),
+    ];
+    const stops = pointCameraStops(preparePointGrowthTimeline(points)!, 1);
+    expect(stops.length).toBeGreaterThanOrEqual(5);
+    expect(stops.length).toBeLessThan(points.length);
+    expect(stops[0]).toMatchObject({ point: points[0], progress: 0, sourceIndex: 0 });
+    expect(stops.at(-1)).toMatchObject({ point: points.at(-1), progress: 1, sourceIndex: points.length - 1 });
+    expect(stops.map(stop => stop.progress)).toEqual([...stops.map(stop => stop.progress)].sort((a, b) => a - b));
+  });
+
+  test('camera simplification stays within two screen pixels across ordinary phone zooms', () => {
+    const points = [p(174.77, -36.85), p(174.78, -36.84)];
+    expect(pointCameraToleranceM(points, 14)).toBe(8);
+    expect(pointCameraToleranceM(points, 18)).toBeGreaterThanOrEqual(0.5);
+    expect(pointCameraToleranceM(points, 18)).toBeLessThan(1.1);
   });
 });

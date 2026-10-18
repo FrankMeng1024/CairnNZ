@@ -35,6 +35,11 @@ describe('real Mapbox Web consumer coverage', () => {
 
   test('Web camera supports the detail-screen fitBounds contract', () => {
     expect(adapter).toContain('fitBounds: (northEast, southWest, padding = 0, animationDuration = 0)');
+    expect(adapter).toContain('} : null;');
+    expect(adapter).toContain('retainPadding: true');
+    expect(adapter).toContain('const sequencePadding = config.stops.find(stop => stop.padding)?.padding;');
+    expect(adapter).toContain('applyStop(centerOnlyStop');
+    expect(adapter).not.toContain('padding: undefined');
     expect(adapter).toContain('inner.fitBounds([southWest, northEast]');
   });
 

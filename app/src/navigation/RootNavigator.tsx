@@ -310,6 +310,7 @@ export function RootNavigator() {
               // These handles remain Web-only like the surrounding QA bridge.
               stores.useMemorySubscriptionsStore = require('../features/memory/store/useMemorySubscriptionsStore').useMemorySubscriptionsStore;
               stores.useFriendMemoryStore = require('../features/memory/store/useFriendMemoryStore').useFriendMemoryStore;
+              stores.usePreparedMemoryCoverageStore = require('../features/memory/store/usePreparedMemoryCoverageStore').usePreparedMemoryCoverageStore;
               stores.useMemoryScopeStore = require('../features/memory/store/useMemoryScopeStore').useMemoryScopeStore;
               stores.useMemoryCameraStore = require('../features/memory/store/useMemoryCameraStore').useMemoryCameraStore;
               stores.useMarkerStore = require('../store/useMarkerStore').useMarkerStore;

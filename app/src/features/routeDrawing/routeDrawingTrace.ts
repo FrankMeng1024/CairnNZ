@@ -41,6 +41,7 @@ export interface RouteDrawingTrace {
   version: number;
   sessionId: string;
   routeId: string;
+  accountId: string | null;
   source: { kind: 'route' | 'activity' | 'draft'; id: string | null };
   initialGeometryRevision: number | null;
   originalRoute: LngLat[];
@@ -81,8 +82,8 @@ export interface RouteDrawingReplayResult {
 
 export interface RouteOperationReplayEvidence {
   operationId: string;
-  kind: 'draw' | 'point' | 'session';
-  outcome: 'committed' | 'rejected' | 'abandoned' | 'incomplete';
+  kind: 'draw' | 'point' | 'trim' | 'session';
+  outcome: 'committed' | 'rejected' | 'cancelled' | 'abandoned' | 'incomplete';
   divergenceStage: RouteDrawingTraceStage | null;
   reason: string | null;
   preStateGeometry: LngLat[];
@@ -166,6 +167,7 @@ export function isRouteDrawingDiagnosticsEnabled(): boolean {
 export function beginRouteDrawingTrace(input: {
   sessionId: string;
   routeId: string;
+  accountId?: string | null;
   source: { kind: 'route' | 'activity' | 'draft'; id: string | null };
   initialGeometryRevision?: number | null;
   originalRoute: LngLat[];
@@ -185,6 +187,7 @@ export function beginRouteDrawingTrace(input: {
     version: TRACE_VERSION,
     sessionId: input.sessionId,
     routeId: input.routeId,
+    accountId: input.accountId ?? null,
     source: input.source,
     initialGeometryRevision: input.initialGeometryRevision ?? null,
     // An exact original is required for a trustworthy replay. If it cannot
@@ -207,6 +210,7 @@ export function beginRouteDrawingTrace(input: {
   }
   recordRouteDrawingTrace('route_session_started', {
     routeId: input.routeId,
+    accountId: input.accountId ?? null,
     source: input.source,
     initialGeometryRevision: input.initialGeometryRevision ?? null,
     initialUndoDepth: input.initialUndoDepth,
@@ -226,7 +230,7 @@ export function endRouteDrawingTrace(reason: 'saved' | 'cancelled' | 'detached' 
   operationByStrokeId = new Map();
 }
 
-export function selectRouteDrawingOperation(strokeId: string, kind: 'draw' | 'point' = 'draw'): string {
+export function selectRouteDrawingOperation(strokeId: string, kind: 'draw' | 'point' | 'trim' = 'draw'): string {
   const trace = currentTrace();
   if (!trace) return `disabled:${strokeId}`;
   const existing = operationByStrokeId.get(strokeId);
@@ -344,15 +348,21 @@ export function replayRouteOperationEvidence(
   const events = trace.events.filter(event => event.operationId === operationId);
   const find = (kind: string) => [...events].reverse().find(event => event.kind === kind) ?? null;
   const pointRequest = find('route_point_provider_request');
+  const trimStarted = find('route_trim_started');
   const drawInput = find('route_draw_geographic_stroke') ?? find('brush_end');
   const drawIntent = find('route_draw_transaction_intent');
   const provider = find('route_point_provider_response') ?? find('route_draw_provider_response') ?? find('brush_full_dump');
   const selected = find('route_point_candidate_selected') ?? find('route_draw_intent_decision') ?? find('brush_intent_decision');
   const rejected = find('route_draw_rejected') ?? find('route_draw_ambiguous');
   const committed = find('route_draw_commit');
+  const terminal = find('route_operation_terminal');
   const abandoned = find('route_creation_abandoned');
-  const kind = pointRequest ? 'point' : drawInput ? 'draw' : 'session';
-  const outcome = committed ? 'committed' : rejected ? 'rejected' : abandoned ? 'abandoned' : 'incomplete';
+  const kind = pointRequest ? 'point' : trimStarted ? 'trim' : drawInput ? 'draw' : 'session';
+  const terminalOutcome = String(terminal?.payload.outcome ?? '');
+  const outcome = committed ? 'committed'
+    : terminalOutcome === 'cancelled' ? 'cancelled'
+      : rejected || terminalOutcome === 'rejected' || terminalOutcome === 'failed' ? 'rejected'
+        : abandoned ? 'abandoned' : 'incomplete';
   const reasonValue = rejected?.payload.code ?? rejected?.payload.reason
     ?? selected?.payload.reason ?? abandoned?.payload.reason ?? null;
   return {
@@ -360,9 +370,12 @@ export function replayRouteOperationEvidence(
     kind,
     outcome,
     divergenceStage: rejected?.stage ?? selected?.stage ?? null,
-    reason: reasonValue == null ? null : String(reasonValue),
+    reason: reasonValue == null
+      ? (terminal?.payload.reason == null ? null : String(terminal.payload.reason))
+      : String(reasonValue),
     preStateGeometry: clonePoints(pointRequest?.payload.preStateGeometry
       ?? drawIntent?.payload.preStateGeometry
+      ?? trimStarted?.payload.preStateGeometry
       ?? trace.originalRoute),
     inputGeometry: clonePoints(pointRequest ? [pointRequest.payload.start, pointRequest.payload.target] : drawInput?.payload.rawPoints),
     providerGeometry: clonePoints(provider?.payload.providerGeometry ?? provider?.payload.stitched_curve_full),
@@ -371,6 +384,7 @@ export function replayRouteOperationEvidence(
       ?? selected?.payload.finalGeometry),
     finalGeometry: clonePoints(committed?.payload.finalGeometry
       ?? rejected?.payload.unchangedFinalGeometry
+      ?? terminal?.payload.finalGeometry
       ?? abandoned?.payload.finalGeometry),
   };
 }

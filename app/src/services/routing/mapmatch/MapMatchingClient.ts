@@ -16,7 +16,7 @@
  *
  * Network policy:
  *   - 8s timeout per request.
- *   - 1 retry on network/5xx (not on 4xx).
+ *   - No hidden retry. The editor owns one finite Draw operation deadline.
  *   - 300 req/min Mapbox rate limit; we don't enforce client-side
  *     because debounce + via cap (5) keeps us well under.
  */
@@ -35,7 +35,6 @@ const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
 // false-snap is mitigated by the warning + user's own visual review.
 const ENDPOINT_BASE = 'https://api.mapbox.com/matching/v5/mapbox/walking';
 const TIMEOUT_MS = 8_000;
-const MAX_RETRIES = 1;
 
 interface MapboxMatchingResponse {
   code: string;
@@ -44,7 +43,126 @@ interface MapboxMatchingResponse {
     geometry: { type: 'LineString'; coordinates: [number, number][] };
     legs?: Array<{ confidence?: number }>;
   }>;
+  tracepoints?: Array<null | {
+    matchings_index: number;
+    waypoint_index: number | null;
+    alternatives_count: number;
+    location: [number, number];
+  }>;
   message?: string;
+}
+
+interface ProjectedTracepoint {
+  inputIndex: number;
+  location: [number, number];
+  progress: number;
+  alternativesCount: number;
+}
+
+function projectToGeometry(
+  geometry: LngLat[],
+  location: [number, number],
+  minimumProgress: number,
+): { point: LngLat; progress: number } | null {
+  if (geometry.length < 2) return null;
+  const target = { lng: location[0], lat: location[1] };
+  const latitude = target.lat * Math.PI / 180;
+  const scaleX = Math.max(0.01, Math.cos(latitude));
+  let best: { point: LngLat; progress: number; distanceSquared: number } | null = null;
+  const firstSegment = Math.max(0, Math.min(geometry.length - 2, Math.floor(minimumProgress)));
+  for (let index = firstSegment; index < geometry.length - 1; index += 1) {
+    const start = geometry[index];
+    const end = geometry[index + 1];
+    const ax = (start.lng - target.lng) * scaleX;
+    const ay = start.lat - target.lat;
+    const bx = (end.lng - target.lng) * scaleX;
+    const by = end.lat - target.lat;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const denominator = dx * dx + dy * dy;
+    const minimumFraction = index === firstSegment ? Math.max(0, minimumProgress - index) : 0;
+    const fraction = denominator <= Number.EPSILON
+      ? minimumFraction
+      : Math.max(minimumFraction, Math.min(1, -(ax * dx + ay * dy) / denominator));
+    const x = ax + fraction * dx;
+    const y = ay + fraction * dy;
+    const candidate = {
+      point: {
+        lng: start.lng + (end.lng - start.lng) * fraction,
+        lat: start.lat + (end.lat - start.lat) * fraction,
+      },
+      progress: index + fraction,
+      distanceSquared: x * x + y * y,
+    };
+    if (!best || candidate.distanceSquared < best.distanceSquared) best = candidate;
+  }
+  return best ? { point: best.point, progress: best.progress } : null;
+}
+
+function geometryBetween(
+  geometry: LngLat[],
+  start: ProjectedTracepoint,
+  end: ProjectedTracepoint,
+): LngLat[] | null {
+  if (end.progress <= start.progress + 1e-6) return null;
+  const points: LngLat[] = [{ lng: start.location[0], lat: start.location[1] }];
+  for (let index = Math.floor(start.progress) + 1; index <= Math.floor(end.progress); index += 1) {
+    const point = geometry[index];
+    if (point) points.push({ ...point });
+  }
+  points.push({ lng: end.location[0], lat: end.location[1] });
+  return points.filter((point, index) => index === 0
+    || Math.abs(point.lng - points[index - 1].lng) > 1e-10
+    || Math.abs(point.lat - points[index - 1].lat) > 1e-10);
+}
+
+function mappedSegmentsForMatching(
+  geometry: LngLat[],
+  tracepoints: NonNullable<MapboxMatchingResponse['tracepoints']>,
+  matchingIndex: number,
+  confidence: number,
+): Array<{
+  points: LngLat[];
+  confidence: number;
+  inputStartIndex?: number;
+  inputEndIndex?: number;
+  alternativesCount?: number;
+}> {
+  const belonging = tracepoints
+    .map((tracepoint, inputIndex) => ({ tracepoint, inputIndex }))
+    .filter(({ tracepoint }) => tracepoint?.matchings_index === matchingIndex && Array.isArray(tracepoint.location));
+  if (belonging.length === 0) return [{ points: geometry, confidence }];
+  const projected: ProjectedTracepoint[] = [];
+  let minimumProgress = 0;
+  for (const { tracepoint, inputIndex } of belonging) {
+    const projection = projectToGeometry(geometry, tracepoint!.location, minimumProgress);
+    if (!projection) continue;
+    minimumProgress = projection.progress;
+    projected.push({
+      inputIndex,
+      location: tracepoint!.location,
+      progress: projection.progress,
+      alternativesCount: tracepoint!.alternatives_count ?? 0,
+    });
+  }
+  const runs: ProjectedTracepoint[][] = [];
+  for (const point of projected) {
+    const current = runs.at(-1);
+    if (!current || point.inputIndex !== current.at(-1)!.inputIndex + 1) runs.push([point]);
+    else current.push(point);
+  }
+  return runs.flatMap(run => {
+    if (run.length < 2) return [];
+    const points = geometryBetween(geometry, run[0], run.at(-1)!);
+    if (!points || points.length < 2) return [];
+    return [{
+      points,
+      confidence,
+      inputStartIndex: run[0].inputIndex,
+      inputEndIndex: run.at(-1)!.inputIndex,
+      alternativesCount: Math.max(...run.map(point => point.alternativesCount)),
+    }];
+  });
 }
 
 function fetchWithTimeout(
@@ -152,7 +270,13 @@ function buildUrl(segment: MatchSegment): string {
 function parseResponse(body: MapboxMatchingResponse): {
   matchedPoints: LngLat[];
   confidence: number;
-  segments: { points: LngLat[]; confidence: number }[];
+  segments: {
+    points: LngLat[];
+    confidence: number;
+    inputStartIndex?: number;
+    inputEndIndex?: number;
+    alternativesCount?: number;
+  }[];
 } | null {
   if (!body.matchings || body.matchings.length === 0) return null;
   // v263: extract ALL matchings. Mapbox can split a single input into
@@ -161,11 +285,23 @@ function parseResponse(body: MapboxMatchingResponse): {
   // missing the segment containing the end-anchor C → 300m+ splice gaps.
   // Legacy fields (matchedPoints / confidence) keep v260-v262 behavior
   // = matchings[0]; new callers consume `segments`.
-  const segments: { points: LngLat[]; confidence: number }[] = [];
-  for (const m of body.matchings) {
+  const segments: {
+    points: LngLat[];
+    confidence: number;
+    inputStartIndex?: number;
+    inputEndIndex?: number;
+    alternativesCount?: number;
+  }[] = [];
+  for (let matchingIndex = 0; matchingIndex < body.matchings.length; matchingIndex += 1) {
+    const m = body.matchings[matchingIndex];
     if (!m.geometry || m.geometry.type !== 'LineString') continue;
     const points: LngLat[] = m.geometry.coordinates.map(([lng, lat]) => ({ lng, lat }));
-    segments.push({ points, confidence: m.confidence ?? 0 });
+    segments.push(...mappedSegmentsForMatching(
+      points,
+      body.tracepoints ?? [],
+      matchingIndex,
+      m.confidence ?? 0,
+    ));
   }
   if (segments.length === 0) return null;
   return {
@@ -210,9 +346,7 @@ export async function matchSegment(
   }
 
   const url = buildUrl(segment);
-  let lastErr: any = null;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
+  try {
       const res = await fetchWithTimeout(url, TIMEOUT_MS, options?.signal);
       if (res.status === 429) {
         return { ok: false, reason: 'rate-limit', durationMs: Date.now() - t0 };
@@ -221,10 +355,6 @@ export async function matchSegment(
         return { ok: false, reason: 'auth', detail: `HTTP ${res.status}`, durationMs: Date.now() - t0 };
       }
       if (res.status >= 500) {
-        if (attempt < MAX_RETRIES) {
-          lastErr = new Error(`HTTP ${res.status}`);
-          continue;
-        }
         return {
           ok: false,
           reason: 'network',
@@ -267,17 +397,14 @@ export async function matchSegment(
         durationMs: Date.now() - t0,
       };
     } catch (e: any) {
-      lastErr = e;
       if (e?.message === 'timeout') {
-        if (attempt < MAX_RETRIES) continue;
         return { ok: false, reason: 'timeout', durationMs: Date.now() - t0 };
       }
-      // v6.3 R3 C3: external AbortSignal cancellation. Distinct from timeout
-      // (which retries) — caller-cancel must NOT retry: the user backed out.
+      // v6.3 R3 C3: external AbortSignal cancellation. Distinct from timeout;
+      // caller-cancel must remain terminal because the user backed out.
       if (e?.message === 'aborted') {
         return { ok: false, reason: 'invalid-input', detail: 'aborted', durationMs: Date.now() - t0 };
       }
-      if (attempt < MAX_RETRIES) continue;
       return {
         ok: false,
         reason: 'network',
@@ -285,11 +412,4 @@ export async function matchSegment(
         durationMs: Date.now() - t0,
       };
     }
-  }
-  return {
-    ok: false,
-    reason: 'network',
-    detail: lastErr ? String(lastErr.message ?? lastErr) : 'unknown',
-    durationMs: Date.now() - t0,
-  };
 }

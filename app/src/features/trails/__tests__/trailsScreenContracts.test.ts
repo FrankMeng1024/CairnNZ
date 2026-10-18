@@ -76,7 +76,7 @@ describe('Trails personal journey library screen contracts', () => {
     const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
     expect(trails).toContain("createStep === 'source' ? 'route-create-source' : 'route-activity-picker'");
     expect(trails).toContain('testID="route-create-activity"');
-    expect(trails).toContain("leaveCreateFlow({ creationSource: 'activity', fromSessionId: session.id })");
+    expect(trails).toContain("leaveCreateFlow({\n                    creationSource: 'activity',\n                    fromSessionId: session.id,\n                    creationSessionId: createRouteCreationSessionId(),");
     expect(trails).toContain('onClosed={finishCreateTransition}');
     expect(detail).not.toContain('activity-save-as-route');
     expect(detail).not.toContain('Save as Route');

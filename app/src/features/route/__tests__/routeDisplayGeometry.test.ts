@@ -25,21 +25,25 @@ describe('display-only repeated traversal projection', () => {
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 
-  test('A to B to A uses two stable opposite lanes without changing canonical geometry', () => {
+  test('A to B to A keeps one continuous offset path through the real turn without changing canonical geometry', () => {
     const canonical = canonicalRouteGeometry({ points: [p(0), p(50), p(100), p(50), p(0)] });
     const before = canonicalRouteGeometryFingerprint(canonical);
     const display = buildRouteDisplayGeometry(canonical);
-    expect(display.repeatLanes.map(lane => lane.offsetPx).sort()).toEqual([-3, 3]);
-    expect(display.repeatLanes.every(lane => lane.multiplicity === 1)).toBe(true);
+    expect(display.repeatLanes).toHaveLength(1);
+    expect(display.repeatLanes[0].offsetPx).toBe(3);
+    expect(display.repeatLanes[0].multiplicity).toBe(2);
+    expect(display.repeatLanes[0].coordinates).toEqual(expect.arrayContaining([p(100)]));
+    expect(display.repeatLabels).toEqual([]);
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 
-  test('five passes cap display lanes at two and retain directional multiplicity', () => {
+  test('five passes stay a continuous serpentine and use a traversal count without arrows', () => {
     const canonical = canonicalRouteGeometry({ points: [p(0), p(100), p(0), p(100), p(0), p(100)] });
     const display = buildRouteDisplayGeometry(canonical);
-    expect(display.repeatLanes).toHaveLength(2);
-    expect(display.repeatLanes.map(lane => lane.multiplicity).sort()).toEqual([2, 3]);
-    expect(display.repeatLabels.map(label => label.text).sort()).toEqual(['← ×2', '→ ×3']);
+    expect(display.repeatLanes).toHaveLength(1);
+    expect(display.repeatLanes[0].multiplicity).toBe(5);
+    expect(display.repeatLabels.map(label => label.text)).toEqual(['5 traversals']);
+    expect(display.repeatLabels[0].text).not.toMatch(/[←→]/);
   });
 
   test('nearby parallel geometry is not mistaken for the same traversal', () => {
@@ -52,19 +56,29 @@ describe('display-only repeated traversal projection', () => {
       points: [p(0), p(30, 18), p(70, 18), p(100), p(70, 18), p(30, 18)],
     });
     const display = buildRouteDisplayGeometry(canonical);
-    expect(display.repeatLanes).toHaveLength(2);
+    expect(display.repeatLanes).toHaveLength(1);
     expect(display.repeatLanes.flatMap(lane => lane.occurrenceIds)).toHaveLength(4);
     expect(display.baseLines.flatMap(line => line.coordinates)).toContainEqual(p(0));
     expect(display.repeatLanes.flatMap(line => line.coordinates)).toContainEqual(p(100));
   });
 
-  test('same-direction repeats use a count without inventing an opposite lane', () => {
+  test('same-direction repeats are recognized without inventing an opposite direction arrow', () => {
     const canonical = canonicalRouteGeometry({ points: [p(0), p(100), p(0, 20), p(100, 20), p(0), p(100)] });
     const display = buildRouteDisplayGeometry(canonical);
     const repeated = display.repeatLanes.filter(lane => lane.multiplicity > 1);
-    expect(repeated).toHaveLength(1);
-    expect(repeated[0]).toMatchObject({ direction: 'forward', multiplicity: 2, offsetPx: 0 });
-    expect(display.repeatLabels.find(label => label.id.includes(repeated[0].id))?.text).toBe('→ ×2');
+    expect(repeated.length).toBeGreaterThan(0);
+    expect(repeated.every(lane => lane.offsetPx === 3)).toBe(true);
+    expect(display.repeatLabels.every(label => !/[←→]/.test(label.text))).toBe(true);
+  });
+
+  test('different sampling densities on the return share the same display corridor', () => {
+    const canonical = canonicalRouteGeometry({
+      points: [p(0), p(100), p(75), p(50), p(25), p(0)],
+    });
+    const display = buildRouteDisplayGeometry(canonical);
+    expect(display.repeatLanes).toHaveLength(1);
+    expect(display.repeatLanes[0].multiplicity).toBe(2);
+    expect(display.baseLines).toEqual([]);
   });
 
   test('an explicit gap remains a boundary even when its endpoints coincide', () => {

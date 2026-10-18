@@ -799,6 +799,13 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       // Store not loaded yet — nothing to reset.
     }
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { usePreparedMemoryCoverageStore } = require('../features/memory/store/usePreparedMemoryCoverageStore');
+      usePreparedMemoryCoverageStore.getState().reset();
+    } catch (_e) {
+      // Store not loaded yet — nothing to reset.
+    }
+    try {
       // Exact friend grants and protected-place coordinates are account data.
       // Clear them synchronously before any signed-out or next-account render.
       // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1099,6 +1106,13 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const { useFriendMemoryStore } = require('../features/memory/store/useFriendMemoryStore');
           useFriendMemoryStore.getState().reset();
+        } catch (_e) {
+          // Store not loaded yet — nothing to reset.
+        }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { usePreparedMemoryCoverageStore } = require('../features/memory/store/usePreparedMemoryCoverageStore');
+          usePreparedMemoryCoverageStore.getState().reset();
         } catch (_e) {
           // Store not loaded yet — nothing to reset.
         }

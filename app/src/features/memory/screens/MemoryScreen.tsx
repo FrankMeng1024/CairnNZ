@@ -29,6 +29,7 @@ import { useMemorySettingsStore } from '../store/useMemorySettingsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
+import { usePreparedMemoryCoverageStore } from '../store/usePreparedMemoryCoverageStore';
 import { useMemoryCameraStore } from '../store/useMemoryCameraStore';
 import { useFriendStore } from '../../../store/useFriendStore';
 import { readLastFix } from '../services/lastFixCache';
@@ -236,7 +237,7 @@ export function MemoryScreen() {
   // Outgoing sharing is managed in Friends; this is display selection only.
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
-  const selectedMemoryFriendId = useMemoryScopeStore((s) => s.selectedFriendId);
+  const activateMemoryScopeOwner = useMemoryScopeStore((s) => s.activateOwner);
   const [fogReady, setFogReady] = useState(false);
   const [fogUnavailable, setFogUnavailable] = useState(false);
   const entryUsableRef = useRef(false);
@@ -246,7 +247,6 @@ export function MemoryScreen() {
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
-  const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
   const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
   const friendProjectionError = useFriendMemoryStore((s) => s.error);
   const friendProjections = useFriendMemoryStore((s) => s.projections);
@@ -267,6 +267,11 @@ export function MemoryScreen() {
   const manualBrowseThisMountRef = useRef(false);
   const currentCityAppliedRef = useRef<string | null>(null);
   const currentLocationViewportRef = useRef<MemoryCityViewport | null>(null);
+  useEffect(() => {
+    // Remember the user's Mine/Friends choice while navigating in the same
+    // signed-in session, but never carry it across an account boundary.
+    activateMemoryScopeOwner(activeOwnerId);
+  }, [activateMemoryScopeOwner, activeOwnerId]);
   useEffect(() => {
     if (!activeOwnerId || cameraOwnerId === activeOwnerId) return;
     void hydrateMemoryCamera(activeOwnerId);
@@ -422,6 +427,7 @@ export function MemoryScreen() {
     log('v360.user_retry');
     setMapReady(false);
     setFogReady(false);
+    setFogUnavailable(false);
     setRefetchToken((n) => n + 1);
     setMountKey((n) => {
       const next = n + 1;
@@ -528,6 +534,7 @@ export function MemoryScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      let focusActive = true;
       // O1 (2026-07-26) stale closure fix: 从 ref/store getState 拿 latest
       // 值。原代码 mountKey / settingsHydrated 在 React.useCallback(fn, [])
       // 空 deps 里读 = 永远拿首次 mount 时的 0 / false, log 数据完全失真
@@ -566,9 +573,6 @@ export function MemoryScreen() {
       manualBrowseThisMountRef.current = false;
       currentCityAppliedRef.current = null;
       const now = Date.now();
-      // Reset scope to 'mine' on every focus — per product spec, social
-      // view is a deliberate switch, not a persistent default.
-      useMemoryScopeStore.getState().setScope('self');
       // Fence the prior focus synchronously. Waiting for the subscriptions
       // request would leave a small revoke window where the old verified
       // projection could be made visible from another map control.
@@ -581,10 +585,25 @@ export function MemoryScreen() {
         if (!ownerId) return;
         if (useFriendMemoryStore.getState().userId !== ownerId) {
           await hydrateFriendProjections(ownerId);
+          if (!focusActive || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
         }
         const authorityLoaded = await loadSubs();
-        if (authorityLoaded === false) return;
-        await Promise.all([loadFriendProjections(), loadCircleMarkers()]);
+        if (!focusActive || authorityLoaded === false
+          || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
+        // MemoryMap stays mounted between tabs. Reclaim its exact viewport
+        // after fresh authorization: Route can legitimately have replaced the
+        // singleton prepared/Friends viewport while Memory was blurred, and
+        // unchanged camera/selection keys would otherwise never retrigger the
+        // FogLayer effects after suspendVisibility().
+        const memoryViewport = mapRef.current?.getCoverageViewport();
+        if (memoryViewport) {
+          await Promise.all([
+            usePreparedMemoryCoverageStore.getState().loadViewport(memoryViewport),
+            useFriendMemoryStore.getState().loadSelectedProjections(undefined, memoryViewport),
+          ]);
+        }
+        if (!focusActive || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
+        await loadCircleMarkers();
       })();
       lastMountAtRef.current = now;
       if (now - lastRefetchAtRef.current >= FOCUS_REFETCH_DEBOUNCE_MS) {
@@ -603,6 +622,10 @@ export function MemoryScreen() {
         log('memory.js_heartbeat', { elapsed_ms: elapsed });
       }, 500) : null;
       return () => {
+        // An authorization refresh may still be in flight when the user opens
+        // Route. Never let the blurred Memory task reclaim the two shared
+        // coverage viewports or overwrite Route's active request generation.
+        focusActive = false;
         if (heartbeat) clearInterval(heartbeat);
         log('memory.tab_blur', { total_focus_ms: Date.now() - heartbeatStart });
         // v327: force-flush logs on tab blur. Without this, all the
@@ -611,7 +634,7 @@ export function MemoryScreen() {
         // while inside the tab can never be diagnosed otherwise.
         void flushLogsNow();
       };
-    }, [hydrateFriendProjections, loadCircleMarkers, loadFriendProjections, loadSubs])
+    }, [hydrateFriendProjections, loadCircleMarkers, loadSubs])
   );
 
   // R4 + S1: only fetch a one-shot fix when (a) user explicitly
@@ -793,7 +816,7 @@ export function MemoryScreen() {
   const mapMayBeShown = Boolean(persistentCoord);
   const memoryEntryUsable = mapMayBeShown && mapReady && (fogReady || fogUnavailable);
   const memoryPreviewKey = activeOwnerId
-    ? `${activeOwnerId}:${memoryScope}:${selectedMemoryFriendId ?? 'none'}:${subscriptions.map(item => item.friend_id).sort((a, b) => a - b).join(',')}:${theme.mode}`
+    ? `${activeOwnerId}:${memoryScope}:${subscriptions.map(item => item.friend_id).sort((a, b) => a - b).join(',')}:${theme.mode}`
     : null;
   const authorizedPreviewUri = memoryPreviewKey && _authorizedMemoryPreview?.key === memoryPreviewKey
     ? _authorizedMemoryPreview.uri

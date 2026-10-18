@@ -27,9 +27,12 @@ import { DismissButton } from '../../../components/DismissButton';
 interface Props {
   visible: boolean;
   onClose: () => void;
+  /** Memory opts into combined scope after selection; Route keeps its own
+   * independent display scope while editing the shared contributor set. */
+  activateCombinedOnSelect?: boolean;
 }
 
-export function MemoryFriendPickModal({ visible, onClose }: Props) {
+export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSelect = true }: Props) {
   const theme = useVisualTheme();
   const sources = useMemorySubscriptionsStore((s) => s.availableSources);
   const loading = useMemorySubscriptionsStore((s) => s.loading);
@@ -107,7 +110,7 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
     const status = await subscribe(friendId);
     setPendingIds(ids => ids.filter(id => id !== friendId));
     if (status >= 200 && status < 300) {
-      setScope('combined');
+      if (activateCombinedOnSelect) setScope('combined');
       void loadFriendProjections([friendId]);
       return;
     }
@@ -116,7 +119,7 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
       await load();
       const reconciled = useMemorySubscriptionsStore.getState();
       if (reconciled.isSubscribed(friendId)) {
-        setScope('combined');
+        if (activateCombinedOnSelect) setScope('combined');
         void loadFriendProjections([friendId]);
       } else {
         setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not select this friend. Try again.' }));
@@ -136,7 +139,7 @@ export function MemoryFriendPickModal({ visible, onClose }: Props) {
       setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not deselect this friend. Try again.' }));
       return;
     }
-    setScope('combined');
+    if (activateCombinedOnSelect) setScope('combined');
   };
 
   return (

@@ -9,36 +9,160 @@ export interface PointGrowthFrame {
   totalM: number;
 }
 
-export function pointGrowthDurationMs(points: RoutePoint[]): number {
-  const totalM = points.slice(1).reduce((sum, point, index) => sum + routePointDistanceM(points[index], point), 0);
-  return Math.round(Math.max(720, Math.min(2_200, 620 + totalM * 3.1)));
+export interface PointGrowthSample {
+  progress: number;
+  head: RoutePoint;
+  visiblePointCount: number;
+  travelledM: number;
+  totalM: number;
 }
 
-/** One arc-length clock owns both the revealed line and camera head. */
-export function pointGrowthFrame(points: RoutePoint[], progress: number): PointGrowthFrame | null {
+export interface PointGrowthTimeline {
+  points: RoutePoint[];
+  cumulativeM: number[];
+  totalM: number;
+}
+
+export interface PointCameraStop {
+  point: RoutePoint;
+  progress: number;
+  sourceIndex: number;
+}
+
+export function preparePointGrowthTimeline(points: RoutePoint[]): PointGrowthTimeline | null {
   if (points.length < 2) return null;
-  const cumulative = [0];
-  for (let index = 1; index < points.length; index += 1) {
-    cumulative.push(cumulative[index - 1] + routePointDistanceM(points[index - 1], points[index]));
+  const stablePoints = points.map(point => ({ ...point }));
+  const cumulativeM = [0];
+  for (let index = 1; index < stablePoints.length; index += 1) {
+    cumulativeM.push(cumulativeM[index - 1] + routePointDistanceM(stablePoints[index - 1], stablePoints[index]));
   }
-  const totalM = cumulative.at(-1)!;
-  if (totalM <= 0) return null;
+  const totalM = cumulativeM.at(-1)!;
+  return Number.isFinite(totalM) && totalM > 0 ? { points: stablePoints, cumulativeM, totalM } : null;
+}
+
+export function pointGrowthDurationMs(points: RoutePoint[]): number {
+  const totalM = points.slice(1).reduce((sum, point, index) => sum + routePointDistanceM(points[index], point), 0);
+  // Long legs must not be compressed into a two-second jump. The bounded
+  // visual speed keeps the moving head readable without turning navigation
+  // into a long animation workflow.
+  return Math.round(Math.max(720, Math.min(8_000, 620 + totalM * 8)));
+}
+
+function pointToSegmentDistanceM(
+  point: RoutePoint,
+  start: RoutePoint,
+  end: RoutePoint,
+): number {
+  const latitude = (point.lat + start.lat + end.lat) / 3;
+  const lngScale = 111_320 * Math.cos(latitude * Math.PI / 180);
+  const latScale = 110_574;
+  const px = (point.lng - start.lng) * lngScale;
+  const py = (point.lat - start.lat) * latScale;
+  const ex = (end.lng - start.lng) * lngScale;
+  const ey = (end.lat - start.lat) * latScale;
+  const lengthSquared = ex * ex + ey * ey;
+  if (lengthSquared <= 1e-9) return Math.hypot(px, py);
+  const fraction = Math.max(0, Math.min(1, (px * ex + py * ey) / lengthSquared));
+  return Math.hypot(px - ex * fraction, py - ey * fraction);
+}
+
+/**
+ * Reduce dense provider vertices to the actual bends the native camera must
+ * follow. Every retained stop is tied to the same source arc-length clock as
+ * the reveal head; no independent camera timeline or per-provider-vertex
+ * chase is introduced.
+ */
+export function pointCameraStops(
+  timeline: PointGrowthTimeline,
+  toleranceM: number,
+): PointCameraStop[] {
+  const { points, cumulativeM, totalM } = timeline;
+  if (points.length < 2 || totalM <= 0) return [];
+  const keep = new Set<number>([0, points.length - 1]);
+  const ranges: Array<[number, number]> = [[0, points.length - 1]];
+  const threshold = Math.max(0.2, toleranceM);
+  while (ranges.length > 0) {
+    const [startIndex, endIndex] = ranges.pop()!;
+    if (endIndex - startIndex <= 1) continue;
+    let furthestIndex = -1;
+    let furthestDistanceM = threshold;
+    for (let index = startIndex + 1; index < endIndex; index += 1) {
+      const distanceM = pointToSegmentDistanceM(points[index], points[startIndex], points[endIndex]);
+      if (distanceM > furthestDistanceM) {
+        furthestDistanceM = distanceM;
+        furthestIndex = index;
+      }
+    }
+    if (furthestIndex < 0) continue;
+    keep.add(furthestIndex);
+    ranges.push([startIndex, furthestIndex], [furthestIndex, endIndex]);
+  }
+  return [...keep]
+    .sort((a, b) => a - b)
+    .map(sourceIndex => ({
+      point: points[sourceIndex],
+      progress: cumulativeM[sourceIndex] / totalM,
+      sourceIndex,
+    }));
+}
+
+export function pointCameraToleranceM(points: RoutePoint[], zoom: number): number {
+  const latitude = points.length > 0
+    ? points.reduce((sum, point) => sum + point.lat, 0) / points.length
+    : 0;
+  const metresPerPixel = 156_543.03392 * Math.cos(latitude * Math.PI / 180) / 2 ** Math.max(0, zoom);
+  // The previous sub-pixel cap retained nearly every small provider bend
+  // (19 camera stops on the real Test2 leg). Each stop restarts a native/Web
+  // camera segment even though the resulting correction is visually
+  // imperceptible. A two-screen-pixel bound keeps the reveal head centered
+  // while materially reducing programmatic camera churn.
+  return Math.max(0.5, Math.min(8, metresPerPixel * 2));
+}
+
+/**
+ * Allocation-light animation sample. The hot path does not rebuild the
+ * already-committed provider polyline on every display frame.
+ */
+export function pointGrowthSample(timeline: PointGrowthTimeline, progress: number): PointGrowthSample {
+  const { points, cumulativeM: cumulative, totalM } = timeline;
   const normalized = Math.max(0, Math.min(1, progress));
   const travelledM = normalized * totalM;
-  let endIndex = 1;
-  while (endIndex < cumulative.length - 1 && cumulative[endIndex] < travelledM) endIndex += 1;
+  let low = 1;
+  let high = cumulative.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (cumulative[middle] < travelledM) low = middle + 1;
+    else high = middle;
+  }
+  const endIndex = low;
   const segmentStartM = cumulative[endIndex - 1];
   const segmentLengthM = Math.max(1e-9, cumulative[endIndex] - segmentStartM);
   const fraction = Math.max(0, Math.min(1, (travelledM - segmentStartM) / segmentLengthM));
   const start = points[endIndex - 1];
   const end = points[endIndex];
-  const head = {
-    lat: start.lat + (end.lat - start.lat) * fraction,
-    lng: start.lng + (end.lng - start.lng) * fraction,
+  return {
+    progress: normalized,
+    head: {
+      lat: start.lat + (end.lat - start.lat) * fraction,
+      lng: start.lng + (end.lng - start.lng) * fraction,
+    },
+    visiblePointCount: endIndex + 1,
+    travelledM,
+    totalM,
   };
-  const visiblePoints = [...points.slice(0, endIndex), head];
-  if (normalized >= 1) visiblePoints[visiblePoints.length - 1] = { ...points.at(-1)! };
-  return { progress: normalized, head, visiblePoints, travelledM, totalM };
+}
+
+/** One arc-length clock owns both the revealed line and camera head. */
+export function pointGrowthFrame(pointsOrTimeline: RoutePoint[] | PointGrowthTimeline, progress: number): PointGrowthFrame | null {
+  const timeline = Array.isArray(pointsOrTimeline)
+    ? preparePointGrowthTimeline(pointsOrTimeline)
+    : pointsOrTimeline;
+  if (!timeline) return null;
+  const sample = pointGrowthSample(timeline, progress);
+  const endIndex = Math.max(1, sample.visiblePointCount - 1);
+  const visiblePoints = [...timeline.points.slice(0, endIndex), sample.head];
+  if (sample.progress >= 1) visiblePoints[visiblePoints.length - 1] = { ...timeline.points.at(-1)! };
+  return { ...sample, visiblePoints };
 }
 
 export function pointInsideUsableMap(
@@ -51,4 +175,3 @@ export function pointInsideUsableMap(
   const bottom = viewport.height - viewport.bottomInset - 56;
   return point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
 }
-

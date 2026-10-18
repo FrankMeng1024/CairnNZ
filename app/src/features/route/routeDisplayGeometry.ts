@@ -30,156 +30,258 @@ export interface RouteDisplayGeometry {
 
 interface DisplaySegment {
   id: string;
+  occurrenceId: string;
   a: RoutePoint;
   b: RoutePoint;
-  key: string;
-  referenceA: RoutePoint;
-  referenceB: RoutePoint;
-  direction: 'forward' | 'backward';
   breakBefore: boolean;
 }
 
 const CONNECTED_M = 0.5;
-const KEY_SCALE = 1_000_000;
-
-function pointKey(point: RoutePoint): string {
-  return `${Math.round(point.lng * KEY_SCALE)},${Math.round(point.lat * KEY_SCALE)}`;
-}
+const DISPLAY_SAMPLE_M = 6;
+const RETRACE_CORRIDOR_M = 3.25;
+const RETRACE_HEADING_DEG = 28;
+const RETRACE_TURN_BRIDGE_M = 18;
 
 function clone(point: RoutePoint): RoutePoint {
   return { ...point };
 }
 
-function segmentDescriptor(id: string, a: RoutePoint, b: RoutePoint, breakBefore = false): DisplaySegment {
-  const aKey = pointKey(a);
-  const bKey = pointKey(b);
-  const forward = aKey <= bKey;
+function interpolate(a: RoutePoint, b: RoutePoint, fraction: number): RoutePoint {
   return {
-    id,
-    a: clone(a),
-    b: clone(b),
-    key: forward ? `${aKey}>${bKey}` : `${bKey}>${aKey}`,
-    referenceA: clone(forward ? a : b),
-    referenceB: clone(forward ? b : a),
-    direction: forward ? 'forward' : 'backward',
-    breakBefore,
+    lat: a.lat + (b.lat - a.lat) * fraction,
+    lng: a.lng + (b.lng - a.lng) * fraction,
   };
 }
 
+function localMetres(point: RoutePoint, origin: RoutePoint): [number, number] {
+  const latScale = 111_132;
+  const lngScale = 111_320 * Math.cos(origin.lat * Math.PI / 180);
+  return [(point.lng - origin.lng) * lngScale, (point.lat - origin.lat) * latScale];
+}
+
+function pointToSegmentDistanceM(point: RoutePoint, a: RoutePoint, b: RoutePoint): number {
+  const [px, py] = localMetres(point, a);
+  const [bx, by] = localMetres(b, a);
+  const denominator = bx * bx + by * by;
+  if (denominator <= Number.EPSILON) return Math.hypot(px, py);
+  const t = Math.max(0, Math.min(1, (px * bx + py * by) / denominator));
+  return Math.hypot(px - bx * t, py - by * t);
+}
+
+function headingCompatible(a: DisplaySegment, b: DisplaySegment): boolean {
+  const [ax, ay] = localMetres(a.b, a.a);
+  const [bx, by] = localMetres(b.b, b.a);
+  const length = Math.hypot(ax, ay) * Math.hypot(bx, by);
+  if (length <= Number.EPSILON) return false;
+  const absoluteCosine = Math.abs((ax * bx + ay * by) / length);
+  return absoluteCosine >= Math.cos(RETRACE_HEADING_DEG * Math.PI / 180);
+}
+
+function segmentsShareCorridor(a: DisplaySegment, b: DisplaySegment): boolean {
+  if (!headingCompatible(a, b)) return false;
+  const aMid = interpolate(a.a, a.b, 0.5);
+  const bMid = interpolate(b.a, b.b, 0.5);
+  return pointToSegmentDistanceM(aMid, b.a, b.b) <= RETRACE_CORRIDOR_M
+    && pointToSegmentDistanceM(bMid, a.a, a.b) <= RETRACE_CORRIDOR_M;
+}
+
+function subdivide(
+  occurrenceId: string,
+  a: RoutePoint,
+  b: RoutePoint,
+  breakBefore: boolean,
+): DisplaySegment[] {
+  const steps = Math.max(1, Math.ceil(routePointDistanceM(a, b) / DISPLAY_SAMPLE_M));
+  const result: DisplaySegment[] = [];
+  for (let index = 0; index < steps; index += 1) {
+    result.push({
+      id: `${occurrenceId}@${index}`,
+      occurrenceId,
+      a: interpolate(a, b, index / steps),
+      b: interpolate(a, b, (index + 1) / steps),
+      breakBefore: breakBefore && index === 0,
+    });
+  }
+  return result;
+}
+
+function traversalMultiplicity(matches: number[]): number {
+  const peers = [...matches].sort((a, b) => a - b);
+  let groups = 0;
+  let previous = Number.NEGATIVE_INFINITY;
+  for (const peer of peers) {
+    // Adjacent six-metre samples belong to one traversal occurrence.
+    if (peer - previous > 2) groups += 1;
+    previous = peer;
+  }
+  return Math.max(2, groups + 1);
+}
+
 /**
- * Build a reversible presentation projection from immutable canonical Route
- * coordinates. Connected tool/provider parts are rendered as one line so an
- * internal join never receives its own cap. Exact repeated traversals get at
- * most two direction-stable pixel lanes; no shifted point is returned to the
- * editor, persistence, metrics or navigation layers.
+ * Build a reversible, screen-space presentation from immutable canonical
+ * coordinates. Sampling is used only for overlap recognition; persistence,
+ * metrics and navigation keep using the untouched canonical geometry.
+ *
+ * Repeated intervals remain in original traversal order as a continuous
+ * offset feature. Mapbox rounds the real turning vertex into the small U that
+ * joins an out-and-back. Matching uses corridor and heading, so A-B can match
+ * B-M-A without requiring identical endpoint pairs.
  */
 export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): RouteDisplayGeometry {
   const gapAfter = new Set(geometry.gaps.map(gap => gap.afterPartId));
   const segments: DisplaySegment[] = [];
   geometry.parts.forEach((part, partIndex) => {
     part.points.slice(0, -1).forEach((point, pointIndex) => {
-      segments.push(segmentDescriptor(
+      segments.push(...subdivide(
         `${part.id}:${pointIndex}`,
         point,
         part.points[pointIndex + 1],
         pointIndex === 0 && partIndex > 0 && gapAfter.has(geometry.parts[partIndex - 1].id),
       ));
     });
-    const next = geometry.parts[partIndex + 1];
-    if (!next || gapAfter.has(part.id)) return;
-    const end = part.points.at(-1);
-    const start = next.points[0];
-    // Parts with a shared endpoint are already represented by their own
-    // adjacent segments. A non-zero connector is not invented here.
-    if (end && start && routePointDistanceM(end, start) > CONNECTED_M) return;
   });
 
-  const grouped = new Map<string, DisplaySegment[]>();
-  for (const segment of segments) grouped.set(segment.key, [...(grouped.get(segment.key) ?? []), segment]);
-  const repeatedKeys = new Set([...grouped].filter(([, entries]) => entries.length > 1).map(([key]) => key));
+  const matchIndexes = segments.map(() => [] as number[]);
+  for (let left = 0; left < segments.length; left += 1) {
+    for (let right = left + 3; right < segments.length; right += 1) {
+      if (segments[right].breakBefore) continue;
+      if (!segmentsShareCorridor(segments[left], segments[right])) continue;
+      matchIndexes[left].push(right);
+      matchIndexes[right].push(left);
+    }
+  }
+  const repeated = matchIndexes.map(matches => matches.length > 0);
 
-  const baseLines: RouteDisplayLine[] = [];
-  let active: RouteDisplayLine | null = null;
-  for (const segment of segments) {
-    if (repeatedKeys.has(segment.key)) {
-      if (active) baseLines.push(active);
-      active = null;
+  // The neighbour guard above intentionally prevents a segment from matching
+  // the immediately adjacent samples at a real turn. That leaves a tiny hole
+  // at the tip of an out-and-back. Bridge only a short, continuous hole that
+  // is bounded by already-proven overlap on both sides; never bridge a gap or
+  // a longer connector between distinct nearby paths.
+  let runStart = -1;
+  for (let index = 0; index <= repeated.length; index += 1) {
+    if (index < repeated.length && !repeated[index] && !segments[index].breakBefore) {
+      if (runStart < 0) runStart = index;
       continue;
     }
-    if (active && !segment.breakBefore && routePointDistanceM(active.coordinates.at(-1)!, segment.a) <= CONNECTED_M) {
-      active.coordinates.push(clone(segment.b));
-      active.occurrenceIds.push(segment.id);
+    if (runStart >= 0) {
+      const runEnd = index - 1;
+      const bounded = runStart > 0
+        && index < repeated.length
+        && repeated[runStart - 1]
+        && repeated[index]
+        && !segments[index].breakBefore;
+      const distance = bounded
+        ? segments.slice(runStart, runEnd + 1)
+          .reduce((sum, segment) => sum + routePointDistanceM(segment.a, segment.b), 0)
+        : Number.POSITIVE_INFINITY;
+      if (distance <= RETRACE_TURN_BRIDGE_M) {
+        for (let fill = runStart; fill <= runEnd; fill += 1) repeated[fill] = true;
+      }
+      runStart = -1;
+    }
+  }
+
+  // Most Routes do not retrace themselves. Preserve their exact canonical
+  // vertices in the display source: sampling above is recognition-only.
+  if (!repeated.some(Boolean)) {
+    const baseLines: RouteDisplayLine[] = [];
+    let active: RouteDisplayLine | null = null;
+    geometry.parts.forEach((part, partIndex) => {
+      const hasGap = partIndex > 0 && gapAfter.has(geometry.parts[partIndex - 1].id);
+      const occurrenceIds = part.points.slice(0, -1).map((_, index) => `${part.id}:${index}`);
+      if (active
+        && !hasGap
+        && routePointDistanceM(active.coordinates.at(-1)!, part.points[0]) <= CONNECTED_M) {
+        active.coordinates.push(...part.points.slice(1).map(clone));
+        active.occurrenceIds.push(...occurrenceIds);
+      } else {
+        active = {
+          id: `base:${part.id}`,
+          coordinates: part.points.map(clone),
+          occurrenceIds,
+        };
+        baseLines.push(active);
+      }
+    });
+    return { baseLines, repeatLanes: [], repeatLabels: [] };
+  }
+
+  const baseLines: RouteDisplayLine[] = [];
+  const repeatLanes: RouteRepeatLane[] = [];
+  let activeBase: RouteDisplayLine | null = null;
+  let activeRepeat: RouteRepeatLane | null = null;
+
+  const flushBase = () => {
+    if (activeBase) baseLines.push(activeBase);
+    activeBase = null;
+  };
+  const flushRepeat = () => {
+    if (activeRepeat) repeatLanes.push(activeRepeat);
+    activeRepeat = null;
+  };
+
+  segments.forEach((segment, index) => {
+    if (repeated[index]) {
+      flushBase();
+      const multiplicity = traversalMultiplicity(matchIndexes[index]);
+      if (activeRepeat
+        && !segment.breakBefore
+        && routePointDistanceM(activeRepeat.coordinates.at(-1)!, segment.a) <= CONNECTED_M) {
+        activeRepeat.coordinates.push(clone(segment.b));
+        if (!activeRepeat.occurrenceIds.includes(segment.occurrenceId)) {
+          activeRepeat.occurrenceIds.push(segment.occurrenceId);
+        }
+        activeRepeat.multiplicity = Math.max(activeRepeat.multiplicity, multiplicity);
+      } else {
+        flushRepeat();
+        activeRepeat = {
+          id: `repeat:${segment.id}`,
+          coordinates: [clone(segment.a), clone(segment.b)],
+          occurrenceIds: [segment.occurrenceId],
+          direction: 'forward',
+          multiplicity,
+          // Direction-relative +3 puts a reverse leg on the opposite physical
+          // side and keeps both legs joined at the canonical turn.
+          offsetPx: 3,
+        };
+      }
+      return;
+    }
+
+    flushRepeat();
+    if (activeBase
+      && !segment.breakBefore
+      && routePointDistanceM(activeBase.coordinates.at(-1)!, segment.a) <= CONNECTED_M) {
+      activeBase.coordinates.push(clone(segment.b));
+      if (!activeBase.occurrenceIds.includes(segment.occurrenceId)) {
+        activeBase.occurrenceIds.push(segment.occurrenceId);
+      }
     } else {
-      if (active) baseLines.push(active);
-      active = {
+      flushBase();
+      activeBase = {
         id: `base:${segment.id}`,
         coordinates: [clone(segment.a), clone(segment.b)],
-        occurrenceIds: [segment.id],
+        occurrenceIds: [segment.occurrenceId],
       };
     }
-  }
-  if (active) baseLines.push(active);
-
-  // With no repeated segment, preserve one continuous feature across every
-  // shared internal part boundary. This is the common multi-stroke case.
-  const rawRepeatLanes: RouteRepeatLane[] = [];
-  for (const [key, entries] of grouped) {
-    if (entries.length < 2) continue;
-    const forward = entries.filter(entry => entry.direction === 'forward');
-    const backward = entries.filter(entry => entry.direction === 'backward');
-    const reference = entries[0];
-    const addLane = (direction: 'forward' | 'backward', matches: DisplaySegment[], offsetPx: number) => {
-      if (!matches.length) return;
-      rawRepeatLanes.push({
-        id: `repeat:${key}:${direction}`,
-        coordinates: [clone(reference.referenceA), clone(reference.referenceB)],
-        occurrenceIds: matches.map(match => match.id),
-        direction,
-        multiplicity: matches.length,
-        offsetPx,
-      });
-    };
-    if (forward.length && backward.length) {
-      addLane('forward', forward, 3);
-      addLane('backward', backward, -3);
-    } else if (forward.length) addLane('forward', forward, 0);
-    else addLane('backward', backward, 0);
-  }
-
-  const repeatLanes: RouteRepeatLane[] = [];
-  for (const direction of ['forward', 'backward'] as const) {
-    for (const lane of rawRepeatLanes.filter(item => item.direction === direction)) {
-      const prior = repeatLanes.at(-1);
-      if (prior
-        && prior.direction === lane.direction
-        && prior.offsetPx === lane.offsetPx
-        && prior.multiplicity === lane.multiplicity
-        && routePointDistanceM(prior.coordinates.at(-1)!, lane.coordinates[0]) <= CONNECTED_M) {
-        prior.coordinates.push(...lane.coordinates.slice(1).map(clone));
-        prior.occurrenceIds.push(...lane.occurrenceIds);
-      } else {
-        repeatLanes.push({
-          ...lane,
-          coordinates: lane.coordinates.map(clone),
-          occurrenceIds: [...lane.occurrenceIds],
-        });
-      }
-    }
-  }
-  const repeatLabels: RouteRepeatLabel[] = repeatLanes.map(lane => {
-    const midpoint = lane.coordinates[Math.floor((lane.coordinates.length - 1) / 2)];
-    const next = lane.coordinates[Math.min(lane.coordinates.length - 1, Math.floor((lane.coordinates.length - 1) / 2) + 1)];
-    return {
-      id: `repeat-label:${lane.id}`,
-      coordinate: {
-        lat: (midpoint.lat + next.lat) / 2,
-        lng: (midpoint.lng + next.lng) / 2,
-      },
-      text: `${lane.direction === 'forward' ? '→' : '←'}${lane.multiplicity > 1 ? ` ×${lane.multiplicity}` : ''}`,
-      occurrenceIds: [...lane.occurrenceIds],
-      direction: lane.direction,
-    };
   });
+  flushBase();
+  flushRepeat();
+
+  const repeatLabels: RouteRepeatLabel[] = repeatLanes
+    .filter(lane => lane.multiplicity >= 4)
+    .map(lane => {
+      const middle = Math.floor((lane.coordinates.length - 1) / 2);
+      const a = lane.coordinates[middle];
+      const b = lane.coordinates[Math.min(lane.coordinates.length - 1, middle + 1)];
+      return {
+        id: `repeat-label:${lane.id}`,
+        coordinate: interpolate(a, b, 0.5),
+        text: `${lane.multiplicity} traversals`,
+        occurrenceIds: [...lane.occurrenceIds],
+        direction: lane.direction,
+      };
+    });
 
   return { baseLines, repeatLanes, repeatLabels };
 }

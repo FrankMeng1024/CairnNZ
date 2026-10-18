@@ -11,9 +11,17 @@ import {
 export const ROUTE_MATCH_MAX_COORDINATES = 100;
 export const ROUTE_MATCH_CHUNK_COORDINATES = 90;
 export const ROUTE_MATCH_MAX_CHUNKS = 8;
+export const ROUTE_DRAW_TOTAL_DEADLINE_MS = 18_000;
 export const ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M = 25;
 export const ROUTE_MATCH_REVIEW_DEVIATION_M = 45;
 export const ROUTE_MATCH_REJECT_DEVIATION_M = 90;
+export const ROUTE_FREE_TERMINAL_MAX_LATERAL_M = 10;
+// Map Matching follows a trace; it is not Directions. A candidate that stays
+// spatially nearby by repeatedly looping/retracing can evade point-to-line and
+// Fréchet bounds while multiplying distance. Keep that provider artefact out
+// of canonical geometry and retain the user's coherent manual stroke instead.
+export const ROUTE_MATCH_MAX_LENGTH_RATIO = 1.8;
+export const ROUTE_MATCH_MIN_LENGTH_RATIO = 0.45;
 
 export type RouteProviderReason =
   | 'invalid-input'
@@ -23,10 +31,20 @@ export type RouteProviderReason =
   | 'split-match'
   | 'endpoint-shift'
   | 'shape-deviation'
-  | 'chunk-seam';
+  | 'chunk-seam'
+  | 'operation-timeout'
+  | 'cancelled';
+
+export interface DrawPlanPart {
+  points: RoutePoint[];
+  resolution: 'draw-matched' | 'draw-manual';
+  /** Inclusive input indices in the resampled operation trace. */
+  inputStartIndex: number;
+  inputEndIndex: number;
+}
 
 export type DrawPlanResolution =
-  | { outcome: 'accepted'; points: RoutePoint[]; callCount: number }
+  | { outcome: 'accepted'; points: RoutePoint[]; parts: DrawPlanPart[]; callCount: number; fallbackReason?: RouteProviderReason }
   | { outcome: 'review'; points: RoutePoint[]; reason: RouteProviderReason; callCount: number }
   | { outcome: 'manual-available'; rawPoints: RoutePoint[]; reason: RouteProviderReason; callCount: number }
   | { outcome: 'rejected'; reason: RouteProviderReason; callCount: number };
@@ -95,6 +113,21 @@ function maxPointToPolylineDistanceM(source: RoutePoint[], candidate: RoutePoint
     max = Math.max(max, nearest);
   }
   return max;
+}
+
+function polylineLengthM(points: RoutePoint[]): number {
+  return points.slice(1).reduce(
+    (total, point, index) => total + routePointDistanceM(points[index], point),
+    0,
+  );
+}
+
+function orderedLengthRatioIsPlausible(source: RoutePoint[], candidate: RoutePoint[]): boolean {
+  const sourceLengthM = polylineLengthM(source);
+  const candidateLengthM = polylineLengthM(candidate);
+  if (sourceLengthM <= 0.35 || candidateLengthM <= 0.35) return false;
+  const ratio = candidateLengthM / sourceLengthM;
+  return ratio >= ROUTE_MATCH_MIN_LENGTH_RATIO && ratio <= ROUTE_MATCH_MAX_LENGTH_RATIO;
 }
 
 /**
@@ -175,10 +208,193 @@ function providerFailureReason(result: Extract<MatchResult, { ok: false }>): Rou
   return 'provider-unavailable';
 }
 
+function mergeDrawParts(parts: DrawPlanPart[]): DrawPlanPart[] {
+  const output: DrawPlanPart[] = [];
+  for (const source of parts) {
+    const points = normalizeOrderedPoints(source.points);
+    if (points.length < 2) continue;
+    const part: DrawPlanPart = { ...source, points };
+    const previous = output.at(-1);
+    if (previous && previous.resolution === part.resolution
+      && routePointDistanceM(previous.points.at(-1)!, part.points[0]) <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M) {
+      part.points[0] = { ...previous.points.at(-1)! };
+      previous.points.push(...part.points.slice(1));
+      previous.inputEndIndex = part.inputEndIndex;
+    } else {
+      output.push(part);
+    }
+  }
+  return output;
+}
+
+function joinedDrawPoints(parts: DrawPlanPart[]): RoutePoint[] {
+  const points: RoutePoint[] = [];
+  for (const part of parts) {
+    const start = points.length > 0
+      && routePointDistanceM(points.at(-1)!, part.points[0]) <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
+      ? 1 : 0;
+    if (start === 1) part.points[0] = { ...points.at(-1)! };
+    points.push(...part.points.slice(start).map(point => ({ ...point })));
+  }
+  return normalizeOrderedPoints(points);
+}
+
+function rawPart(points: RoutePoint[], start: number, end: number): DrawPlanPart | null {
+  const boundedStart = Math.max(0, Math.min(points.length - 1, start));
+  const boundedEnd = Math.max(boundedStart, Math.min(points.length - 1, end));
+  const rawPoints = normalizeOrderedPoints(points.slice(boundedStart, boundedEnd + 1));
+  return rawPoints.length >= 2
+    ? { points: rawPoints, resolution: 'draw-manual', inputStartIndex: boundedStart, inputEndIndex: boundedEnd }
+    : null;
+}
+
 /**
- * Draw retains the complete submitted shape. Provider output is accepted only
- * when every bounded chunk is one coherent match with connected seams. A raw
- * connected stroke remains available for the user's explicit manual choice.
+ * Correct only a tiny unsupported pen-up tail when its endpoint is a lateral
+ * miss beside a stable forward trend. The tail remains explicitly manual;
+ * this does not relabel it as provider-routed or extend it past the user's
+ * along-track intent.
+ */
+function reconcileFreeTerminalPenUp(chunk: RoutePoint[], parts: DrawPlanPart[]): void {
+  const manual = parts.at(-1);
+  const matched = parts.at(-2);
+  if (!manual || !matched
+    || manual.resolution !== 'draw-manual'
+    || matched.resolution !== 'draw-matched'
+    || manual.inputEndIndex !== chunk.length - 1) return;
+  // The provider may support the final tracepoint only as an isolated sample,
+  // leaving a longer manual run. Endpoint intent is still determined by the
+  // final raw sample versus the stable raw direction immediately before it.
+  const anchorIndex = chunk.length - 2;
+  const trendStartIndex = anchorIndex - 1;
+  const trendStart = chunk[trendStartIndex];
+  const anchor = chunk[anchorIndex];
+  const rawEnd = chunk.at(-1)!;
+  const latitude = (trendStart.lat + anchor.lat + rawEnd.lat) / 3;
+  const lngScale = 111_320 * Math.cos(latitude * Math.PI / 180);
+  const latScale = 110_574;
+  const trendX = (anchor.lng - trendStart.lng) * lngScale;
+  const trendY = (anchor.lat - trendStart.lat) * latScale;
+  const trendLengthM = Math.hypot(trendX, trendY);
+  if (trendLengthM < 6) return;
+  if (trendStartIndex > 0) {
+    const before = chunk[trendStartIndex - 1];
+    const previousX = (trendStart.lng - before.lng) * lngScale;
+    const previousY = (trendStart.lat - before.lat) * latScale;
+    const previousLengthM = Math.hypot(previousX, previousY);
+    const directionAgreement = previousLengthM <= 1e-9
+      ? -1
+      : (previousX * trendX + previousY * trendY) / (previousLengthM * trendLengthM);
+    if (directionAgreement < Math.cos(45 * Math.PI / 180)) return;
+  }
+  const endX = (rawEnd.lng - anchor.lng) * lngScale;
+  const endY = (rawEnd.lat - anchor.lat) * latScale;
+  const endDistanceM = Math.hypot(endX, endY);
+  if (endDistanceM < 1) return;
+  const unitX = trendX / trendLengthM;
+  const unitY = trendY / trendLengthM;
+  const alongM = endX * unitX + endY * unitY;
+  const lateralM = Math.abs(endX * unitY - endY * unitX);
+  // A genuine turn/return has little forward component or a substantial
+  // lateral move. Preserve it as the user's manual geometry.
+  if (alongM < Math.max(2, endDistanceM * 0.35)
+    || lateralM < 3
+    || lateralM > ROUTE_FREE_TERMINAL_MAX_LATERAL_M) return;
+  const effectiveEnd = {
+    ...rawEnd,
+    lng: anchor.lng + alongM * unitX / lngScale,
+    lat: anchor.lat + alongM * unitY / latScale,
+  };
+  if (routePointDistanceM(rawEnd, effectiveEnd) > ROUTE_FREE_TERMINAL_MAX_LATERAL_M) return;
+  manual.points[manual.points.length - 1] = effectiveEnd;
+}
+
+function partsForMatchResult(
+  chunk: RoutePoint[],
+  result: Extract<MatchResult, { ok: true }>,
+): { parts: DrawPlanPart[]; fallbackReason?: RouteProviderReason } {
+  const mapped = result.segments
+    .filter(segment => Number.isInteger(segment.inputStartIndex) && Number.isInteger(segment.inputEndIndex))
+    .map(segment => ({
+      segment,
+      start: Math.max(0, Math.min(chunk.length - 1, Number(segment.inputStartIndex))),
+      end: Math.max(0, Math.min(chunk.length - 1, Number(segment.inputEndIndex))),
+    }))
+    .filter(item => item.end > item.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  // Legacy fixtures and a provider response without tracepoint correspondence
+  // can only be accepted as one whole supported run. Split output without
+  // correspondence is deliberately kept manual instead of guessed together.
+  if (mapped.length === 0) {
+    if (result.segments.length !== 1) {
+      const manual = rawPart(chunk, 0, chunk.length - 1);
+      return { parts: manual ? [manual] : [], fallbackReason: 'split-match' };
+    }
+    mapped.push({ segment: result.segments[0], start: 0, end: chunk.length - 1 });
+  }
+
+  const parts: DrawPlanPart[] = [];
+  let fallbackReason: RouteProviderReason | undefined;
+  let cursor = 0;
+  for (const { segment, start, end } of mapped) {
+    if (start < cursor) continue;
+    if (start > cursor) {
+      fallbackReason = fallbackReason ?? 'split-match';
+      const manual = rawPart(chunk, cursor, start);
+      if (manual) parts.push(manual);
+    }
+    const matched = normalizeOrderedPoints(segment.points);
+    const rawRun = chunk.slice(start, end + 1);
+    const startShiftM = matched.length >= 2 ? routePointDistanceM(rawRun[0], matched[0]) : Infinity;
+    const endShiftM = matched.length >= 2 ? routePointDistanceM(rawRun.at(-1)!, matched.at(-1)!) : Infinity;
+    const deviationM = matched.length >= 2 ? orderedShapeDeviationM(rawRun, matched) : Infinity;
+    const supported = matched.length >= 2
+      && startShiftM <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
+      && endShiftM <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
+      && (segment.alternativesCount == null || segment.alternativesCount === 0)
+      && orderedLengthRatioIsPlausible(rawRun, matched)
+      && deviationM <= ROUTE_MATCH_REVIEW_DEVIATION_M;
+    if (supported) {
+      // Do not force the free provider endpoint back to the finger-up point.
+      // Adjacent manual runs adopt this endpoint below, so the saved geometry
+      // remains continuous without manufacturing a terminal hook.
+      const previous = parts.at(-1);
+      if (previous) previous.points[previous.points.length - 1] = { ...matched[0] };
+      parts.push({
+        points: matched,
+        resolution: 'draw-matched',
+        inputStartIndex: start,
+        inputEndIndex: end,
+      });
+    } else {
+      fallbackReason = matched.length < 2
+        ? 'no-match'
+        : (segment.alternativesCount ?? 0) > 0
+          ? 'split-match'
+        : startShiftM > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M || endShiftM > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
+          ? 'endpoint-shift'
+          : 'shape-deviation';
+      const manual = rawPart(chunk, start, end);
+      if (manual) parts.push(manual);
+    }
+    cursor = end;
+  }
+  if (cursor < chunk.length - 1) {
+    fallbackReason = fallbackReason ?? 'split-match';
+    const manual = rawPart(chunk, cursor, chunk.length - 1);
+    if (manual) {
+      const previous = parts.at(-1);
+      if (previous) manual.points[0] = { ...previous.points.at(-1)! };
+      parts.push(manual);
+    }
+  }
+  return { parts: mergeDrawParts(parts), fallbackReason };
+}
+
+/**
+ * Draw preserves every ordered input interval. Provider-supported contiguous
+ * runs become matched parts; unsupported runs remain manual parts in the same
+ * atomic operation. No unknown interval is silently bridged.
  */
 export async function resolveDrawPlan(
   raw: RoutePoint[],
@@ -190,60 +406,116 @@ export async function resolveDrawPlan(
   }
   const matcher = options.matcher ?? matchSegment;
   const chunks = chunkOrderedTrace(normalized);
-  const stitched: RoutePoint[] = [];
+  const parts: DrawPlanPart[] = [];
   let calls = 0;
-  for (const chunk of chunks) {
+  let globalOffset = 0;
+  let fallbackReason: RouteProviderReason | undefined;
+  const deadlineController = new AbortController();
+  const deadlineAt = Date.now() + ROUTE_DRAW_TOTAL_DEADLINE_MS;
+  const abortForCaller = () => deadlineController.abort();
+  options.signal?.addEventListener('abort', abortForCaller, { once: true });
+  const deadlineTimer = setTimeout(() => deadlineController.abort(), ROUTE_DRAW_TOTAL_DEADLINE_MS);
+  try {
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+    const chunk = chunks[chunkIndex];
+    if (deadlineController.signal.aborted) {
+      if (options.signal?.aborted) return { outcome: 'rejected', reason: 'cancelled', callCount: calls };
+      fallbackReason = 'operation-timeout';
+      const remaining = normalizeOrderedPoints(normalized.slice(globalOffset));
+      if (remaining.length >= 2) parts.push({
+        points: remaining, resolution: 'draw-manual',
+        inputStartIndex: globalOffset, inputEndIndex: normalized.length - 1,
+      });
+      break;
+    }
     calls += 1;
-    const result = await matcher({
+    let callTimer: ReturnType<typeof setTimeout> | undefined;
+    const matchPromise = matcher({
       coords: chunk.map(point => ({ lng: point.lng, lat: point.lat, alt: point.alt })),
       radiuses: chunk.map(() => 25),
       viaIndicesInCoords: [0, chunk.length - 1],
-    }, { signal: options.signal });
+    }, { signal: deadlineController.signal });
+    const timeoutPromise = new Promise<MatchResult>(resolve => {
+      callTimer = setTimeout(() => {
+        deadlineController.abort();
+        resolve({ ok: false, reason: 'timeout', detail: 'operation-deadline', durationMs: ROUTE_DRAW_TOTAL_DEADLINE_MS });
+      }, Math.max(0, deadlineAt - Date.now()));
+    });
+    const result = await Promise.race([matchPromise, timeoutPromise]);
+    if (callTimer) clearTimeout(callTimer);
     if (!result.ok) {
-      return {
-        outcome: 'manual-available',
-        rawPoints: normalized,
-        reason: providerFailureReason(result),
-        callCount: calls,
-      };
-    }
-    if (result.segments.length !== 1) {
-      return { outcome: 'manual-available', rawPoints: normalized, reason: 'split-match', callCount: calls };
-    }
-    const matched = normalizeOrderedPoints(result.segments[0].points);
-    if (matched.length < 2) {
-      return { outcome: 'manual-available', rawPoints: normalized, reason: 'no-match', callCount: calls };
-    }
-    if (routePointDistanceM(chunk[0], matched[0]) > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
-      || routePointDistanceM(chunk[chunk.length - 1], matched[matched.length - 1]) > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M) {
-      return { outcome: 'manual-available', rawPoints: normalized, reason: 'endpoint-shift', callCount: calls };
-    }
-    if (stitched.length > 0) {
-      const previous = stitched[stitched.length - 1];
-      if (routePointDistanceM(previous, matched[0]) > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M) {
-        return { outcome: 'manual-available', rawPoints: normalized, reason: 'chunk-seam', callCount: calls };
+      if (deadlineController.signal.aborted && options.signal?.aborted) {
+        return { outcome: 'rejected', reason: 'cancelled', callCount: calls };
       }
-      matched[0] = { ...previous };
-      stitched.push(...matched.slice(1));
+      fallbackReason = deadlineController.signal.aborted
+        ? 'operation-timeout'
+        : providerFailureReason(result);
+      const remaining = normalizeOrderedPoints(normalized.slice(globalOffset));
+      if (remaining.length >= 2) parts.push({
+        points: remaining, resolution: 'draw-manual',
+        inputStartIndex: globalOffset, inputEndIndex: normalized.length - 1,
+      });
+      break;
     } else {
-      stitched.push(...matched);
+      const chunkResolution = partsForMatchResult(chunk, result);
+      const chunkParts = chunkResolution.parts.map(part => ({
+        ...part,
+        inputStartIndex: part.inputStartIndex + globalOffset,
+        inputEndIndex: part.inputEndIndex + globalOffset,
+      }));
+      if (chunkResolution.fallbackReason) fallbackReason = chunkResolution.fallbackReason;
+      const previous = parts.at(-1);
+      const first = chunkParts[0];
+      if (previous && first) {
+        if (routePointDistanceM(previous.points.at(-1)!, first.points[0]) > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M) {
+          const remaining = normalizeOrderedPoints(normalized.slice(globalOffset));
+          if (remaining.length >= 2) parts.push({
+            points: remaining, resolution: 'draw-manual',
+            inputStartIndex: globalOffset, inputEndIndex: normalized.length - 1,
+          });
+          fallbackReason = 'chunk-seam';
+          break;
+        }
+        first.points[0] = { ...previous.points.at(-1)! };
+      }
+      parts.push(...chunkParts);
     }
+    globalOffset += chunk.length - 1;
   }
-  // Both directions plus ordered Fréchet prevent a matcher from adding an
-  // unrequested far spur or collapsing a loop while retaining the raw input
-  // vertices somewhere in the response.
-  const maxDeviation = orderedShapeDeviationM(normalized, stitched);
-  if (maxDeviation > ROUTE_MATCH_REJECT_DEVIATION_M) {
-    return { outcome: 'manual-available', rawPoints: normalized, reason: 'shape-deviation', callCount: calls };
+  } finally {
+    clearTimeout(deadlineTimer);
+    options.signal?.removeEventListener('abort', abortForCaller);
   }
-  // Re-anchor only the overall endpoints after the provider has passed the
-  // bounded shift check. No interior straight connector is manufactured.
-  stitched[0] = { ...normalized[0] };
-  stitched[stitched.length - 1] = { ...normalized[normalized.length - 1] };
-  if (maxDeviation > ROUTE_MATCH_REVIEW_DEVIATION_M) {
-    return { outcome: 'review', points: stitched, reason: 'shape-deviation', callCount: calls };
+  const mergedParts = mergeDrawParts(parts);
+  // A provider response can leave adjacent unsupported sub-runs at the free
+  // end (for example an unsupported segment followed by a trailing gap).
+  // They become one coherent manual tail only after the complete operation is
+  // merged. Reconcile against that final structure so a small pen-up miss is
+  // not skipped merely because the provider split the unsupported tail.
+  reconcileFreeTerminalPenUp(normalized, mergedParts);
+  const points = joinedDrawPoints(mergedParts);
+  if (points.length < 2) {
+    return { outcome: 'rejected', reason: fallbackReason ?? 'no-match', callCount: calls };
   }
-  return { outcome: 'accepted', points: stitched, callCount: calls };
+  // Validate the actual post-seam/post-endpoint shape, not merely each
+  // provider candidate before composition. A suspicious composed result
+  // falls back to the coherent hand-drawn operation without inventing gaps.
+  if (!orderedLengthRatioIsPlausible(normalized, points)
+    || orderedShapeDeviationM(normalized, points) > ROUTE_MATCH_REVIEW_DEVIATION_M) {
+    return {
+      outcome: 'accepted',
+      points: normalized,
+      parts: [{
+        points: normalized,
+        resolution: 'draw-manual',
+        inputStartIndex: 0,
+        inputEndIndex: normalized.length - 1,
+      }],
+      callCount: calls,
+      fallbackReason: 'shape-deviation',
+    };
+  }
+  return { outcome: 'accepted', points, parts: mergedParts, callCount: calls, ...(fallbackReason ? { fallbackReason } : {}) };
 }
 
 export async function resolvePointPlan(

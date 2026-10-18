@@ -109,7 +109,7 @@ describe('Route Detail / editor / use source contracts', () => {
   });
 
   test('editor keeps Draw/Point transactional, recoverable, and separate from Activity truth', () => {
-    expect(overlay).toContain("onCancel('gesture-interrupted')");
+    expect(overlay).toContain("onCancel('gesture-interrupted', capture)");
     expect(overlay).toContain('onStroke(points, capture)');
     expect(overlay).toContain('samples: rawSamplesRef.current.map');
     expect(editor).toContain('testID="ordered-route-save"');

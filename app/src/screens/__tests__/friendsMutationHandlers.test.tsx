@@ -8,7 +8,6 @@ const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
 const mockLoadFriends = jest.fn(async () => undefined);
 const mockLoadCircleMarkers = jest.fn(async () => undefined);
-const mockBlockUser = jest.fn();
 const mockRemoveFriend = jest.fn();
 const mockSetGrant = jest.fn(async (_friendId: string, _enabled: boolean) => true);
 const mockSendFriendRequest = jest.fn();
@@ -63,7 +62,6 @@ jest.mock('../../store/useFriendStore', () => ({
   fetchFriendRequests: (...args: any[]) => mockFetchFriendRequests(...args),
   acceptFriendRequestAPI: (...args: any[]) => mockAcceptFriendRequest(...args),
   rejectFriendRequestAPI: (...args: any[]) => mockRejectFriendRequest(...args),
-  blockUser: (...args: any[]) => mockBlockUser(...args),
   fetchFriendProfileForNavigation: (...args: any[]) => mockFetchProfileForNavigation(...args),
   friendProfileNavigationAuthorityIsCurrent: (...args: any[]) => mockProfileAuthorityCurrent(...args),
   fetchOutboundRequests: (...args: any[]) => mockFetchOutboundRequests(...args),
@@ -93,13 +91,6 @@ async function renderReady() {
   await waitFor(() => expect(screen.getByTestId('friend-card-owner-a')).toBeTruthy());
   await waitFor(() => expect(mockLoadFriends).toHaveBeenCalledTimes(1));
   return screen;
-}
-
-async function openBlockConfirmation(screen: ReturnType<typeof render>) {
-  fireEvent(screen.getByTestId('friend-card-owner-a'), 'longPress');
-  await waitFor(() => expect(screen.getByTestId('friend-actions-modal')).toBeTruthy());
-  fireEvent.press(screen.getByText('Block friend'));
-  await waitFor(() => expect(screen.getByText('Block Alice')).toBeTruthy());
 }
 
 async function openRemoveConfirmation(screen: ReturnType<typeof render>) {
@@ -283,39 +274,12 @@ describe('FriendsScreen mutation result handling', () => {
     expect(screen.getByText('New')).toBeTruthy();
   });
 
-  test('silently discards a superseded Block without modal, feedback, busy, navigation, or refresh completion effects', async () => {
-    let release!: (value: any) => void;
-    mockBlockUser.mockReturnValue(new Promise(resolve => { release = resolve; }));
+  test('does not expose a Block action from the ordinary Friends surface', async () => {
     const screen = await renderReady();
-    await openBlockConfirmation(screen);
-    fireEvent.press(screen.getByText('Block Alice'));
-    expect(mockBlockUser).toHaveBeenCalledWith('owner-a');
+    fireEvent(screen.getByTestId('friend-card-owner-a'), 'longPress');
+    expect(screen.queryByTestId('friend-actions-modal')).toBeNull();
+    expect(screen.queryByText('Block friend')).toBeNull();
     expect(screen.queryByText('Block Alice')).toBeNull();
-
-    await act(async () => { release({ success: false, superseded: true }); });
-
-    expect(screen.getByTestId('friend-actions-modal')).toBeTruthy();
-    expect(screen.queryByText('Block Alice')).toBeNull();
-    expect(mockLoadFriends).toHaveBeenCalledTimes(1);
-    expect(mockLoadCircleMarkers).not.toHaveBeenCalled();
-    expect(mockNavigate).not.toHaveBeenCalled();
-  });
-
-  test('renders committed Block cleanup uncertainty and disables an unsafe retry', async () => {
-    mockBlockUser.mockResolvedValue({
-      success: false,
-      serverCommitted: true,
-      localCleanup: 'storage-uncertain',
-      error: 'Block completed on the server, but downloaded shared content could not be cleared from this device.',
-    });
-    const screen = await renderReady();
-    await openBlockConfirmation(screen);
-    fireEvent.press(screen.getByText('Block Alice'));
-
-    await waitFor(() => expect(screen.getByText(/Block completed on the server/)).toBeTruthy());
-    expect(screen.getByRole('button', { name: 'Block Alice' }).props.accessibilityState.disabled).toBe(true);
-    expect(mockLoadFriends).toHaveBeenCalledTimes(1);
-    expect(mockLoadCircleMarkers).not.toHaveBeenCalled();
   });
 
   test('silently discards a superseded Unfriend without profile, feedback, busy, navigation, or refresh completion effects', async () => {

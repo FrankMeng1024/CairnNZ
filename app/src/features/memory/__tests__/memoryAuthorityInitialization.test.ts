@@ -29,9 +29,22 @@ describe('shared Memory authority initialization', () => {
     expect(manager).not.toContain('detachMemorySync');
   });
 
+  test('returning focus explicitly reacquires Memory viewport coverage after authorization', () => {
+    const screen = read('src/features/memory/screens/MemoryScreen.tsx');
+    expect(screen).toContain('let focusActive = true;');
+    expect(screen).toContain('const memoryViewport = mapRef.current?.getCoverageViewport();');
+    expect(screen).toContain('usePreparedMemoryCoverageStore.getState().loadViewport(memoryViewport)');
+    expect(screen).toContain('useFriendMemoryStore.getState().loadSelectedProjections(undefined, memoryViewport)');
+    expect(screen).toContain('focusActive = false;');
+    expect(screen).toContain("if (!focusActive || authorityLoaded === false\n          || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;");
+    expect(screen.indexOf('focusActive = false;')).toBeGreaterThan(screen.indexOf('loadSelectedProjections(undefined, memoryViewport)'));
+    const map = read('src/features/memory/components/MemoryMap.tsx');
+    expect(map).toContain('getCoverageViewport: () => coverageViewportRef.current');
+  });
+
   test('an authoritative empty Memory snapshot invalidates cached fog geometry', () => {
     const fogLayer = read('src/features/memory/components/FogLayer.tsx');
-    const emptyBranchStart = fogLayer.lastIndexOf('if (points.length === 0 && friendCells.length === 0)');
+    const emptyBranchStart = fogLayer.lastIndexOf('if (coverageReadReady && !hasAnyEvidence)');
     const emptyBranch = fogLayer.slice(
       emptyBranchStart,
       fogLayer.indexOf('if (!authorityChanged && lastSigRef.current', emptyBranchStart),

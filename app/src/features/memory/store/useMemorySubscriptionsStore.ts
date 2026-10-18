@@ -43,6 +43,9 @@ interface State {
   unsubscribe: (friendId: number) => Promise<number>;
   /** Convenience selector — does this user count as picked? */
   isSubscribed: (friendId: number) => boolean;
+  /** Account-fenced local removal used by unfriend intent. A fresh server
+   * load is the only way to restore a failed optimistic removal. */
+  removeFriendLocally: (friendId: number | string) => void;
   /** BUG-010 fix: reset slice on user switch (called from useMarkerStore
    *  clearMarkers / hydrate). Prevents prior user's subscriptions leaking
    *  into a new session. */
@@ -203,6 +206,17 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
 
   isSubscribed: (friendId) =>
     get().subscriptions.some((s) => s.friend_id === friendId),
+
+  removeFriendLocally: (friendId) => {
+    const numericId = Number(friendId);
+    subscriptionGeneration += 1;
+    set({
+      subscriptions: get().subscriptions.filter(subscription => Number(subscription.friend_id) !== numericId),
+      availableSources: get().availableSources.filter(source => Number(source.friend_id) !== numericId),
+      loading: false,
+      error: null,
+    });
+  },
 
   reset: () => {
     subscriptionGeneration += 1;

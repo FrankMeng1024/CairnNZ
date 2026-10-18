@@ -150,7 +150,7 @@ describe('matchSegment — Mapbox response codes', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test('5xx retries once then maps to reason=network', async () => {
+  test('5xx maps to reason=network without a hidden retry', async () => {
     fetchMock.mockResolvedValue({
       status: 503,
       json: async () => ({}),
@@ -158,10 +158,10 @@ describe('matchSegment — Mapbox response codes', () => {
     const r = await matchSegment(tinySegment());
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe('network');
-    expect(fetchMock).toHaveBeenCalledTimes(2); // initial + 1 retry
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test('5xx then success on retry returns ok', async () => {
+  test('5xx does not consume a speculative second response', async () => {
     fetchMock
       .mockResolvedValueOnce({ status: 503, json: async () => ({}) })
       .mockResolvedValueOnce({
@@ -180,15 +180,14 @@ describe('matchSegment — Mapbox response codes', () => {
         }),
       });
     const r = await matchSegment(tinySegment());
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.matchedPoints).toHaveLength(2);
-    }
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('network');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('matchSegment — network failures', () => {
-  test('thrown network error retries once then maps to reason=network', async () => {
+  test('thrown network error maps to reason=network without retry', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNRESET'));
     const r = await matchSegment(tinySegment());
     expect(r.ok).toBe(false);
@@ -196,7 +195,7 @@ describe('matchSegment — network failures', () => {
       expect(r.reason).toBe('network');
       expect(r.detail).toContain('ECONNRESET');
     }
-    expect(fetchMock).toHaveBeenCalledTimes(2); // 1 + 1 retry
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test('aborted/timeout maps to reason=timeout', async () => {
@@ -239,6 +238,30 @@ describe('matchSegment — happy path', () => {
       expect(r.confidence).toBeCloseTo(0.93);
       expect(r.durationMs).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  test('splits one provider geometry around null tracepoint islands', async () => {
+    const input = tinySegment(6);
+    const coordinates = input.coords.map(point => [point.lng, point.lat]);
+    fetchMock.mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        code: 'Ok',
+        matchings: [{ confidence: 0.9, geometry: { type: 'LineString', coordinates } }],
+        tracepoints: input.coords.map((point, index) => index === 2 || index === 3 ? null : ({
+          matchings_index: 0,
+          waypoint_index: null,
+          alternatives_count: 0,
+          location: [point.lng, point.lat],
+        })),
+      }),
+    });
+    const result = await matchSegment(input);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.segments.map(segment => [segment.inputStartIndex, segment.inputEndIndex]))
+      .toEqual([[0, 1], [4, 5]]);
+    expect(result.segments.every(segment => segment.points.length >= 2)).toBe(true);
   });
 
   test('Ok response with no matchings array maps to reason=no-match', async () => {

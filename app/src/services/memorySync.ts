@@ -601,6 +601,14 @@ async function pushPendingPoints(options?: { sourceActivityClientId?: string }):
         ? [...new Set(rawPresenceEcho.map((entry: any) => String(entry.cid)))]
         : [];
       useMemoryStore.getState().markPresenceWitnessesSynced(presenceBatch, acceptedPresenceCids);
+      if (acceptedPointCids.length > 0 || acceptedPresenceCids.length > 0) {
+        // The accepted points remain in FogLayer's small live handoff overlay
+        // until this source-owned viewport response incorporates them. A
+        // witness may also promote an older, already-ACKed passive segment.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        void require('../features/memory/store/usePreparedMemoryCoverageStore')
+          .usePreparedMemoryCoverageStore.getState().refreshCurrentViewport();
+      }
       const completeEcho = echoShapeValid
         && presenceEchoShapeValid
         && acceptedPointCids.length === batch.length
@@ -884,6 +892,15 @@ export async function deleteAllMemoryFromServer(expectedUserId: string): Promise
       } catch {
         return false;
       }
+      // Prepared viewport coverage is a separate render authority from the
+      // point journal cleared by commitMemoryPersistenceReset(). Invalidate it
+      // synchronously after the durable reset succeeds so the same viewport
+      // cannot short-circuit on, and keep painting, pre-delete geometry. reset()
+      // also advances the store request sequence, fencing a late coverage
+      // response that started before the deletion.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../features/memory/store/usePreparedMemoryCoverageStore')
+        .usePreparedMemoryCoverageStore.getState().reset();
       return true;
     }
     await flushMemoryNow().catch(() => undefined);

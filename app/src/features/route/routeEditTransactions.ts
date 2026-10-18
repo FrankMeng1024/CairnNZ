@@ -18,6 +18,7 @@ import {
   routePointDistanceM,
   type EditableRouteResolution,
   type OrderedPosition,
+  type OrderedRoutePart,
   type OrderedRouteDraft,
   type RouteEditResult,
 } from './orderedRouteDraft';
@@ -485,29 +486,43 @@ export function classifyDrawTransaction(
   if (gapBridges.length === 1) return gapBridges[0];
   if (gapBridges.length > 1) return { kind: 'reject', code: 'AMBIGUOUS_INTERVAL' };
 
+  const terminal = terminalPoint(draft);
+  const beginning = initialPoint(draft);
+  const startsAtTerminal = Boolean(terminal && routePointDistanceM(first, terminal) <= toleranceM);
   const starts = nearestOrderedPositions(draft, first, toleranceM);
   const ends = nearestOrderedPositions(draft, last, toleranceM);
-  const terminal = terminalPoint(draft);
-  // Endpoint ownership is stronger than a coincident interior occurrence.
-  // In particular, a long Activity whose end is close to its beginning must
-  // append a closure; treating the same gesture as a whole-route replacement
-  // destroys the immutable recorded interior.
-  if (terminal && routePointDistanceM(first, terminal) <= toleranceM) {
+  // A free endpoint is unambiguously an extension. Closing all the way back
+  // to Start is likewise an appended traversal, even when the old Route is
+  // near-closed and Start has another nearby ordered occurrence.
+  if (startsAtTerminal && ends.length === 0) return { kind: 'append' };
+  if (startsAtTerminal && beginning && routePointDistanceM(last, beginning) <= toleranceM) {
     return { kind: 'append' };
   }
   const options = intervalOptions(draft, starts, ends);
   if (options.length > 0) {
     const selected = unambiguousInterval(draft, raw, options);
-    if (selected) return { kind: 'replace', options: [selected] };
+    if (selected) {
+      if (startsAtTerminal) {
+        // End-to-earlier strokes have two legitimate meanings. A stroke that
+        // closely retraces the selected suffix is a continued traversal and
+        // must append (Test2/U-return). A materially different local shape is
+        // the user's suffix correction and replaces only that ordered interval.
+        // The bound scales with the same geographic attachment tolerance; a
+        // sub-bound change is visually indistinguishable from normal finger
+        // and matching displacement and therefore remains non-destructive.
+        const suffixDifferenceM = intervalShapeScore(draft, raw, selected);
+        if (suffixDifferenceM <= Math.max(12, toleranceM * 1.25)) return { kind: 'append' };
+      }
+      return { kind: 'replace', options: [selected] };
+    }
     return {
       kind: 'pending-replace', points: normalizeOrderedPoints(raw),
       draftId: draft.draftId, baseRevision: draft.revision, ambiguity: 'overlap',
     };
   }
-  const beginning = initialPoint(draft);
-  if (ends.length === 0 && terminal && routePointDistanceM(first, terminal) <= toleranceM) {
-    return { kind: 'append' };
-  }
+  // When the other end does not identify a route interval, the terminal/free
+  // extension case has already returned above. Interior free strokes remain
+  // pending so they cannot silently delete an untouched suffix.
   if (ends.length === 0 && beginning && routePointDistanceM(first, beginning) <= toleranceM) {
     return { kind: 'prepend' };
   }
@@ -576,4 +591,89 @@ export function applyDrawTransaction(
     orient(candidate, intent.option.reverseCandidate),
     resolution,
   );
+}
+
+export interface DrawTransactionPart {
+  points: RoutePoint[];
+  resolution: Extract<EditableRouteResolution, 'draw-matched' | 'draw-manual'>;
+}
+
+function orientDrawParts(parts: DrawTransactionPart[], reverse: boolean): DrawTransactionPart[] {
+  if (!reverse) return parts.map(part => ({ ...part, points: part.points.map(point => ({ ...point })) }));
+  return [...parts].reverse().map(part => ({
+    ...part,
+    points: [...part.points].reverse().map(point => ({ ...point })),
+  }));
+}
+
+/**
+ * Applies matched/manual sub-runs as one revision. The existing transaction
+ * classifier and Activity replacement guard see the complete stroke, while
+ * persistence retains each contiguous run's provenance. Undo therefore
+ * removes the whole Draw, never one provider chunk at a time.
+ */
+export function applyDrawTransactionParts(
+  draft: OrderedRouteDraft,
+  intent: Exclude<DrawTransactionIntent, { kind: 'replace' | 'reject' }>
+    | { kind: 'replace'; option: RouteIntervalCandidate },
+  sourceParts: DrawTransactionPart[],
+): RouteEditResult {
+  if (sourceParts.length === 0) return { ok: false, code: 'ZERO_LENGTH', draft };
+  const shouldReverse = intent.kind === 'prepend'
+    || (intent.kind === 'bridge' && intent.reverseCandidate)
+    || (intent.kind === 'replace' && intent.option.reverseCandidate);
+  const parts = orientDrawParts(sourceParts, shouldReverse)
+    .map(part => ({ ...part, points: normalizeOrderedPoints(part.points) }))
+    .filter(part => part.points.length >= 2);
+  if (parts.length === 0) return { ok: false, code: 'ZERO_LENGTH', draft };
+  for (let index = 1; index < parts.length; index += 1) {
+    if (routePointDistanceM(parts[index - 1].points.at(-1)!, parts[index].points[0]) > ROUTE_ATTACHMENT_TOLERANCE_M) {
+      return { ok: false, code: 'DISCONNECTED', draft };
+    }
+    parts[index].points[0] = { ...parts[index - 1].points.at(-1)! };
+  }
+  const merged = normalizeOrderedPoints(parts.flatMap((part, index) => index === 0 ? part.points : part.points.slice(1)));
+  const applied = applyDrawTransaction(
+    draft,
+    intent,
+    shouldReverse ? [...merged].reverse() : merged,
+    parts[0].resolution,
+  );
+  if (!applied.ok || parts.length === 1) return applied;
+
+  const marker = intent.kind === 'new' || intent.kind === 'append'
+    ? ':append:'
+    : intent.kind === 'prepend'
+      ? ':prepend'
+      : intent.kind === 'bridge'
+        ? ':bridge:'
+        : ':replace:';
+  // Earlier Draw operations retain ids such as `:append:` and `:replace:`.
+  // Looking up by the operation marker alone therefore selected the first
+  // historical part on the second multi-section Draw, replaced that old part,
+  // and left the newly appended merged part in place as a duplicate. Select
+  // only the part created by this transaction.
+  const previousPartIds = new Set(draft.parts.map(part => part.id));
+  const insertedIndex = applied.draft.parts.findIndex(
+    part => !previousPartIds.has(part.id) && part.id.includes(marker),
+  );
+  if (insertedIndex < 0) return { ok: false, code: 'INVALID_INTERVAL', draft };
+  const inserted = applied.draft.parts[insertedIndex];
+  parts[0].points[0] = { ...inserted.points[0] };
+  parts[parts.length - 1].points[parts.at(-1)!.points.length - 1] = { ...inserted.points.at(-1)! };
+  const persisted: OrderedRoutePart[] = parts.map((part, index) => ({
+    id: `${inserted.id}:section:${index}`,
+    points: part.points.map(point => ({ ...point })),
+    resolution: part.resolution,
+  }));
+  const next = {
+    ...applied.draft,
+    parts: [...applied.draft.parts],
+    gaps: applied.draft.gaps.map(gap => ({ ...gap })),
+  };
+  next.parts.splice(insertedIndex, 1, ...persisted);
+  next.gaps = next.gaps.map(gap => gap.afterPartId === inserted.id
+    ? { ...gap, afterPartId: persisted.at(-1)!.id }
+    : gap);
+  return { ok: true, draft: next };
 }

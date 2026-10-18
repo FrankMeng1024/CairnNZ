@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
-const outputDir = path.resolve(process.env.CAIRN_ROUTE_UX_QA_DIR || '/tmp/cairn-o83-route-ux-qa');
+const outputDir = path.resolve(process.env.CAIRN_ROUTE_UX_QA_DIR || '/tmp/cairn-o86-route-ux-qa');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(outputDir, { recursive: true });
 
 const user = {
-  id: 'route-ux-o83-qa', name: 'Aroha', email: 'route.ux.qa@example.invalid',
+  id: 'route-ux-o86-qa', name: 'Aroha', email: 'route.ux.qa@example.invalid',
   createdAt: '2026-01-01T00:00:00.000Z', dateOfBirth: '1990-01-01', hasPassword: true, providers: ['email'],
 };
 const A = { lng: 174.7638, lat: -36.8482 };
@@ -16,11 +16,11 @@ const B = { lng: 174.7650, lat: -36.8480 };
 const C = { lng: 174.7661, lat: -36.8475 };
 const routePoints = [A, B, C, B, A, B, C];
 const routeFixture = {
-  id: 'o83-route-ux', clientRouteId: 'o83-route-ux', name: 'Harbour Return Plan',
+  id: 'o86-route-ux', clientRouteId: 'o86-route-ux', name: 'Harbour Return Plan',
   createdAt: 1_760_000_000_000, updatedAt: 1_760_000_000_000,
   points: routePoints,
   orderedDraft: {
-    schemaVersion: 1, draftId: 'route:o83-route-ux', ownerId: user.id, origin: 'plan', revision: 4,
+    schemaVersion: 1, draftId: 'route:o86-route-ux', ownerId: user.id, origin: 'plan', revision: 4,
     parts: [
       { id: 'mapped-out-return', resolution: 'point', points: [A, B, C, B, A] },
       { id: 'mapped-local', resolution: 'point', points: [A, B] },
@@ -73,19 +73,40 @@ for (const scenario of matrix) {
   });
   const page = await context.newPage();
   const caseErrors = [];
-  page.on('pageerror', error => caseErrors.push(`pageerror: ${error.message}`));
-  page.on('console', message => {
-    if (message.type() === 'error' && !message.text().includes('Failed to load resource')) caseErrors.push(`console: ${message.text()}`);
+  const seenErrors = new Set();
+  const recordError = error => {
+    if (seenErrors.has(error) || caseErrors.length >= 20) return;
+    seenErrors.add(error);
+    caseErrors.push(error);
+  };
+  page.on('pageerror', error => recordError(`pageerror: ${error.message}\n${error.stack ?? ''}`));
+  page.on('console', async message => {
+    if (message.type() !== 'error' || message.text().includes('Failed to load resource')) return;
+    const location = message.location();
+    const args = await Promise.all(message.args().map(async argument => {
+      try { return JSON.stringify(await argument.jsonValue()); }
+      catch { return String(argument); }
+    }));
+    recordError(`console: ${message.text()}\nargs: ${args.join(' | ')}\nlocation: ${location.url}:${location.lineNumber}:${location.columnNumber}`);
   });
   await page.addInitScript(({ userId, localStyle }) => {
     globalThis.__cairnMapQaLocalStyle = localStyle;
-    localStorage.setItem('cairn_jwt', 'route-ux-o83-local-qa');
+    localStorage.setItem('cairn_jwt', 'route-ux-o86-local-qa');
     localStorage.setItem('cairn_onboarding_v1_done', 'true');
     localStorage.setItem(`cairn_onboarding_v1_done_${userId}`, 'true');
   }, { userId: user.id, localStyle: process.env.CAIRN_QA_LOCAL_STYLE === '1' });
   await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url());
     if (route.request().url().includes('/api/auth/me')) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user }) });
+      return;
+    }
+    if (url.pathname === '/api/memory/coverage') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        coverage_rule_version: 4, coverage_version: 'o86-empty', evidence_count: 0,
+        tile_count: 0, rebuilt_tile_count: 0, total_ms: 1, stage_ms: {},
+        geometry: { type: 'MultiPolygon', coordinates: [] },
+      }) });
       return;
     }
     await route.fulfill({
@@ -94,7 +115,7 @@ for (const scenario of matrix) {
     });
   });
   await page.route('**/matching/v5/mapbox/walking/**', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'NoMatch', message: 'O83 deterministic unmatched freehand' }),
+    status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'NoMatch', message: 'O86 deterministic unmatched freehand' }),
   }));
   try {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
@@ -140,6 +161,7 @@ for (const scenario of matrix) {
     await page.getByTestId('route-tool-draw').click();
     await page.screenshot({ path: path.join(outputDir, `${prefix}-draw.png`) });
     const drawMessageVisible = await page.getByText('Draw to reshape your route.').isVisible();
+    const drawContextBox = await box(page.getByTestId('route-context-slot'));
     await page.getByTestId('route-tool-draw').click();
 
     const cameraBeforePoint = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCameraSnapshot());
@@ -147,11 +169,13 @@ for (const scenario of matrix) {
     await page.waitForTimeout(80);
     const cameraAfterPoint = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCameraSnapshot());
     await page.screenshot({ path: path.join(outputDir, `${prefix}-point.png`) });
+    const pointContextBox = await box(page.getByTestId('route-context-slot'));
     const pointTextBox = await box(page.getByText('Move map to choose.'));
     const pointActionBox = await box(page.getByTestId('route-point-confirm'));
 
     await page.getByTestId('route-tool-trim').click();
     await page.screenshot({ path: path.join(outputDir, `${prefix}-trim.png`) });
+    const trimContextBox = await box(page.getByTestId('route-context-slot'));
     const trimStrip = await box(page.getByTestId('route-trim-strip'));
     const trimApply = await box(page.getByTestId('route-trim-apply'));
     const trimCancelAbsent = await page.getByText('Cancel', { exact: true }).count() === 0;
@@ -174,7 +198,7 @@ for (const scenario of matrix) {
       start: C,
       finish: { lng: C.lng + 0.0010, lat: C.lat + 0.00055 },
     });
-    await page.getByText('Line added. Move the map, or tap Draw to continue.').waitFor({ state: 'visible', timeout: 15_000 });
+    await page.getByText('Drawing kept. Undo if needed.').waitFor({ state: 'visible', timeout: 15_000 });
     await page.screenshot({ path: path.join(outputDir, `${prefix}-freehand.png`) });
     const fallbackChoiceAbsent = await page.getByTestId('route-freehand-choice').count() === 0;
     const undoEnabledAfterManualFallback = await page.getByTestId('route-undo').isEnabled();
@@ -192,6 +216,18 @@ for (const scenario of matrix) {
         index: 1, routes: [{ name: 'Home' }, { name: 'MapHistory', params: { routeId } }],
       });
     }, routeFixture.id);
+    const leaveConfirmation = page.getByTestId('route-editor-leave-confirm');
+    await leaveConfirmation.waitFor({ state: 'visible', timeout: 5_000 });
+    // React Native Web reports the node visible at the beginning of Modal's
+    // fade. Capture the settled material, not an intentionally translucent
+    // intermediate animation frame.
+    await page.waitForTimeout(350);
+    const keepEditingBox = await box(page.getByText('Keep editing', { exact: true }));
+    const discardChangesBox = await box(page.getByText('Discard changes', { exact: true }));
+    await page.screenshot({ path: path.join(outputDir, `${prefix}-leave-confirm.png`) });
+    const leaveConfirmationClear = await page.getByText('Your unsaved Route changes will be discarded.', { exact: true }).isVisible()
+      && Boolean(keepEditingBox && discardChangesBox && !overlaps(keepEditingBox, discardChangesBox));
+    await page.getByTestId('route-editor-confirm-leave').click();
     await page.getByTestId('route-detail-panel').waitFor({ state: 'visible', timeout: 30_000 });
     await page.waitForFunction(() => Boolean(globalThis.__cairnMap), null, { timeout: 15_000 });
     await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
@@ -281,6 +317,9 @@ for (const scenario of matrix) {
       locationPuckVisible,
       nameAndSaveHorizontal: Math.abs(centerY(nameBox) - centerY(saveBox)) <= 8 && !overlaps(nameBox, saveBox),
       drawMessageVisible,
+      contextualRowsSameHeight: Boolean(drawContextBox && pointContextBox && trimContextBox
+        && Math.max(drawContextBox.height, pointContextBox.height, trimContextBox.height)
+          - Math.min(drawContextBox.height, pointContextBox.height, trimContextBox.height) <= 1),
       pointEntryCameraInvariant: ['center', 'zoom', 'bearing', 'pitch'].every(key => JSON.stringify(cameraBeforePoint?.[key]) === JSON.stringify(cameraAfterPoint?.[key])),
       pointRowCompact: Math.abs(centerY(pointTextBox) - centerY(pointActionBox)) <= 9
         && !overlaps(pointTextBox, pointActionBox)
@@ -294,12 +333,18 @@ for (const scenario of matrix) {
         || layersSelected.expanded === 'true'
         || layersSelected.background !== layersBackgroundBefore,
       fallbackAutoCommitsWithoutDecisionRow: fallbackChoiceAbsent && undoEnabledAfterManualFallback,
+      leaveConfirmationClear,
       editorOrnamentsAboveDock,
       detailOrnamentsAboveSheet,
       detailRouteFits,
       repeatedTraversalLayersVisible: repeatLayerCount >= 2,
       repeatedTraversalPainted: detailRuntime.renderedRepeatFeatures > 0,
-      repeatedTraversalAnnotated: detailRuntime.renderedRepeatLabels > 0,
+      repeatedTraversalAnnotationPolicy: Math.max(
+        0,
+        ...(detailRuntime.repeatSourceData?.features ?? []).map(feature => Number(feature.properties?.multiplicity) || 0),
+      ) >= 4
+        ? detailRuntime.renderedRepeatLabels > 0
+        : detailRuntime.renderedRepeatLabels === 0,
       detailHeaderAndActions: await page.getByTestId('route-detail-header-more').isVisible()
         && /Use for Hike/.test(detailCopy) && /Edit/.test(detailCopy) && /Share/.test(detailCopy),
       detailNoRedundantReadyOrFakeElevation: !/Mine\s*·\s*Ready/.test(detailCopy) && !/\+0\s*m.*elevation/i.test(detailCopy),

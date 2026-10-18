@@ -1,4 +1,8 @@
 const CACHE_PREFIX = 'cairn:friend-memory-projections:v1:';
+const TEST_VIEWPORT = {
+  bbox: [174.6, -41.4, 174.9, -41.1] as [number, number, number, number],
+  key: 'test-viewport',
+};
 
 function projection(friendId = '11', authorizedAt = 1_000_000) {
   return {
@@ -90,7 +94,7 @@ describe('friend Memory authorization cache ordering', () => {
         sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
       }],
     });
-    await useFriendMemoryStore.getState().loadSelectedProjections();
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
 
     const refresh = useMemorySubscriptionsStore.getState().load();
@@ -101,6 +105,45 @@ describe('friend Memory authorization cache ordering', () => {
 
     expect(useMemorySubscriptionsStore.getState().error).toContain('HTTP 503');
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
+  });
+
+  test('a half-open Friends projection request times out into a truthful error state', async () => {
+    jest.useFakeTimers();
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    let markFetchStarted!: () => void;
+    const fetchStarted = new Promise<void>(resolve => { markFetchStarted = resolve; });
+    const authenticatedFetch = jest.fn((_path: string, options: RequestInit) => new Promise((_resolve, reject) => {
+      markFetchStarted();
+      options.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    }));
+    jest.doMock('../../../store/storage', () => ({
+      storage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+
+    const { useFriendMemoryStore, FRIEND_MEMORY_PROJECTION_TIMEOUT_MS } = require('../store/useFriendMemoryStore');
+    const { useMemorySubscriptionsStore } = require('../store/useMemorySubscriptionsStore');
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 11, friend_name: 'Mia' }],
+      availableSources: [{
+        friend_id: '11', friend_name: 'Mia', selected: true,
+        authorization_version: 4, effective_at: new Date(0).toISOString(),
+        sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+      }],
+    });
+    const pending = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+    await fetchStarted;
+    expect(useFriendMemoryStore.getState().sourceStates['11']?.status).toBe('loading');
+    await jest.advanceTimersByTimeAsync(FRIEND_MEMORY_PROJECTION_TIMEOUT_MS + 1);
+    await pending;
+    expect(useFriendMemoryStore.getState().loading).toBe(false);
+    expect(useFriendMemoryStore.getState().sourceStates['11']).toMatchObject({
+      status: 'error', error: 'Friend Memory timed out',
+    });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toEqual([]);
+    jest.useRealTimers();
   });
 
   test('fails closed when the wall clock moves behind the last observed server cache time', async () => {
@@ -171,7 +214,7 @@ describe('friend Memory authorization cache ordering', () => {
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const oldLoad = useFriendMemoryStore.getState().loadSelectedProjections();
+    const oldLoad = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     await Promise.resolve();
     appState.user = { id: 'viewer-b' };
     await useFriendMemoryStore.getState().hydrate('viewer-b');
@@ -228,7 +271,7 @@ describe('friend Memory authorization cache ordering', () => {
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const pending = useFriendMemoryStore.getState().loadSelectedProjections();
+    const pending = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     await fetchStarted;
     subscriptionState.subscriptions = [];
     await useFriendMemoryStore.getState().purgeFriend('11');
@@ -287,9 +330,9 @@ describe('friend Memory authorization cache ordering', () => {
     });
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const first = useFriendMemoryStore.getState().loadSelectedProjections();
+    const first = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     while (deferred.length < 1) await Promise.resolve();
-    const second = useFriendMemoryStore.getState().loadSelectedProjections();
+    const second = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     while (deferred.length < 2) await Promise.resolve();
     deferred[1].resolve(body('newer-request'));
     await second;
@@ -341,7 +384,7 @@ describe('friend Memory authorization cache ordering', () => {
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const load = useFriendMemoryStore.getState().loadSelectedProjections();
+    const load = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     while (setItem.mock.calls.length < 1) await Promise.resolve();
     subscriptionState.subscriptions = [];
     const purge = useFriendMemoryStore.getState().purgeFriend('11');
@@ -395,7 +438,7 @@ describe('friend Memory authorization cache ordering', () => {
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    await useFriendMemoryStore.getState().loadSelectedProjections();
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
 
     expect(useFriendMemoryStore.getState().sourceStates).toMatchObject({
       '11': { status: 'error', cellCount: 0 },
@@ -448,13 +491,13 @@ describe('friend Memory authorization cache ordering', () => {
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    await useFriendMemoryStore.getState().loadSelectedProjections();
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     subscriptionState.subscriptions = [{ friend_id: 22 }];
     await useFriendMemoryStore.getState().purgeFriend(11);
     expect(Object.keys(useFriendMemoryStore.getState().projections)).toEqual(['22']);
 
     subscriptionState.subscriptions = [{ friend_id: 11 }, { friend_id: 22 }];
-    await useFriendMemoryStore.getState().loadSelectedProjections();
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     expect(useFriendMemoryStore.getState().projections['11'].projectionVersion).toBe('a-2');
     expect(useFriendMemoryStore.getState().projections['22'].projectionVersion).toBe('b-2');
   });
@@ -493,7 +536,7 @@ describe('friend Memory authorization cache ordering', () => {
     });
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const stale = useFriendMemoryStore.getState().loadSelectedProjections();
+    const stale = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     while (deferred.length < 1) await Promise.resolve();
     await useFriendMemoryStore.getState().purgeFriend('11');
     // Selection is intentionally still present: server revoke/block state can
@@ -504,7 +547,7 @@ describe('friend Memory authorization cache ordering', () => {
     expect(useFriendMemoryStore.getState().projections).toEqual({});
 
     subscriptionState.availableSources = [{ friend_id: '11', authorization_version: 5 }];
-    const fresh = useFriendMemoryStore.getState().loadSelectedProjections();
+    const fresh = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     while (deferred.length < 2) await Promise.resolve();
     deferred[1].resolve(response(5, 'fresh-after-new-grant'));
     await fresh;

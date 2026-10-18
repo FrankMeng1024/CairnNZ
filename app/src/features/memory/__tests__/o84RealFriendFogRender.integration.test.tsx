@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
 
@@ -16,7 +15,10 @@ jest.mock('../services/mapboxAdapter', () => ({
     return ({
     available: true,
     ShapeSource: ({ id, shape, children }: any) => {
-      mockRenderedSources.set(id, shape);
+      mockReact.useEffect(() => {
+        mockRenderedSources.set(id, shape);
+        return () => { mockRenderedSources.delete(id); };
+      }, [id, shape]);
       return mockReact.createElement(MockView, { testID: id }, children);
     },
     FillLayer: ({ id }: any) => mockReact.createElement(MockView, { testID: id }),
@@ -48,65 +50,44 @@ import { useAppStore } from '../../../store/useAppStore';
 import { useSettingsStore } from '../../../store/useSettingsStore';
 import { useActivitySimulatorStore } from '../../activitySimulator/useActivitySimulatorStore';
 import { FogLayer } from '../components/FogLayer';
-import { useFriendMemoryStore, type FriendProjection } from '../store/useFriendMemoryStore';
+import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
+import { usePreparedMemoryCoverageStore } from '../store/usePreparedMemoryCoverageStore';
 
 function polygonCount(shape: any): number {
   if (!shape?.geometry) return 0;
   return shape.geometry.type === 'Polygon' ? 1 : shape.geometry.coordinates.length;
 }
 
-describe('O84 isolated real API Friend Fog render boundary', () => {
+describe('O86 exact prepared coverage Mapbox render boundary', () => {
   jest.setTimeout(20_000);
 
-  test('the exact two authorized server projections reach production Mapbox ShapeSources', async () => {
-    const evidencePath = process.env.O84_FRIEND_FOG_EVIDENCE;
-    if (!evidencePath) throw new Error('O84_FRIEND_FOG_EVIDENCE is required');
-    const evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
-    expect(evidence.result).toBe('PASS');
-    const fixture = evidence.render_fixture;
-    expect(fixture.owners).toHaveLength(2);
-    const viewerId = String(fixture.viewer_id);
+  test('exact Mine and two Friends MultiPolygons classify, remount, and revoke without legacy cells', async () => {
+    const viewerId = 'prepared-viewer';
     const now = Date.now();
-    const projections: Record<string, FriendProjection> = {};
-    for (const owner of fixture.owners) {
-      const value = owner.projection;
-      const friendId = String(value.source_friend_id);
-      projections[friendId] = {
-        friendId,
-        authorizationVersion: Number(value.authorization_version),
-        projectionVersion: String(value.projection_version),
-        cellSizeM: Number(value.cell_size_m),
-        cells: value.cells.map((cell: any) => ({ id: String(cell.id), polygon: cell.polygon })),
-        regions: [],
-        serverAuthorizedAtMs: now - 60_000,
-        authorizationExpiresAtMs: now + 60 * 60 * 1000,
-      };
-    }
-    const friendIds = Object.keys(projections);
-    const expectedAuthorizedCells = Object.values(projections)
-      .reduce((total, projection) => total + projection.cells.length, 0);
-    const viewerPoints = fixture.viewer_points.map((point: any) => ({
-      lat: point.lat,
-      lng: point.lng,
-      ts: point.ts,
-      cid: point.cid,
-      synced: true,
-      evidenceSource: 'passive_real' as const,
-      sourceSegmentId: point.source_segment_id,
-      horizontalAccuracyM: point.horizontal_accuracy_m,
-      continuityState: 'accepted' as const,
-    }));
+    const viewport = {
+      key: '174.76000,-36.86000,174.80000,-36.82000',
+      bbox: [174.76, -36.86, 174.8, -36.82] as [number, number, number, number],
+    };
+    const mineGeometry = { type: 'MultiPolygon' as const, coordinates: [[[[
+      174.770, -36.850,
+    ], [174.780, -36.850], [174.780, -36.840], [174.770, -36.840], [174.770, -36.850]]]] };
+    const friendGeometries: Record<string, any> = {
+      '31': { type: 'MultiPolygon', coordinates: [[[[174.775, -36.850], [174.785, -36.850], [174.785, -36.840], [174.775, -36.840], [174.775, -36.850]]]] },
+      '32': { type: 'MultiPolygon', coordinates: [[[[174.790, -36.838], [174.795, -36.838], [174.795, -36.833], [174.790, -36.833], [174.790, -36.838]]]] },
+    };
+    const friendIds = Object.keys(friendGeometries);
 
     useAppStore.setState({ user: { id: viewerId } as any, isLoggedIn: true, hydrated: true });
     useSettingsStore.setState({ debugMode: false });
     useActivitySimulatorStore.setState({ enabled: false });
-    useMemoryScopeStore.setState({ scope: 'combined', selectedFriendId: null });
+    useMemoryScopeStore.setState({ scope: 'combined' });
     useMemoryStore.setState(state => ({
-      points: viewerPoints,
+      points: [],
       testPoints: [],
+      pendingPreparedCoverageCids: [],
       geometryVersion: state.geometryVersion + 1,
       localHydration: {
         ownerUserId: viewerId,
@@ -122,7 +103,7 @@ describe('O84 isolated real API Friend Fog render boundary', () => {
         friend_id: id,
         friend_name: `Friend ${id}`,
         selected: true,
-        authorization_version: projections[id].authorizationVersion,
+        authorization_version: 4,
         effective_at: new Date(now - 60_000).toISOString(),
         sharing_status: 'shared' as const,
         coverage_scope: 'full_history_delayed_v1' as const,
@@ -130,15 +111,35 @@ describe('O84 isolated real API Friend Fog render boundary', () => {
       loading: false,
       error: null,
     });
-    mockAuthenticatedFetch.mockImplementation(async (_url: string, options: any) => {
+    mockAuthenticatedFetch.mockImplementation(async (url: string, options: any) => {
+      if (url.startsWith('/api/memory/coverage?bbox=')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            coverage_rule_version: 4,
+            coverage_version: 'mine-exact-v1',
+            evidence_count: 8,
+            tile_count: 1,
+            rebuilt_tile_count: 0,
+            geometry: mineGeometry,
+          }),
+        };
+      }
       const requestedId = String(JSON.parse(options.body).friend_ids[0]);
-      const original = fixture.owners.find((owner: any) => String(owner.projection.source_friend_id) === requestedId)?.projection;
       return {
         ok: true,
         status: 200,
         json: async () => ({
           projections: [{
-            ...original,
+            source_friend_id: requestedId,
+            authorization_version: 4,
+            projection_version: `friend-${requestedId}-exact-v1`,
+            coverage_rule_version: 4,
+            evidence_count: 4,
+            cells: [],
+            regions: [],
+            geometry: friendGeometries[requestedId],
             server_authorized_at: new Date(now - 60_000).toISOString(),
             authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
           }],
@@ -146,37 +147,168 @@ describe('O84 isolated real API Friend Fog render boundary', () => {
         }),
       };
     });
+    mockRenderedSources.clear();
+    usePreparedMemoryCoverageStore.getState().reset();
     useFriendMemoryStore.getState().reset();
-    await useFriendMemoryStore.getState().loadSelectedProjections(friendIds);
 
     const ready = jest.fn();
-    render(<FogLayer onFogReady={ready} />);
+    const view = render(<FogLayer viewport={viewport} onFogReady={ready} />);
     await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true), { timeout: 15_000 });
+    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(true), { timeout: 15_000 });
     await waitFor(() => expect(ready).toHaveBeenCalled(), { timeout: 15_000 });
 
-    const visible = useFriendMemoryStore.getState().getVisibleCells();
-    expect(new Set(visible.map(cell => cell.sourceFriendId))).toEqual(new Set(friendIds));
-    expect(visible).toHaveLength(expectedAuthorizedCells);
+    const visible = useFriendMemoryStore.getState().getVisibleGeometries();
+    expect(new Set(visible.map(source => source.sourceFriendId))).toEqual(new Set(friendIds));
+    expect(visible).toHaveLength(2);
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
     const fogShape = mockRenderedSources.get('memory-fog-src');
     const friendShape = mockRenderedSources.get('memory-friend-union-src');
+    const overlapShape = mockRenderedSources.get('memory-overlap-src');
     expect(polygonCount(fogShape)).toBeGreaterThan(0);
     expect(polygonCount(friendShape)).toBeGreaterThan(0);
-    expect(fogShape.properties.cairnEvidencePointCount).toBe(viewerPoints.length);
+    expect(polygonCount(overlapShape)).toBeGreaterThan(0);
+    expect(fogShape.properties.cairnEvidencePointCount).toBe(0);
+    expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('mine-exact-v1');
 
-    // Emit source-backed measurements for the handoff artifact.
-    process.stdout.write(`o84-friend-fog-mapbox=${JSON.stringify({
+    // Finishing or revising the local journal does not change the exact
+    // prepared account/scope/content authority. It must not clear the painted
+    // Friend classifications and then short-circuit on the cached main mask.
+    await act(async () => {
+      useMemoryStore.setState(state => ({
+        localHydration: {
+          ...state.localHydration,
+          revision: state.localHydration.revision + 1,
+        },
+      }));
+    });
+    await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true));
+    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(true));
+
+    // A style reload remounts the sources while the exact authenticated
+    // viewport stores stay current. It must not fall back to legacy cells.
+    view.unmount();
+    mockRenderedSources.clear();
+    const remount = render(<FogLayer viewport={viewport} />);
+    await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true), { timeout: 15_000 });
+    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(true), { timeout: 15_000 });
+
+    // Revoking the overlapping friend removes that source immediately. The
+    // geographically separate second friend remains, so overlap disappears
+    // while Friends coverage stays visible.
+    await act(async () => {
+      await useFriendMemoryStore.getState().purgeFriend('31', viewerId);
+    });
+    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(false), { timeout: 15_000 });
+    await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true), { timeout: 15_000 });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries().map(item => item.sourceFriendId)).toEqual(['32']);
+
+    process.stdout.write(`o86-exact-friend-fog-mapbox=${JSON.stringify({
       sourceFriendIds: friendIds,
-      authorizedCells: visible.length,
+      exactGeometrySources: visible.length,
+      legacyCells: 0,
       friendSourcePolygons: polygonCount(friendShape),
+      overlapSourcePolygons: polygonCount(overlapShape),
       fogSourcePolygons: polygonCount(fogShape),
-      mineEvidencePoints: viewerPoints.length,
-      projectionVersions: Object.fromEntries(friendIds.map(id => [id, projections[id].projectionVersion])),
+      mineCoverageVersion: usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion,
     })}\n`);
 
+    remount.unmount();
     await act(async () => {
       useFriendMemoryStore.getState().reset();
+      usePreparedMemoryCoverageStore.getState().reset();
       useMemorySubscriptionsStore.getState().reset();
-      useMemoryScopeStore.setState({ scope: 'self', selectedFriendId: null });
+      useMemoryScopeStore.setState({ scope: 'self' });
     });
+  });
+});
+
+describe('O86 prepared viewport render lifecycle', () => {
+  test('a same-key viewport rerender does not restart prepared coverage work', async () => {
+    const viewport = { key: '174.76000,-36.86000,174.78000,-36.84000', bbox: [174.76, -36.86, 174.78, -36.84] as [number, number, number, number] };
+    const loadViewport = jest.fn(async () => undefined);
+    useAppStore.setState({ user: { id: 'viewport-owner' } as any, isLoggedIn: true, hydrated: true });
+    useSettingsStore.setState({ debugMode: false });
+    useActivitySimulatorStore.setState({ enabled: false });
+    useMemoryScopeStore.setState({ scope: 'self' });
+    useMemoryStore.setState(state => ({
+      points: [],
+      testPoints: [],
+      pendingPreparedCoverageCids: [],
+      geometryVersion: state.geometryVersion + 1,
+      localHydration: {
+        ownerUserId: 'viewport-owner', status: 'ready', requiresInitialReconcile: false,
+        initialReconcile: 'not_required', revision: state.localHydration.revision + 1,
+      },
+    }));
+    usePreparedMemoryCoverageStore.setState({
+      userId: 'viewport-owner',
+      coverage: {
+        viewportKey: viewport.key,
+        coverageVersion: 'same-key-v1',
+        coverageRuleVersion: 4,
+        geometry: { type: 'MultiPolygon', coordinates: [] },
+        evidenceCount: 0,
+        loadedAtMs: Date.now(),
+      },
+      status: 'ready', error: null, version: 1, viewport, loadViewport,
+    });
+
+    const view = render(<FogLayer viewport={{ ...viewport, bbox: [...viewport.bbox] }} />);
+    await waitFor(() => expect(loadViewport).toHaveBeenCalledTimes(1));
+    view.rerender(<FogLayer viewport={{ ...viewport, bbox: [...viewport.bbox] }} />);
+    await act(async () => undefined);
+    expect(loadViewport).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    usePreparedMemoryCoverageStore.getState().reset();
+  });
+
+  test('loads Friends when the selected contributor list arrives after FogLayer mounts', async () => {
+    const viewport = { key: '174.76000,-36.86000,174.78000,-36.84000', bbox: [174.76, -36.86, 174.78, -36.84] as [number, number, number, number] };
+    const loadSelectedProjections = jest.fn(async () => undefined);
+    useAppStore.setState({ user: { id: 'late-subscriptions-owner' } as any, isLoggedIn: true, hydrated: true });
+    useSettingsStore.setState({ debugMode: false });
+    useActivitySimulatorStore.setState({ enabled: false });
+    useMemoryScopeStore.setState({ ownerUserId: 'late-subscriptions-owner', scope: 'combined' });
+    useMemorySubscriptionsStore.setState({ subscriptions: [], availableSources: [], loading: true, error: null });
+    useMemoryStore.setState(state => ({
+      points: [], testPoints: [], pendingPreparedCoverageCids: [],
+      geometryVersion: state.geometryVersion + 1,
+      localHydration: {
+        ownerUserId: 'late-subscriptions-owner', status: 'ready', requiresInitialReconcile: false,
+        initialReconcile: 'not_required', revision: state.localHydration.revision + 1,
+      },
+    }));
+    usePreparedMemoryCoverageStore.setState({
+      userId: 'late-subscriptions-owner',
+      coverage: {
+        viewportKey: viewport.key, coverageVersion: 'late-subscriptions-v1', coverageRuleVersion: 4,
+        geometry: { type: 'MultiPolygon', coordinates: [] }, evidenceCount: 0, loadedAtMs: Date.now(),
+      },
+      status: 'ready', error: null, version: 1, viewport,
+    });
+    useFriendMemoryStore.setState({ userId: 'late-subscriptions-owner', loadSelectedProjections });
+
+    const view = render(<FogLayer viewport={viewport} />);
+    await waitFor(() => expect(loadSelectedProjections).toHaveBeenCalledTimes(1));
+    loadSelectedProjections.mockClear();
+
+    act(() => {
+      useMemorySubscriptionsStore.setState({
+        subscriptions: [{ friend_id: 31, friend_name: 'Late Friend' }],
+        availableSources: [{
+          friend_id: '31', friend_name: 'Late Friend', selected: true,
+          authorization_version: 1, effective_at: new Date().toISOString(),
+          sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+        }],
+        loading: false, error: null,
+      });
+    });
+
+    await waitFor(() => expect(loadSelectedProjections).toHaveBeenCalledWith(undefined, viewport));
+    view.unmount();
+    useFriendMemoryStore.getState().reset();
+    usePreparedMemoryCoverageStore.getState().reset();
+    useMemorySubscriptionsStore.getState().reset();
   });
 });

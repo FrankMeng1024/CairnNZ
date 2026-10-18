@@ -28,6 +28,9 @@ describe('central Memory semantic authority', () => {
     useMemoryStore.getState().markPointsSyncedByCid([before.cid]);
     const after = useMemoryStore.getState().points[0];
     expect(after).toMatchObject({ lat: before.lat, lng: before.lng, cid: before.cid, synced: true });
+    expect(useMemoryStore.getState().pendingPreparedCoverageCids).toEqual([before.cid]);
+    useMemoryStore.getState().acknowledgePreparedCoverage();
+    expect(useMemoryStore.getState().pendingPreparedCoverageCids).toEqual([]);
   });
 
   test('a later real return preserves presence without inflating coverage', () => {

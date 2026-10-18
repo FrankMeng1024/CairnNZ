@@ -103,7 +103,7 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           id={`${idPrefix}-repeated-traversals`}
           shape={{ type: 'FeatureCollection', features: repeatFeatures }}
         >
-          {([-3, 0, 3] as const).flatMap(offset => [
+          {([3] as const).flatMap(offset => [
             <LineLayer
               key={`repeat-casing-${offset}`}
               id={`${idPrefix}-repeat-casing-${offset}`}
@@ -140,25 +140,21 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           id={`${idPrefix}-repeat-labels`}
           shape={{ type: 'FeatureCollection', features: repeatLabelFeatures }}
         >
-          {(['forward', 'backward'] as const).map(direction => (
-            <SymbolLayer
-              key={direction}
-              id={`${idPrefix}-repeat-label-text-${direction}`}
-              slot="top"
-              minZoomLevel={11}
-              filter={['==', ['get', 'direction'], direction]}
-              style={{
-                textField: ['get', 'text'],
-                textSize: 10,
-                textOffset: direction === 'forward' ? [0, -1.15] : [0, 1.15],
-                textColor: theme.foreground,
-                textHaloColor: theme.surfaceElevated,
-                textHaloWidth: 1.5,
-                textAllowOverlap: true,
-                textIgnorePlacement: true,
-              }}
-            />
-          ))}
+          <SymbolLayer
+            id={`${idPrefix}-repeat-label-text`}
+            slot="top"
+            minZoomLevel={11}
+            style={{
+              textField: ['get', 'text'],
+              textSize: 10,
+              textOffset: [0, 1.15],
+              textColor: theme.foreground,
+              textHaloColor: theme.surfaceElevated,
+              textHaloWidth: 1.5,
+              textAllowOverlap: true,
+              textIgnorePlacement: true,
+            }}
+          />
         </ShapeSource>
       ) : null}
       {gapFeatures.length > 0 ? (

@@ -3823,6 +3823,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               .map((p: any) => p.cid);
             if (cids.length > 0 && typeof useMemoryStore.getState().markPointsSyncedByCid === 'function') {
               useMemoryStore.getState().markPointsSyncedByCid(cids);
+              // Keep the just-finished Activity visible while the prepared
+              // read model takes ownership of its already-accepted coverage.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              void require('../features/memory/store/usePreparedMemoryCoverageStore')
+                .usePreparedMemoryCoverageStore.getState().refreshCurrentViewport();
             }
           } catch (markErr) {
             crashLogger.breadcrumb(`v412:mark_synced_failed ${String(markErr).slice(0, 60)}`);

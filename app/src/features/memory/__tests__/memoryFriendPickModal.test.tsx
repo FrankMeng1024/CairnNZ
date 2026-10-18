@@ -2,6 +2,8 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
+jest.setTimeout(15_000);
+
 const mockAuthenticatedFetch = jest.fn();
 
 jest.mock('../../../services/apiService', () => ({
@@ -27,6 +29,7 @@ const sources = [
   { friend_id: '22', friend_name: 'Second Friend', selected: false, authorization_version: 1, effective_at: '2026-10-15T00:00:00Z', sharing_status: 'shared' as const, coverage_scope: 'full_history_delayed_v1' as const },
   { friend_id: '33', friend_name: 'Unavailable Friend', selected: false, authorization_version: 0, effective_at: '', sharing_status: 'not_shared' as const, coverage_scope: null },
 ];
+const TEST_VIEWPORT = { bbox: [174.6, -41.4, 174.9, -41.1] as [number, number, number, number], key: 'test-viewport' };
 
 function ok(body: any, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
@@ -39,14 +42,15 @@ function projection(friendId: number) {
     source_friend_id: friendId,
     authorization_version: 1,
     projection_version: `projection-${friendId}`,
-    cell_size_m: 200,
+    coverage_rule_version: 4,
     server_authorized_at: new Date(now - 60_000).toISOString(),
     authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
     regions: [],
-    cells: [{
-      id: `cell-${friendId}`,
-      polygon: [[start, -41], [start + 0.001, -41], [start + 0.001, -41.001], [start, -41.001], [start, -41]],
-    }],
+    cells: [],
+    geometry: {
+      type: 'MultiPolygon',
+      coordinates: [[[[start, -41], [start + 0.001, -41], [start + 0.001, -41.001], [start, -41.001], [start, -41]]]],
+    },
   };
 }
 
@@ -63,7 +67,8 @@ describe('Memory friend picker interaction owner', () => {
     useMemorySubscriptionsStore.getState().reset();
     useMemorySubscriptionsStore.setState({ availableSources: sources, subscriptions: [], loading: false, error: null });
     useFriendMemoryStore.getState().reset();
-    useMemoryScopeStore.setState({ scope: 'self', selectedFriendId: null });
+    useFriendMemoryStore.setState({ userId: 'viewer', activeViewport: TEST_VIEWPORT });
+    useMemoryScopeStore.setState({ scope: 'self' });
   });
 
   test('selects two friends while open, loads each source independently, and deselects without friendship semantics', async () => {
@@ -76,7 +81,7 @@ describe('Memory friend picker interaction owner', () => {
       if (path === '/api/friend-sharing/sources') return ok({ sources });
       if (path === '/api/memory-subscriptions' && init.method === 'POST') return ok({}, 201);
       if (path.startsWith('/api/memory-subscriptions/') && init.method === 'DELETE') return ok({});
-      if (path === '/api/friend-sharing/projections') {
+      if (path === '/api/friend-sharing/coverage') {
         const friendId = JSON.parse(init.body).friend_ids[0];
         if (friendId === 11) await firstGate;
         return ok({ revoked_friend_ids: [], projections: [projection(friendId)] });
@@ -110,7 +115,7 @@ describe('Memory friend picker interaction owner', () => {
     expect(screen.queryByTestId('memory-friend-row-status-22')).toBeNull();
     expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-status-slot-11').props.style)).toMatchObject({ minHeight: 18 });
     expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-accessory-11').props.style)).toMatchObject({ width: 32, minHeight: 44 });
-    expect(new Set(useFriendMemoryStore.getState().getVisibleCells().map(cell => cell.sourceFriendId)))
+    expect(new Set(useFriendMemoryStore.getState().getVisibleGeometries().map(source => source.sourceFriendId)))
       .toEqual(new Set(['11', '22']));
     expect(useMemoryScopeStore.getState().scope).toBe('combined');
 

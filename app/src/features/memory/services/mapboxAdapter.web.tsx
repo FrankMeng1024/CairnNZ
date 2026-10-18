@@ -180,8 +180,20 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
 }: MapViewProps, ref) {
   const mapRef = useRef<MapRef | null>(null);
   const loadingStartedRef = useRef(false);
+  const lastProgrammaticCameraEventAtRef = useRef(0);
 
   React.useImperativeHandle(ref, () => ({
+    requestRender: () => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      inner?.triggerRepaint?.();
+    },
+    isSourceLoaded: (sourceId: string) => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!inner?.getSource?.(sourceId)) return false;
+      return typeof inner.isSourceLoaded === 'function'
+        ? Boolean(inner.isSourceLoaded(sourceId))
+        : true;
+    },
     getPointInView: async (coordinate: [number, number]) => {
       const inner = mapRef.current?.getMap?.() ?? mapRef.current;
       const point = inner?.project?.(coordinate);
@@ -315,6 +327,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
           }}
           mapboxAccessToken={localQaStyleEnabled ? LOCAL_QA_MAPBOX_TOKEN : MAPBOX_ACCESS_TOKEN}
           mapStyle={localQaStyleEnabled ? LOCAL_QA_STYLE : (parsedStyleJSON ?? styleUrl)}
+          fadeDuration={0}
           attributionControl={false}
           logoPosition={webControlPosition(logoPosition, 'bottom-left')}
           onLoad={(event) => {
@@ -348,8 +361,23 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
             onDidFinishRenderingMapFully?.();
             onDidFinishRenderingFrameFully?.();
           }}
+          onRender={() => {
+            // Native supplies a fully-rendered-frame callback independently of
+            // the later all-map completion event. Forward Web render frames as
+            // well; MemoryMap only accepts one after its exact Fog authority
+            // has committed, so early blank/style frames cannot release UI.
+            onDidFinishRenderingFrameFully?.();
+          }}
           onMove={(e) => {
             if (!onCameraChanged) return;
+            const userEvent = Boolean(e.originalEvent);
+            const now = performance.now();
+            // Programmatic Mapbox movement can emit at render cadence. The
+            // app only needs sampled camera telemetry; forwarding every event
+            // duplicates the animation clock's work. User events remain
+            // immediate so a pan/pinch always cancels Point follow at once.
+            if (!userEvent && now - lastProgrammaticCameraEventAtRef.current < 100) return;
+            lastProgrammaticCameraEventAtRef.current = now;
             const c = e.target.getCenter();
             const z = e.target.getZoom();
             onCameraChanged({
@@ -360,7 +388,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
                 pitch: e.target.getPitch?.() ?? 0,
                 // react-map-gl supplies originalEvent for pointer/wheel/touch
                 // moves, while programmatic easeTo/jumpTo updates omit it.
-                isUserInteraction: Boolean(e.originalEvent),
+                isUserInteraction: userEvent,
               },
             });
           }}
@@ -440,14 +468,19 @@ interface CameraProps {
  * Imperative camera handle the parent obtains via ref.
  * Matches the subset of @rnmapbox/maps' CameraRef we actually call.
  */
-interface CameraRef {
-  setCamera: (config: {
+interface WebCameraStop {
     centerCoordinate?: [number, number];
+    padding?: { paddingTop?: number; paddingRight?: number; paddingBottom?: number; paddingLeft?: number };
     zoomLevel?: number;
     heading?: number;
     pitch?: number;
+    animationMode?: 'flyTo' | 'easeTo' | 'linearTo' | 'moveTo' | 'none';
     animationDuration?: number;
-  }) => void;
+}
+
+interface CameraRef {
+  setCamera: (config: WebCameraStop | { stops: WebCameraStop[] }) => void;
+  cancelAnimation: () => void;
   fitBounds: (
     northEast: [number, number],
     southWest: [number, number],
@@ -459,6 +492,7 @@ interface CameraRef {
 export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(props, ref) {
   const mapCtx = React.useContext(MapInstanceContext);
   const { centerCoordinate, zoomLevel, minZoomLevel, maxZoomLevel } = props;
+  const sequenceGenerationRef = React.useRef(0);
 
   // Apply zoom range limits whenever they change.
   useEffect(() => {
@@ -479,23 +513,76 @@ export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(p
       if (!m) return;
       const inner = (m as any).getMap?.() ?? m;
       if (!inner) return;
-      const center = config.centerCoordinate;
-      const z = config.zoomLevel;
-      const bearing = config.heading;
-      const pitch = config.pitch;
-      const duration = config.animationDuration ?? 0;
-      if (duration <= 0) {
-        if (center) inner.jumpTo({ center, zoom: z ?? inner.getZoom(), bearing, pitch });
-        else if (typeof z === 'number') inner.setZoom(z);
-      } else {
+      const sequenceGeneration = ++sequenceGenerationRef.current;
+      const applyStop = (stop: WebCameraStop, durationOverride?: number) => {
+        const center = stop.centerCoordinate;
+        const z = stop.zoomLevel;
+        const bearing = stop.heading;
+        const pitch = stop.pitch;
+        const duration = durationOverride ?? stop.animationDuration ?? 0;
+        // Never pass an undefined padding value: production Mapbox GL compares the
+        // padding object while animating and can throw before the camera move.
+        const padding = stop.padding ? {
+          top: stop.padding.paddingTop ?? 0,
+          right: stop.padding.paddingRight ?? 0,
+          bottom: stop.padding.paddingBottom ?? 0,
+          left: stop.padding.paddingLeft ?? 0,
+        } : null;
+        if (duration <= 0) {
+          if (center) inner.jumpTo({
+            center,
+            zoom: z ?? inner.getZoom(),
+            bearing,
+            pitch,
+            ...(padding ? { padding, retainPadding: true } : {}),
+          });
+          else if (typeof z === 'number') inner.setZoom(z);
+          return;
+        }
         inner.easeTo({
-          center: center ?? inner.getCenter(),
-          zoom: z ?? inner.getZoom(),
-          bearing: bearing ?? inner.getBearing?.(),
-          pitch: pitch ?? inner.getPitch?.(),
-          duration,
+            center: center ?? inner.getCenter(),
+            zoom: z ?? inner.getZoom(),
+            bearing: bearing ?? inner.getBearing?.(),
+            pitch: pitch ?? inner.getPitch?.(),
+            duration,
+            ...(padding ? { padding, retainPadding: true } : {}),
+            ...(stop.animationMode === 'linearTo' ? { easing: (value: number) => value } : {}),
         });
+      };
+      if ('stops' in config) {
+        // A Point follow uses one stable unobscured viewport for every bend.
+        // Establish that padding once, then animate only geographic centers;
+        // asking Mapbox to re-interpolate identical padding at every stop
+        // needlessly reflows symbols and makes the moving head trail.
+        const sequencePadding = config.stops.find(stop => stop.padding)?.padding;
+        if (sequencePadding) {
+          applyStop({ centerCoordinate: [inner.getCenter().lng, inner.getCenter().lat], padding: sequencePadding });
+        }
+        const sequenceStartedAt = performance.now();
+        let startOffsetMs = 0;
+        for (const stop of config.stops) {
+          const plannedStartMs = startOffsetMs;
+          const plannedEndMs = plannedStartMs + Math.max(0, stop.animationDuration ?? 0);
+          const run = () => {
+            if (sequenceGenerationRef.current !== sequenceGeneration) return;
+            const elapsedMs = performance.now() - sequenceStartedAt;
+            const { padding: ignoredPadding, ...centerOnlyStop } = stop;
+            void ignoredPadding;
+            applyStop(centerOnlyStop, Math.max(0, plannedEndMs - elapsedMs));
+          };
+          if (plannedStartMs <= 0) run();
+          else setTimeout(run, plannedStartMs);
+          startOffsetMs = plannedEndMs;
+        }
+        return;
       }
+      void applyStop(config);
+    },
+    cancelAnimation: () => {
+      sequenceGenerationRef.current += 1;
+      const m = mapCtx?.current;
+      const inner = (m as any)?.getMap?.() ?? m;
+      inner?.stop?.();
     },
     fitBounds: (northEast, southWest, padding = 0, animationDuration = 0) => {
       const m = mapCtx?.current;
@@ -536,6 +623,7 @@ interface ShapeSourceProps {
   clusterRadius?: number;
   clusterMaxZoomLevel?: number;
   clusterProperties?: Record<string, any>;
+  lineMetrics?: boolean;
 }
 
 export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function ShapeSource({
@@ -546,6 +634,7 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
   clusterRadius,
   clusterMaxZoomLevel,
   clusterProperties,
+  lineMetrics,
 }: ShapeSourceProps, ref) {
   const mapCtx = React.useContext(MapInstanceContext);
   React.useImperativeHandle(ref, () => ({
@@ -585,6 +674,7 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
       id={id}
       type="geojson"
       data={shape}
+      {...(typeof lineMetrics === 'boolean' ? { lineMetrics } : {})}
       {...clusteringProps}
     >
       {enriched}
@@ -614,7 +704,20 @@ export function FillLayer({ id, style, __sourceId, filter }: LayerProps) {
 }
 
 // ── LineLayer ─────────────────────────────────────────────────────────
-export function LineLayer({ id, style, __sourceId, filter }: LayerProps) {
+export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ id, style, __sourceId, filter }, ref) {
+  const mapCtx = React.useContext(MapInstanceContext);
+  React.useImperativeHandle(ref, () => ({
+    setNativeProps: (props: { style?: Record<string, any> }) => {
+      const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      if (!inner?.getLayer?.(id) || !props.style) return;
+      for (const [key, value] of Object.entries(props.style)) {
+        const property = key.replace(/[A-Z]/g, match => `-${match.toLowerCase()}`);
+        // These values were already validated by the RN style surface. Skip
+        // GL JS's style-spec validation in the animation hot path.
+        try { inner.setPaintProperty(id, property, value, { validate: false }); } catch { /* unsupported development paint */ }
+      }
+    },
+  }), [id, mapCtx]);
   const lineLayoutKeys = new Set([
     'lineCap',
     'lineJoin',
@@ -644,7 +747,7 @@ export function LineLayer({ id, style, __sourceId, filter }: LayerProps) {
       paint={paintToKebab(paintStyle) as any}
     />
   );
-}
+});
 
 export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
   const filterProps = filter ? { filter: filter as any } : {};

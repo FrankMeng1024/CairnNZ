@@ -117,7 +117,10 @@ describe('RouteDrawOverlay native gesture handoff', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    await waitFor(() => expect(onCancel).toHaveBeenCalledWith('gesture-interrupted'));
+    await waitFor(() => expect(onCancel).toHaveBeenCalledWith(
+      'gesture-interrupted',
+      expect.objectContaining({ samples: expect.any(Array), droppedSampleCount: 0 }),
+    ));
     expect(onStroke).not.toHaveBeenCalled();
   });
 
@@ -141,7 +144,10 @@ describe('RouteDrawOverlay native gesture handoff', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    await waitFor(() => expect(onCancel).toHaveBeenCalledWith('coordinate-unavailable'));
+    await waitFor(() => expect(onCancel).toHaveBeenCalledWith(
+      'coordinate-unavailable',
+      expect.objectContaining({ samples: expect.any(Array), droppedSampleCount: 0 }),
+    ));
     expect(onStroke).not.toHaveBeenCalled();
   });
 });

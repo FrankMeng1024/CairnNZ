@@ -50,7 +50,10 @@ describe('Route planning provider boundaries', () => {
     const raw = [p(0, 0), p(20, 20), p(40, 35), p(60, 20), p(80, 0)];
     const matcher = jest.fn(async segment => ok(segment.coords));
     const result = await resolveDrawPlan(raw, { matcher });
-    expect(result).toEqual({ outcome: 'accepted', points: raw, callCount: 1 });
+    expect(result).toMatchObject({
+      outcome: 'accepted', points: raw, callCount: 1,
+      parts: [{ resolution: 'draw-matched', inputStartIndex: 0, inputEndIndex: 4 }],
+    });
     expect(matcher.mock.calls[0][0].coords).toEqual(raw);
   });
 
@@ -58,8 +61,9 @@ describe('Route planning provider boundaries', () => {
     const raw = [p(0, 0), p(40, 0), p(80, 0)];
     const withFarSpur = [raw[0], raw[1], p(2_000, 2_000), raw[2]];
     expect(orderedShapeDeviationM(raw, withFarSpur)).toBeGreaterThan(90);
-    await expect(resolveDrawPlan(raw, { matcher: async () => ok(withFarSpur) })).resolves.toEqual({
-      outcome: 'manual-available', rawPoints: raw, reason: 'shape-deviation', callCount: 1,
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(withFarSpur) })).resolves.toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: 'shape-deviation', callCount: 1,
+      parts: [{ resolution: 'draw-manual' }],
     });
   });
 
@@ -68,8 +72,22 @@ describe('Route planning provider boundaries', () => {
     const dense = Array.from({ length: 201 }, (_, index) => p(index * 0.4, 0));
     dense[1] = p(2_000, 2_000);
     expect(orderedShapeDeviationM(raw, dense)).toBeGreaterThan(90);
-    await expect(resolveDrawPlan(raw, { matcher: async () => ok(dense) })).resolves.toEqual({
-      outcome: 'manual-available', rawPoints: raw, reason: 'shape-deviation', callCount: 1,
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(dense) })).resolves.toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: 'shape-deviation', callCount: 1,
+      parts: [{ resolution: 'draw-manual' }],
+    });
+  });
+
+  test('Draw rejects a nearby provider loop that multiplies distance without a far spatial spur', async () => {
+    const raw = [p(0, 0), p(100, 0)];
+    const looping = [
+      raw[0], p(10, 35), p(20, -35), p(30, 35), p(40, -35),
+      p(50, 35), p(60, -35), p(70, 35), p(80, -35), p(90, 35), raw[1],
+    ];
+    expect(orderedShapeDeviationM(raw, looping)).toBeLessThan(45);
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(looping) })).resolves.toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: 'shape-deviation', callCount: 1,
+      parts: [{ resolution: 'draw-manual' }],
     });
   });
 
@@ -84,7 +102,7 @@ describe('Route planning provider boundaries', () => {
   test('Draw does not accept a collapsed deliberate loop with matching endpoints', async () => {
     const raw = [p(0, 0), p(80, 0), p(80, 80), p(0, 80), p(0, 0)];
     await expect(resolveDrawPlan(raw, { matcher: async () => ok([raw[0], raw.at(-1)!]) }))
-      .resolves.toMatchObject({ outcome: 'manual-available', reason: 'no-match' });
+      .resolves.toMatchObject({ outcome: 'accepted', fallbackReason: 'no-match', parts: [{ resolution: 'draw-manual' }] });
   });
 
   test('Point may use a direct provider path for the same endpoints', async () => {
@@ -125,8 +143,158 @@ describe('Route planning provider boundaries', () => {
       ],
       durationMs: 2,
     });
-    await expect(resolveDrawPlan(raw, { matcher })).resolves.toEqual({
-      outcome: 'manual-available', rawPoints: raw, reason: 'split-match', callCount: 1,
+    await expect(resolveDrawPlan(raw, { matcher })).resolves.toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: 'split-match', callCount: 1,
+      parts: [{ resolution: 'draw-manual' }],
+    });
+  });
+
+  test('tracepoint correspondence keeps a matched prefix and manual terminal as ordered parts', async () => {
+    const raw = [p(0, 0), p(20, 2), p(40, 3), p(60, 18), p(80, 30)];
+    const snappedPrefix = [p(0, 0), p(20, 0), p(40, 0)];
+    const matcher = async (): Promise<MatchResult> => ({
+      ok: true,
+      matchedPoints: snappedPrefix,
+      confidence: 0.9,
+      segments: [{
+        points: snappedPrefix,
+        confidence: 0.9,
+        inputStartIndex: 0,
+        inputEndIndex: 2,
+        alternativesCount: 0,
+      }],
+      durationMs: 2,
+    });
+    const result = await resolveDrawPlan(raw, { matcher });
+    expect(result).toMatchObject({
+      outcome: 'accepted',
+      fallbackReason: 'split-match',
+      parts: [
+        { resolution: 'draw-matched', inputStartIndex: 0, inputEndIndex: 2 },
+        { resolution: 'draw-manual', inputStartIndex: 2, inputEndIndex: 4 },
+      ],
+    });
+    if (result.outcome !== 'accepted') return;
+    expect(result.parts[0].points.at(-1)).toEqual(result.parts[1].points[0]);
+    expect(result.points.at(-1)).toEqual(raw.at(-1));
+  });
+
+  test('a short unsupported lateral pen-up tail follows the stable terminal direction without becoming matched', async () => {
+    const raw = [p(0, 0), p(20, 0), p(40, 0), p(60, 0), p(80, 7)];
+    const snappedPrefix = raw.slice(0, 4);
+    const result = await resolveDrawPlan(raw, {
+      matcher: async (): Promise<MatchResult> => ({
+        ok: true,
+        matchedPoints: snappedPrefix,
+        confidence: 0.9,
+        segments: [{
+          points: snappedPrefix,
+          confidence: 0.9,
+          inputStartIndex: 0,
+          inputEndIndex: 3,
+          alternativesCount: 0,
+        }],
+        durationMs: 2,
+      }),
+    });
+    expect(result).toMatchObject({
+      outcome: 'accepted',
+      parts: [
+        { resolution: 'draw-matched' },
+        { resolution: 'draw-manual' },
+      ],
+    });
+    if (result.outcome !== 'accepted') return;
+    expect(result.points.at(-1)?.lng).toBeCloseTo(p(80, 0).lng, 6);
+    expect(result.points.at(-1)?.lat).toBeCloseTo(p(80, 0).lat, 6);
+    expect(result.points.at(-1)).not.toEqual(raw.at(-1));
+  });
+
+  test('terminal pen-up reconciliation runs after adjacent unsupported provider runs are merged', async () => {
+    const raw = [p(0, 0), p(20, 0), p(40, 0), p(60, 0), p(70, 0), p(80, 7)];
+    const result = await resolveDrawPlan(raw, {
+      matcher: async (): Promise<MatchResult> => ({
+        ok: true,
+        matchedPoints: raw.slice(0, 4),
+        confidence: 0.9,
+        segments: [
+          {
+            points: raw.slice(0, 4),
+            confidence: 0.9,
+            inputStartIndex: 0,
+            inputEndIndex: 3,
+            alternativesCount: 0,
+          },
+          {
+            points: raw.slice(3, 5),
+            confidence: 0.4,
+            inputStartIndex: 3,
+            inputEndIndex: 4,
+            alternativesCount: 2,
+          },
+        ],
+        durationMs: 2,
+      }),
+    });
+    expect(result).toMatchObject({
+      outcome: 'accepted',
+      parts: [
+        { resolution: 'draw-matched' },
+        { resolution: 'draw-manual', inputStartIndex: 3, inputEndIndex: 5 },
+      ],
+    });
+    if (result.outcome !== 'accepted') return;
+    expect(result.points.at(-1)?.lng).toBeCloseTo(p(80, 0).lng, 6);
+    expect(result.points.at(-1)?.lat).toBeCloseTo(p(80, 0).lat, 6);
+    expect(result.points.at(-1)).not.toEqual(raw.at(-1));
+  });
+
+  test('a deliberate unsupported terminal turn is preserved as manual geometry', async () => {
+    const raw = [p(0, 0), p(20, 0), p(40, 0), p(60, 0), p(60, 9)];
+    const snappedPrefix = raw.slice(0, 4);
+    const result = await resolveDrawPlan(raw, {
+      matcher: async (): Promise<MatchResult> => ({
+        ok: true,
+        matchedPoints: snappedPrefix,
+        confidence: 0.9,
+        segments: [{
+          points: snappedPrefix,
+          confidence: 0.9,
+          inputStartIndex: 0,
+          inputEndIndex: 3,
+          alternativesCount: 0,
+        }],
+        durationMs: 2,
+      }),
+    });
+    expect(result.outcome).toBe('accepted');
+    if (result.outcome !== 'accepted') return;
+    expect(result.points.at(-1)).toEqual(raw.at(-1));
+    expect(result.parts.at(-1)?.resolution).toBe('draw-manual');
+  });
+
+  test('ambiguous tracepoint run stays manual while reliable flanks remain matched', async () => {
+    const raw = [p(0, 0), p(20, 0), p(40, 4), p(60, 4), p(80, 0), p(100, 0)];
+    const matcher = async (): Promise<MatchResult> => ({
+      ok: true,
+      matchedPoints: raw.slice(0, 2),
+      confidence: 0.9,
+      segments: [
+        { points: raw.slice(0, 2), confidence: 0.9, inputStartIndex: 0, inputEndIndex: 1, alternativesCount: 0 },
+        { points: raw.slice(1, 5), confidence: 0.9, inputStartIndex: 1, inputEndIndex: 4, alternativesCount: 2 },
+        { points: raw.slice(4, 6), confidence: 0.9, inputStartIndex: 4, inputEndIndex: 5, alternativesCount: 0 },
+      ],
+      durationMs: 2,
+    });
+    const result = await resolveDrawPlan(raw, { matcher });
+    expect(result).toMatchObject({
+      outcome: 'accepted',
+      fallbackReason: 'split-match',
+      parts: [
+        { resolution: 'draw-matched', inputStartIndex: 0, inputEndIndex: 1 },
+        { resolution: 'draw-manual', inputStartIndex: 1, inputEndIndex: 4 },
+        { resolution: 'draw-matched', inputStartIndex: 4, inputEndIndex: 5 },
+      ],
     });
   });
 
@@ -135,10 +303,13 @@ describe('Route planning provider boundaries', () => {
     ['quota', { ok: false, reason: 'rate-limit', durationMs: 1 } as MatchResult, 'provider-unavailable'],
     ['token', { ok: false, reason: 'auth', durationMs: 1 } as MatchResult, 'provider-unavailable'],
     ['timeout', { ok: false, reason: 'timeout', durationMs: 1 } as MatchResult, 'provider-unavailable'],
-  ])('%s keeps coherent Draw available as an explicit manual recovery', async (_label, response, reason) => {
+  ])('%s keeps a coherent Draw as an immediate manual part', async (_label, response, reason) => {
     const raw = [p(0, 0), p(20, 10), p(40, 0)];
     const result = await resolveDrawPlan(raw, { matcher: async () => response });
-    expect(result).toEqual({ outcome: 'manual-available', rawPoints: raw, reason, callCount: 1 });
+    expect(result).toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: reason, callCount: 1,
+      parts: [{ resolution: 'draw-manual' }],
+    });
   });
 
   test('provider endpoint shift is review for Point and manual recovery for Draw', async () => {
@@ -149,7 +320,7 @@ describe('Route planning provider boundaries', () => {
     })).resolves.toMatchObject({ outcome: 'review', reason: 'endpoint-shift' });
     await expect(resolveDrawPlan([start, p(40, 20), end], {
       matcher: async () => ok([p(40, 40), end]),
-    })).resolves.toMatchObject({ outcome: 'manual-available', reason: 'endpoint-shift' });
+    })).resolves.toMatchObject({ outcome: 'accepted', fallbackReason: 'endpoint-shift', parts: [{ resolution: 'draw-manual' }] });
   });
 
   test('invalid coordinates and duplicate targets make no provider call', async () => {
@@ -180,6 +351,6 @@ describe('Route planning provider boundaries', () => {
         return ok(points);
       },
     });
-    expect(broken).toMatchObject({ outcome: 'manual-available', reason: 'endpoint-shift' });
+    expect(broken).toMatchObject({ outcome: 'accepted', fallbackReason: 'endpoint-shift' });
   });
 });
