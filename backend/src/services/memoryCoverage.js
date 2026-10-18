@@ -117,7 +117,8 @@ async function synchronizeCoverageSubset(db, ownerId, filterSql = '', filterPara
           )) canonical
             ON ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(mp.ts AS SIGNED))<=1000
            AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(mp.lng,mp.lat))<=5
-           AND COALESCE(canonical.segment_id,'legacy-0')=COALESCE(mp.source_segment_id,'legacy-0')
+           AND CONVERT(COALESCE(canonical.segment_id,'legacy-0') USING utf8mb4) COLLATE utf8mb4_unicode_ci
+               =COALESCE(mp.source_segment_id,'legacy-0') COLLATE utf8mb4_unicode_ci
          WHERE source_session.user_id=mp.user_id
            AND source_session.client_activity_id=mp.source_activity_client_id
            AND source_session.finalized_at IS NOT NULL

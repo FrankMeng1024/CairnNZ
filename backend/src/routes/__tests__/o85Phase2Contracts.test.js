@@ -49,4 +49,10 @@ test('Friends source status and projection both include server-accepted passive 
   assert.match(sharing, /FROM memory_coverage_evidence evidence[\s\S]*share_ready_at<=UTC_TIMESTAMP/);
   assert.match(coverage, /mp\.evidence_source='passive_real' OR EXISTS/);
   assert.match(migration, /mp\.evidence_source = 'passive_real'[\s\S]*OR EXISTS/);
+  assert.equal((migration.match(/CREATE TABLE IF NOT EXISTS memory_coverage_/g) ?? []).length, 4);
+  assert.match(migration, /CONVERT\(COALESCE\(canonical\.segment_id, 'legacy-0'\) USING utf8mb4\) COLLATE utf8mb4_unicode_ci/);
+  assert.match(coverage, /CONVERT\(COALESCE\(canonical\.segment_id,'legacy-0'\) USING utf8mb4\) COLLATE utf8mb4_unicode_ci/);
+  const verifier = read('scripts/verify-migration-051.sh');
+  assert.match(verifier, /NOT EXISTS \(SELECT 1 FROM memory_coverage_evidence evidence WHERE evidence\.memory_point_id=mp\.id\)/);
+  assert.match(verifier, /mapped\.memory_point_id IS NULL/);
 });
