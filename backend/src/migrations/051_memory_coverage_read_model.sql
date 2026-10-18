@@ -2,7 +2,7 @@
 -- Source truth remains accepted memory_points. Visible geometry is the same
 -- 30m / 20-vertex geodesic footprint for Mine and delayed Friends reads.
 
-CREATE TABLE memory_coverage_evidence (
+CREATE TABLE IF NOT EXISTS memory_coverage_evidence (
   memory_point_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
   owner_id BIGINT UNSIGNED NOT NULL,
   coverage_rule_version SMALLINT UNSIGNED NOT NULL DEFAULT 4,
@@ -22,7 +22,7 @@ CREATE TABLE memory_coverage_evidence (
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE memory_coverage_tiles (
+CREATE TABLE IF NOT EXISTS memory_coverage_tiles (
   owner_id BIGINT UNSIGNED NOT NULL,
   coverage_rule_version SMALLINT UNSIGNED NOT NULL,
   visibility ENUM('mine','shared') NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE memory_coverage_tiles (
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE memory_coverage_source_state (
+CREATE TABLE IF NOT EXISTS memory_coverage_source_state (
   owner_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
   coverage_rule_version SMALLINT UNSIGNED NOT NULL DEFAULT 4,
   evidence_revision BIGINT UNSIGNED NOT NULL DEFAULT 1,
@@ -50,7 +50,7 @@ CREATE TABLE memory_coverage_source_state (
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE memory_coverage_regions (
+CREATE TABLE IF NOT EXISTS memory_coverage_regions (
   memory_point_id BIGINT UNSIGNED NOT NULL,
   owner_id BIGINT UNSIGNED NOT NULL,
   coverage_rule_version SMALLINT UNSIGNED NOT NULL DEFAULT 4,
@@ -100,7 +100,8 @@ SELECT mp.id, mp.user_id, 4,
          )) canonical
            ON ABS(CAST(canonical.observed_ms AS SIGNED) - CAST(mp.ts AS SIGNED)) <= 1000
           AND ST_Distance_Sphere(POINT(canonical.lng, canonical.lat), POINT(mp.lng, mp.lat)) <= 5
-          AND COALESCE(canonical.segment_id, 'legacy-0') = COALESCE(mp.source_segment_id, 'legacy-0')
+          AND CONVERT(COALESCE(canonical.segment_id, 'legacy-0') USING utf8mb4) COLLATE utf8mb4_unicode_ci
+              = COALESCE(mp.source_segment_id, 'legacy-0') COLLATE utf8mb4_unicode_ci
         WHERE source_session.user_id = mp.user_id
           AND source_session.client_activity_id = mp.source_activity_client_id
           AND source_session.finalized_at IS NOT NULL
