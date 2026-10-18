@@ -194,6 +194,10 @@ async function start() {
       'data_exports',         // migration 023
       'feedback_messages',    // migration 035
       'public_cairn_moderation_audit', // migration 044
+      'memory_coverage_evidence', // migration 051
+      'memory_coverage_tiles', // migration 051
+      'memory_coverage_source_state', // migration 051
+      'memory_coverage_regions', // migration 051
     ];
     const missingCols = [];
     for (const [table, col] of requiredCols) {
@@ -258,11 +262,15 @@ async function start() {
         // live 500s, so fail closed until migration 047 is present.
         throw new Error('friend_request_migration_047_incomplete');
       }
+      if (missingTables.some(table => table.startsWith('memory_coverage_'))) {
+        throw new Error('memory_coverage_migration_051_incomplete');
+      }
     } else {
       console.log('✓ Sprint 6 schema check: all tables + columns + FKs present');
     }
   } catch (schemaErr) {
     if (schemaErr.message === 'friend_request_migration_047_incomplete'
+      || schemaErr.message === 'memory_coverage_migration_051_incomplete'
       || String(process.env.PUBLIC_CAIRN_PILOT_ENABLED || '').trim() === '1') {
       console.error('[boot] Schema verification failed:', schemaErr.message);
       throw schemaErr;
