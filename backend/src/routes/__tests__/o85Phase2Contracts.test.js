@@ -55,4 +55,5 @@ test('Friends source status and projection both include server-accepted passive 
   const verifier = read('scripts/verify-migration-051.sh');
   assert.match(verifier, /NOT EXISTS \(SELECT 1 FROM memory_coverage_evidence evidence WHERE evidence\.memory_point_id=mp\.id\)/);
   assert.match(verifier, /mapped\.memory_point_id IS NULL/);
+  assert.match(read('Dockerfile'), /COPY scripts\/o86-memory-coverage-backfill\.js \.\/scripts\/o86-memory-coverage-backfill\.js/);
 });
