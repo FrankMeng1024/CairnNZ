@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 const { cellFor, loadFriendProjectionEvidence } = require('../../src/services/friendProjection');
+const { synchronizeCoverageEvidence } = require('../../src/services/memoryCoverage');
 
 const baseUrl = process.env.HARNESS_API_URL;
 const dbConfig = {
@@ -21,6 +22,13 @@ if (!baseUrl || !jwtSecret) throw new Error('HARNESS_API_URL and JWT_SECRET are 
 
 const evidence = { started_at: new Date().toISOString(), assertions: [], actors: {}, objects: {}, connection_ids: {} };
 function pass(id, detail) { evidence.assertions.push({ id, result: 'PASS', detail }); }
+
+function geometryAtPrecision(geometry, decimals = 9) {
+  const normalize = value => Array.isArray(value)
+    ? value.map(normalize)
+    : Number(Number(value).toFixed(decimals));
+  return { ...geometry, coordinates: normalize(geometry.coordinates) };
+}
 
 function deferred() {
   let resolve;
@@ -240,6 +248,44 @@ async function main() {
     assert.equal(unqualifiedStored.continuity_state, 'unknown');
     pass('O85.passive-server-continuity', 'a zero-duration passive client claim stayed unknown and did not create an accepted witness or fail the request');
 
+    const splitPassiveCid = crypto.randomUUID();
+    const splitPassiveSegment = `passive-split-${crypto.randomUUID()}`;
+    const splitPassiveAt = Date.now() - 60_000;
+    await api(actors.C, '/api/memory/points', {
+      method: 'POST',
+      body: { points: [{
+        lat: -43.531, lng: 172.636, ts: splitPassiveAt, cid: splitPassiveCid,
+        evidence_source: 'passive_real', source_segment_id: splitPassiveSegment,
+        horizontal_accuracy_m: 8, continuity_state: 'accepted',
+      }] },
+      expected: 200,
+    });
+    const splitWitness = await api(actors.C, '/api/memory/points', {
+      method: 'POST',
+      body: { presence_witnesses: [{
+        cid: crypto.randomUUID(), first_lat: -43.531, first_lng: 172.636,
+        first_observed_at_ms: splitPassiveAt - 20_000, lat: -43.531, lng: 172.636,
+        observed_at_ms: splitPassiveAt, evidence_source: 'passive_real',
+        source_activity_client_id: null, source_segment_id: splitPassiveSegment,
+        horizontal_accuracy_m: 8, continuity_state: 'accepted',
+      }] },
+      expected: 200,
+    });
+    assert.equal(splitWitness.body.presence_witnesses.length, 1);
+    const [[splitPrepared]] = await admin.execute(
+      `SELECT point.continuity_state,COUNT(evidence.memory_point_id) AS evidence_n
+         FROM memory_points point
+         LEFT JOIN memory_coverage_evidence evidence ON evidence.memory_point_id=point.id
+        WHERE point.user_id=? AND point.client_id=? GROUP BY point.id`,
+      [actors.C.id, splitPassiveCid],
+    );
+    assert.equal(splitPrepared.continuity_state, 'accepted');
+    assert.equal(Number(splitPrepared.evidence_n), 1);
+    const splitMine = await api(actors.C, '/api/memory/coverage?bbox=172.62,-43.55,172.65,-43.51', { expected: 200 });
+    assert.equal(splitMine.body.evidence_count, 1);
+    assert.ok(splitMine.body.geometry.coordinates.length > 0);
+    pass('O86.passive-witness-prepared-handoff', 'a later witness promoted an already-ACKed passive segment and made its prepared Mine footprint readable before the witness response completed');
+
     await api(actors.B, '/api/friends/request', {
       method: 'POST', body: { email: actors.D.email, shareMemory: true }, expected: 201,
     });
@@ -362,13 +408,19 @@ async function main() {
       [actors.A.id, passiveWitnessSegment],
     );
     const witnessOnlySources = await api(actors.B, '/api/friend-sharing/sources', { expected: 200 });
-    assert.equal(witnessOnlySources.body.sources.find(source => source.friend_id === actors.A.id)?.sharing_status, 'shared');
+    assert.equal(witnessOnlySources.body.sources.find(source => source.friend_id === actors.A.id)?.sharing_status, 'shared_empty');
     const witnessOnlyProjection = await api(actors.B, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
     const passiveWitnessCell = cellFor(passiveWitnessLat, passiveWitnessLng).id;
     assert.equal(witnessOnlyProjection.body.projections[0].cells.some(cell => cell.id === passiveWitnessCell), true);
-    pass('O85.passive-witness-projection-parity', 'a server-accepted delayed passive witness without a coverage row is shared by both source status and projection');
+    const witnessOnlyCoverage = await api(actors.B, '/api/friend-sharing/coverage', {
+      method: 'POST',
+      body: { friend_ids: [Number(actors.A.id)], viewport_bbox: [173.7, -42.3, 173.8, -42.2] },
+      expected: 200,
+    });
+    assert.equal(witnessOnlyCoverage.body.projections[0].geometry.coordinates.length, 0);
+    pass('O86.presence-is-not-coverage', 'presence-only evidence remains in the O85 compatibility projection but does not manufacture a personal/O86 exploration footprint');
 
     const activityA = await completeActivity(actors.A, {
       lat: revisitLat, lng: revisitLng, includeCoverage: false,
@@ -479,6 +531,30 @@ async function main() {
     assert.equal(JSON.stringify(projection.body).includes('source_activity_client_id'), false);
     pass('R03-SHARE/PJ-06/FR-03.provenance-projection', `explicit full-history authority released only the delay-eligible Activity ${preGrantActivityA.clientActivityId}; fresh revisit ${activityA.clientActivityId} remained withheld and raw source/times stayed absent`);
 
+    await admin.execute(
+      `UPDATE memory_coverage_evidence evidence
+          JOIN memory_points point ON point.id=evidence.memory_point_id
+          SET evidence.share_ready_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 SECOND)
+        WHERE evidence.owner_id=? AND point.source_activity_client_id=?`,
+      [actors.A.id, preGrantActivityA.clientActivityId],
+    );
+    const equalityViewport = [174.775, -41.288, 174.797, -41.285];
+    const mineExact = await api(actors.A, `/api/memory/coverage?bbox=${equalityViewport.join(',')}`, { expected: 200 });
+    const friendExact = await api(actors.B, '/api/friend-sharing/coverage', {
+      method: 'POST',
+      body: { friend_ids: [Number(actors.A.id)], viewport_bbox: equalityViewport },
+      expected: 200,
+    });
+    assert.deepEqual(
+      geometryAtPrecision(friendExact.body.projections[0].geometry),
+      geometryAtPrecision(mineExact.body.geometry),
+    );
+    assert.equal(friendExact.body.projections[0].radius_m, 30);
+    assert.equal(friendExact.body.projections[0].coverage_rule_version, 4);
+    assert.equal(JSON.stringify(friendExact.body).includes('source_activity_client_id'), false);
+    assert.equal(JSON.stringify(friendExact.body).includes('observed_at'), false);
+    pass('O86.same-footprint-mine-friends', 'the same eligible source evidence returns topologically identical 30m prepared Mine/Friends geometry (equal within 1e-9 degrees, sub-millimetre) without raw coordinates or observation times');
+
     const passiveDelaySegment = `passive-delay-${crypto.randomUUID()}`;
     const passiveDelayTs = Date.now() - 60 * 60 * 1000;
     for (const [index, lng] of [174.0, 174.01, 174.02].entries()) {
@@ -492,30 +568,68 @@ async function main() {
           crypto.randomUUID(), passiveDelaySegment],
       );
     }
+    // The trusted epoch is UTC, while FROM_UNIXTIME follows the current
+    // MySQL session time zone. Exercise a deliberately non-UTC session so a
+    // future refactor cannot shift the 30-minute frontier by the host offset.
+    await admin.query("SET time_zone='+08:00'");
+    await synchronizeCoverageEvidence(admin, actors.A.id);
+    const [[nonUtcFrontier]] = await admin.execute(
+      `SELECT MIN(TIMESTAMPDIFF(MICROSECOND,UTC_TIMESTAMP(3),evidence.share_ready_at))/1000 AS ready_in_ms
+         FROM memory_coverage_evidence evidence
+         JOIN memory_points point ON point.id=evidence.memory_point_id
+        WHERE evidence.owner_id=? AND point.source_segment_id=?`,
+      [actors.A.id, passiveDelaySegment],
+    );
+    assert.ok(Number(nonUtcFrontier.ready_in_ms) >= -5000 && Number(nonUtcFrontier.ready_in_ms) <= 5000);
+    await admin.query("SET time_zone='+00:00'");
+    pass('O86.share-frontier-timezone', 'epoch-to-UTC conversion kept the 30-minute frontier within 5s under a +08:00 MySQL session');
     const middlePassiveCell = cellFor(-40, 174.01).id;
     const justBeforeDelay = await api(actors.B, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
     assert.equal(justBeforeDelay.body.projections[0].cells.some(cell => cell.id === middlePassiveCell), false);
+    const delayViewport = [173.99, -40.01, 174.03, -39.99];
+    const exactBeforeDelay = await api(actors.B, '/api/friend-sharing/coverage', {
+      method: 'POST', body: { friend_ids: [Number(actors.A.id)], viewport_bbox: delayViewport }, expected: 200,
+    });
+    assert.equal(exactBeforeDelay.body.projections[0].geometry.coordinates.length, 0);
     await admin.execute(
       `UPDATE memory_points SET received_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1800 SECOND)
         WHERE user_id=? AND source_segment_id=?`,
       [actors.A.id, passiveDelaySegment],
     );
+    await admin.execute(
+      `DELETE evidence FROM memory_coverage_evidence evidence
+        JOIN memory_points point ON point.id=evidence.memory_point_id
+       WHERE evidence.owner_id=? AND point.source_segment_id=?`,
+      [actors.A.id, passiveDelaySegment],
+    );
+    await synchronizeCoverageEvidence(admin, actors.A.id);
     const exactlyAtDelay = await api(actors.B, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
     assert.equal(exactlyAtDelay.body.projections[0].cells.some(cell => cell.id === middlePassiveCell), true);
+    const exactAtDelay = await api(actors.B, '/api/friend-sharing/coverage', {
+      method: 'POST', body: { friend_ids: [Number(actors.A.id)], viewport_bbox: delayViewport }, expected: 200,
+    });
+    assert.ok(exactAtDelay.body.projections[0].geometry.coordinates.length > 0);
     await admin.execute(
       `UPDATE memory_points SET received_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1801 SECOND)
         WHERE user_id=? AND source_segment_id=?`,
       [actors.A.id, passiveDelaySegment],
     );
+    await admin.execute(
+      `DELETE evidence FROM memory_coverage_evidence evidence
+        JOIN memory_points point ON point.id=evidence.memory_point_id
+       WHERE evidence.owner_id=? AND point.source_segment_id=?`,
+      [actors.A.id, passiveDelaySegment],
+    );
+    await synchronizeCoverageEvidence(admin, actors.A.id);
     const justAfterDelay = await api(actors.B, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     });
     assert.equal(justAfterDelay.body.projections[0].cells.some(cell => cell.id === middlePassiveCell), true);
-    pass('FR-30M.before-at-after', 'server SQL withheld a passive lifecycle at 29:59, released its coarse cells at 30:00, and retained them after 30:00');
+    pass('FR-30M.before-at-after', 'server SQL withheld a passive lifecycle at 29:59, released both compatibility cells and exact 30m coverage at 30:00, and retained it after 30:00');
 
     const cellsBeforeRemovedSetting = justAfterDelay.body.projections[0].cells.length;
     const removedPlaces = await api(actors.A, '/api/friend-sharing/private-places', { expected: 200 });
@@ -761,20 +875,31 @@ async function main() {
     const projectionPromise = api(actors.B, '/api/friend-sharing/projections', {
       method: 'POST', body: { friend_ids: [Number(actors.A.id)] }, expected: 200,
     }).finally(() => { projectionSettled = true; });
+    let coverageSettled = false;
+    const coveragePromise = api(actors.B, '/api/friend-sharing/coverage', {
+      method: 'POST',
+      body: { friend_ids: [Number(actors.A.id)], viewport_bbox: equalityViewport },
+      expected: 200,
+    }).finally(() => { coverageSettled = true; });
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(projectionSettled, false);
+    assert.equal(coverageSettled, false);
     await barrier.commit();
     await revokePromise;
     const revoked = await projectionPromise;
+    const revokedCoverage = await coveragePromise;
     assert.deepEqual(revoked.body.projections, []);
     assert.deepEqual(revoked.body.revoked_friend_ids, [actors.A.id]);
+    assert.deepEqual(revokedCoverage.body.projections, []);
+    assert.deepEqual(revokedCoverage.body.revoked_friend_ids, [actors.A.id]);
     evidence.objects.authorization_lock_race = {
       held_connection_id: evidence.connection_ids.C,
       revoke_wait_ms: Date.now() - revokeStartedAt,
       projections_after_release: revoked.body.projections.length,
+      coverage_after_release: revokedCoverage.body.projections.length,
       revoked_friend_ids: revoked.body.revoked_friend_ids,
     };
-    pass('FR-15.authorization-lock-race', 'a real held MySQL authority lock made revoke and projection wait on separate API connections; queued revoke committed first and the later projection issued no stale authorization');
+    pass('FR-15.authorization-lock-race', 'a real held MySQL authority lock made revoke, legacy projection and exact coverage wait on separate API connections; queued revoke committed first and neither read issued stale authorization');
     const [[subscriptionCount]] = await admin.execute(
       'SELECT COUNT(*) AS n FROM memory_subscriptions WHERE user_id=? AND friend_id=?', [actors.B.id, actors.A.id],
     );

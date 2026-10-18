@@ -19,6 +19,10 @@ const pool = require('../config/db');
 const { scheduleMemoryAttribution } = require('../lib/attributeMemoryPoints');
 const { reconcilePublicSubmissionsForActivity } = require('../services/publicPublication');
 const {
+  scheduleCoverageMaterialization,
+  synchronizeCoverageEvidenceForActivity,
+} = require('../services/memoryCoverage');
+const {
   buildCurrentActivityMemoryRows,
   upsertActivityMemoryRows,
 } = require('../services/activityMemoryIngestion');
@@ -427,10 +431,12 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         rawPoints: rows[0].route_points_raw,
       });
       const replayAccepted = await upsertActivityMemoryRows(conn, replayMemory.rows);
+      await synchronizeCoverageEvidenceForActivity(conn, userId, rows[0].client_activity_id);
       await conn.commit();
       if (replayMemory.rows.length > 0) {
         const replayTimestamps = replayMemory.rows.map(row => row.ts);
         scheduleMemoryAttribution(pool, userId, Math.min(...replayTimestamps), Math.max(...replayTimestamps));
+        scheduleCoverageMaterialization(pool, userId);
       }
       schedulePublicAfterActivityCommit(userId, rows[0].client_activity_id);
       return res.status(200).json({
@@ -479,6 +485,11 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       rawPoints: route_points_raw,
     });
     const accepted = await upsertActivityMemoryRows(conn, activityMemory.rows);
+    await synchronizeCoverageEvidenceForActivity(
+      conn,
+      userId,
+      rows[0].client_activity_id ?? client_activity_id ?? null,
+    );
     const rejected = activityMemory.rejected;
     if (activityMemory.rows.length > 0) {
       const tsList = activityMemory.rows.map(row => row.ts);
@@ -488,6 +499,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     await conn.commit();
     if (attributionRange) {
       scheduleMemoryAttribution(pool, userId, attributionRange.minTs, attributionRange.maxTs);
+      scheduleCoverageMaterialization(pool, userId);
     }
     schedulePublicAfterActivityCommit(userId, rows[0].client_activity_id);
 

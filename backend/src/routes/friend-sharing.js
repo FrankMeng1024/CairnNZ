@@ -8,7 +8,7 @@ const {
   setExplicitMemoryGrant,
 } = require('../services/friendAuthorization');
 const { deriveFriendProjection } = require('../services/friendProjection');
-const { eligibleSourceProvenanceSql } = require('../services/activitySourceProvenance');
+const { loadCoverageRegions, loadPreparedCoverage, parseViewport } = require('../services/memoryCoverage');
 
 const router = express.Router();
 router.use(authenticate);
@@ -59,55 +59,10 @@ router.get('/sources', async (req, res) => {
               CASE WHEN ms.friend_id IS NULL THEN 0 ELSE 1 END AS selected
               ,CASE WHEN g.id IS NULL THEN 'not_shared'
                     WHEN EXISTS (
-                      SELECT 1 FROM memory_points mp
-                       WHERE mp.user_id = f.friend_id
-                         AND mp.evidence_source IN ('activity_real','passive_real')
-                         AND mp.continuity_state = 'accepted'
-                         AND mp.horizontal_accuracy_m IS NOT NULL
-                         AND mp.horizontal_accuracy_m <= 50
-                         AND (mp.evidence_source = 'passive_real' OR EXISTS (
-                           SELECT 1 FROM sessions source_session
-                           JOIN JSON_TABLE(COALESCE(source_session.route_points_canonical,JSON_ARRAY()), '$[*]' COLUMNS(
-                             lat DOUBLE PATH '$.lat',lng DOUBLE PATH '$.lng',
-                             observed_ms BIGINT PATH '$.t',segment_id VARCHAR(80) PATH '$.segment_id'
-                           )) canonical
-                             ON ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(mp.ts AS SIGNED))<=1000
-                            AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(mp.lng,mp.lat))<=5
-                            AND COALESCE(canonical.segment_id,'legacy-0')=COALESCE(mp.source_segment_id,'legacy-0')
-                           WHERE source_session.user_id=mp.user_id
-                             AND source_session.client_activity_id=mp.source_activity_client_id
-                             AND source_session.finalized_at IS NOT NULL
-                             AND source_session.abandoned_at IS NULL
-                             AND ${eligibleSourceProvenanceSql('source_session.source_provenance')}
-                         ))
-                         AND DATE_ADD(GREATEST(FROM_UNIXTIME(mp.ts / 1000), mp.received_at),
-                                      INTERVAL 1800 SECOND) <= UTC_TIMESTAMP(3)
-                       LIMIT 1
-                    ) OR EXISTS (
-                      SELECT 1 FROM memory_presence_witnesses witness
-                       WHERE witness.user_id = f.friend_id
-                         AND witness.continuity_state = 'accepted'
-                         AND witness.horizontal_accuracy_m <= 50
-                         AND (witness.evidence_source = 'passive_real' OR EXISTS (
-                           SELECT 1 FROM sessions source_session
-                           JOIN JSON_TABLE(COALESCE(source_session.route_points_canonical,JSON_ARRAY()), '$[*]' COLUMNS(
-                             lat DOUBLE PATH '$.lat',lng DOUBLE PATH '$.lng',
-                             observed_ms BIGINT PATH '$.t',segment_id VARCHAR(80) PATH '$.segment_id'
-                           )) canonical
-                             ON (ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(witness.first_observed_at_ms AS SIGNED))<=1000
-                                 AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(witness.first_lng,witness.first_lat))<=5
-                                 OR ABS(CAST(canonical.observed_ms AS SIGNED)-CAST(witness.observed_at_ms AS SIGNED))<=1000
-                                 AND ST_Distance_Sphere(POINT(canonical.lng,canonical.lat),POINT(witness.lng,witness.lat))<=5)
-                            AND COALESCE(canonical.segment_id,'legacy-0')=COALESCE(witness.source_segment_id,'legacy-0')
-                           WHERE source_session.user_id=witness.user_id
-                             AND source_session.client_activity_id=witness.source_activity_client_id
-                             AND source_session.finalized_at IS NOT NULL
-                             AND source_session.abandoned_at IS NULL
-                             AND ${eligibleSourceProvenanceSql('source_session.source_provenance')}
-                         ))
-                         AND DATE_ADD(GREATEST(
-                               FROM_UNIXTIME(witness.first_observed_at_ms / 1000),
-                               witness.received_at), INTERVAL 1800 SECOND) <= UTC_TIMESTAMP(3)
+                      SELECT 1 FROM memory_coverage_evidence evidence
+                       WHERE evidence.owner_id=f.friend_id
+                         AND evidence.coverage_rule_version=4
+                         AND evidence.share_ready_at<=UTC_TIMESTAMP(3)
                        LIMIT 1
                     ) THEN 'shared'
                     ELSE 'shared_empty' END AS sharing_status
@@ -280,6 +235,93 @@ router.post('/projections', async (req, res) => {
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
     console.error('[friend-sharing/projections]', error.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+// O86 viewport-bounded coverage. The legacy /projections endpoint remains for
+// older installed clients; current clients use this exact 30m representation.
+router.post('/coverage', async (req, res) => {
+  const requested = Array.isArray(req.body?.friend_ids) ? req.body.friend_ids : [];
+  const ids = [...new Set(requested.map(Number).filter(id => Number.isInteger(id) && id > 0))];
+  const viewport = parseViewport(req.body?.viewport_bbox);
+  if (ids.length > 100) return res.status(400).json({ error: 'At most 100 selected sources are allowed' });
+  if (!viewport) return res.status(400).json({ error: 'Valid viewport_bbox is required' });
+  const startedAt = Date.now();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // The same sorted user locks are taken by grant revocation/unfriend. Hold
+    // them through the prepared read and final authorization check so a
+    // queued revoke commits before any later request can return old authority.
+    const lockIds = [...new Set([Number(req.user.userId), ...ids])].sort((a, b) => a - b);
+    if (lockIds.length > 0) {
+      await conn.query('SELECT id FROM users WHERE id IN (?) ORDER BY id FOR UPDATE', [lockIds]);
+    }
+    const projections = [];
+    const revokedFriendIds = [];
+    for (const ownerId of ids) {
+      const authorizationStartedAt = Date.now();
+      const grant = await currentMemoryGrant(conn, ownerId, req.user.userId, { requireSelected: true });
+      const authorizationMs = Date.now() - authorizationStartedAt;
+      if (!grant) {
+        revokedFriendIds.push(String(ownerId));
+        continue;
+      }
+      const geometryStartedAt = Date.now();
+      const [coverage, regions] = await Promise.all([
+        loadPreparedCoverage(conn, ownerId, 'shared', viewport),
+        loadCoverageRegions(conn, ownerId, 'shared'),
+      ]);
+      const geometryMs = Date.now() - geometryStartedAt;
+      const revalidated = await currentMemoryGrant(conn, ownerId, req.user.userId, { requireSelected: true });
+      if (!revalidated
+        || revalidated.grant_epoch !== grant.grant_epoch
+        || Number(revalidated.authorization_version) !== Number(grant.authorization_version)) {
+        revokedFriendIds.push(String(ownerId));
+        continue;
+      }
+      projections.push({
+        source_friend_id: String(ownerId),
+        authorization_version: Number(grant.authorization_version),
+        projection_version: coverage.coverage_version,
+        coverage_rule_version: coverage.coverage_rule_version,
+        radius_m: coverage.radius_m,
+        ring_steps: coverage.ring_steps,
+        contribution_delay_seconds: 1800,
+        coverage_scope: 'full_history_delayed_v1',
+        geometry: coverage.geometry,
+        regions,
+        evidence_count: coverage.evidence_count,
+        tile_count: coverage.tile_count,
+        rebuilt_tile_count: coverage.rebuilt_tile_count,
+        stage_ms: {
+          authorization: authorizationMs,
+          prepared_geometry: geometryMs,
+          ...coverage.stage_ms,
+        },
+      });
+    }
+    await conn.commit();
+    const authorizedAt = new Date();
+    const expiresAt = new Date(authorizedAt.getTime() + 24 * 60 * 60 * 1000);
+    return res.json({
+      server_authorized_at: authorizedAt.toISOString(),
+      authorization_expires_at: expiresAt.toISOString(),
+      coverage_rule_version: 4,
+      total_ms: Date.now() - startedAt,
+      projections: projections.map(projection => ({
+        ...projection,
+        server_authorized_at: authorizedAt.toISOString(),
+        authorization_expires_at: expiresAt.toISOString(),
+      })),
+      revoked_friend_ids: revokedFriendIds,
+    });
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* noop */ }
+    console.error('[friend-sharing/coverage]', error.message);
     return res.status(500).json({ error: 'Server error' });
   } finally {
     conn.release();

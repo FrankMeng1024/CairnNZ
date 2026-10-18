@@ -24,6 +24,13 @@ const authenticate = require('../middleware/authenticate');
 const { deterministicCid } = require('../lib/deterministicCid');
 const { scheduleMemoryAttribution, scheduleMemoryProjectionReset } = require('../lib/attributeMemoryPoints');
 const { reconcilePublicSubmissionsForActivity } = require('../services/publicPublication');
+const {
+  loadPreparedCoverage,
+  parseViewport,
+  synchronizeCoverageEvidenceForClientIds,
+  synchronizeCoverageEvidenceForSegments,
+  scheduleCoverageMaterialization,
+} = require('../services/memoryCoverage');
 
 function schedulePublicMemoryReconciliation(userId, clientActivityId) {
   setImmediate(() => {
@@ -308,6 +315,20 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       : [[]];
     const confirmedPresence = new Set(confirmedPresenceRows.map(row => row.client_id));
     const finalPresenceEcho = presenceEcho.filter(entry => confirmedPresence.has(entry.cid));
+    await synchronizeCoverageEvidenceForClientIds(
+      pool,
+      userId,
+      finalEcho.filter(Boolean).map(entry => entry.cid),
+    );
+    // A passive continuity witness can promote points that were ACKed by an
+    // earlier upload. Materialize that bounded segment synchronously before
+    // this witness is acknowledged, so the client's immediate prepared read
+    // cannot miss legitimate newly accepted history.
+    await synchronizeCoverageEvidenceForSegments(
+      pool,
+      userId,
+      presenceRows.map(row => row[10]),
+    );
     // A marker may have reached the server before its qualifying Memory
     // evidence. Once these source rows are durable, re-evaluate only the
     // exact Activities represented by this request. Public remains isolated:
@@ -319,6 +340,7 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
     for (const clientActivityId of sourceActivityClientIds) {
       schedulePublicMemoryReconciliation(userId, clientActivityId);
     }
+    scheduleCoverageMaterialization(pool, userId);
     // O1: dropped accepted/duplicates/rejected — client 只用 points echo,
     // 三个数字纯 debug 遗留(memorySync 从不 read)。
     return res.json({ points: finalEcho, presence_witnesses: finalPresenceEcho });
@@ -427,6 +449,8 @@ router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
       'DELETE FROM memory_presence_witnesses WHERE user_id = ?',
       [userId]
     );
+    await conn.query('DELETE FROM memory_coverage_tiles WHERE owner_id = ?', [userId]);
+    await conn.query('DELETE FROM memory_coverage_source_state WHERE owner_id = ?', [userId]);
     // A wipe changes every outgoing projection even when the directional
     // grant itself remains active. Advance authorization atomically so warm
     // recipients cannot mistake a pre-wipe envelope for current coverage.
@@ -450,6 +474,25 @@ router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   } finally {
     conn.release();
+  }
+});
+
+router.get('/coverage', authenticate, async (req, res) => {
+  const viewport = parseViewport(typeof req.query.bbox === 'string'
+    ? req.query.bbox.split(',')
+    : null);
+  if (!viewport) return res.status(400).json({ error: 'Valid bbox is required' });
+  const startedAt = Date.now();
+  try {
+    const coverage = await loadPreparedCoverage(pool, req.user.userId, 'mine', viewport);
+    return res.json({
+      ...coverage,
+      source_owner_id: String(req.user.userId),
+      total_ms: Date.now() - startedAt,
+    });
+  } catch (error) {
+    console.error('[memory/coverage]', error.message);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 

@@ -43,6 +43,10 @@ test('declined history does not invent a resend policy and passive server promot
 test('Friends source status and projection both include server-accepted passive witnesses', () => {
   const projection = read('src/services/friendProjection.js');
   const sharing = read('src/routes/friend-sharing.js');
+  const coverage = read('src/services/memoryCoverage.js');
+  const migration = read('src/migrations/051_memory_coverage_read_model.sql');
   assert.equal((projection.match(/witness\.evidence_source IN \('activity_real','passive_real'\)/g) ?? []).length, 2);
-  assert.match(sharing, /witness\.evidence_source = 'passive_real' OR EXISTS/);
+  assert.match(sharing, /FROM memory_coverage_evidence evidence[\s\S]*share_ready_at<=UTC_TIMESTAMP/);
+  assert.match(coverage, /mp\.evidence_source='passive_real' OR EXISTS/);
+  assert.match(migration, /mp\.evidence_source = 'passive_real'[\s\S]*OR EXISTS/);
 });
