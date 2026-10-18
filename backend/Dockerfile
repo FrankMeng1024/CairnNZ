@@ -26,6 +26,9 @@ COPY src ./src
 # O85 one-time, operator-reviewed historical Activity -> Memory repair. The
 # script is dry-run by default and requires an explicit complete manifest.
 COPY scripts/o85-memory-history-backfill.js ./scripts/o85-memory-history-backfill.js
+# O86 source-derived coverage materialization. Dry-run by default; production
+# operators invoke --apply only after migration 051 and a verified backup.
+COPY scripts/o86-memory-coverage-backfill.js ./scripts/o86-memory-coverage-backfill.js
 # O13: static legal pages (privacy.html) served by express.
 COPY public ./public
 
