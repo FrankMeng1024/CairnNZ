@@ -4,21 +4,13 @@ import {
 } from '../services/memoryFogPreparation';
 
 describe('Memory Fog background preparation coordination', () => {
-  test('Home schedules cancellable Mine-only work after interactions without mounting a map or emitting UX', () => {
+  test('Home does not reintroduce the legacy full-history Fog prewarm', () => {
     const source = fs.readFileSync(path.resolve(__dirname, '../../../screens/HomeScreen.tsx'), 'utf8');
-    const preparation = source.slice(source.indexOf('// Prepare only the account-scoped Mine geometry'), source.indexOf('// The bounded registry'));
-    expect(preparation).toContain('InteractionManager.runAfterInteractions');
-    expect(preparation).toContain('setTimeout(() => {');
-    expect(preparation).toContain('}, 600);');
-    expect(preparation).toContain("import('../features/memory/components/FogLayer')");
-    expect(preparation).toContain('runSharedMemoryFogPreparation');
-    expect(preparation).toContain('cancelledBeforeStart');
-    expect(preparation).toContain('useMemoryStore.getState().geometryVersion !== geometryVersion');
-    expect(preparation).toContain("transitionState !== 'idle'");
-    expect(preparation).not.toContain('<MapView');
-    expect(preparation).not.toContain('Toast');
-    expect(preparation).not.toContain('getCurrentPosition');
-    expect(preparation).not.toContain('friend-sharing/projections');
+    expect(source).not.toContain('InteractionManager.runAfterInteractions');
+    expect(source).not.toContain("import('../features/memory/components/FogLayer')");
+    expect(source).not.toContain('runSharedMemoryFogPreparation');
+    expect(source).not.toContain('buildTiledMemoryDisplayEvidence');
+    expect(source).not.toContain('writeFogDisplayCache');
   });
 
   test('Home and visible Memory join the exact same account/content job', async () => {
