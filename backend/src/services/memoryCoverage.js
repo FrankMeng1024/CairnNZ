@@ -355,12 +355,30 @@ async function loadPreparedCoverage(db, ownerId, visibility, viewport) {
 async function loadCoverageRegions(db, ownerId, visibility) {
   const ready = visibility === 'shared' ? 'AND mapped.share_ready_at<=UTC_TIMESTAMP(3)' : '';
   const [rows] = await db.execute(
-    `SELECT DISTINCT region.id,region.parent_id,region.level,region.name_en,
-            region.bbox_min_lng,region.bbox_min_lat,region.bbox_max_lng,region.bbox_max_lat
-       FROM memory_coverage_regions mapped
-       JOIN regions region ON region.id COLLATE utf8mb4_unicode_ci=mapped.region_id
-      WHERE mapped.owner_id=? AND mapped.coverage_rule_version=${COVERAGE_RULE_VERSION} ${ready}
-      ORDER BY region.level,region.id`,
+    `SELECT ranked.id,ranked.parent_id,ranked.level,ranked.name_en,
+            ranked.bbox_min_lng,ranked.bbox_min_lat,
+            ranked.bbox_max_lng,ranked.bbox_max_lat,
+            ranked.anchor_lng,ranked.anchor_lat
+       FROM (
+         SELECT region.id,region.parent_id,region.level,region.name_en,
+                region.bbox_min_lng,region.bbox_min_lat,
+                region.bbox_max_lng,region.bbox_max_lat,
+                point.lng AS anchor_lng,point.lat AS anchor_lat,
+                ROW_NUMBER() OVER (
+                  PARTITION BY region.id
+                  ORDER BY evidence.observed_at_ms DESC,evidence.memory_point_id DESC
+                ) AS recency_rank
+           FROM memory_coverage_regions mapped
+           JOIN memory_coverage_evidence evidence
+             ON evidence.memory_point_id=mapped.memory_point_id
+            AND evidence.owner_id=mapped.owner_id
+            AND evidence.coverage_rule_version=mapped.coverage_rule_version
+           JOIN memory_points point ON point.id=evidence.memory_point_id
+           JOIN regions region ON region.id COLLATE utf8mb4_unicode_ci=mapped.region_id
+          WHERE mapped.owner_id=? AND mapped.coverage_rule_version=${COVERAGE_RULE_VERSION} ${ready}
+       ) ranked
+      WHERE ranked.recency_rank=1
+      ORDER BY ranked.level,ranked.id`,
     [ownerId],
   );
   return rows.map(region => ({
@@ -372,12 +390,10 @@ async function loadCoverageRegions(db, ownerId, visibility) {
       Number(region.bbox_min_lng), Number(region.bbox_min_lat),
       Number(region.bbox_max_lng), Number(region.bbox_max_lat),
     ],
-    // A bbox center supports city navigation without serializing a precise
-    // observation coordinate as projection metadata.
-    anchor: [
-      (Number(region.bbox_min_lng) + Number(region.bbox_max_lng)) / 2,
-      (Number(region.bbox_min_lat) + Number(region.bbox_max_lat)) / 2,
-    ],
+    // The most recent accepted coverage witness is a legitimate exploration
+    // anchor. Shared reads apply the same delayed-visibility fence as the
+    // region itself, so this never reveals an unready point.
+    anchor: [Number(region.anchor_lng), Number(region.anchor_lat)],
   }));
 }
 
