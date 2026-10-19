@@ -59,6 +59,13 @@ describe('Memory evidence rendering continuity', () => {
     })).toBe(false);
     expect(memoryFogCombinedPreparationSettled({
       ...base,
+      sourceStates: {
+        '31': { status: 'loaded' },
+        '32': { status: 'error' },
+      },
+    })).toBe(false);
+    expect(memoryFogCombinedPreparationSettled({
+      ...base,
       scope: 'self',
       subscriptionsLoading: true,
       friendLoading: true,

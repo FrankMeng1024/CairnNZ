@@ -210,6 +210,23 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
         return false;
       }
     },
+    hasRenderedScene: (layerIds: string[], readinessKey?: string) => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!inner?.queryRenderedFeatures || !Array.isArray(layerIds) || layerIds.length === 0) return false;
+      try {
+        // Fog/Mine/Friends/Overlap are filtered views of one atomic GeoJSON
+        // source. A feature carrying the exact readiness key in any visible
+        // semantic layer proves that correlated setData reached the worker.
+        // Requiring Fog specifically deadlocked a fully explored viewport,
+        // where the Fog complement legitimately has no rendered pixels.
+        return layerIds.some(layerId => inner.getLayer?.(layerId)
+          && inner.queryRenderedFeatures(undefined, { layers: [layerId] }).some((feature: any) => (
+            !readinessKey || feature?.properties?.cairnReadinessKey === readinessKey
+          )));
+      } catch {
+        return false;
+      }
+    },
     getPointInView: async (coordinate: [number, number]) => {
       const inner = mapRef.current?.getMap?.() ?? mapRef.current;
       const point = inner?.project?.(coordinate);
@@ -672,22 +689,57 @@ export const Camera = React.forwardRef<CameraRef, CameraProps>(function Camera(p
         }
         const sequenceStartedAt = performance.now();
         let startOffsetMs = 0;
+        let previousCenter: [number, number] = [inner.getCenter().lng, inner.getCenter().lat];
         for (const stop of config.stops) {
           const plannedStartMs = startOffsetMs;
           const plannedEndMs = plannedStartMs + Math.max(0, stop.animationDuration ?? 0);
+          const segmentStartCenter = previousCenter;
+          if (stop.centerCoordinate) previousCenter = stop.centerCoordinate;
           const run = () => {
             if (sequenceGenerationRef.current !== sequenceGeneration) return;
             const elapsedMs = performance.now() - sequenceStartedAt;
             const { padding: ignoredPadding, ...centerOnlyStop } = stop;
             void ignoredPadding;
+            const segmentDurationMs = plannedEndMs - plannedStartMs;
+            const lateByMs = elapsedMs - plannedStartMs;
+            if (centerOnlyStop.centerCoordinate
+              && segmentDurationMs > 0
+              && lateByMs > 4
+              && elapsedMs < plannedEndMs) {
+              // A busy Web frame can deliver the bend timer after the reveal
+              // clock has already advanced. Jump to the matching point on the
+              // missed chord before easing the remainder; otherwise the
+              // camera spends the next frames visibly chasing the route head.
+              const progress = Math.max(0, Math.min(1, lateByMs / segmentDurationMs));
+              const target = centerOnlyStop.centerCoordinate;
+              inner.jumpTo({
+                center: [
+                  segmentStartCenter[0] + (target[0] - segmentStartCenter[0]) * progress,
+                  segmentStartCenter[1] + (target[1] - segmentStartCenter[1]) * progress,
+                ],
+                zoom: centerOnlyStop.zoomLevel ?? inner.getZoom(),
+                bearing: centerOnlyStop.heading ?? inner.getBearing?.(),
+                pitch: centerOnlyStop.pitch ?? inner.getPitch?.(),
+              });
+            }
             applyStop(centerOnlyStop, Math.max(0, plannedEndMs - elapsedMs));
           };
           if (plannedStartMs <= 0) run();
-          // Hand the next bend to Mapbox just before the previous ease ends.
-          // Timer wake-up and style work can otherwise leave a visible idle
-          // frame at every stop. The duration is still pinned to plannedEndMs,
-          // so the single route clock and final endpoint remain unchanged.
-          else setTimeout(run, Math.max(0, plannedStartMs - 60));
+          else {
+            // Wake the JS timer one frame early, but do not hand Mapbox the
+            // next bend until the shared arc-length boundary is actually due.
+            // This avoids both timer-late pauses and the former early easeTo
+            // that cut corners ahead of the visible route head.
+            const waitForBoundary = () => {
+              if (sequenceGenerationRef.current !== sequenceGeneration) return;
+              if (performance.now() - sequenceStartedAt + 0.5 < plannedStartMs) {
+                requestAnimationFrame(waitForBoundary);
+                return;
+              }
+              run();
+            };
+            setTimeout(waitForBoundary, Math.max(0, plannedStartMs - 16));
+          }
           startOffsetMs = plannedEndMs;
         }
         return;

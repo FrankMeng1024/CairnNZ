@@ -32,6 +32,8 @@ jest.mock('../../../hooks/useVisualTheme', () => ({
     mapFogFill: '#111',
     mapFogEdgeOuter: '#222',
     mapFogEdgeInner: '#333',
+    mapMineMemoryFill: '#173',
+    mapMineMemoryOpacity: 0.3,
     mapFriendMemoryFill: '#0a7',
     mapFriendMemoryOpacity: 0.4,
     mapMemoryOverlapFill: '#fc0',
@@ -49,7 +51,11 @@ jest.mock('../../../store/storage', () => ({
 import { useAppStore } from '../../../store/useAppStore';
 import { useSettingsStore } from '../../../store/useSettingsStore';
 import { useActivitySimulatorStore } from '../../activitySimulator/useActivitySimulatorStore';
-import { FogLayer } from '../components/FogLayer';
+import {
+  FogLayer,
+  memoryFogSafeFallbackPresentationKey,
+  memoryFogSceneRemainsAuthorized,
+} from '../components/FogLayer';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemoryStore } from '../store/useMemoryStore';
@@ -61,10 +67,47 @@ function polygonCount(shape: any): number {
   return shape.geometry.type === 'Polygon' ? 1 : shape.geometry.coordinates.length;
 }
 
+function sceneFeature(shape: any, kind: 'fog' | 'mine' | 'friend' | 'overlap'): any {
+  return shape?.features?.find((feature: any) => feature?.properties?.cairnFogKind === kind);
+}
+
 describe('O86 exact prepared coverage Mapbox render boundary', () => {
   jest.setTimeout(20_000);
 
-  test('exact Mine and two Friends MultiPolygons classify, remount, and revoke without legacy cells', async () => {
+  test('published Friends scenes fail closed on account, selection, or authorization-version change', () => {
+    const common = {
+      sceneAccountId: 'viewer-a',
+      currentAccountId: 'viewer-a',
+      friendSources: [{
+        friendId: '31',
+        authorizationVersion: 7,
+        authorizationExpiresAtMs: 2_000,
+      }],
+      selectedFriendIds: ['31'],
+      authorizedSourceVersions: { '31': 7 },
+      nowMs: 1_000,
+    };
+    expect(memoryFogSceneRemainsAuthorized(common)).toBe(true);
+    expect(memoryFogSceneRemainsAuthorized({
+      ...common,
+      authorizedSourceVersions: { '31': 8 },
+    })).toBe(false);
+    expect(memoryFogSceneRemainsAuthorized({
+      ...common,
+      selectedFriendIds: [],
+    })).toBe(false);
+    expect(memoryFogSceneRemainsAuthorized({
+      ...common,
+      currentAccountId: 'viewer-b',
+    })).toBe(false);
+    expect(memoryFogSceneRemainsAuthorized({
+      ...common,
+      nowMs: 2_000,
+    })).toBe(false);
+    expect(memoryFogSafeFallbackPresentationKey('viewer-b', 'self-v2')).toBeTruthy();
+  });
+
+  test('exact Mine and two Friends publish atomically in one stable source and revoke without legacy cells', async () => {
     const viewerId = 'prepared-viewer';
     const now = Date.now();
     const viewport = {
@@ -152,23 +195,53 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
     useFriendMemoryStore.getState().reset();
 
     const ready = jest.fn();
-    const view = render(<FogLayer viewport={viewport} onFogReady={ready} />);
-    await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true), { timeout: 15_000 });
-    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(true), { timeout: 15_000 });
+    const unavailable = jest.fn();
+    const view = render(<FogLayer viewport={viewport} onFogReady={ready} onFogUnavailable={unavailable} />);
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeTruthy(), { timeout: 15_000 });
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'overlap')).toBeTruthy(), { timeout: 15_000 });
     await waitFor(() => expect(ready).toHaveBeenCalled(), { timeout: 15_000 });
 
     const visible = useFriendMemoryStore.getState().getVisibleGeometries();
     expect(new Set(visible.map(source => source.sourceFriendId))).toEqual(new Set(friendIds));
     expect(visible).toHaveLength(2);
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
-    const fogShape = mockRenderedSources.get('memory-fog-src');
-    const friendShape = mockRenderedSources.get('memory-friend-union-src');
-    const overlapShape = mockRenderedSources.get('memory-overlap-src');
+    const scene = mockRenderedSources.get('memory-fog-src');
+    const fogShape = sceneFeature(scene, 'fog');
+    const mineShape = sceneFeature(scene, 'mine');
+    const friendShape = sceneFeature(scene, 'friend');
+    const overlapShape = sceneFeature(scene, 'overlap');
     expect(polygonCount(fogShape)).toBeGreaterThan(0);
     expect(polygonCount(friendShape)).toBeGreaterThan(0);
     expect(polygonCount(overlapShape)).toBeGreaterThan(0);
+    expect(polygonCount(mineShape)).toBeGreaterThan(0);
     expect(fogShape.properties.cairnEvidencePointCount).toBe(0);
     expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('mine-exact-v1');
+
+    // A refresh failure reports truthful pending/error state without clearing
+    // a still-authorized warm scene or pretending the partial selection is a
+    // newly completed combined render.
+    await act(async () => {
+      useFriendMemoryStore.setState(state => ({
+        error: 'unavailable',
+        sourceStates: {
+          ...state.sourceStates,
+          '31': { status: 'error', cellCount: 1, error: 'Unavailable' },
+        },
+        version: state.version + 1,
+      }));
+    });
+    await waitFor(() => expect(unavailable).toHaveBeenCalled());
+    expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeTruthy();
+    await act(async () => {
+      useFriendMemoryStore.setState(state => ({
+        error: null,
+        sourceStates: {
+          ...state.sourceStates,
+          '31': { status: 'loaded', cellCount: 1 },
+        },
+        version: state.version + 1,
+      }));
+    });
 
     // Finishing or revising the local journal does not change the exact
     // prepared account/scope/content authority. It must not clear the painted
@@ -181,16 +254,16 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
         },
       }));
     });
-    await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true));
-    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(true));
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeTruthy());
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'overlap')).toBeTruthy());
 
     // A style reload remounts the sources while the exact authenticated
     // viewport stores stay current. It must not fall back to legacy cells.
     view.unmount();
     mockRenderedSources.clear();
     const remount = render(<FogLayer viewport={viewport} />);
-    await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true), { timeout: 15_000 });
-    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(true), { timeout: 15_000 });
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeTruthy(), { timeout: 15_000 });
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'overlap')).toBeTruthy(), { timeout: 15_000 });
 
     // Revoking the overlapping friend removes that source immediately. The
     // geographically separate second friend remains, so overlap disappears
@@ -198,8 +271,8 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
     await act(async () => {
       await useFriendMemoryStore.getState().purgeFriend('31', viewerId);
     });
-    await waitFor(() => expect(mockRenderedSources.has('memory-overlap-src')).toBe(false), { timeout: 15_000 });
-    await waitFor(() => expect(mockRenderedSources.has('memory-friend-union-src')).toBe(true), { timeout: 15_000 });
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'overlap')).toBeFalsy(), { timeout: 15_000 });
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeTruthy(), { timeout: 15_000 });
     expect(useFriendMemoryStore.getState().getVisibleGeometries().map(item => item.sourceFriendId)).toEqual(['32']);
 
     process.stdout.write(`o86-exact-friend-fog-mapbox=${JSON.stringify({
@@ -223,6 +296,71 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
 });
 
 describe('O86 prepared viewport render lifecycle', () => {
+  test('a cold combined terminal error exposes safe Fog and unavailable feedback, never Mine-as-complete', async () => {
+    const ownerId = 'cold-friend-error-owner';
+    const viewport = {
+      key: '174.76000,-36.86000,174.78000,-36.84000',
+      bbox: [174.76, -36.86, 174.78, -36.84] as [number, number, number, number],
+    };
+    useAppStore.setState({ user: { id: ownerId } as any, isLoggedIn: true, hydrated: true });
+    useSettingsStore.setState({ debugMode: false });
+    useActivitySimulatorStore.setState({ enabled: false });
+    useMemoryScopeStore.setState({ ownerUserId: ownerId, scope: 'combined' });
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 31, friend_name: 'Unavailable Friend' }],
+      availableSources: [{
+        friend_id: '31', friend_name: 'Unavailable Friend', selected: true,
+        authorization_version: 1, effective_at: new Date().toISOString(),
+        sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+      }],
+      loading: false,
+      error: null,
+    });
+    useMemoryStore.setState(state => ({
+      points: [], testPoints: [], pendingPreparedCoverageCids: [],
+      geometryVersion: state.geometryVersion + 1,
+      localHydration: {
+        ownerUserId: ownerId, status: 'ready', requiresInitialReconcile: false,
+        initialReconcile: 'not_required', revision: state.localHydration.revision + 1,
+      },
+    }));
+    usePreparedMemoryCoverageStore.setState({
+      userId: ownerId,
+      coverage: {
+        viewportKey: viewport.key, coverageVersion: 'cold-error-mine-v1', coverageRuleVersion: 4,
+        geometry: { type: 'MultiPolygon', coordinates: [] }, evidenceCount: 0, loadedAtMs: Date.now(),
+      },
+      status: 'ready', error: null, version: 1, viewport,
+      loadViewport: jest.fn(async () => undefined),
+    });
+    const loadSelectedProjections = jest.fn(async () => undefined);
+    useFriendMemoryStore.setState({
+      userId: ownerId,
+      projections: {},
+      authorizedSourceVersions: {},
+      activeViewport: viewport,
+      loading: false,
+      error: 'unavailable',
+      sourceStates: { '31': { status: 'error', cellCount: 0, error: 'Unavailable' } },
+      loadSelectedProjections,
+    });
+    mockRenderedSources.clear();
+    const ready = jest.fn();
+    const unavailable = jest.fn();
+    const view = render(<FogLayer viewport={viewport} onFogReady={ready} onFogUnavailable={unavailable} />);
+
+    await waitFor(() => expect(unavailable).toHaveBeenCalled());
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'fog')).toBeTruthy());
+    expect(ready).not.toHaveBeenCalled();
+    expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeFalsy();
+    expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'overlap')).toBeFalsy();
+
+    view.unmount();
+    useFriendMemoryStore.getState().reset();
+    usePreparedMemoryCoverageStore.getState().reset();
+    useMemorySubscriptionsStore.getState().reset();
+  });
+
   test('a same-key viewport rerender does not restart prepared coverage work', async () => {
     const viewport = { key: '174.76000,-36.86000,174.78000,-36.84000', bbox: [174.76, -36.86, 174.78, -36.84] as [number, number, number, number] };
     const loadViewport = jest.fn(async () => undefined);

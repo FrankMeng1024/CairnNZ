@@ -25,15 +25,17 @@ describe('display-only repeated traversal projection', () => {
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 
-  test('A to B to A keeps one continuous offset path through the real turn without changing canonical geometry', () => {
+  test('A to B to A keeps one continuous canonical path through the real turn without changing geometry', () => {
     const canonical = canonicalRouteGeometry({ points: [p(0), p(50), p(100), p(50), p(0)] });
     const before = canonicalRouteGeometryFingerprint(canonical);
     const display = buildRouteDisplayGeometry(canonical);
+    expect(display.baseLines).toHaveLength(1);
+    expect(display.baseLines[0].coordinates).toEqual([p(0), p(50), p(100), p(50), p(0)]);
     expect(display.repeatLanes).toHaveLength(1);
-    expect(display.repeatLanes[0].offsetPx).toBe(3);
+    expect(display.repeatLanes[0].offsetPx).toBe(0);
     expect(display.repeatLanes[0].multiplicity).toBe(2);
     expect(display.repeatLanes[0].coordinates).toEqual(expect.arrayContaining([p(100)]));
-    expect(display.repeatLabels).toEqual([]);
+    expect(display.repeatLabels.map(label => label.text)).toEqual(['2 passes']);
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 
@@ -42,7 +44,7 @@ describe('display-only repeated traversal projection', () => {
     const display = buildRouteDisplayGeometry(canonical);
     expect(display.repeatLanes).toHaveLength(1);
     expect(display.repeatLanes[0].multiplicity).toBe(5);
-    expect(display.repeatLabels.map(label => label.text)).toEqual(['5 traversals']);
+    expect(display.repeatLabels.map(label => label.text)).toEqual(['5 passes']);
     expect(display.repeatLabels[0].text).not.toMatch(/[←→]/);
   });
 
@@ -67,7 +69,7 @@ describe('display-only repeated traversal projection', () => {
     const display = buildRouteDisplayGeometry(canonical);
     const repeated = display.repeatLanes.filter(lane => lane.multiplicity > 1);
     expect(repeated.length).toBeGreaterThan(0);
-    expect(repeated.every(lane => lane.offsetPx === 3)).toBe(true);
+    expect(repeated.every(lane => lane.offsetPx === 0)).toBe(true);
     expect(display.repeatLabels.every(label => !/[←→]/.test(label.text))).toBe(true);
   });
 
@@ -78,7 +80,8 @@ describe('display-only repeated traversal projection', () => {
     const display = buildRouteDisplayGeometry(canonical);
     expect(display.repeatLanes).toHaveLength(1);
     expect(display.repeatLanes[0].multiplicity).toBe(2);
-    expect(display.baseLines).toEqual([]);
+    expect(display.baseLines).toHaveLength(1);
+    expect(display.baseLines[0].coordinates).toEqual([p(0), p(100), p(75), p(50), p(25), p(0)]);
   });
 
   test('an explicit gap remains a boundary even when its endpoints coincide', () => {

@@ -37,20 +37,6 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
         coordinates: line.coordinates.map(point => [point.lng, point.lat]),
       },
     }));
-  const repeatFeatures = display.repeatLanes.map(lane => ({
-    type: 'Feature' as const,
-    id: lane.id,
-    properties: {
-      offsetPx: lane.offsetPx,
-      direction: lane.direction,
-      multiplicity: lane.multiplicity,
-      occurrenceIds: lane.occurrenceIds.join(','),
-    },
-    geometry: {
-      type: 'LineString' as const,
-      coordinates: lane.coordinates.map(point => [point.lng, point.lat]),
-    },
-  }));
   const repeatLabelFeatures = display.repeatLabels.map(label => ({
     type: 'Feature' as const,
     id: label.id,
@@ -98,43 +84,6 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           />
         </ShapeSource>
       ) : null}
-      {repeatFeatures.length > 0 ? (
-        <ShapeSource
-          id={`${idPrefix}-repeated-traversals`}
-          shape={{ type: 'FeatureCollection', features: repeatFeatures }}
-        >
-          {([3] as const).flatMap(offset => [
-            <LineLayer
-              key={`repeat-casing-${offset}`}
-              id={`${idPrefix}-repeat-casing-${offset}`}
-              slot="top"
-              filter={['==', ['get', 'offsetPx'], offset]}
-              style={{
-                lineColor: theme.mapRouteCasing,
-                lineWidth: 8,
-                lineOffset: offset,
-                lineOpacity: 0.82,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />,
-            <LineLayer
-              key={`repeat-line-${offset}`}
-              id={`${idPrefix}-repeat-line-${offset}`}
-              slot="top"
-              filter={['==', ['get', 'offsetPx'], offset]}
-              style={{
-                lineColor: theme.mapRouteLine,
-                lineWidth: 4.5,
-                lineOffset: offset,
-                lineOpacity: 0.98,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />,
-          ])}
-        </ShapeSource>
-      ) : null}
       {SymbolLayer && repeatLabelFeatures.length > 0 ? (
         <ShapeSource
           id={`${idPrefix}-repeat-labels`}
@@ -143,11 +92,11 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           <SymbolLayer
             id={`${idPrefix}-repeat-label-text`}
             slot="top"
-            minZoomLevel={11}
+            minZoomLevel={16}
             style={{
               textField: ['get', 'text'],
-              textSize: 10,
-              textOffset: [0, 1.15],
+              textSize: 9.5,
+              textOffset: [0, 1],
               textColor: theme.foreground,
               textHaloColor: theme.surfaceElevated,
               textHaloWidth: 1.5,

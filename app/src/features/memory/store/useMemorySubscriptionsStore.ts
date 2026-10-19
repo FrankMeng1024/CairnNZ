@@ -54,6 +54,38 @@ interface State {
 
 let subscriptionGeneration = 0;
 
+function resolvedFriendName(nextName: unknown, previousName?: string): string {
+  const candidate = typeof nextName === 'string' ? nextName.trim() : '';
+  if (candidate && !/^\d+$/.test(candidate)) return candidate;
+  return previousName?.trim() || candidate;
+}
+
+/** Preserve stable row/name identity across authorization refreshes. Status
+ * accessories may update; an already resolved label such as `frank test`
+ * never blanks or swaps through a numeric fallback. */
+export function reconcileAvailableMemorySources(
+  previous: AvailableMemorySource[],
+  incoming: AvailableMemorySource[],
+): AvailableMemorySource[] {
+  const priorById = new Map(previous.map(source => [String(source.friend_id), source]));
+  return incoming.map(source => {
+    const prior = priorById.get(String(source.friend_id));
+    const next = {
+      ...source,
+      friend_name: resolvedFriendName(source.friend_name, prior?.friend_name),
+    };
+    return prior
+      && prior.friend_name === next.friend_name
+      && prior.selected === next.selected
+      && prior.authorization_version === next.authorization_version
+      && prior.effective_at === next.effective_at
+      && prior.sharing_status === next.sharing_status
+      && prior.coverage_scope === next.coverage_scope
+      ? prior
+      : next;
+  });
+}
+
 export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   limit: Number.POSITIVE_INFINITY,
   subscriptions: [],
@@ -81,12 +113,13 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
     if (!viewerAtStart) return false;
     const generationAtStart = subscriptionGeneration;
-    // Start every authorization refresh fail-closed. A projection verified on
-    // the previous focus must not remain visible while this focus's `/sources`
-    // response is still in flight (or if either paired read fails).
+    // A routine sources refresh (including opening the picker) must not erase
+    // a still-valid, short-lived server proof. Focus/account transitions can
+    // deliberately call suspendVisibility() before this read; a successful
+    // reconciliation restores only matching unexpired projections, while a
+    // failed read leaves that explicit hard fence in place.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useFriendMemoryStore } = require('./useFriendMemoryStore');
-    useFriendMemoryStore.getState().suspendVisibility();
     set({ loading: true, error: null });
     try {
       const [res, sourcesResponse] = await Promise.all([
@@ -95,37 +128,53 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       ]);
       if (generationAtStart !== subscriptionGeneration
         || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
-      if (!res.ok) {
-        set({ loading: false, error: `Could not load Memory friends (HTTP ${res.status}).` });
-        useFriendMemoryStore.getState().suspendVisibility();
-        return false;
-      }
-      const data = await res.json();
       const sourcesBody = sourcesResponse.ok ? await sourcesResponse.json() : null;
       if (generationAtStart !== subscriptionGeneration
         || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
       const nextSources = sourcesBody && Array.isArray(sourcesBody.sources) ? sourcesBody.sources : null;
+      const previousSources = get().availableSources;
+      if (!res.ok) {
+        set({
+          ...(nextSources ? {
+            availableSources: reconcileAvailableMemorySources(previousSources, nextSources),
+          } : {}),
+          loading: false,
+          error: `Could not load Memory friends (HTTP ${res.status}).`,
+        });
+        // The sources endpoint is the grant authority. Even if the parallel
+        // subscriptions list failed, consume a successful source response so
+        // a revoke/version rotation still fences geometry immediately.
+        if (nextSources) {
+          await useFriendMemoryStore.getState().reconcileAuthorizedSources(nextSources);
+        }
+        return false;
+      }
+      const data = await res.json();
+      if (generationAtStart !== subscriptionGeneration
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
       set({
         limit: data.limit == null ? Number.POSITIVE_INFINITY : Number(data.limit),
         subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
-        ...(nextSources ? { availableSources: nextSources } : {}),
+        ...(nextSources ? {
+          availableSources: reconcileAvailableMemorySources(previousSources, nextSources),
+        } : {}),
         loading: false,
         error: sourcesBody ? null : `Could not refresh available friends (HTTP ${sourcesResponse.status}).`,
       });
       // A durable Fog cache is never self-authorizing. A fresh sources read
-      // may purge revoked/version-stale rows; a failed read immediately hides
-      // all cached projections until authority can be checked again.
+      // purges revoked/version-stale rows and restores proof only for an
+      // unexpired in-memory projection from the exact same grant. If this
+      // routine read fails, an already valid server-issued proof remains
+      // usable only until its own expiry timer; a caller-applied hard fence
+      // remains fenced because there is no successful reconciliation.
       if (nextSources) {
         await useFriendMemoryStore.getState().reconcileAuthorizedSources(nextSources);
-      } else {
-        useFriendMemoryStore.getState().suspendVisibility();
       }
       return Boolean(nextSources);
     } catch (e: any) {
       if (generationAtStart !== subscriptionGeneration
         || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
       set({ loading: false, error: String(e?.message ?? e).slice(0, 120) });
-      useFriendMemoryStore.getState().suspendVisibility();
       return false;
     }
   },

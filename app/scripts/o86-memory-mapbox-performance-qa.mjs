@@ -84,6 +84,7 @@ const browser = await chromium.launch({
 });
 const results = [];
 const warmReplacementResults = [];
+const scopeSwitchResults = [];
 try {
   for (const scenario of scenarios) {
     const [west, south, east, north] = scenario.viewport;
@@ -111,6 +112,7 @@ try {
       const page = await context.newPage();
       const runtimeErrors = [];
       const clientLogs = [];
+      const requestCounts = {};
       page.on('pageerror', error => runtimeErrors.push(`pageerror:${error.message}`));
       page.on('console', message => {
         const value = message.text();
@@ -129,6 +131,7 @@ try {
         const request = route.request();
         const url = new URL(request.url());
         const endpoint = url.pathname;
+        requestCounts[endpoint] = (requestCounts[endpoint] ?? 0) + 1;
         const fulfill = async (body, delayMs = 0, status = 200) => {
           if (delayMs > 0) await sleep(delayMs);
           await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -219,12 +222,23 @@ try {
           }));
           globalThis.__o86MemoryVisibleStartedAt = performance.now();
           globalThis.__o86MemoryStages = [];
+          globalThis.__o87FogSourceIdentity = null;
+          globalThis.__o87FogSourceIdentityChanges = 0;
+          globalThis.__o87FogSourceMissingAfterSeen = 0;
           let previous = '';
           clearInterval(globalThis.__o86MemoryStageTimer);
           globalThis.__o86MemoryStageTimer = setInterval(() => {
             const map = globalThis.__cairnMap;
             const prepared = stores.usePreparedMemoryCoverageStore?.getState?.() ?? {};
             const friends = stores.useFriendMemoryStore.getState();
+            const fogSourceObject = map?.getSource?.('memory-fog-src') ?? null;
+            if (fogSourceObject && globalThis.__o87FogSourceIdentity !== fogSourceObject) {
+              globalThis.__o87FogSourceIdentity = fogSourceObject;
+              globalThis.__o87FogSourceIdentityChanges += 1;
+            } else if (!fogSourceObject && globalThis.__o87FogSourceIdentity) {
+              globalThis.__o87FogSourceMissingAfterSeen += 1;
+            }
+            const fogFeatures = fogSourceObject?._data?.features ?? [];
             const state = {
               route: stores.getCurrentRoute?.() ?? null,
               map: Boolean(map),
@@ -236,11 +250,11 @@ try {
               friendLoading: friends.loading,
               visibleFriends: friends.getVisibleGeometries().length,
               fogSource: Boolean(map?.getSource?.('memory-fog-src')),
-              friendSource: Boolean(map?.getSource?.('memory-friend-union-src')),
-              overlapSource: Boolean(map?.getSource?.('memory-overlap-src')),
-              sourceLoaded: Object.fromEntries(['memory-fog-src', 'memory-friend-union-src', 'memory-overlap-src']
-                .map(id => [id, map?.getSource?.(id) ? Boolean(map?.isSourceLoaded?.(id)) : null])),
-              rendered: Object.fromEntries(['memory-fog', 'memory-friend-union', 'memory-overlap']
+              atomicFeatureKinds: fogFeatures.map(feature => feature?.properties?.cairnFogKind).filter(Boolean).sort(),
+              sourceLoaded: { 'memory-fog-src': fogSourceObject ? Boolean(map?.isSourceLoaded?.('memory-fog-src')) : null },
+              sourceIdentityChanges: globalThis.__o87FogSourceIdentityChanges,
+              sourceMissingAfterSeen: globalThis.__o87FogSourceMissingAfterSeen,
+              rendered: Object.fromEntries(['memory-fog', 'memory-mine', 'memory-friend-union', 'memory-overlap']
                 .map(id => {
                   try { return [id, map?.getLayer?.(id) ? map.queryRenderedFeatures(undefined, { layers: [id] }).length : null]; }
                   catch { return [id, -1]; }
@@ -267,12 +281,6 @@ try {
           const fogSource = map.getSource?.('memory-fog-src');
           const fogLayer = map.getLayer?.('memory-fog');
           if (!fogSource || !fogLayer) return false;
-          const friendSource = map.getSource?.('memory-friend-union-src');
-          const overlapSource = map.getSource?.('memory-overlap-src');
-          if (expectFriend && !friendSource) return false;
-          if (!expectFriend && friendSource) return false;
-          if (expectOverlap && !overlapSource) return false;
-          if (!expectOverlap && overlapSource) return false;
           const visibleFriends = globalThis.__cairnStores.useFriendMemoryStore.getState().getVisibleGeometries();
           if (visibleFriends.length !== selectedCount) return false;
           let fogPainted = 0; let friendPainted = 0; let overlapPainted = 0; let basemapPainted = 0;
@@ -290,12 +298,20 @@ try {
           if (basemapPainted < 1 || fogPainted < 1
             || (expectFriend && friendPainted < 1) || (expectOverlap && overlapPainted < 1)) return false;
           const fogData = fogSource._data;
+          const kinds = (fogData?.features ?? []).map(feature => feature?.properties?.cairnFogKind);
+          if (!kinds.includes('fog') || expectFriend !== kinds.includes('friend') || expectOverlap !== kinds.includes('overlap')) return false;
+          const readinessKeys = [...new Set((fogData?.features ?? []).map(feature => feature?.properties?.cairnReadinessKey).filter(Boolean))];
+          if (readinessKeys.length !== 1) return false;
           return {
             visibleAtMs: performance.now() - globalThis.__o86MemoryVisibleStartedAt,
             basemapPainted, fogPainted, friendPainted, overlapPainted,
             visibleFriendSources: visibleFriends.length,
-            fogGeometryType: fogData?.geometry?.type ?? null,
+            fogGeometryType: fogData?.type ?? null,
             fogGeometryHash: fogData ? JSON.stringify(fogData).length : 0,
+            atomicFeatureKinds: kinds.sort(),
+            readinessKey: readinessKeys[0],
+            sourceIdentityChanges: globalThis.__o87FogSourceIdentityChanges ?? 0,
+            sourceMissingAfterSeen: globalThis.__o87FogSourceMissingAfterSeen ?? 0,
           };
         }, {
           expectFriend: scenario.expectFriend,
@@ -307,15 +323,111 @@ try {
           clearInterval(globalThis.__o86MemoryStageTimer);
           return globalThis.__o86MemoryStages ?? [];
         });
-        if (trial === 0) await page.screenshot({ path: path.join(outputDir, `${scenario.id}-actual-mapbox-390x844.png`) });
+        if (trial === 0) {
+          for (const appearance of ['day', 'sunset', 'night']) {
+            await page.evaluate(async value => {
+              const stores = globalThis.__cairnStores;
+              await stores.useSettingsStore.getState().saveAll({ debugMode: false, appearance: value, mapLayer: 'outdoors' });
+              stores.useWeatherStore?.getState?.().setConditionOverride?.('sunny');
+              stores.useWeatherStore?.getState?.().setDayNightOverride?.(value);
+            }, appearance);
+            await page.waitForTimeout(500);
+            await page.screenshot({ path: path.join(outputDir, `${scenario.id}-${appearance}-actual-mapbox-390x844.png`) });
+          }
+        }
         if (trial === 0 && scenario.id === 'mine-plus-two-friends-12k') {
+          try {
+            const scopeSwitch = await page.evaluate(async () => {
+              const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+              const stores = globalThis.__cairnStores;
+              const map = globalThis.__cairnMap;
+              const scene = () => {
+                const source = map?.getSource?.('memory-fog-src');
+                const features = source?._data?.features ?? [];
+                return {
+                  source,
+                  key: features[0]?.properties?.cairnReadinessKey ?? null,
+                  kinds: features.map(feature => feature?.properties?.cairnFogKind).filter(Boolean).sort(),
+                };
+              };
+              const combined = scene();
+              stores.useMemoryScopeStore.getState().setScope('self');
+              const selfDeadline = performance.now() + 5_000;
+              let self = scene();
+              while (performance.now() < selfDeadline) {
+                self = scene();
+                if (self.key && self.key !== combined.key && !self.kinds.includes('friend')) break;
+                await sleep(25);
+              }
+              const samples = [];
+              const startedAt = performance.now();
+              const timer = setInterval(() => {
+                const current = scene();
+                samples.push({
+                  atMs: performance.now() - startedAt,
+                  key: current.key,
+                  kinds: current.kinds,
+                  sourceStable: current.source === combined.source,
+                  pending: Boolean(document.querySelector('[data-testid="memory-scope-pending"]')),
+                });
+              }, 25);
+              stores.useMemoryScopeStore.getState().setScope('combined');
+              const combinedDeadline = performance.now() + 5_000;
+              let nextCombined = scene();
+              while (performance.now() < combinedDeadline) {
+                nextCombined = scene();
+                if (nextCombined.key && nextCombined.key !== self.key && nextCombined.kinds.includes('friend')) break;
+                await sleep(25);
+              }
+              clearInterval(timer);
+              samples.push({
+                atMs: performance.now() - startedAt,
+                key: nextCombined.key,
+                kinds: nextCombined.kinds,
+                sourceStable: nextCombined.source === combined.source,
+                pending: Boolean(document.querySelector('[data-testid="memory-scope-pending"]')),
+              });
+              const allowedKeys = new Set([self.key, nextCombined.key].filter(Boolean));
+              return {
+                visibleAtMs: performance.now() - startedAt,
+                originalCombinedKey: combined.key,
+                selfKey: self.key,
+                nextCombinedKey: nextCombined.key,
+                sampleCount: samples.length,
+                pendingObserved: samples.some(sample => sample.pending),
+                sourceStable: samples.every(sample => sample.sourceStable),
+                noEmptyScene: samples.every(sample => sample.kinds.includes('fog')),
+                noPartialAuthorityScene: samples.every(sample => !sample.key || allowedKeys.has(sample.key)),
+                keysObserved: [...new Set(samples.map(sample => sample.key))],
+                kindsObserved: [...new Set(samples.map(sample => sample.kinds.join(',')))],
+              };
+            });
+            scopeSwitchResults.push({
+              scenario: 'self-to-two-friends-atomic-scene',
+              measurement: scopeSwitch,
+              pass: Boolean(scopeSwitch.selfKey && scopeSwitch.nextCombinedKey
+                && scopeSwitch.selfKey !== scopeSwitch.nextCombinedKey
+                && scopeSwitch.visibleAtMs < 5_000
+                && scopeSwitch.sourceStable
+                && scopeSwitch.noEmptyScene
+                && scopeSwitch.noPartialAuthorityScene),
+            });
+            await page.screenshot({ path: path.join(outputDir, 'warm-self-to-two-friends-actual-mapbox-390x844.png') });
+          } catch (error) {
+            scopeSwitchResults.push({
+              scenario: 'self-to-two-friends-atomic-scene',
+              error: error?.stack || String(error),
+              pass: false,
+            });
+          }
           const warmStart = await page.evaluate(async ({ removedFriendId }) => {
             const map = globalThis.__cairnMap;
-            const oldReadinessKey = map?.getSource?.('memory-fog-src')?._data?.properties?.cairnReadinessKey ?? null;
+            const oldReadinessKey = map?.getSource?.('memory-fog-src')?._data?.features?.[0]?.properties?.cairnReadinessKey ?? null;
+            const sourceIdentity = map?.getSource?.('memory-fog-src') ?? null;
             const startedAt = performance.now();
             const status = await globalThis.__cairnStores.useMemorySubscriptionsStore.getState()
               .unsubscribe(Number(removedFriendId));
-            return { oldReadinessKey, startedAt, status };
+            return { oldReadinessKey, sourceIdentityStableAtStart: sourceIdentity === globalThis.__o87FogSourceIdentity, startedAt, status };
           }, { removedFriendId: overlapId });
           try {
             const warmHandle = await page.waitForFunction(({ oldReadinessKey, startedAt, retainedFriendId, removedFriendId }) => {
@@ -325,13 +437,11 @@ try {
               const visible = stores.useFriendMemoryStore.getState().getVisibleGeometries();
               if (visible.length !== 1 || String(visible[0]?.sourceFriendId) !== retainedFriendId
                 || stores.useFriendMemoryStore.getState().projections[removedFriendId]) return false;
-              const sourceIds = ['memory-fog-src', 'memory-friend-union-src', 'memory-overlap-src']
-                .filter(id => map.getSource?.(id));
-              const readinessKey = map.getSource?.('memory-fog-src')?._data?.properties?.cairnReadinessKey ?? null;
+              const sourceIds = ['memory-fog-src'];
+              const readinessKey = map.getSource?.('memory-fog-src')?._data?.features?.[0]?.properties?.cairnReadinessKey ?? null;
               if (!readinessKey || readinessKey === oldReadinessKey) return false;
-              const layerIds = sourceIds.map(id => id === 'memory-fog-src'
-                ? 'memory-fog'
-                : id === 'memory-friend-union-src' ? 'memory-friend-union' : 'memory-overlap');
+              const layerIds = ['memory-fog', 'memory-mine', 'memory-friend-union', 'memory-overlap']
+                .filter(id => map.getLayer?.(id));
               const renderedKeys = {};
               for (const layerId of layerIds) {
                 try {
@@ -346,6 +456,8 @@ try {
                 readinessKey,
                 renderedKeys,
                 sourceIds,
+                sourceIdentityChanges: globalThis.__o87FogSourceIdentityChanges ?? 0,
+                sourceMissingAfterSeen: globalThis.__o87FogSourceMissingAfterSeen ?? 0,
                 visibleFriendSources: visible.map(value => value.sourceFriendId),
               };
             }, {
@@ -359,7 +471,10 @@ try {
               scenario: 'two-friends-to-one-revoke',
               subscriptionStatus: warmStart.status,
               measurement: warmMeasurement,
-              pass: warmStart.status === 200 && warmMeasurement.visibleAtMs < 5_000,
+              pass: warmStart.status === 200 && warmStart.sourceIdentityStableAtStart
+                && warmMeasurement.visibleAtMs < 5_000
+                && warmMeasurement.sourceIdentityChanges === 1
+                && warmMeasurement.sourceMissingAfterSeen === 0,
             });
             await page.screenshot({ path: path.join(outputDir, 'warm-two-to-one-revoke-actual-mapbox-390x844.png') });
           } catch (error) {
@@ -387,11 +502,13 @@ try {
               friendStates: stores?.useFriendMemoryStore?.getState?.().sourceStates ?? {},
               visibleFriends: stores?.useFriendMemoryStore?.getState?.().getVisibleGeometries?.().length ?? 0,
               fogSource: Boolean(map?.getSource?.('memory-fog-src')),
-              friendSource: Boolean(map?.getSource?.('memory-friend-union-src')),
-              overlapSource: Boolean(map?.getSource?.('memory-overlap-src')),
-              sourceReadinessKeys: Object.fromEntries(['memory-fog-src', 'memory-friend-union-src', 'memory-overlap-src']
-                .map(id => [id, map?.getSource?.(id)?._data?.properties?.cairnReadinessKey ?? null])),
-              renderedReadinessKeys: Object.fromEntries(['memory-fog', 'memory-friend-union', 'memory-overlap']
+              atomicFeatureKinds: (map?.getSource?.('memory-fog-src')?._data?.features ?? [])
+                .map(feature => feature?.properties?.cairnFogKind).filter(Boolean),
+              sourceReadinessKeys: (map?.getSource?.('memory-fog-src')?._data?.features ?? [])
+                .map(feature => feature?.properties?.cairnReadinessKey).filter(Boolean),
+              sourceIdentityChanges: globalThis.__o87FogSourceIdentityChanges ?? 0,
+              sourceMissingAfterSeen: globalThis.__o87FogSourceMissingAfterSeen ?? 0,
+              renderedReadinessKeys: Object.fromEntries(['memory-fog', 'memory-mine', 'memory-friend-union', 'memory-overlap']
                 .map(id => {
                   try {
                     return [id, map?.getLayer?.(id)
@@ -412,7 +529,11 @@ try {
         measurement,
         runtimeErrors,
         clientLogs,
-        pass: Boolean(measurement && Number(measurement.visibleAtMs) < 5_000 && runtimeErrors.length === 0),
+        requestCounts,
+        pass: Boolean(measurement && Number(measurement.visibleAtMs) < 5_000
+          && measurement.sourceIdentityChanges === 1
+          && measurement.sourceMissingAfterSeen === 0
+          && runtimeErrors.length === 0),
       });
         await page.close();
       }
@@ -444,7 +565,7 @@ const scenarioSummaries = Object.fromEntries(scenarios.map(scenario => {
 }));
 const report = {
   generated_at: new Date().toISOString(),
-  candidate: 'current O86 worktree',
+  candidate: 'current O87 candidate worktree',
   fixture_provenance: fixture.provenance,
   fixture_sha256: sha(fixture),
   fixture_counts: { viewer_mine: 2_000, dense_friend: 10_000, overlap_friend: 2_000, distinct_friend: 1_000 },
@@ -459,9 +580,11 @@ const report = {
   },
   scenario_summaries: scenarioSummaries,
   warm_replacement_results: warmReplacementResults,
+  scope_switch_results: scopeSwitchResults,
   results,
   verdict: Object.values(scenarioSummaries).every(summary => summary.gate === 'PASS')
     && warmReplacementResults.every(result => result.pass)
+    && scopeSwitchResults.every(result => result.pass)
     ? 'PASS' : 'FAIL',
 };
 fs.writeFileSync(path.join(outputDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);

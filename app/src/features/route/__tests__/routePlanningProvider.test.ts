@@ -67,6 +67,88 @@ describe('Route planning provider boundaries', () => {
     });
   });
 
+  test('ordinary finger wobble accepts a genuine road correction beyond the O86 45m fidelity gate', async () => {
+    const raw = [
+      p(0, 0), p(30, 16), p(60, 32), p(90, 46),
+      p(120, 32), p(150, 16), p(180, 0),
+    ];
+    const road = [p(0, 0), p(90, 0), p(180, 0)];
+    expect(orderedShapeDeviationM(raw, road)).toBeGreaterThan(45);
+    expect(orderedShapeDeviationM(raw, road)).toBeLessThan(90);
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(road) })).resolves.toMatchObject({
+      outcome: 'accepted', points: road, callCount: 1,
+      parts: [{ resolution: 'draw-matched' }],
+    });
+  });
+
+  test('a normal intersection alternative does not discard an otherwise faithful Mapbox match', async () => {
+    const raw = [p(0, 3), p(40, -2), p(80, 4), p(120, 0)];
+    const road = [p(0, 0), p(60, 0), p(120, 0)];
+    const result = await resolveDrawPlan(raw, { matcher: async (): Promise<MatchResult> => ({
+      ok: true,
+      matchedPoints: road,
+      confidence: 0.9,
+      segments: [{
+        points: road,
+        confidence: 0.9,
+        inputStartIndex: 0,
+        inputEndIndex: raw.length - 1,
+        alternativesCount: 2,
+      }],
+      durationMs: 2,
+    }) });
+    expect(result).toMatchObject({
+      outcome: 'accepted', points: road,
+      parts: [{ resolution: 'draw-matched' }],
+    });
+  });
+
+  test('an ambiguous parallel-road detour outside the review corridor stays manual', async () => {
+    const raw = [p(0, 0), p(100, 0), p(200, 0), p(300, 0), p(400, 0)];
+    // Long shallow ramps deliberately avoid looking like a sharp user turn.
+    // Shape/length/endpoints alone would accept this unrelated parallel road.
+    const parallelRoad = [p(0, 0), p(100, 60), p(300, 60), p(400, 0)];
+    const deviationM = orderedShapeDeviationM(raw, parallelRoad);
+    expect(deviationM).toBeGreaterThan(45);
+    expect(deviationM).toBeLessThan(90);
+    const result = await resolveDrawPlan(raw, { matcher: async (): Promise<MatchResult> => ({
+      ok: true,
+      matchedPoints: parallelRoad,
+      confidence: 0.7,
+      segments: [{
+        points: parallelRoad,
+        confidence: 0.7,
+        inputStartIndex: 0,
+        inputEndIndex: raw.length - 1,
+        alternativesCount: 2,
+      }],
+      durationMs: 2,
+    }) });
+    expect(result).toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: 'shape-deviation',
+      parts: [{ resolution: 'draw-manual' }],
+    });
+  });
+
+  test('the wider road-snap envelope still preserves an intentional sharp turn', async () => {
+    const raw = [p(0, 0), p(60, 45), p(120, 0)];
+    const flattened = [p(0, 0), p(60, 0), p(120, 0)];
+    expect(orderedShapeDeviationM(raw, flattened)).toBeLessThan(90);
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(flattened) })).resolves.toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: 'shape-deviation',
+      parts: [{ resolution: 'draw-manual' }],
+    });
+  });
+
+  test('the wider road-snap envelope still preserves an intentional U-turn', async () => {
+    const raw = [p(0, 0), p(70, 0), p(140, 0), p(70, 0), p(3, 0)];
+    const collapsed = [p(0, 0), p(3, 0)];
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(collapsed) })).resolves.toMatchObject({
+      outcome: 'accepted', points: raw,
+      parts: [{ resolution: 'draw-manual' }],
+    });
+  });
+
   test('Draw rejects a far spur hidden between more than 100 provider vertices', async () => {
     const raw = [p(0, 0), p(80, 0)];
     const dense = Array.from({ length: 201 }, (_, index) => p(index * 0.4, 0));
@@ -210,7 +292,7 @@ describe('Route planning provider boundaries', () => {
     expect(result.points.at(-1)).not.toEqual(raw.at(-1));
   });
 
-  test('terminal pen-up reconciliation runs after adjacent unsupported provider runs are merged', async () => {
+  test('terminal pen-up reconciliation runs after a valid alternative and unsupported tail are resolved', async () => {
     const raw = [p(0, 0), p(20, 0), p(40, 0), p(60, 0), p(70, 0), p(80, 7)];
     const result = await resolveDrawPlan(raw, {
       matcher: async (): Promise<MatchResult> => ({
@@ -240,7 +322,7 @@ describe('Route planning provider boundaries', () => {
       outcome: 'accepted',
       parts: [
         { resolution: 'draw-matched' },
-        { resolution: 'draw-manual', inputStartIndex: 3, inputEndIndex: 5 },
+        { resolution: 'draw-manual', inputStartIndex: 4, inputEndIndex: 5 },
       ],
     });
     if (result.outcome !== 'accepted') return;
@@ -273,7 +355,7 @@ describe('Route planning provider boundaries', () => {
     expect(result.parts.at(-1)?.resolution).toBe('draw-manual');
   });
 
-  test('ambiguous tracepoint run stays manual while reliable flanks remain matched', async () => {
+  test('a spatially faithful alternative run remains matched with its reliable flanks', async () => {
     const raw = [p(0, 0), p(20, 0), p(40, 4), p(60, 4), p(80, 0), p(100, 0)];
     const matcher = async (): Promise<MatchResult> => ({
       ok: true,
@@ -289,12 +371,7 @@ describe('Route planning provider boundaries', () => {
     const result = await resolveDrawPlan(raw, { matcher });
     expect(result).toMatchObject({
       outcome: 'accepted',
-      fallbackReason: 'split-match',
-      parts: [
-        { resolution: 'draw-matched', inputStartIndex: 0, inputEndIndex: 1 },
-        { resolution: 'draw-manual', inputStartIndex: 1, inputEndIndex: 4 },
-        { resolution: 'draw-matched', inputStartIndex: 4, inputEndIndex: 5 },
-      ],
+      parts: [{ resolution: 'draw-matched', inputStartIndex: 0, inputEndIndex: 5 }],
     });
   });
 

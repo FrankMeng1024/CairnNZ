@@ -41,6 +41,7 @@ import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { excludeAcquiredFriendMarkers } from '../services/cairnMapPresentation';
 import { memoryCoverageViewport, type MemoryCoverageViewport } from '../services/memoryCoverageViewport';
 import { memoryFogPaintEvidenceReady } from '../services/memoryFogReadiness';
+import { memoryMinePreviewCanCapture } from '../services/memoryEntryPresentation';
 
 let memoryMapHasRendered = false;
 const MEMORY_MAP_ORNAMENTS = mapOrnamentsAbove(76);
@@ -93,7 +94,7 @@ interface Props {
    * second gate for hiding the loading overlay.
    */
   onFogReady?: () => void;
-  onFogPreparing?: (readinessKey: string) => void;
+  onFogPreparing?: (readinessKey: string, retainsDisplayedScene: boolean) => void;
   onFogUnavailable?: () => void;
   /**
    * v424: fly camera to arbitrary center+zoom, driven by HierarchyPanel
@@ -122,7 +123,7 @@ export type MemoryMapHandle = {
   getCurrentCenter: () => Promise<{ lat: number; lng: number } | null>;
   /** The exact settled viewport authority currently owned by Memory. */
   getCoverageViewport: () => MemoryCoverageViewport;
-  /** Capture the fully rendered local map+Fog frame for one bounded warm-entry preview. */
+  /** Capture a fully rendered Mine-only map+Fog frame for one bounded warm-entry preview. */
   captureAuthorizedPreview: () => Promise<string | null>;
 };
 
@@ -144,6 +145,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const friendMarkers = useMarkerStore((s) => s.circleMarkers);
   const acquiredMarkers = useCairnPresentationStore((s) => s.acquiredMarkers);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
+  const memoryScopeRef = useRef(memoryScope);
+  memoryScopeRef.current = memoryScope;
   const allMarkers = useMemo(() => {
     if (memoryScope === 'self') return ownMarkers;
     // Acquired Friend Cairns have one authoritative map presentation in
@@ -197,6 +200,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     },
     captureAuthorizedPreview: async () => {
       try {
+        if (!memoryMinePreviewCanCapture({
+          scope: memoryScopeRef.current,
+          currentReadinessKey: fogReadinessKeyRef.current,
+          paintedReadinessKey: fogPaintReadyKeyRef.current,
+        })) return null;
         const m = mapViewRef.current;
         if (!m || typeof m.takeSnap !== 'function') return null;
         const raw = await m.takeSnap(false);
@@ -227,6 +235,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const fogRequiredSourceIdsRef = useRef<string[]>(['memory-fog-src']);
   const fogPreparingAtRef = useRef(0);
   const fogGeometryReadyAtRef = useRef(0);
+  const fogRetainingSceneRef = useRef(false);
   const fogPaintProbeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localHydration = useMemoryStore((s) => s.localHydration) ?? {
     ownerUserId: null,
@@ -339,6 +348,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // settle) are ignored — the loading overlay only cares about the
   // first paint.
   const mapFullyReadyFiredRef = useRef(false);
+  const mapFullyRenderedLoggedRef = useRef(false);
   // O1 batch 28.3: gate blue dot 到 map basemap 加载完成后一起出。
   // 用户报 Bug 2: memory 里当前位置和地图出现时间不一样,有先后。
   // 现象是 UserLocation `visible={true}` 立即渲染,而 basemap tiles 稍
@@ -379,8 +389,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     const sourceProbe = mapViewRef.current?.isSourceLoaded;
     const sourcesLoaded = typeof sourceProbe !== 'function'
       || fogRequiredSourceIdsRef.current.every(sourceId => sourceProbe(sourceId));
-    const layerIds = fogRequiredSourceIdsRef.current.map(sourceId => {
-      if (sourceId === 'memory-fog-src') return 'memory-fog';
+    const layerIds = fogRequiredSourceIdsRef.current.flatMap(sourceId => {
+      if (sourceId === 'memory-fog-src') return [
+        'memory-fog',
+        'memory-mine',
+        'memory-friend-union',
+        'memory-overlap',
+      ];
       if (sourceId === 'memory-friend-union-src') return 'memory-friend-union';
       if (sourceId === 'memory-overlap-src') return 'memory-overlap';
       return sourceId;
@@ -391,10 +406,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     // probe is stronger evidence of user-visible completion than that worker
     // bookkeeping flag. Native has no optional probe and retains its genuine
     // fully-rendered callback path.
+    const atomicSceneProbe = mapViewRef.current?.hasRenderedScene;
     const renderedProbe = mapViewRef.current?.areLayersRendered;
-    const hasRenderedLayerProbe = typeof renderedProbe === 'function';
-    const exactLayersRendered = hasRenderedLayerProbe
-      && renderedProbe(layerIds, readinessKey);
+    const hasRenderedLayerProbe = typeof atomicSceneProbe === 'function'
+      || typeof renderedProbe === 'function';
+    const exactLayersRendered = typeof atomicSceneProbe === 'function'
+      ? atomicSceneProbe(layerIds, readinessKey)
+      : typeof renderedProbe === 'function' && renderedProbe(layerIds, readinessKey);
     if (!memoryFogPaintEvidenceReady({
       hasRenderedLayerProbe,
       exactLayersRendered,
@@ -593,7 +611,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         //     This is when "fully painted" map exists; if fog is missing
         //     after this fires, the bug is in FogLayer, not Mapbox.
         // We log without ctx — these are points, not measurements.
-        onWillStartLoadingMap={() => { log('v357.mapbox_willStartLoadingMap', {}); }}
+        onWillStartLoadingMap={() => {
+          mapFullyRenderedLoggedRef.current = false;
+          log('v357.mapbox_willStartLoadingMap', {});
+        }}
         onDidFinishLoadingMap={() => {
           log('v357.mapbox_didFinishLoadingMap', {});
           // O1 batch 28.3: gate blue dot 一起出
@@ -615,7 +636,14 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           confirmCurrentFogPaint(false);
         }}
         onDidFinishRenderingMapFully={() => {
-          log('v357.mapbox_didFinishRenderingMapFully', {});
+          // Mapbox may emit this event for every requested repaint while a
+          // GeoJSON worker settles. One diagnostic per style load preserves
+          // the useful lifecycle marker without turning that paint loop into
+          // hundreds of telemetry requests on a slow/racy frame.
+          if (!mapFullyRenderedLoggedRef.current) {
+            mapFullyRenderedLoggedRef.current = true;
+            log('v357.mapbox_didFinishRenderingMapFully', {});
+          }
           // Backup: also fire here in case didFinishLoadingMap was
           // somehow missed (defensive — ref guard prevents duplicate).
           setMapReady(true);
@@ -740,7 +768,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         <FogLayer
           userCenter={{ lat: centerLat, lng: centerLng }}
           viewport={coverageViewport}
-          onFogPreparing={(readinessKey) => {
+          onFogPreparing={(readinessKey, retainsDisplayedScene) => {
             if (fogPaintProbeTimerRef.current) {
               clearTimeout(fogPaintProbeTimerRef.current);
               fogPaintProbeTimerRef.current = null;
@@ -750,15 +778,17 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             fogPaintReadyKeyRef.current = '';
             fogPreparingAtRef.current = Date.now();
             fogGeometryReadyAtRef.current = 0;
+            fogRetainingSceneRef.current = retainsDisplayedScene;
             fogRequiredSourceIdsRef.current = ['memory-fog-src'];
-            setFogReady(false);
-            onFogPreparing?.(readinessKey);
+            if (!retainsDisplayedScene) setFogReady(false);
+            onFogPreparing?.(readinessKey, retainsDisplayedScene);
           }}
           onFogReady={(readinessKey, requiredSourceIds) => {
             if (fogReadinessKeyRef.current !== readinessKey) return;
             // Geometry has committed in JS. Cairns remain gated until Mapbox
             // reports a fully rendered frame for this same readiness key.
             fogGeometryReadyKeyRef.current = readinessKey;
+            fogRetainingSceneRef.current = false;
             fogRequiredSourceIdsRef.current = requiredSourceIds;
             fogGeometryReadyAtRef.current = Date.now();
             log('o86.memory.fog_geometry_committed', {
@@ -776,7 +806,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             if (fogReadinessKeyRef.current !== readinessKey) return;
             fogGeometryReadyKeyRef.current = '';
             fogPaintReadyKeyRef.current = '';
-            setFogReady(false);
+            if (!fogRetainingSceneRef.current) setFogReady(false);
             onFogUnavailable?.();
           }}
         />

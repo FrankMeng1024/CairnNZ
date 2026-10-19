@@ -30,6 +30,11 @@ const mockHydrateFriendMemory = jest.fn(async (_ownerId: string) => undefined);
 const mockFogLayer = jest.fn((_props: any) => null);
 let mockMemorySubscriptions: any[] = [];
 let mockFriendMemoryUserId: string | null = null;
+let mockFriendMemoryError: 'offline' | 'unavailable' | null = null;
+let mockFriendSourceStates: Record<string, { status: string; cellCount: number; error?: string }> = {};
+let mockMemoryScopeOwner: string | null = 'owner-a';
+let mockMemoryScope: 'self' | 'combined' = 'self';
+const mockSetMemoryScope = jest.fn((scope: 'self' | 'combined') => { mockMemoryScope = scope; });
 const mockStroke = [
   { lat: -41.2865, lng: 174.7767 },
   { lat: -41.2862, lng: 174.7772 },
@@ -110,7 +115,9 @@ jest.mock('../../components/MapLoadOverlay', () => ({ MapLoadOverlay: () => null
 jest.mock('../../components/ModalCard', () => {
   const ReactModule = require('react'); const { Text, View } = require('react-native');
   return {
-    ModalCard: ({ visible, children, testID }: any) => visible ? ReactModule.createElement(View, { testID }, children) : null,
+    ModalCard: ({ visible, children, testID, presentation }: any) => visible
+      ? ReactModule.createElement(View, { testID, presentation }, children)
+      : null,
     ModalCardHeader: ({ title, body }: any) => ReactModule.createElement(View, null,
       ReactModule.createElement(Text, null, title), body ? ReactModule.createElement(Text, null, body) : null),
   };
@@ -131,10 +138,13 @@ jest.mock('../../components/map/RouteDrawOverlay', () => {
 jest.mock('../../features/memory/components/FogLayer', () => ({ FogLayer: (props: any) => mockFogLayer(props) }));
 jest.mock('../../features/memory/store/useFriendMemoryStore', () => ({
   useFriendMemoryStore: Object.assign((selector: any) => selector({
-    sourceStates: {},
+    error: mockFriendMemoryError,
+    sourceStates: mockFriendSourceStates,
     loadSelectedProjections: mockLoadSelectedProjections,
   }), { getState: () => ({
     userId: mockFriendMemoryUserId,
+    error: mockFriendMemoryError,
+    sourceStates: mockFriendSourceStates,
     hydrate: async (ownerId: string) => { mockFriendMemoryUserId = ownerId; await mockHydrateFriendMemory(ownerId); },
     loadSelectedProjections: mockLoadSelectedProjections,
   }) }),
@@ -154,6 +164,25 @@ jest.mock('../../features/memory/store/useMemorySubscriptionsStore', () => {
     useMemorySubscriptionsStore: Object.assign(
       (selector: any) => selector(state),
       { getState: () => state },
+    ),
+  };
+});
+jest.mock('../../features/memory/store/useMemoryScopeStore', () => {
+  const getState = () => ({
+    ownerUserId: mockMemoryScopeOwner,
+    scope: mockMemoryScope,
+    activateOwner: jest.fn(),
+    setScope: mockSetMemoryScope,
+  });
+  const hook: any = (selector: any) => selector(getState());
+  hook.getState = getState;
+  return {
+    useMemoryScopeStore: hook,
+    memoryScopeForNewRoute: (ownerUserId: string | number | null | undefined) => (
+      ownerUserId != null
+      && mockMemoryScopeOwner === String(ownerUserId)
+        ? mockMemoryScope
+        : 'self'
     ),
   };
 });
@@ -240,6 +269,10 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     mockRecoveredPast = [];
     mockMemorySubscriptions = [];
     mockFriendMemoryUserId = null;
+    mockFriendMemoryError = null;
+    mockFriendSourceStates = {};
+    mockMemoryScopeOwner = 'owner-a';
+    mockMemoryScope = 'self';
     mockEmittedStroke = mockStroke;
     mockSessionState.sessions = [];
     mockLoadActivityTrackPoints.mockResolvedValue([]);
@@ -268,6 +301,9 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByTestId('source-ordered-route-endpoints').props.shape.features.map((feature: any) => feature.properties.role)).toEqual(['Start', 'End']);
     expect(screen.getByTestId('layer-ordered-route-line').props.slot).toBe('top');
     expect(screen.getByTestId('layer-ordered-route-line').props.style.lineColor).toBe('#2F684F');
+    const headerStyle = StyleSheet.flatten(screen.getByTestId('route-editor-header').props.style);
+    expect(headerStyle.backgroundColor).toBeUndefined();
+    expect(headerStyle.borderBottomWidth).toBe(0);
   });
 
   test('current location and overview move only the camera', async () => {
@@ -308,6 +344,56 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.press(combined);
     await waitFor(() => expect(mockFogLayer).toHaveBeenLastCalledWith(expect.objectContaining({ scopeOverride: 'combined' })));
     expect(mockMemorySubscriptions).toEqual([{ friend_id: 11, friend_name: 'First Friend' }]);
+  });
+
+  test('a terminal Friend source failure clears Route Fog pending and exposes unavailable semantics', async () => {
+    mockMemorySubscriptions = [{ friend_id: 11, friend_name: 'First Friend' }];
+    mockFriendSourceStates = { '11': { status: 'error', cellCount: 0, error: 'Unavailable' } };
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByTestId('route-more'));
+    fireEvent.press(screen.getByText('Mine & Friends'));
+    const combined = screen.getByLabelText('Mine and Friends exploration unavailable');
+    expect(combined.props.accessibilityState).toMatchObject({ selected: true, busy: false });
+    expect(screen.getByText('Shared exploration couldn’t refresh. Mine stays visible.')).toBeTruthy();
+    expect(screen.queryByText('No shared Friend Fog is available. Mine stays visible.')).toBeNull();
+    act(() => {
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('failed-scene', false);
+    });
+    await waitFor(() => expect(
+      screen.getByLabelText('Mine and Friends exploration unavailable').props.accessibilityState.busy,
+    ).toBe(false));
+  });
+
+  test('a new Create Route inherits Memory scope once while the active editor remains independent', async () => {
+    mockRecoveredDraftEnabled = false;
+    mockScreenParams = { creationSource: 'plan' };
+    mockMemorySubscriptions = [{ friend_id: 11, friend_name: 'First Friend' }];
+    mockMemoryScopeOwner = 'owner-a';
+    mockMemoryScope = 'combined';
+
+    const first = render(<OrderedRouteEditorScreen />);
+    await first.findByText('Create Route');
+    await waitFor(() => expect(mockFogLayer).toHaveBeenLastCalledWith(expect.objectContaining({ scopeOverride: 'combined' })));
+
+    mockMemoryScope = 'self';
+    fireEvent.press(first.getByTestId('route-more'));
+    expect(mockFogLayer).toHaveBeenLastCalledWith(expect.objectContaining({ scopeOverride: 'combined' }));
+    first.unmount();
+
+    const second = render(<OrderedRouteEditorScreen />);
+    await second.findByText('Create Route');
+    await waitFor(() => expect(mockFogLayer).toHaveBeenLastCalledWith(expect.objectContaining({ scopeOverride: 'self' })));
+  });
+
+  test('a new Create Route never inherits another account\'s remembered Friends scope', async () => {
+    mockRecoveredDraftEnabled = false;
+    mockScreenParams = { creationSource: 'plan' };
+    mockMemoryScopeOwner = 'previous-owner';
+    mockMemoryScope = 'combined';
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByText('Create Route');
+    await waitFor(() => expect(mockFogLayer).toHaveBeenLastCalledWith(expect.objectContaining({ scopeOverride: 'self' })));
   });
 
   test('R1 renders the native current-location marker without changing the loaded Route camera', async () => {
@@ -404,7 +490,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     fireEvent.press(first.getByTestId('route-trim-apply'));
     expect(first.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
     fireEvent.press(first.getByLabelText('Back'));
-    expect(first.getByTestId('route-editor-leave-confirm')).toBeTruthy();
+    expect(first.getByTestId('route-editor-leave-confirm').props.presentation).toBe('confirmation');
+    expect(first.getByText('Keep editing')).toBeTruthy();
     fireEvent.press(first.getByText('Discard changes'));
     expect(mockAbandonDraft).toHaveBeenCalledWith('owner-a', 'activity:activity-good:create-a');
     first.unmount();
@@ -578,10 +665,31 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       properties: { center: screen.getByTestId('source-ordered-route-growth').props.shape.geometry.coordinates[0], zoom: 14 },
     });
     await act(async () => {
-      // Wait past this representative leg's distance-derived timeline.
+      // The public duration is capped at 2.2 s; the frame-cadence final paint
+      // and two overlap frames must still complete inside this bound.
       await new Promise(resolve => setTimeout(resolve, 2_600));
     });
     expect(screen.queryByTestId('source-ordered-route-growth')).toBeNull();
+  });
+
+  test('Point reveals the committed Start attachment from frame zero instead of the provider road snap', async () => {
+    reduceMotionSpy.mockResolvedValueOnce(false);
+    mockResolvePoint.mockResolvedValueOnce({
+      outcome: 'accepted',
+      points: [
+        // Valid provider snap, about 9 m from the canonical Route endpoint.
+        { lat: -41.2865, lng: 174.7781 },
+        { lat: -41.2862, lng: 174.7777 },
+        { lat: -41.2865, lng: 174.7772 },
+      ],
+    });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    const growth = await screen.findByTestId('source-ordered-route-growth');
+    expect(growth.props.shape.geometry.coordinates[0]).toEqual([174.7782, -41.2865]);
+    expect(growth.props.shape.geometry.coordinates[0]).not.toEqual([174.7781, -41.2865]);
   });
 
   test('R3/R4 Point retrace selects the ordered known subpath, follows one reveal timeline, and user pan cancels it', async () => {
@@ -627,13 +735,44 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       properties: { center: [174.7775, -41.2864], zoom: 14 },
     });
     await waitFor(() => expect(mockFogLayer.mock.calls.at(-1)?.[0].viewport).not.toBeNull());
-    const repeat = screen.getByTestId('source-ordered-route-repeated-traversals').props.shape.features;
+    const repeat = screen.getByTestId('source-ordered-route-repeat-labels').props.shape.features;
     expect(repeat).toHaveLength(1);
-    expect(repeat[0].geometry.coordinates).toEqual(expect.arrayContaining([
-      [174.7782, -41.2865],
-    ]));
+    expect(repeat[0].properties.text).toBe('2 passes');
+    expect(repeat[0].geometry).toMatchObject({
+      type: 'Point', coordinates: [expect.any(Number), expect.any(Number)],
+    });
     fireEvent.press(screen.getByLabelText('Undo last Route edit'));
-    expect(screen.queryByTestId('source-ordered-route-repeated-traversals')).toBeNull();
+    expect(screen.queryByTestId('source-ordered-route-repeat-labels')).toBeNull();
+  });
+
+  test('a user pan while Point provider work is pending fences later automatic camera ownership', async () => {
+    reduceMotionSpy.mockResolvedValueOnce(false);
+    let resolveProvider!: (value: any) => void;
+    mockResolvePoint.mockReturnValueOnce(new Promise(resolve => { resolveProvider = resolve; }));
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(1));
+
+    fireEvent(screen.getByTestId('mock-map'), 'cameraChanged', {
+      properties: { center: [174.779, -41.287], zoom: 14, heading: 0, pitch: 0, isUserInteraction: true },
+    });
+    const cameraCallsAfterPan = mockCameraSet.mock.calls.length;
+    await act(async () => {
+      resolveProvider({
+        outcome: 'accepted',
+        points: [
+          { lat: -41.2865, lng: 174.7782 },
+          { lat: -41.2862, lng: 174.7777 },
+          { lat: -41.2865, lng: 174.7772 },
+        ],
+      });
+    });
+
+    expect(await screen.findByTestId('source-ordered-route-growth')).toBeTruthy();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 90)); });
+    expect(mockCameraSet).toHaveBeenCalledTimes(cameraCallsAfterPan);
   });
 
   test('R3 mixed Draw then Point actions keep a coincident seam and do not append the provider triangle', async () => {
@@ -781,9 +920,8 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByTestId('route-tool-draw'));
     fireEvent.press(screen.getByTestId('emit-route-stroke'));
-    await waitFor(() => expect(screen.queryByTestId('emit-route-stroke')).toBeNull());
+    await screen.findByText('Drawing kept. Undo if needed.');
     expect(screen.queryByTestId('route-freehand-choice')).toBeNull();
-    expect(screen.getByText('Drawing kept. Undo if needed.')).toBeTruthy();
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(false);
     const committed = screen.getByTestId('source-ordered-route-parts').props.shape.features
       .flatMap((feature: any) => feature.geometry.coordinates);

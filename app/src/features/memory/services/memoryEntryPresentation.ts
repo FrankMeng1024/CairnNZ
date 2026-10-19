@@ -4,6 +4,32 @@ export const MEMORY_ENTRY_SETTLE_MS = 150;
 
 export type MemoryEntryVisibleState = 'stable-placeholder' | 'authorized-preview' | 'preparing' | 'usable-map' | 'error';
 
+/** A full Mapbox frame can contain borrowed Fog, markers, and region context.
+ * Warm previews are therefore captured only from an exact painted Mine scene,
+ * never from combined content or a self scene that is still preparing. */
+export function memoryMinePreviewCanCapture(input: {
+  scope: 'self' | 'combined';
+  currentReadinessKey: string;
+  paintedReadinessKey: string;
+}): boolean {
+  return input.scope === 'self'
+    && input.currentReadinessKey.length > 0
+    && input.paintedReadinessKey === input.currentReadinessKey;
+}
+
+export function memoryMinePreviewCanRender(input: {
+  scope: 'self' | 'combined';
+  ownerId: string | null;
+  themeMode: string;
+  preview: { ownerId: string; scope: 'self'; themeMode: string } | null;
+}): boolean {
+  return input.scope === 'self'
+    && Boolean(input.ownerId)
+    && input.preview?.ownerId === input.ownerId
+    && input.preview.scope === 'self'
+    && input.preview.themeMode === input.themeMode;
+}
+
 export function memoryEntryVisibleState(input: {
   elapsedMs: number;
   hasCenter: boolean;

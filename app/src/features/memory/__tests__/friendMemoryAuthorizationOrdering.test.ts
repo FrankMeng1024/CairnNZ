@@ -72,7 +72,7 @@ describe('friend Memory authorization cache ordering', () => {
     expect(useFriendMemoryStore.getState().projections).toEqual({});
   });
 
-  test('a new sources refresh hides the prior focus immediately and stays hidden on subscriptions HTTP failure', async () => {
+  test('a routine sources refresh preserves an unexpired proof if the subscriptions read fails', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
     const appState = { user: { id: 'viewer-a' } };
     let releaseSubscriptions!: (value: any) => void;
@@ -116,13 +116,59 @@ describe('friend Memory authorization cache ordering', () => {
     expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
 
     const refresh = useMemorySubscriptionsStore.getState().load();
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
     releaseSubscriptions({ ok: false, status: 503 });
-    releaseSources({ ok: true, status: 200, json: async () => ({ sources: [] }) });
+    releaseSources({ ok: false, status: 503, json: async () => ({}) });
     await refresh;
 
     expect(useMemorySubscriptionsStore.getState().error).toContain('HTTP 503');
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+  });
+
+  test('a successful sources authority revokes geometry even if the subscriptions read fails', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    const authenticatedFetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          revoked_friend_ids: [],
+          projections: [{
+            source_friend_id: 11,
+            authorization_version: 4,
+            projection_version: 'fresh-4',
+            cell_size_m: 200,
+            server_authorized_at: new Date(1_000_000).toISOString(),
+            authorization_expires_at: new Date(1_000_000 + 86_400_000).toISOString(),
+            cells: projection().cells,
+            regions: [],
+          }],
+        }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ sources: [] }) });
+    jest.doMock('../../../store/storage', () => ({
+      storage: { removeItem: jest.fn(async () => undefined) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    const { useMemorySubscriptionsStore } = require('../store/useMemorySubscriptionsStore');
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 11, friend_name: 'Mia' }],
+      availableSources: [{
+        friend_id: '11', friend_name: 'Mia', selected: true,
+        authorization_version: 4, effective_at: new Date(0).toISOString(),
+        sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+      }],
+    });
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+
+    await useMemorySubscriptionsStore.getState().load();
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
+    expect(useFriendMemoryStore.getState().authorizedSourceVersions).toEqual({});
   });
 
   test('a half-open Friends projection request times out into a truthful error state', async () => {
@@ -229,9 +275,50 @@ describe('friend Memory authorization cache ordering', () => {
     now = 999_000;
     expect(useFriendMemoryStore.getState().getVisibleGeometries()).toEqual([]);
     expect(useFriendMemoryStore.getState().projections).toEqual({});
+    expect(useFriendMemoryStore.getState().authorizedSourceVersions).toEqual({});
     now = 1_000_100;
     expect(useFriendMemoryStore.getState().getVisibleGeometries()).toEqual([]);
     expect(authenticatedFetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('retry clears a stale source error when the retained authorized projection is reusable', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    const subscriptionState = {
+      subscriptions: [{ friend_id: 11 }],
+      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+    };
+    const authenticatedFetch = jest.fn();
+    jest.doMock('../../../store/storage', () => ({
+      storage: { getItem: jest.fn(async () => null), removeItem: jest.fn(async () => undefined) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+    jest.doMock('../store/useMemorySubscriptionsStore', () => ({
+      useMemorySubscriptionsStore: { getState: () => subscriptionState },
+    }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    const retained = { ...projection(), viewportKey: TEST_VIEWPORT.key, regions: [] };
+    useFriendMemoryStore.setState({
+      userId: 'viewer-a',
+      projections: { '11': retained },
+      sourceStates: { '11': { status: 'error', cellCount: 1, error: 'Unavailable' } },
+      error: 'offline',
+      lastObservedWallClockMs: Date.now(),
+    });
+    await useFriendMemoryStore.getState().reconcileAuthorizedSources([{
+      friend_id: 11, authorization_version: 4, selected: true,
+    }]);
+
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+
+    expect(authenticatedFetch).not.toHaveBeenCalled();
+    expect(useFriendMemoryStore.getState().sourceStates['11']).toEqual({
+      status: 'loaded', cellCount: 1,
+    });
+    expect(useFriendMemoryStore.getState().error).toBeNull();
+    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
   });
 
   test('an account switch never restores either account durable Friend geometry', async () => {

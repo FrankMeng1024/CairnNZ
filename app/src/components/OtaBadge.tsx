@@ -372,7 +372,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O86 (2026-10-19): continuous Point following, bounded Memory preparation,
 // exact-authority Friends paint, and cross-feature quality closure on the
 // unchanged Build 65 / 0.2.6-o66 runtime.
-export const OTA_VERSION = 'O86';
+// O87 (2026-10-19): continuity-first Route rendering, useful Draw matching,
+// atomic Memory presentation, synchronized Point growth, and iPhone UI polish
+// on the unchanged Build 65 / 0.2.6-o66 runtime.
+export const OTA_VERSION = 'O87';
 
 
 type OtaState =

@@ -3,6 +3,8 @@ import {
   MEMORY_ENTRY_SETTLE_MS,
   MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS,
   memoryEntryVisibleState,
+  memoryMinePreviewCanCapture,
+  memoryMinePreviewCanRender,
 } from '../services/memoryEntryPresentation';
 
 describe('Memory entry has one stable presentation owner', () => {
@@ -45,5 +47,36 @@ describe('Memory entry has one stable presentation owner', () => {
     expect(MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS).toBe(1200);
     expect(MEMORY_ENTRY_SETTLE_MS).toBeGreaterThanOrEqual(120);
     expect(MEMORY_ENTRY_SETTLE_MS).toBeLessThanOrEqual(180);
+  });
+
+  test('warm preview capture is Mine-only and requires the exact painted Fog scene', () => {
+    expect(memoryMinePreviewCanCapture({
+      scope: 'self', currentReadinessKey: 'self-v2', paintedReadinessKey: 'self-v2',
+    })).toBe(true);
+    expect(memoryMinePreviewCanCapture({
+      scope: 'combined', currentReadinessKey: 'combined-v2', paintedReadinessKey: 'combined-v2',
+    })).toBe(false);
+    expect(memoryMinePreviewCanCapture({
+      scope: 'self', currentReadinessKey: 'self-v2', paintedReadinessKey: 'combined-v1',
+    })).toBe(false);
+    expect(memoryMinePreviewCanCapture({
+      scope: 'self', currentReadinessKey: '', paintedReadinessKey: '',
+    })).toBe(false);
+  });
+
+  test('a Mine preview never renders for combined scope or another account/theme', () => {
+    const preview = { ownerId: 'viewer-a', scope: 'self' as const, themeMode: 'day' };
+    expect(memoryMinePreviewCanRender({
+      scope: 'self', ownerId: 'viewer-a', themeMode: 'day', preview,
+    })).toBe(true);
+    expect(memoryMinePreviewCanRender({
+      scope: 'combined', ownerId: 'viewer-a', themeMode: 'day', preview,
+    })).toBe(false);
+    expect(memoryMinePreviewCanRender({
+      scope: 'self', ownerId: 'viewer-b', themeMode: 'day', preview,
+    })).toBe(false);
+    expect(memoryMinePreviewCanRender({
+      scope: 'self', ownerId: 'viewer-a', themeMode: 'night', preview,
+    })).toBe(false);
   });
 });

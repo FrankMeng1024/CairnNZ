@@ -14,10 +14,21 @@ interface Props {
   testID?: string;
   /** Called after the native modal has fully dismissed. */
   onClosed?: () => void;
+  /** A tighter decision frame for short, two-action confirmations. */
+  presentation?: 'default' | 'confirmation';
 }
 
 /** Calm centered-dialog frame. Content owns hierarchy; frame owns material. */
-export function ModalCard({ visible, onDismiss, onClosed, children, dismissible = true, keyboardVerticalOffset = 0, testID }: Props) {
+export function ModalCard({
+  visible,
+  onDismiss,
+  onClosed,
+  children,
+  dismissible = true,
+  keyboardVerticalOffset = 0,
+  testID,
+  presentation = 'default',
+}: Props) {
   const theme = useVisualTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -44,7 +55,11 @@ export function ModalCard({ visible, onDismiss, onClosed, children, dismissible 
         <View
           testID={testID}
           accessibilityViewIsModal
-          style={[styles.card, { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]}
+          style={[
+            styles.card,
+            presentation === 'confirmation' && styles.confirmationCard,
+            { backgroundColor: theme.modalSurface, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
+          ]}
         >
           {children}
         </View>
@@ -79,6 +94,7 @@ export function ModalCardHeader({ title, body, onClose, testID }: ModalCardHeade
 const styles = StyleSheet.create({
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl },
   card: { width: '100%', maxWidth: 344, borderRadius: RadiusRole.modal, borderWidth: 1, padding: Spacing.xl, ...Shadow.modal },
+  confirmationCard: { maxWidth: 324, borderRadius: RadiusRole.panel, padding: Spacing.lg },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, marginBottom: Spacing.lg },
   headerCopy: { flex: 1 },
   title: { fontSize: FontSize.h3, fontWeight: '700', lineHeight: 23 },

@@ -15,6 +15,7 @@ jest.mock('../../../store/storage', () => ({
 import { useMemoryCameraStore } from '../store/useMemoryCameraStore';
 
 const city = {
+  source: 'mine' as const,
   cityId: 'wellington',
   countryId: 'nz',
   bbox: [174.7, -41.4, 174.9, -41.2] as [number, number, number, number],
@@ -53,5 +54,27 @@ describe('Memory manual city persistence', () => {
       hydrated: true,
       manualCity: null,
     });
+  });
+
+  test('does not restore legacy or Friend-derived exact camera metadata', async () => {
+    mockValues.set('cairn:memory-camera:v1:owner-a', JSON.stringify({
+      ownerId: 'owner-a',
+      // Old records have no provenance and could have been written from a
+      // Friend-only anchor. O87 fails them closed on launch.
+      manualCity: { ...city, source: undefined },
+    }));
+    await useMemoryCameraStore.getState().hydrate('owner-a');
+    expect(useMemoryCameraStore.getState().manualCity).toBeNull();
+  });
+
+  test('a later Recenter clear wins over an in-flight city persistence write', async () => {
+    await useMemoryCameraStore.getState().hydrate('owner-a');
+    const selecting = useMemoryCameraStore.getState().selectCity(city);
+    const recentering = useMemoryCameraStore.getState().clearManualCity();
+    await Promise.all([selecting, recentering]);
+
+    useMemoryCameraStore.getState().reset();
+    await useMemoryCameraStore.getState().hydrate('owner-a');
+    expect(useMemoryCameraStore.getState().manualCity).toBeNull();
   });
 });

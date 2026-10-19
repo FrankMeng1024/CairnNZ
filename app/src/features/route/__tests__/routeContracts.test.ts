@@ -119,7 +119,12 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(editor).toContain("'This Route changed while the edit was being reviewed");
     expect(editor).toContain('rawTarget: selection.rawTarget');
     expect(editor).toContain('effectiveTarget: selection.effectiveTarget');
-    expect(editor).toContain('animateAcceptedPoint(points');
+    expect(editor).toContain('animateAcceptedPoint(committedPart?.points ?? points');
+    expect(editor).toContain('animateAcceptedPoint(addedPart?.points ?? points');
+    expect(editor).toContain('userCameraInteractionGenerationRef.current === userCameraGenerationAtRequest');
+    expect(editor).toContain('routeGrowthPaintedSampleRef.current');
+    expect(editor).toContain('canonicalOverlap: true');
+    expect(editor).toContain('hiddenPartId={routeGrowthAnimation?.canonicalOverlap ? undefined');
     expect(editor).not.toContain('loadRoutePlannerDraft(');
     expect(editor).toContain('useRouteStore.getState().routes.find');
     expect(editor).toContain('invalidatePendingOperation();');

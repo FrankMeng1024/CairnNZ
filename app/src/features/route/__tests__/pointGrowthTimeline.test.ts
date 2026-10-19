@@ -24,7 +24,8 @@ describe('Point reveal and camera share one arc-length timeline', () => {
 
   test('duration scales with the visible task but stays bounded', () => {
     expect(pointGrowthDurationMs([p(0, 0), p(0.0001, 0)])).toBeGreaterThanOrEqual(720);
-    expect(pointGrowthDurationMs([p(0, 0), p(1, 0)])).toBe(8000);
+    expect(pointGrowthDurationMs([p(0, 0), p(1, 0)])).toBe(2200);
+    expect(pointGrowthDurationMs([p(174.77, -36.85), p(174.78, -36.85)])).toBe(2200);
   });
 
   test('usable map bounds reserve the dock and top controls', () => {
@@ -69,7 +70,7 @@ describe('Point reveal and camera share one arc-length timeline', () => {
     expect(stops.at(-1)?.sourceIndex).toBe(points.length - 1);
     expect(stops.map(stop => stop.sourceIndex)).not.toContain(2);
     for (let index = 1; index < stops.length; index += 1) {
-      expect(stops[index].progress - stops[index - 1].progress).toBeGreaterThanOrEqual(0.045);
+      expect(stops[index].progress - stops[index - 1].progress).toBeGreaterThanOrEqual(0.014);
     }
   });
 

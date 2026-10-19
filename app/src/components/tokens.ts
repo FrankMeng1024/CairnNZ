@@ -132,6 +132,8 @@ export interface VisualThemeTokens {
   mapFogFill: string;
   mapFogEdgeOuter: string;
   mapFogEdgeInner: string;
+  mapMineMemoryFill: string;
+  mapMineMemoryOpacity: number;
   mapFriendMemoryFill: string;
   mapFriendMemoryOpacity: number;
   mapMemoryOverlapFill: string;
@@ -201,10 +203,12 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   mapFogFill: 'rgba(31,38,42,0.68)',
   mapFogEdgeOuter: 'rgba(223,233,226,0.38)',
   mapFogEdgeInner: 'rgba(227,238,229,0.76)',
-  mapFriendMemoryFill: '#7D91A0',
+  mapMineMemoryFill: '#3F795B',
+  mapMineMemoryOpacity: 0.18,
+  mapFriendMemoryFill: '#397F82',
   mapFriendMemoryOpacity: 0.22,
-  mapMemoryOverlapFill: '#C98E58',
-  mapMemoryOverlapOpacity: 0.24,
+  mapMemoryOverlapFill: '#245C4F',
+  mapMemoryOverlapOpacity: 0.30,
   mapRouteLine: '#2F684F',
   mapRouteCasing: 'rgba(248,246,239,0.92)',
   mapRoutePending: '#72A34B',
@@ -274,10 +278,12 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   mapFogFill: 'rgba(38,35,37,0.70)',
   mapFogEdgeOuter: 'rgba(218,202,191,0.32)',
   mapFogEdgeInner: 'rgba(235,219,205,0.68)',
-  mapFriendMemoryFill: '#788F96',
-  mapFriendMemoryOpacity: 0.24,
-  mapMemoryOverlapFill: '#C58562',
-  mapMemoryOverlapOpacity: 0.25,
+  mapMineMemoryFill: '#65765A',
+  mapMineMemoryOpacity: 0.19,
+  mapFriendMemoryFill: '#47797B',
+  mapFriendMemoryOpacity: 0.23,
+  mapMemoryOverlapFill: '#314F47',
+  mapMemoryOverlapOpacity: 0.31,
   mapRouteLine: '#675F45',
   mapRouteCasing: 'rgba(255,248,239,0.90)',
   mapRoutePending: '#8B7C58',
@@ -347,10 +353,12 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   mapFogFill: 'rgba(54,65,76,0.54)',
   mapFogEdgeOuter: 'rgba(197,218,217,0.46)',
   mapFogEdgeInner: 'rgba(204,229,221,0.82)',
-  mapFriendMemoryFill: '#8CA2B4',
-  mapFriendMemoryOpacity: 0.25,
-  mapMemoryOverlapFill: '#C98C66',
-  mapMemoryOverlapOpacity: 0.27,
+  mapMineMemoryFill: '#86A67C',
+  mapMineMemoryOpacity: 0.22,
+  mapFriendMemoryFill: '#58A0A3',
+  mapFriendMemoryOpacity: 0.24,
+  mapMemoryOverlapFill: '#477E6E',
+  mapMemoryOverlapOpacity: 0.32,
   mapRouteLine: '#B7C9AA',
   mapRouteCasing: 'rgba(18,27,38,0.92)',
   mapRoutePending: '#D0B879',

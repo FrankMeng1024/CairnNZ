@@ -20,7 +20,7 @@ const parse = value => typeof value === 'string' ? JSON.parse(value) : value;
 const routeQuery = `
 const pool=require('./src/config/db');
 (async()=>{const [rows]=await pool.execute(
-  'SELECT id,user_id,name,points,ordered_draft FROM routes WHERE id IN (92,93,95,96,97) ORDER BY id'
+  'SELECT id,user_id,name,points,ordered_draft FROM routes WHERE id IN (92,93,95,96,97,98) ORDER BY id'
 );const [sessions]=await pool.execute(
   'SELECT id,user_id,route_points,route_points_canonical FROM sessions WHERE id=2134'
 );process.stdout.write(JSON.stringify({rows,sessions}));await pool.end()})()
@@ -46,8 +46,8 @@ function readEvidence() {
 
 const productionBefore = readEvidence();
 const rows = productionBefore.routes;
-if (rows.length !== 5 || rows.map(row => Number(row.id)).join(',') !== '92,93,95,96,97') {
-  throw new Error('Owner Route identity query did not return 92, 93, 95, 96 and 97');
+if (rows.length !== 6 || rows.map(row => Number(row.id)).join(',') !== '92,93,95,96,97,98') {
+  throw new Error('Owner Route identity query did not return 92, 93, 95, 96, 97 and 98');
 }
 if (productionBefore.sessions.length !== 1 || productionBefore.sessions[0].route_points.length < 8) {
   throw new Error('Source Activity 2134 geometry unavailable');
@@ -68,6 +68,111 @@ const resample = (points, count = 90) => points.length <= count
 const distanceM = (a, b) => {
   const latitude = (a.lat + b.lat) * Math.PI / 360;
   return Math.hypot((a.lng - b.lng) * 111_320 * Math.cos(latitude), (a.lat - b.lat) * 110_574);
+};
+const perpendicularDistanceM = (point, start, end) => {
+  const latitude = start.lat * Math.PI / 180;
+  const scaleX = 111_320 * Math.cos(latitude);
+  const px = (point.lng - start.lng) * scaleX;
+  const py = (point.lat - start.lat) * 110_574;
+  const ex = (end.lng - start.lng) * scaleX;
+  const ey = (end.lat - start.lat) * 110_574;
+  const denominator = ex * ex + ey * ey;
+  if (denominator <= Number.EPSILON) return Math.hypot(px, py);
+  const fraction = (px * ex + py * ey) / denominator;
+  return Math.hypot(px - fraction * ex, py - fraction * ey);
+};
+const simplify = (points, toleranceM = 6) => {
+  if (points.length <= 2) return points.slice();
+  const keep = new Array(points.length).fill(false);
+  keep[0] = true;
+  keep[points.length - 1] = true;
+  const stack = [[0, points.length - 1]];
+  while (stack.length > 0) {
+    const [start, end] = stack.pop();
+    let furthestIndex = -1;
+    let furthestDistanceM = -1;
+    for (let index = start + 1; index < end; index += 1) {
+      const distance = perpendicularDistanceM(points[index], points[start], points[end]);
+      if (distance > furthestDistanceM) {
+        furthestDistanceM = distance;
+        furthestIndex = index;
+      }
+    }
+    if (furthestDistanceM > toleranceM && furthestIndex > start) {
+      keep[furthestIndex] = true;
+      stack.push([start, furthestIndex], [furthestIndex, end]);
+    }
+  }
+  return points.filter((_point, index) => keep[index]);
+};
+const structuralTurnStats = points => {
+  const simplified = simplify(points, 6);
+  let sharpTurns = 0;
+  let reversals = 0;
+  let maxTurnDeg = 0;
+  simplified.slice(1, -1).forEach((point, index) => {
+    const before = simplified[index];
+    const after = simplified[index + 2];
+    if (distanceM(before, point) < 12 || distanceM(point, after) < 12) return;
+    const latitude = point.lat * Math.PI / 180;
+    const incoming = {
+      x: (point.lng - before.lng) * 111_320 * Math.cos(latitude),
+      y: (point.lat - before.lat) * 110_574,
+    };
+    const outgoing = {
+      x: (after.lng - point.lng) * 111_320 * Math.cos(latitude),
+      y: (after.lat - point.lat) * 110_574,
+    };
+    const denominator = Math.hypot(incoming.x, incoming.y) * Math.hypot(outgoing.x, outgoing.y);
+    if (denominator <= Number.EPSILON) return;
+    const cosine = Math.max(-1, Math.min(1, (incoming.x * outgoing.x + incoming.y * outgoing.y) / denominator));
+    const turnDeg = Math.acos(cosine) * 180 / Math.PI;
+    maxTurnDeg = Math.max(maxTurnDeg, turnDeg);
+    if (turnDeg >= 55) sharpTurns += 1;
+    if (turnDeg >= 145) reversals += 1;
+  });
+  return { sharpTurns, reversals, maxTurnDeg: Number(maxTurnDeg.toFixed(2)) };
+};
+const resampleProgress = (points, count = 41) => {
+  if (points.length < 2) return points.slice();
+  const cumulative = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    cumulative.push(cumulative[index - 1] + distanceM(points[index - 1], points[index]));
+  }
+  const total = cumulative.at(-1);
+  if (!Number.isFinite(total) || total <= 0) return points.slice();
+  let segment = 1;
+  return Array.from({ length: count }, (_, index) => {
+    const target = total * index / (count - 1);
+    while (segment < cumulative.length - 1 && cumulative[segment] < target) segment += 1;
+    const startDistance = cumulative[segment - 1];
+    const endDistance = cumulative[segment];
+    const fraction = endDistance === startDistance ? 0 : (target - startDistance) / (endDistance - startDistance);
+    return {
+      lat: points[segment - 1].lat + (points[segment].lat - points[segment - 1].lat) * fraction,
+      lng: points[segment - 1].lng + (points[segment].lng - points[segment - 1].lng) * fraction,
+    };
+  });
+};
+const orderedProgressDeviationM = (source, candidate) => {
+  if (source.length < 2 || candidate.length < 2) return Infinity;
+  const a = resampleProgress(source);
+  const b = resampleProgress(candidate);
+  return Math.max(...a.map((point, index) => distanceM(point, b[index])));
+};
+const separatedRevisitPairs = points => {
+  if (points.length < 2) return 0;
+  const sampled = resampleProgress(points, 61);
+  let pairs = 0;
+  // Six progress samples separate ordinary neighbouring vertices while still
+  // finding a genuine later traversal of the same road. A lone closed-loop
+  // Start/End coincidence is only one pair and cannot satisfy the QA gate.
+  for (let left = 0; left < sampled.length; left += 1) {
+    for (let right = left + 6; right < sampled.length; right += 1) {
+      if (distanceM(sampled[left], sampled[right]) <= 12) pairs += 1;
+    }
+  }
+  return pairs;
 };
 const terminalIntentMetrics = points => {
   const [before, trendStart, anchor, end] = points.slice(-4);
@@ -132,6 +237,26 @@ const test4Stroke = resample(byId.get(97).points);
 const realNetworkPenUpStroke = withLateralPenUpError(resample(stablePrefix(byId.get(97).points)));
 const realNetworkMultiStrokes = splitContinuous(resample(stablePrefix(byId.get(97).points), 75), 3);
 const test2Strokes = splitContinuous(resample(byId.get(93).points, 85), 5);
+const wrong1ReturnStroke = resample(byId.get(98).points, 90);
+const route97DrawAfterPointParts = splitContinuous(resample(stablePrefix(byId.get(97).points), 72), 3);
+const drawAfterPointSeed = route97DrawAfterPointParts[0];
+const drawAfterPointStroke = route97DrawAfterPointParts[1];
+const deliberateZigzagStroke = resample(stablePrefix(byId.get(97).points), 13).map((point, index, points) => {
+  if (index === 0 || index === points.length - 1) return point;
+  const before = points[index - 1];
+  const after = points[index + 1];
+  const latitude = point.lat * Math.PI / 180;
+  const east = (after.lng - before.lng) * 111_320 * Math.cos(latitude);
+  const north = (after.lat - before.lat) * 110_574;
+  const length = Math.max(0.1, Math.hypot(east, north));
+  const side = index % 2 === 0 ? 1 : -1;
+  const offsetEast = -north / length * 24 * side;
+  const offsetNorth = east / length * 24 * side;
+  return {
+    lng: point.lng + offsetEast / (111_320 * Math.cos(latitude)),
+    lat: point.lat + offsetNorth / 110_574,
+  };
+});
 const activityChord = Array.from({ length: 4 }, (_, index) => {
   // Route 96 is the Owner's persisted historical destructive result. Reuse
   // its exact two endpoints only as a disposable negative stroke against the
@@ -177,6 +302,33 @@ const scenarios = [
     qaRole: 'HISTORICAL_REAL_SAVED_TRANSACTION_NEGATIVE_FIXTURE',
     label: 'REAL_SAVED_ROUTE_NEGATIVE_REPLAY: Route 93 geometry split into five disposable strokes; provider loop/detour amplification must fall back to the raw manual trace, so this is containment evidence rather than positive walking-quality proof',
     strokes: test2Strokes, expect: 'five-atomic-operations',
+  },
+  {
+    id: 'wrong1-intentional-return', sourceRouteId: 98,
+    qaRole: 'REAL_SAVED_RETURN_REPLAY',
+    label: 'CURRENT_REPLAY_REAL_GEOGRAPHY: exact saved wrong1 ordered return replayed through live Mapbox Draw; validates that matching or manual fallback preserves the real out-and-back instead of collapsing it',
+    strokes: [wrong1ReturnStroke], expect: 'intentional-return',
+  },
+  {
+    id: 'qa-deliberate-zigzag', sourceRouteId: 97,
+    qaRole: 'QA_GENERATED_INTENT_PRESERVATION',
+    label: 'QA-GENERATED GESTURE over Route 97 real geography: alternating 24m lateral turns must not be flattened by a plausible nearby provider road; this is scale/intent evidence, not a recorded Owner gesture',
+    strokes: [deliberateZigzagStroke], expect: 'zigzag-intent-preserved',
+  },
+  {
+    id: 'qa-draw-after-point-provenance', sourceRouteId: 97,
+    qaRole: 'QA_GENERATED_COMPOSITION',
+    label: 'QA-GENERATED composition on Route 97 real geography: a point-routed canonical seed followed by a live-provider Draw operation verifies seam/revision handling; it is not evidence that the seed was created by a physical tap in this run',
+    strokes: [drawAfterPointStroke], expect: 'draw-after-point',
+    initialDraft: {
+      schemaVersion: 1,
+      draftId: 'plan:o87-draw-after-point',
+      ownerId: String(byId.get(97).user_id),
+      origin: 'plan',
+      revision: 1,
+      parts: [{ id: 'qa-point-seed', resolution: 'point-routed', points: drawAfterPointSeed }],
+      gaps: [],
+    },
   },
   {
     id: 'activity2134-destructive-short-chord', sourceRouteId: 95,
@@ -352,10 +504,30 @@ for (const scenario of scenarios) {
     const rawDistanceM = Number(scenario.strokes.reduce((total, stroke) => total + stroke.slice(1).reduce(
       (sum, point, index) => sum + distanceM(stroke[index], point), 0,
     ), 0).toFixed(2));
+    const initialDistanceM = Number(initialDraft.parts.reduce((total, part) => total + part.points.slice(1).reduce(
+      (sum, point, index) => sum + distanceM(part.points[index], point), 0,
+    ), 0).toFixed(2));
     const finalDistanceM = Number(partDistancesM.reduce((sum, value) => sum + value, 0).toFixed(2));
+    const addedDistanceM = Number(Math.max(0, finalDistanceM - initialDistanceM).toFixed(2));
     const finalToRawDistanceRatio = Number((finalDistanceM / Math.max(0.01, rawDistanceM)).toFixed(3));
+    const addedToRawDistanceRatio = Number((addedDistanceM / Math.max(0.01, rawDistanceM)).toFixed(3));
     const matchedCount = resolutions.filter(value => value === 'draw-matched').length;
     const manualCount = resolutions.filter(value => value === 'draw-manual').length;
+    const rawOperationPoints = scenario.strokes.flatMap((stroke, index) => index === 0 ? stroke : stroke.slice(1));
+    const finalOperationPoints = initialDraft.parts.length === 0
+      ? finalPoints
+      : finalDraft.parts.slice(initialDraft.parts.length).flatMap(part => part.points);
+    const rawTurnStats = structuralTurnStats(rawOperationPoints);
+    const finalTurnStats = structuralTurnStats(finalOperationPoints);
+    const rawSeparatedRevisitPairs = separatedRevisitPairs(rawOperationPoints);
+    const finalSeparatedRevisitPairs = separatedRevisitPairs(finalOperationPoints);
+    const orderedProgressErrorM = Number(orderedProgressDeviationM(rawOperationPoints, finalOperationPoints).toFixed(2));
+    const operationStartErrorM = finalOperationPoints.length > 0
+      ? Number(distanceM(rawOperationPoints[0], finalOperationPoints[0]).toFixed(2))
+      : Infinity;
+    const operationEndErrorM = finalOperationPoints.length > 0
+      ? Number(distanceM(rawOperationPoints.at(-1), finalOperationPoints.at(-1)).toFixed(2))
+      : Infinity;
     const visibleMessage = await page.getByTestId('route-context-message').textContent().catch(() => null);
     const assertions = {
       ...(scenario.expect === 'activity-short-chord-rejected'
@@ -364,15 +536,16 @@ for (const scenario of scenarios) {
       canonicalGeometryPresent: finalPoints.length >= 2,
       noGap: finalDraft.gaps.length === 0,
       noRuntimeErrors: runtimeErrors.length === 0,
-      ...(scenario.expect !== 'activity-short-chord-rejected' ? {
+      ...(scenario.expect !== 'activity-short-chord-rejected' && scenario.expect !== 'draw-after-point' ? {
         boundedLengthAmplification: finalToRawDistanceRatio >= 0.45 && finalToRawDistanceRatio <= 1.8,
-      } : {
+      } : {}),
+      ...(scenario.expect === 'activity-short-chord-rejected' ? {
         immutableActivityDraftUnchanged: finalDraft.revision === 0
           && sha(finalPoints) === sha(initialDraft.parts.flatMap(part => part.points)),
         destructiveShortChordNotCommitted: finalDistanceM > rawDistanceM * 3,
         activityRejectionExplained: visibleMessage === 'That section is ambiguous. Redraw from clearer points; your Route is unchanged.'
           || visibleMessage === 'That edit would remove the recorded Activity. Use Point or Draw from the Route end instead.',
-      }),
+      } : {}),
       ...(scenario.expect === 'matched-no-terminal-spur' ? {
         acceptedMatchedGeometry: matchedCount >= 1,
         providerOwnsFreeTerminal: distanceM(rawEnd, finalEnd) >= 1 && distanceM(rawEnd, finalEnd) <= 25,
@@ -390,6 +563,40 @@ for (const scenario of scenarios) {
         threeProviderCalls: providerCalls.length === 3,
         acceptedMatchedGeometry: matchedCount >= 1,
       } : {}),
+      ...(scenario.expect === 'intentional-return' ? {
+        returnTraversalPreserved: finalToRawDistanceRatio >= 0.8 && finalToRawDistanceRatio <= 1.25,
+        orderedReturnTopologyPreserved: orderedProgressErrorM <= 90,
+        structuralReturnTurnsPreserved: finalTurnStats.sharpTurns >= rawTurnStats.sharpTurns
+          && finalTurnStats.reversals >= rawTurnStats.reversals,
+        returnRevisitTopologyPresent: rawSeparatedRevisitPairs >= 3 && finalSeparatedRevisitPairs >= 3,
+        returnEndpointsRemainBounded: operationStartErrorM <= 25 && operationEndErrorM <= 25,
+        returnProvenanceRecorded: resolutions.length >= 1
+          && resolutions.every(value => value === 'draw-matched' || value === 'draw-manual'),
+        oneAtomicRevision: finalDraft.revision === 1,
+      } : {}),
+      ...(scenario.expect === 'zigzag-intent-preserved' ? {
+        deliberateTraversalNotCollapsed: finalToRawDistanceRatio >= 0.9,
+        deliberateLengthPreserved: finalToRawDistanceRatio >= 0.9 && finalToRawDistanceRatio <= 1.1,
+        orderedZigzagPreserved: orderedProgressErrorM <= 90,
+        deliberateTurnsPreserved: finalTurnStats.sharpTurns >= rawTurnStats.sharpTurns
+          && finalTurnStats.reversals >= rawTurnStats.reversals,
+        zigzagFixtureHasStructuralIntent: rawTurnStats.sharpTurns >= 4,
+        // Intentional geometry does not have to remain manual when genuine
+        // Mapbox roads preserve its ordered turns. The product contract asks
+        // Draw to infer road intent; forcing raw provenance here would mark a
+        // useful, topology-faithful road correction as a regression. Either
+        // accepted provenance is truthful, while the structural and ordered
+        // gates above prevent a flattened/wrong-road result from passing.
+        intentPreservingProvenance: resolutions.length >= 1
+          && resolutions.every(value => value === 'draw-matched' || value === 'draw-manual'),
+        oneAtomicRevision: finalDraft.revision === 1,
+      } : {}),
+      ...(scenario.expect === 'draw-after-point' ? {
+        pointSeedRetained: finalDraft.parts[0]?.resolution === 'point-routed',
+        drawCommittedAfterPoint: finalDraft.revision === 2 && finalDraft.parts.length >= 2,
+        connectedSeam: finalDraft.gaps.length === 0,
+        boundedAddedLengthAmplification: addedToRawDistanceRatio >= 0.45 && addedToRawDistanceRatio <= 1.8,
+      } : {}),
     };
     const screenshot = `${scenario.id}-${scenario.expect === 'activity-short-chord-rejected' ? 'rejected' : 'accepted'}-map-390x844.png`;
     await page.screenshot({ path: path.join(outputDir, screenshot) });
@@ -398,7 +605,10 @@ for (const scenario of scenarios) {
       strokeCount: scenario.strokes.length, rawPointCounts: scenario.strokes.map(value => value.length),
       providerCalls, finalRevision: finalDraft.revision, finalPartCount: finalDraft.parts.length,
       finalPointCount: finalPoints.length, finalGeometryHash: sha(finalPoints), resolutions,
-      partPointCounts, partDistancesM, rawDistanceM, finalDistanceM, finalToRawDistanceRatio,
+      partPointCounts, partDistancesM, rawDistanceM, initialDistanceM, addedDistanceM,
+      finalDistanceM, finalToRawDistanceRatio, addedToRawDistanceRatio,
+      rawTurnStats, finalTurnStats, rawSeparatedRevisitPairs, finalSeparatedRevisitPairs,
+      orderedProgressErrorM, operationStartErrorM, operationEndErrorM,
       operationSnapshots,
       rawTerminalSegmentM: Number(distanceM(scenario.strokes.at(-1).at(-2), rawEnd).toFixed(2)),
       rawTerminalIntent: terminalIntentMetrics(scenario.strokes.at(-1)),
@@ -420,7 +630,7 @@ const productionActivityUnchanged = productionAfter.sessions.length === 1
   && activityHashesBefore.routePoints === sha(productionAfter.sessions[0].route_points)
   && activityHashesBefore.canonical === sha(productionAfter.sessions[0].route_points_canonical);
 const report = {
-  generatedAt: new Date().toISOString(), baseline: 'current O86 worktree',
+  generatedAt: new Date().toISOString(), baseline: 'current O87 candidate worktree',
   evidenceClass: [
     'REAL_PRODUCTION_SAVED_ROUTE_INPUT',
     'LIVE_MAPBOX_MAP_MATCHING',

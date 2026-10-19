@@ -1726,13 +1726,9 @@ function MapHistoryObjectScreen() {
 
       {/* Top bar — overlays map */}
       <SafeAreaView style={styles.topBar} edges={['top']}>
-        <View style={[
-          styles.topRow,
-          isRouteDetail && styles.routeDetailTopRow,
-          isRouteDetail && { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border },
-        ]}>
+        <View style={styles.topRow} testID={isRouteDetail ? 'route-detail-header' : undefined}>
           <BackButton
-            variant="inline"
+            variant={isRouteDetail ? 'pill' : 'inline'}
             onPress={targetSessionId
               ? handleActivityBack
               : undefined}
@@ -1741,7 +1737,15 @@ function MapHistoryObjectScreen() {
               has NO top title — the tab bar (Activities/Routes/Cairns) below
               already anchors the context. Only detail views show a title.
               Type-specific label based on which detail is open. */}
-          <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{isRouteDetail ? 'Route' : targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
+          {isRouteDetail ? (
+            <View pointerEvents="none" style={styles.routeHeaderTitleWrap}>
+              <View style={[styles.routeHeaderTitleChip, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}>
+                <Text style={[styles.routeHeaderTitleText, { color: visualTheme.foreground }]}>{'Route'}</Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
+          )}
           {/* User decision 2026-08-16: Plan button removed from Trails top row.
               Also drop the right-side spacer — nothing to balance now. */}
           {isRouteDetail && selectedRoute ? (
@@ -1750,6 +1754,7 @@ function MapHistoryObjectScreen() {
               onPress={() => setRouteMoreOpen(value => !value)}
               accessibilityRole="button"
               accessibilityLabel="More Route actions"
+              accessibilityState={{ expanded: routeMoreOpen }}
               testID="route-detail-header-more"
             ><Icon name="MoreHorizontal" size={20} color={visualTheme.iconActive} /></TouchableOpacity>
           ) : <View style={{ width: 44 }} />}
@@ -1935,8 +1940,8 @@ function MapHistoryObjectScreen() {
             </View>
             {routeMoreOpen ? (
               <View style={[styles.routeCompactMenu, { backgroundColor: visualTheme.surface, borderColor: visualTheme.borderSubtle }]} testID="route-detail-more-menu">
-                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); void useSelectedRoute('running'); }} disabled={!routeCanBeUsed(selectedRoute)}><Icon name="Footprints" size={16} color={visualTheme.iconActive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Use for Run</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); setRouteDeleteConfirm(true); }} disabled={deleteSaving}><Icon name="Trash2" size={16} color={visualTheme.destructive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>{targetSharedDeliveryId ? 'Remove received Route' : 'Delete Route'}</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); void useSelectedRoute('running'); }} disabled={!routeCanBeUsed(selectedRoute)} accessibilityRole="button" accessibilityLabel="Use Route for Run" accessibilityState={{ disabled: !routeCanBeUsed(selectedRoute) }}><Icon name="Footprints" size={16} color={visualTheme.iconActive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Use for Run</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); setRouteDeleteConfirm(true); }} disabled={deleteSaving} accessibilityRole="button" accessibilityLabel={targetSharedDeliveryId ? 'Remove received Route' : 'Delete Route'} accessibilityState={{ disabled: deleteSaving }}><Icon name="Trash2" size={16} color={visualTheme.destructive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>{targetSharedDeliveryId ? 'Remove received Route' : 'Delete Route'}</Text></TouchableOpacity>
               </View>
             ) : null}
           </View>
@@ -2668,18 +2673,10 @@ const styles = StyleSheet.create({
   topBar: { position: 'absolute', top: 0, left: 0, right: 0 },
   topRow: {
     flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.lg, paddingBottom: Spacing.xs,
     gap: Spacing.sm,
-  },
-  routeDetailTopRow: {
-    minHeight: 52,
-    marginHorizontal: Spacing.sm,
-    marginTop: Spacing.xs,
-    paddingTop: Spacing.xs,
-    paddingBottom: Spacing.xs,
-    borderWidth: 1,
-    borderRadius: Radius.card,
   },
   routeHeaderMore: {
     width: 44,
@@ -2689,6 +2686,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.button,
   },
+  routeHeaderTitleWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  routeHeaderTitleChip: {
+    minHeight: 38,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md,
+  },
+  routeHeaderTitleText: { textAlign: 'center', fontSize: FontSize.h3, fontWeight: '700' },
   backBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
     backgroundColor: 'rgba(255,255,255,0.95)',

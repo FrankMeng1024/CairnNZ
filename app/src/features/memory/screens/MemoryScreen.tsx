@@ -71,6 +71,7 @@ import {
 import {
   MEMORY_ENTRY_MESSAGE_DELAY_MS,
   MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS,
+  memoryMinePreviewCanRender,
 } from '../services/memoryEntryPresentation';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
@@ -98,7 +99,16 @@ type FailReason = 'permission' | 'timeout' | 'error';
 // Dev caveat: Metro fast refresh resets module scope, so the fix is only
 // verifiable on release builds.
 const _lastKnownCoordByOwner = new Map<string, { lat: number; lng: number; ts: number }>();
-let _authorizedMemoryPreview: { key: string; uri: string; capturedAtMs: number } | null = null;
+// A combined Mapbox snapshot contains borrowed geography and cannot be
+// independently re-authorized after focus, expiry, or revoke. Warm previews
+// therefore hold only an exact, fully painted Mine scene.
+let _authorizedMemoryPreview: {
+  ownerId: string;
+  scope: 'self';
+  themeMode: string;
+  uri: string;
+  capturedAtMs: number;
+} | null = null;
 const MAX_MEMORY_PREVIEW_BYTES = 4 * 1024 * 1024;
 
 // v357 diagnostic: module-scope counter for MemoryScreen render invocations.
@@ -239,6 +249,8 @@ export function MemoryScreen() {
   const memoryScope = useMemoryScopeStore((s) => s.scope);
   const activateMemoryScopeOwner = useMemoryScopeStore((s) => s.activateOwner);
   const [fogReady, setFogReady] = useState(false);
+  const [fogPresentationVersion, setFogPresentationVersion] = useState(0);
+  const [fogScenePending, setFogScenePending] = useState(false);
   const [fogUnavailable, setFogUnavailable] = useState(false);
   const entryUsableRef = useRef(false);
   const [entryVeilMounted, setEntryVeilMounted] = useState(true);
@@ -249,7 +261,7 @@ export function MemoryScreen() {
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
   const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
   const friendProjectionError = useFriendMemoryStore((s) => s.error);
-  const friendProjections = useFriendMemoryStore((s) => s.projections);
+  const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
   const userId = useAppStore((s) => s.user?.id ?? null);
   const activeOwnerId = userId == null ? null : String(userId);
   const cameraOwnerId = useMemoryCameraStore((s) => s.ownerId);
@@ -298,19 +310,20 @@ export function MemoryScreen() {
         anchor: [number, number];
       };
     }> = {};
+    if (memoryScope === 'self') return result;
     const namesById = new Map(subscriptions.map(source => [String(source.friend_id), source.friend_name]));
-    for (const [friendId, projection] of Object.entries(friendProjections)) {
-      const friendName = namesById.get(friendId);
+    for (const region of useFriendMemoryStore.getState().getVisibleRegions()) {
+      const friendName = namesById.get(region.sourceFriendId);
       if (!friendName) continue;
-      for (const region of projection.regions ?? []) {
-        const current = result[region.id] ?? { names: [], region };
-        if (!current.names.includes(friendName)) current.names.push(friendName);
-        current.names.sort((a, b) => a.localeCompare(b));
-        result[region.id] = current;
-      }
+      const current = result[region.id] ?? { names: [], region };
+      if (!current.names.includes(friendName)) current.names.push(friendName);
+      current.names.sort((a, b) => a.localeCompare(b));
+      result[region.id] = current;
     }
     return result;
-  }, [friendProjections, subscriptions]);
+  // The version is the render signal; getVisibleRegions applies current
+  // source/version authorization and never reads persisted Friend geometry.
+  }, [friendMemoryVersion, memoryScope, subscriptions]);
 
   const handlePickModalClose = useCallback(() => {
     setPickModalOpen(false);
@@ -343,6 +356,7 @@ export function MemoryScreen() {
     entryVeilOpacity.setValue(1);
     setMapReady(false);
     setFogReady(false);
+    setFogScenePending(false);
     setEntryMapLoadState('loading');
     log('memory.entry_visible_state', { state: 'stable-placeholder', mount_key: mountKey });
     return () => {
@@ -427,6 +441,7 @@ export function MemoryScreen() {
     log('v360.user_retry');
     setMapReady(false);
     setFogReady(false);
+    setFogScenePending(false);
     setFogUnavailable(false);
     setRefetchToken((n) => n + 1);
     setMountKey((n) => {
@@ -815,11 +830,13 @@ export function MemoryScreen() {
 
   const mapMayBeShown = Boolean(persistentCoord);
   const memoryEntryUsable = mapMayBeShown && mapReady && (fogReady || fogUnavailable);
-  const memoryPreviewKey = activeOwnerId
-    ? `${activeOwnerId}:${memoryScope}:${subscriptions.map(item => item.friend_id).sort((a, b) => a - b).join(',')}:${theme.mode}`
-    : null;
-  const authorizedPreviewUri = memoryPreviewKey && _authorizedMemoryPreview?.key === memoryPreviewKey
-    ? _authorizedMemoryPreview.uri
+  const authorizedPreviewUri = memoryMinePreviewCanRender({
+    scope: memoryScope,
+    ownerId: activeOwnerId,
+    themeMode: theme.mode,
+    preview: _authorizedMemoryPreview,
+  })
+    ? _authorizedMemoryPreview?.uri ?? null
     : null;
   useEffect(() => {
     if (!memoryEntryUsable) {
@@ -846,20 +863,31 @@ export function MemoryScreen() {
     return undefined;
   }, [entryVeilOpacity, failReason, fogReady, fogUnavailable, mapMayBeShown, mapReady, memoryEntryUsable, mountKey]);
   useEffect(() => {
-    if (!memoryEntryUsable || !memoryPreviewKey) return undefined;
+    if (!memoryEntryUsable || !activeOwnerId || memoryScope !== 'self') return undefined;
     let cancelled = false;
     const task = InteractionManager.runAfterInteractions(() => {
       void mapRef.current?.captureAuthorizedPreview().then(uri => {
         if (cancelled || !uri || uri.length > MAX_MEMORY_PREVIEW_BYTES) return;
-        _authorizedMemoryPreview = { key: memoryPreviewKey, uri, capturedAtMs: Date.now() };
-        log('memory.entry_preview_captured', { key: memoryPreviewKey, bytes: uri.length });
+        _authorizedMemoryPreview = {
+          ownerId: activeOwnerId,
+          scope: 'self',
+          themeMode: theme.mode,
+          uri,
+          capturedAtMs: Date.now(),
+        };
+        log('memory.entry_preview_captured', {
+          owner_id: activeOwnerId,
+          scope: 'self',
+          theme: theme.mode,
+          bytes: uri.length,
+        });
       });
     });
     return () => {
       cancelled = true;
       task.cancel?.();
     };
-  }, [memoryEntryUsable, memoryPreviewKey]);
+  }, [activeOwnerId, fogPresentationVersion, memoryEntryUsable, memoryScope, theme.mode]);
   useEffect(() => {
     if (!activeOwnerId || !cameraHydrated || cameraOwnerId !== activeOwnerId) return undefined;
     if (manualBrowseThisMountRef.current) return undefined;
@@ -979,6 +1007,9 @@ export function MemoryScreen() {
 
   const onRecenter = () => {
     log('memory.recenter_tap');
+    // A panel lookup started before this explicit camera command may update
+    // labels, but it must not reopen stale city UI after Recenter wins.
+    panelOpenRequestIdRef.current += 1;
     manualBrowseThisMountRef.current = false;
     const currentLocationViewport = stableCoord
       ? resolveCurrentLocationViewport(stableCoord)
@@ -1036,7 +1067,10 @@ export function MemoryScreen() {
         {/* v376: Pick icon 移到 MemoryScopeToggle 内部作为第三个 segment,
             scope=friends 时 width+opacity 展开,scope=mine 时 collapse 到 0
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
-        <MemoryScopeToggle onPickPress={openFriendPicker} />
+        <MemoryScopeToggle
+          onPickPress={openFriendPicker}
+          pending={fogScenePending && friendProjectionError == null}
+        />
       </View>
       <TouchableOpacity
         testID="memory-all-cairns-entry"
@@ -1117,9 +1151,10 @@ export function MemoryScreen() {
             deliverReadiness('map', mountKey, () => setMapReady(true));
           }}
           onMapUnavailable={() => handleMapUnavailable(mountKey)}
-          onFogPreparing={() => {
+          onFogPreparing={(_readinessKey, retainsDisplayedScene) => {
             if (mountKeyRef.current !== mountKey) return;
             setFogUnavailable(false);
+            setFogScenePending(retainsDisplayedScene);
             if (!entryUsableRef.current) setFogReady(false);
           }}
           onFogReady={() => {
@@ -1127,12 +1162,15 @@ export function MemoryScreen() {
             log('v359.fog_ready_cb', {});
             deliverReadiness('fog', mountKey, () => {
               setFogUnavailable(false);
+              setFogScenePending(false);
               setFogReady(true);
+              setFogPresentationVersion(value => value + 1);
             });
           }}
           onFogUnavailable={() => {
             if (mountKeyRef.current !== mountKey) return;
             if (!entryUsableRef.current) setFogReady(false);
+            setFogScenePending(false);
             setFogUnavailable(true);
           }}
           qaWorkspaceActive={syntheticQaAuthority}
@@ -1258,6 +1296,9 @@ export function MemoryScreen() {
             { backgroundColor: theme.mapOverlay, borderColor: theme.border },
             hierarchyOpen && { backgroundColor: theme.primary, borderColor: theme.primary },
           ]}
+          testID="memory-city-switcher"
+          accessibilityRole="button"
+          accessibilityLabel="Browse explored cities"
           onPress={async () => {
             if (hierarchyOpen) {
               setHierarchyOpen(false);
@@ -1338,11 +1379,13 @@ export function MemoryScreen() {
         </TouchableOpacity>
       ) : null}
 
-      {friendProjectionError === 'offline' && memoryScope !== 'self' ? (
+      {friendProjectionError && memoryScope !== 'self' ? (
         <View style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}>
           <Icon name="CloudOff" size={13} color={theme.iconInactive} strokeWidth={2.2} />
           <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={1}>
-            Connect to refresh shared content
+            {friendProjectionError === 'offline'
+              ? 'Connect to refresh shared content'
+              : 'Shared content couldn’t refresh'}
           </Text>
         </View>
       ) : null}
@@ -1435,6 +1478,7 @@ export function MemoryScreen() {
           currentCountryId={hierarchyCurrentCountryId}
           friendRegionSources={friendRegionSources}
           onSelectItem={(itemId, itemType, bbox) => {
+            panelOpenRequestIdRef.current += 1;
             log('v434.hierarchy_tap', { id: itemId, type: itemType });
             if (itemType === 'country') {
               // World layer → tap country: switch title, do NOT fly.
@@ -1459,6 +1503,7 @@ export function MemoryScreen() {
             let flyLng = bboxCenterLng;
             let flyLat = bboxCenterLat;
             let foundExplored = false;
+            let usedFriendAnchor = false;
             let newestOwnTimestamp = -Infinity;
             for (const p of points) {
               if (!inBbox(p.lat, p.lng)) continue;
@@ -1487,6 +1532,7 @@ export function MemoryScreen() {
               if (friendAnchor) {
                 [flyLng, flyLat] = friendAnchor;
                 foundExplored = true;
+                usedFriendAnchor = true;
               }
             }
             const spanLng = maxLng - minLng;
@@ -1520,13 +1566,21 @@ export function MemoryScreen() {
             // correctly highlight the country the user just flew to.
             setHierarchyCurrentCityId(itemId);
             setHierarchyCurrentCountryId(hierarchyTitleId === 'world' ? null : hierarchyTitleId);
-            void selectMemoryCity({
-              cityId: itemId,
-              countryId: hierarchyTitleId === 'world' ? null : hierarchyTitleId,
-              bbox: [minLng, minLat, maxLng, maxLat],
-              center: [flyLng, flyLat],
-              zoom,
-            });
+            if (usedFriendAnchor) {
+              // Exact Friend-derived geography is authorized session data,
+              // not durable camera metadata. Keep the deliberate fly-to now,
+              // while ensuring revoke/relaunch cannot restore this anchor.
+              void clearManualMemoryCity();
+            } else {
+              void selectMemoryCity({
+                source: 'mine',
+                cityId: itemId,
+                countryId: hierarchyTitleId === 'world' ? null : hierarchyTitleId,
+                bbox: [minLng, minLat, maxLng, maxLat],
+                center: [flyLng, flyLat],
+                zoom,
+              });
+            }
           }}
           onGoUp={() => {
             log('v434.hierarchy_up', { from: hierarchyTitleId });

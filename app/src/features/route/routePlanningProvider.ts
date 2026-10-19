@@ -2,6 +2,7 @@ import type { RoutePoint } from '../../store/useRouteStore';
 import { planWalkingRoute, type WalkingPlanPoint } from '../../services/routing/planWalkingRoute';
 import { matchSegment } from '../../services/routing/mapmatch/MapMatchingClient';
 import type { MatchResult, MatchSegment } from '../../services/routing/mapmatch/types';
+import { douglasPeucker } from '../../utils/strokeSimplify';
 import {
   normalizeOrderedPoints,
   routePointDistanceM,
@@ -128,6 +129,58 @@ function orderedLengthRatioIsPlausible(source: RoutePoint[], candidate: RoutePoi
   if (sourceLengthM <= 0.35 || candidateLengthM <= 0.35) return false;
   const ratio = candidateLengthM / sourceLengthM;
   return ratio >= ROUTE_MATCH_MIN_LENGTH_RATIO && ratio <= ROUTE_MATCH_MAX_LENGTH_RATIO;
+}
+
+interface StructuralTurnStats {
+  sharpTurns: number;
+  reversals: number;
+  maxTurnDeg: number;
+}
+
+function turnAngleDeg(a: RoutePoint, b: RoutePoint, c: RoutePoint): number {
+  const latitude = b.lat * Math.PI / 180;
+  const scaleX = 111_320 * Math.cos(latitude);
+  const scaleY = 110_574;
+  const incomingX = (b.lng - a.lng) * scaleX;
+  const incomingY = (b.lat - a.lat) * scaleY;
+  const outgoingX = (c.lng - b.lng) * scaleX;
+  const outgoingY = (c.lat - b.lat) * scaleY;
+  const denominator = Math.hypot(incomingX, incomingY) * Math.hypot(outgoingX, outgoingY);
+  if (denominator <= Number.EPSILON) return 0;
+  const cosine = Math.max(-1, Math.min(1,
+    (incomingX * outgoingX + incomingY * outgoingY) / denominator));
+  return Math.acos(cosine) * 180 / Math.PI;
+}
+
+/**
+ * Finger jitter is intentionally removed before topology comparison. A turn
+ * only becomes structural when both of its simplified legs are long enough to
+ * represent deliberate travel rather than adjacent touch samples.
+ */
+function structuralTurnStats(points: RoutePoint[]): StructuralTurnStats {
+  const simplified = douglasPeucker(points, 6);
+  let sharpTurns = 0;
+  let reversals = 0;
+  let maxTurnDeg = 0;
+  for (let index = 1; index < simplified.length - 1; index += 1) {
+    const beforeM = routePointDistanceM(simplified[index - 1], simplified[index]);
+    const afterM = routePointDistanceM(simplified[index], simplified[index + 1]);
+    if (beforeM < 12 || afterM < 12) continue;
+    const turn = turnAngleDeg(simplified[index - 1], simplified[index], simplified[index + 1]);
+    maxTurnDeg = Math.max(maxTurnDeg, turn);
+    if (turn >= 55) sharpTurns += 1;
+    if (turn >= 145) reversals += 1;
+  }
+  return { sharpTurns, reversals, maxTurnDeg };
+}
+
+function preservesStructuralDrawIntent(source: RoutePoint[], candidate: RoutePoint[]): boolean {
+  const intended = structuralTurnStats(source);
+  if (intended.sharpTurns === 0 && intended.reversals === 0) return true;
+  const matched = structuralTurnStats(candidate);
+  if (matched.reversals < intended.reversals) return false;
+  if (matched.sharpTurns < intended.sharpTurns) return false;
+  return matched.maxTurnDeg >= intended.maxTurnDeg - 30;
 }
 
 /**
@@ -348,12 +401,21 @@ function partsForMatchResult(
     const startShiftM = matched.length >= 2 ? routePointDistanceM(rawRun[0], matched[0]) : Infinity;
     const endShiftM = matched.length >= 2 ? routePointDistanceM(rawRun.at(-1)!, matched.at(-1)!) : Infinity;
     const deviationM = matched.length >= 2 ? orderedShapeDeviationM(rawRun, matched) : Infinity;
+    // Mapbox alternatives are common at ordinary intersections and are not a
+    // reason to discard an otherwise faithful road correction. They do become
+    // unsafe when the chosen candidate also leaves the gesture's normal
+    // review corridor: that combination can silently select a nearby parallel
+    // road or a provider detour. Preserve the useful O85 snap envelope only
+    // for an unambiguous candidate beyond the tighter review bound.
+    const ambiguityIsFaithful = (segment.alternativesCount ?? 0) === 0
+      || deviationM <= ROUTE_MATCH_REVIEW_DEVIATION_M;
     const supported = matched.length >= 2
       && startShiftM <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
       && endShiftM <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
-      && (segment.alternativesCount == null || segment.alternativesCount === 0)
       && orderedLengthRatioIsPlausible(rawRun, matched)
-      && deviationM <= ROUTE_MATCH_REVIEW_DEVIATION_M;
+      && deviationM <= ROUTE_MATCH_REJECT_DEVIATION_M
+      && ambiguityIsFaithful
+      && preservesStructuralDrawIntent(rawRun, matched);
     if (supported) {
       // Do not force the free provider endpoint back to the finger-up point.
       // Adjacent manual runs adopt this endpoint below, so the saved geometry
@@ -369,8 +431,6 @@ function partsForMatchResult(
     } else {
       fallbackReason = matched.length < 2
         ? 'no-match'
-        : (segment.alternativesCount ?? 0) > 0
-          ? 'split-match'
         : startShiftM > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M || endShiftM > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
           ? 'endpoint-shift'
           : 'shape-deviation';
@@ -501,7 +561,8 @@ export async function resolveDrawPlan(
   // provider candidate before composition. A suspicious composed result
   // falls back to the coherent hand-drawn operation without inventing gaps.
   if (!orderedLengthRatioIsPlausible(normalized, points)
-    || orderedShapeDeviationM(normalized, points) > ROUTE_MATCH_REVIEW_DEVIATION_M) {
+    || orderedShapeDeviationM(normalized, points) > ROUTE_MATCH_REJECT_DEVIATION_M
+    || !preservesStructuralDrawIntent(normalized, points)) {
     return {
       outcome: 'accepted',
       points: normalized,

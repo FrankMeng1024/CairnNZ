@@ -42,10 +42,11 @@ export function preparePointGrowthTimeline(points: RoutePoint[]): PointGrowthTim
 
 export function pointGrowthDurationMs(points: RoutePoint[]): number {
   const totalM = points.slice(1).reduce((sum, point, index) => sum + routePointDistanceM(points[index], point), 0);
-  // Long legs must not be compressed into a two-second jump. The bounded
-  // visual speed keeps the moving head readable without turning navigation
-  // into a long animation workflow.
-  return Math.round(Math.max(720, Math.min(8_000, 620 + totalM * 8)));
+  // Point is an editing acknowledgement, not route playback. O86's 8 s cap
+  // made ordinary 0.8–1.1 km accepted legs take roughly 9–10 s once the
+  // bounded entry move was included. Restore the lively O85 distance curve
+  // while retaining O86's allocation-light reveal and stable camera path.
+  return Math.round(Math.max(720, Math.min(2_200, 620 + totalM * 3.1)));
 }
 
 function pointToSegmentDistanceM(
@@ -105,16 +106,16 @@ export function pointCameraStops(
       sourceIndex,
     }));
   if (stops.length <= 2) return stops;
-  // Provider geometry can place two RDP bends only a few animation frames
-  // apart around a tight return. Starting a second camera transaction before
-  // the first has presented is both visually redundant and was the first
-  // incorrect stage in Test3's periodic pause. Only collapse a genuine sharp
-  // reversal; Test2's close consecutive 90-degree street turns must remain.
+  // Provider geometry can place two RDP bends less than two display frames
+  // apart around a noisy reversal. Such a stop cannot present meaningfully,
+  // but a genuine ~60 ms U-turn (Test3) must remain so the camera follows the
+  // visible head instead of cutting its corner. Exact segment durations mean
+  // retained stops no longer inflate the overall follow clock.
   const collapsed: PointCameraStop[] = [stops[0]];
   for (let index = 1; index < stops.length - 1; index += 1) {
     const priorStop = collapsed.at(-1)!;
     const priorPriorStop = collapsed.at(-2);
-    if (priorPriorStop && stops[index].progress - priorStop.progress < 0.045) {
+    if (priorPriorStop && stops[index].progress - priorStop.progress < 0.014) {
       const incoming = {
         x: priorStop.point.lng - priorPriorStop.point.lng,
         y: priorStop.point.lat - priorPriorStop.point.lat,
@@ -146,9 +147,9 @@ export function pointCameraToleranceM(points: RoutePoint[], zoom: number): numbe
   // The previous sub-pixel cap retained nearly every small provider bend
   // (19 camera stops on the real Test2 leg). Each stop restarts a native/Web
   // camera segment even though the resulting correction is visually
-  // imperceptible. A two-screen-pixel bound keeps the reveal head centered
-  // while materially reducing programmatic camera churn.
-  return Math.max(0.5, Math.min(8, metresPerPixel * 2));
+  // imperceptible. A 1.75-screen-pixel bound keeps tight returns within the
+  // visible-center contract while materially reducing camera churn.
+  return Math.max(0.5, Math.min(8, metresPerPixel * 1.75));
 }
 
 /**

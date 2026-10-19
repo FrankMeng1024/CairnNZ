@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
-const outputDir = path.resolve(process.env.CAIRN_ROUTE_UX_QA_DIR || '/tmp/cairn-o86-route-ux-qa');
+const outputDir = path.resolve(process.env.CAIRN_ROUTE_UX_QA_DIR || '/tmp/cairn-o87-route-ux-qa');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(outputDir, { recursive: true });
 
 const user = {
-  id: 'route-ux-o86-qa', name: 'Aroha', email: 'route.ux.qa@example.invalid',
+  id: 'route-ux-o87-qa', name: 'Aroha', email: 'route.ux.qa@example.invalid',
   createdAt: '2026-01-01T00:00:00.000Z', dateOfBirth: '1990-01-01', hasPassword: true, providers: ['email'],
 };
 const A = { lng: 174.7638, lat: -36.8482 };
@@ -16,11 +16,11 @@ const B = { lng: 174.7650, lat: -36.8480 };
 const C = { lng: 174.7661, lat: -36.8475 };
 const routePoints = [A, B, C, B, A, B, C];
 const routeFixture = {
-  id: 'o86-route-ux', clientRouteId: 'o86-route-ux', name: 'Harbour Return Plan',
+  id: 'o87-route-ux', clientRouteId: 'o87-route-ux', name: 'Harbour Return Plan',
   createdAt: 1_760_000_000_000, updatedAt: 1_760_000_000_000,
   points: routePoints,
   orderedDraft: {
-    schemaVersion: 1, draftId: 'route:o86-route-ux', ownerId: user.id, origin: 'plan', revision: 4,
+    schemaVersion: 1, draftId: 'route:o87-route-ux', ownerId: user.id, origin: 'plan', revision: 4,
     parts: [
       { id: 'mapped-out-return', resolution: 'point', points: [A, B, C, B, A] },
       { id: 'mapped-local', resolution: 'point', points: [A, B] },
@@ -91,7 +91,7 @@ for (const scenario of matrix) {
   });
   await page.addInitScript(({ userId, localStyle }) => {
     globalThis.__cairnMapQaLocalStyle = localStyle;
-    localStorage.setItem('cairn_jwt', 'route-ux-o86-local-qa');
+    localStorage.setItem('cairn_jwt', 'route-ux-o87-local-qa');
     localStorage.setItem('cairn_onboarding_v1_done', 'true');
     localStorage.setItem(`cairn_onboarding_v1_done_${userId}`, 'true');
   }, { userId: user.id, localStyle: process.env.CAIRN_QA_LOCAL_STYLE === '1' });
@@ -103,7 +103,7 @@ for (const scenario of matrix) {
     }
     if (url.pathname === '/api/memory/coverage') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-        coverage_rule_version: 4, coverage_version: 'o86-empty', evidence_count: 0,
+        coverage_rule_version: 4, coverage_version: 'o87-empty', evidence_count: 0,
         tile_count: 0, rebuilt_tile_count: 0, total_ms: 1, stage_ms: {},
         geometry: { type: 'MultiPolygon', coordinates: [] },
       }) });
@@ -115,7 +115,7 @@ for (const scenario of matrix) {
     });
   });
   await page.route('**/matching/v5/mapbox/walking/**', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'NoMatch', message: 'O86 deterministic unmatched freehand' }),
+    status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'NoMatch', message: 'O87 deterministic unmatched freehand' }),
   }));
   try {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
@@ -154,6 +154,8 @@ for (const scenario of matrix) {
 
     const prefix = `route-${scenario.width}-${scenario.theme}`;
     await page.screenshot({ path: path.join(outputDir, `${prefix}-browse.png`) });
+    const editorHeaderBackground = await page.getByTestId('route-editor-header')
+      .evaluate(element => getComputedStyle(element).backgroundColor);
     const browseHasNoReservedContext = await page.getByTestId('route-context-slot').count() === 0;
     const nameBox = await box(page.getByLabel('Route name'));
     const saveBox = await box(page.getByTestId('ordered-route-save'));
@@ -224,6 +226,7 @@ for (const scenario of matrix) {
     await page.waitForTimeout(350);
     const keepEditingBox = await box(page.getByText('Keep editing', { exact: true }));
     const discardChangesBox = await box(page.getByText('Discard changes', { exact: true }));
+    const leaveConfirmationBox = await box(leaveConfirmation);
     await page.screenshot({ path: path.join(outputDir, `${prefix}-leave-confirm.png`) });
     const leaveConfirmationClear = await page.getByText('Your unsaved Route changes will be discarded.', { exact: true }).isVisible()
       && Boolean(keepEditingBox && discardChangesBox && !overlaps(keepEditingBox, discardChangesBox));
@@ -286,7 +289,7 @@ for (const scenario of matrix) {
         .map(layer => ({ id: layer.id, paint: layer.paint, layout: layer.layout, filter: layer.filter })),
       repeatSourceData: (() => {
         const map = globalThis.__cairnMap;
-        const sourceId = Object.keys(map?.getStyle?.()?.sources ?? {}).find(id => id.includes('repeated-traversals'));
+        const sourceId = Object.keys(map?.getStyle?.()?.sources ?? {}).find(id => id.includes('repeat-labels'));
         return sourceId ? map?.getSource?.(sourceId)?._data ?? null : null;
       })(),
       renderedRepeatFeatures: (() => {
@@ -310,6 +313,8 @@ for (const scenario of matrix) {
       })),
     }), routeFixture.id);
     const detailCopy = await page.getByTestId('route-detail-panel').innerText();
+    const detailHeaderBackground = await page.getByTestId('route-detail-header')
+      .evaluate(element => getComputedStyle(element).backgroundColor);
     const panelCompact = Boolean(detailPanel && detailPanel.height <= Math.min(340, scenario.height * 0.43));
     const assertions = {
       browseHasNoReservedContext,
@@ -333,18 +338,17 @@ for (const scenario of matrix) {
         || layersSelected.expanded === 'true'
         || layersSelected.background !== layersBackgroundBefore,
       fallbackAutoCommitsWithoutDecisionRow: fallbackChoiceAbsent && undoEnabledAfterManualFallback,
-      leaveConfirmationClear,
+      leaveConfirmationClear: leaveConfirmationClear
+        && Boolean(leaveConfirmationBox && leaveConfirmationBox.width <= 326
+          && leaveConfirmationBox.height < scenario.height * 0.52),
+      editorHeaderTransparent: ['rgba(0, 0, 0, 0)', 'transparent'].includes(editorHeaderBackground),
+      detailHeaderTransparent: ['rgba(0, 0, 0, 0)', 'transparent'].includes(detailHeaderBackground),
       editorOrnamentsAboveDock,
       detailOrnamentsAboveSheet,
       detailRouteFits,
-      repeatedTraversalLayersVisible: repeatLayerCount >= 2,
-      repeatedTraversalPainted: detailRuntime.renderedRepeatFeatures > 0,
-      repeatedTraversalAnnotationPolicy: Math.max(
-        0,
-        ...(detailRuntime.repeatSourceData?.features ?? []).map(feature => Number(feature.properties?.multiplicity) || 0),
-      ) >= 4
-        ? detailRuntime.renderedRepeatLabels > 0
-        : detailRuntime.renderedRepeatLabels === 0,
+      continuousCanonicalRoutePainted: detailRuntime.layerIds.some(id => id.includes('route-detail-') && id.endsWith('-line')),
+      noSplitOffsetTraversalLayers: detailRuntime.repeatLayerPaint.length === 0,
+      repeatedTraversalAnnotated: repeatLayerCount === 1 && detailRuntime.renderedRepeatLabels > 0,
       detailHeaderAndActions: await page.getByTestId('route-detail-header-more').isVisible()
         && /Use for Hike/.test(detailCopy) && /Edit/.test(detailCopy) && /Share/.test(detailCopy),
       detailNoRedundantReadyOrFakeElevation: !/Mine\s*·\s*Ready/.test(detailCopy) && !/\+0\s*m.*elevation/i.test(detailCopy),
@@ -353,6 +357,7 @@ for (const scenario of matrix) {
     results.push({ scenario, assertions, measurements: {
       nameBox, saveBox, pointTextBox, pointActionBox, trimStrip, trimApply,
       editorPanelBox, editorLogo, editorAttribution, detailPanel, detailLogo, detailAttribution, repeatLayerCount,
+      editorHeaderBackground, detailHeaderBackground, leaveConfirmationBox,
       layersBackgroundBefore, layersSelected, detailRuntime,
     }, runtimeErrors: caseErrors, pass: Object.values(assertions).every(Boolean) && caseErrors.length === 0 });
   } catch (error) {

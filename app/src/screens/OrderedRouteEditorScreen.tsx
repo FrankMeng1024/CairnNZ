@@ -25,6 +25,7 @@ import { CanonicalRouteLayer } from '../components/map/CanonicalRouteLayer';
 import { FogLayer } from '../features/memory/components/FogLayer';
 import { MemoryFriendPickModal } from '../features/memory/components/MemoryFriendPickModal';
 import { useFriendMemoryStore } from '../features/memory/store/useFriendMemoryStore';
+import { memoryScopeForNewRoute, type MemoryScope } from '../features/memory/store/useMemoryScopeStore';
 import { useMemorySubscriptionsStore } from '../features/memory/store/useMemorySubscriptionsStore';
 import { getMapbox } from '../features/memory/services/mapboxAdapter';
 import { memoryCoverageViewport, type MemoryCoverageViewport } from '../features/memory/services/memoryCoverageViewport';
@@ -160,6 +161,7 @@ interface RouteGrowthAnimation {
   visiblePointCount: number;
   head: RoutePoint;
   progress: number;
+  canonicalOverlap: boolean;
   expectedScreenCenter: { x: number; y: number };
 }
 
@@ -170,6 +172,12 @@ interface RouteGrowthFrameHistory {
 }
 
 const ROUTE_GROWTH_FRAME_HISTORY_CAPACITY = 1_000;
+// `setNativeProps` keeps this update outside React reconciliation. Present the
+// trim on the display cadence so the visible head and Mapbox camera consume
+// the same progress sample; the former 34 ms cap let the camera interpolate
+// between two already-stale painted heads.
+const ROUTE_GROWTH_PAINT_INTERVAL_MS = 16;
+const ROUTE_GROWTH_DENSE_PAINT_INTERVAL_MS = 16;
 
 function createRouteGrowthFrameHistory(): RouteGrowthFrameHistory {
   return {
@@ -259,6 +267,8 @@ export function OrderedRouteEditorScreen() {
   const captureActivityRouteReference = useRouteStore(state => state.captureActivityRouteReference);
   const memorySubscriptions = useMemorySubscriptionsStore(state => state.subscriptions);
   const loadMemorySubscriptions = useMemorySubscriptionsStore(state => state.load);
+  const friendMemoryError = useFriendMemoryStore(state => state.error);
+  const friendMemorySourceStates = useFriendMemoryStore(state => state.sourceStates);
 
   const [history, setHistory] = useState<RouteDraftHistory | null>(null);
   const historyRef = useRef<RouteDraftHistory | null>(null);
@@ -287,11 +297,22 @@ export function OrderedRouteEditorScreen() {
   const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
   const [mapEpoch, setMapEpoch] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [planningMemoryScope, setPlanningMemoryScope] = useState<'self' | 'combined'>('self');
+  // A new editor inherits Memory's current owner-scoped choice exactly once.
+  // This is deliberately local state after mount: an active Route session and
+  // Memory may then change their displayed scopes independently.
+  const [planningMemoryScope, setPlanningMemoryScope] = useState<MemoryScope>(() => (
+    !routeId && !readOnlyShared
+      ? memoryScopeForNewRoute(useAppStore.getState().user?.id)
+      : 'self'
+  ));
+  const [routeFogPending, setRouteFogPending] = useState(false);
+  const [showRouteFogPending, setShowRouteFogPending] = useState(false);
   const [memoryCoverageView, setMemoryCoverageView] = useState<MemoryCoverageViewport | null>(null);
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
   const routeGrowthAnimationRef = useRef<RouteGrowthAnimation | null>(null);
   const routeGrowthSampleRef = useRef<ReturnType<typeof pointGrowthSample> | null>(null);
+  const routeGrowthPaintedSampleRef = useRef<ReturnType<typeof pointGrowthSample> | null>(null);
+  const routeGrowthPendingPaintSampleRef = useRef<ReturnType<typeof pointGrowthSample> | null>(null);
   const routeGrowthSourceRef = useRef<any>(null);
   const routeGrowthLineRef = useRef<any>(null);
   const [initialLocation, setInitialLocation] = useState<InitialLocationState>({ status: 'idle' });
@@ -313,6 +334,9 @@ export function OrderedRouteEditorScreen() {
   const routePointEntryTargetRef = useRef<RoutePoint | null>(null);
   const routePointEntryArrivedRef = useRef(false);
   const routePointEntryFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routeCameraStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routeHandoffTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routeHandoffRenderReadyRef = useRef(false);
   const routeGrowthLastPaintAtRef = useRef(0);
   // The lightweight Point-motion basemap begins before the provider returns,
   // so its lifetime is wider than the accepted-route reveal animation. Keep
@@ -333,6 +357,7 @@ export function OrderedRouteEditorScreen() {
   const cameraBearingRef = useRef(0);
   const cameraPitchRef = useRef(0);
   const cameraGenerationRef = useRef(0);
+  const userCameraInteractionGenerationRef = useRef(0);
   const approvedPointTargetRef = useRef<RoutePoint | null>(null);
   const traceDraftIdRef = useRef<string | null>(null);
   const initializationProvenanceRef = useRef('unknown');
@@ -351,6 +376,13 @@ export function OrderedRouteEditorScreen() {
         ? 'trim'
         : 'browse';
   const trimOpen = mode === 'TrimPreview';
+  const routeFogUnavailable = planningMemoryScope === 'combined' && Boolean(
+    friendMemoryError
+    || memorySubscriptions.some(subscription => {
+      const status = friendMemorySourceStates[String(subscription.friend_id)]?.status;
+      return status === 'error' || status === 'unauthorized';
+    }),
+  );
   const setTool = useCallback((next: PlannerTool) => {
     setMode(next === 'draw' ? 'DrawArmed' : next === 'point' ? 'PointTargeting' : next === 'trim' ? 'TrimPreview' : 'Browse');
   }, []);
@@ -364,6 +396,21 @@ export function OrderedRouteEditorScreen() {
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => { mounted = false; subscription.remove(); };
   }, []);
+
+  useEffect(() => {
+    if (planningMemoryScope !== 'combined' || !routeFogPending || routeFogUnavailable) {
+      setShowRouteFogPending(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setShowRouteFogPending(true), 180);
+    return () => clearTimeout(timer);
+  }, [planningMemoryScope, routeFogPending, routeFogUnavailable]);
+
+  useEffect(() => {
+    if (!routeFogUnavailable) return;
+    setRouteFogPending(false);
+    setShowRouteFogPending(false);
+  }, [routeFogUnavailable]);
 
   useEffect(() => {
     let cancelled = false;
@@ -415,6 +462,10 @@ export function OrderedRouteEditorScreen() {
     routePointEntryArrivedRef.current = false;
     if (routePointEntryFallbackRef.current) clearTimeout(routePointEntryFallbackRef.current);
     routePointEntryFallbackRef.current = null;
+    if (routeCameraStartTimeoutRef.current) clearTimeout(routeCameraStartTimeoutRef.current);
+    routeCameraStartTimeoutRef.current = null;
+    if (routeHandoffTimeoutRef.current) clearTimeout(routeHandoffTimeoutRef.current);
+    routeHandoffTimeoutRef.current = null;
     // A native map gesture interrupts Mapbox's active transition. Do not send
     // a compensating camera command here: even one duration-0 write can race
     // the gesture and feel like the map pulled back after the user's pan.
@@ -439,6 +490,9 @@ export function OrderedRouteEditorScreen() {
     recordRouteDrawingTrace('route_point_animation_ended', { reason }, 'state');
     routeGrowthAnimationRef.current = null;
     routeGrowthSampleRef.current = null;
+    routeGrowthPaintedSampleRef.current = null;
+    routeGrowthPendingPaintSampleRef.current = null;
+    routeHandoffRenderReadyRef.current = false;
     setRouteGrowthAnimation(null);
     if (!preserveMotionBasemap && pointMotionBasemapActiveRef.current) {
       void setPointMotionBasemapActive(false);
@@ -489,7 +543,11 @@ export function OrderedRouteEditorScreen() {
     }, 'state');
   }, [invalidatePendingOperation, mode, saving, setTool, trimEnd, trimStart]);
 
-  const animateAcceptedPoint = useCallback((points: RoutePoint[], hiddenPartId?: string) => {
+  const animateAcceptedPoint = useCallback((
+    points: RoutePoint[],
+    hiddenPartId?: string,
+    ownsCamera = true,
+  ) => {
     finishRouteAnimation('superseded', true);
     const timeline = preparePointGrowthTimeline(points);
     if (!timeline) return;
@@ -502,21 +560,35 @@ export function OrderedRouteEditorScreen() {
     };
     if (reduceMotion) {
       const target = points.at(-1)!;
-      cameraRef.current?.setCamera?.({
-        centerCoordinate: [target.lng, target.lat],
-        padding: animationPadding,
-        zoomLevel: cameraZoomRef.current,
-        heading: cameraBearingRef.current,
-        pitch: cameraPitchRef.current,
-        animationDuration: 160,
-      });
-      recordRouteDrawingTrace('route_point_reduced_motion_transition', { target, durationMs: 160 }, 'state');
+      if (ownsCamera) {
+        cameraRef.current?.setCamera?.({
+          centerCoordinate: [target.lng, target.lat],
+          padding: animationPadding,
+          zoomLevel: cameraZoomRef.current,
+          heading: cameraBearingRef.current,
+          pitch: cameraPitchRef.current,
+          animationDuration: 160,
+        });
+      }
+      recordRouteDrawingTrace('route_point_reduced_motion_transition', {
+        target,
+        durationMs: ownsCamera ? 160 : 0,
+        ownsCamera,
+      }, 'state');
       return;
     }
     const durationMs = pointGrowthDurationMs(points);
     const cameraToleranceM = pointCameraToleranceM(points, cameraZoomRef.current);
     const cameraStops = pointCameraStops(timeline, cameraToleranceM);
-    const entryDurationMs = routePointDistanceM(points[0], cameraCenterRef.current ?? points[0]) > 4 ? 260 : 0;
+    // Dense provider geometry costs more for Mapbox to trim even though the
+    // paint update is imperative. Give those lines a slightly larger slice;
+    // ordinary paths stay closer to the display cadence for head/camera sync.
+    const growthPaintIntervalMs = timeline.points.length > 30
+      ? ROUTE_GROWTH_DENSE_PAINT_INTERVAL_MS
+      : ROUTE_GROWTH_PAINT_INTERVAL_MS;
+    const entryDurationMs = ownsCamera
+      && routePointDistanceM(points[0], cameraCenterRef.current ?? points[0]) > 4 ? 180 : 0;
+    const cameraFollowLagMs = 0;
     const key = uuidv4();
     const animationGeneration = routeAnimationGenerationRef.current;
     const initialFrame = pointGrowthFrame(timeline, 0);
@@ -529,6 +601,7 @@ export function OrderedRouteEditorScreen() {
       visiblePointCount: initialFrame.visiblePoints.length,
       head: initialFrame.head,
       progress: 0,
+      canonicalOverlap: false,
       expectedScreenCenter: {
         x: viewportWidth / 2,
         y: animationTopClearance + (viewportHeight - animationTopClearance - animationPadding.paddingBottom) / 2,
@@ -547,6 +620,14 @@ export function OrderedRouteEditorScreen() {
       travelledM: 0,
       totalM: timeline.totalM,
     };
+    routeGrowthPaintedSampleRef.current = {
+      progress: 0,
+      head: { ...initialAnimation.head },
+      visiblePointCount: initialAnimation.visiblePointCount,
+      travelledM: 0,
+      totalM: timeline.totalM,
+    };
+    routeGrowthPendingPaintSampleRef.current = null;
     setRouteGrowthAnimation(initialAnimation);
     recordRouteDrawingTrace('route_point_animation_started', {
       animationId: key,
@@ -560,11 +641,14 @@ export function OrderedRouteEditorScreen() {
       bearing: cameraBearingRef.current,
       pitch: cameraPitchRef.current,
       entryDurationMs,
+      cameraFollowLagMs,
+      ownsCamera,
       unobscuredCenter: {
         x: viewportWidth / 2,
         y: animationTopClearance + (viewportHeight - animationTopClearance - animationPadding.paddingBottom) / 2,
       },
     }, 'state');
+    const cameraFollowDurationMs = durationMs;
     const cameraSequence = cameraStops.slice(1).map((stop, index) => ({
         centerCoordinate: [stop.point.lng, stop.point.lat],
         padding: animationPadding,
@@ -572,11 +656,68 @@ export function OrderedRouteEditorScreen() {
         heading: cameraBearingRef.current,
         pitch: cameraPitchRef.current,
         animationMode: 'linearTo' as const,
-        animationDuration: Math.max(16, durationMs * (
+        animationDuration: cameraFollowDurationMs * (
           stop.progress - (cameraStops[index]?.progress ?? 0)
-        )),
+        ),
       }));
     let startedAt = 0;
+    const publishCanonicalOverlap = () => {
+      routeHandoffTimeoutRef.current = null;
+      if (routeAnimationGenerationRef.current !== animationGeneration) return;
+      if (routeAnimationFrameRef.current != null) cancelAnimationFrame(routeAnimationFrameRef.current);
+      routeAnimationFrameRef.current = null;
+      const finalFrame = pointGrowthSample(timeline, 1, routeGrowthSampleRef.current ?? undefined);
+      routeGrowthSampleRef.current = finalFrame;
+      routeGrowthPendingPaintSampleRef.current = {
+        progress: 1,
+        head: { ...finalFrame.head },
+        visiblePointCount: finalFrame.visiblePointCount,
+        travelledM: finalFrame.travelledM,
+        totalM: finalFrame.totalM,
+      };
+      if (routeGrowthLineRef.current?.setNativeProps) {
+        routeGrowthLineRef.current.setNativeProps({ style: { lineTrimOffset: [1, 1] } });
+      } else if (routeGrowthSourceRef.current?.setNativeProps) {
+        routeGrowthSourceRef.current.setNativeProps({
+          shape: JSON.stringify({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: timeline.points.map(point => [point.lng, point.lat]),
+            },
+          }),
+        });
+      }
+      const activeAnimation = routeGrowthAnimationRef.current ?? initialAnimation;
+      const overlapAnimation = {
+        ...activeAnimation,
+        visiblePointCount: finalFrame.visiblePointCount,
+        head: finalFrame.head,
+        progress: 1,
+        canonicalOverlap: true,
+      };
+      routeGrowthAnimationRef.current = overlapAnimation;
+      setRouteGrowthAnimation(overlapAnimation);
+      routeHandoffRenderReadyRef.current = false;
+      routeAnimationFrameRef.current = requestAnimationFrame(() => {
+        if (routeAnimationGenerationRef.current !== animationGeneration) return;
+        routeAnimationFrameRef.current = null;
+        routeHandoffRenderReadyRef.current = true;
+        mapViewRef.current?.requestRender?.();
+      });
+      // Native/Web normally acknowledge the very next fully rendered Mapbox
+      // frame. Keep a bounded fallback for SDKs that omit the callback; the
+      // transient and canonical lines are identical during this interval.
+      routeHandoffTimeoutRef.current = setTimeout(() => {
+        routeHandoffTimeoutRef.current = null;
+        if (routeAnimationGenerationRef.current === animationGeneration
+          && routeGrowthAnimationRef.current?.key === key
+          && routeGrowthAnimationRef.current.canonicalOverlap) {
+          finishRouteAnimation('complete');
+        }
+      }, 180);
+    };
     const tick = () => {
       if (routeAnimationGenerationRef.current !== animationGeneration) return;
       const now = performance.now();
@@ -602,11 +743,11 @@ export function OrderedRouteEditorScreen() {
       nextAnimation.head = frame.head;
       nextAnimation.progress = progress;
       routeGrowthAnimationRef.current = nextAnimation;
-      // Updating a Mapbox paint property faster than the map can present a
-      // frame queues redundant style work and starves both the reveal clock
-      // and the camera. A 30 fps ceiling keeps the visual motion continuous
-      // while allowing one map render to finish before the next trim update.
-      const shouldPaintGrowth = progress >= 1 || elapsed - routeGrowthLastPaintAtRef.current >= 34;
+      // `setNativeProps` avoids a React render and updates only on the display
+      // cadence. Keeping this sample aligned with the camera clock prevents a
+      // stale 30 fps trim from making the camera visibly outrun the route head.
+      const shouldPaintGrowth = (progress >= 1 && (routeGrowthPaintedSampleRef.current?.progress ?? 0) < 1)
+        || elapsed - routeGrowthLastPaintAtRef.current >= growthPaintIntervalMs;
       if (shouldPaintGrowth && routeGrowthLineRef.current?.setNativeProps) {
         routeGrowthLineRef.current.setNativeProps({ style: { lineTrimOffset: [progress, 1] } });
         routeGrowthLastPaintAtRef.current = elapsed;
@@ -631,6 +772,15 @@ export function OrderedRouteEditorScreen() {
       } else if (!routeGrowthSourceRef.current?.setNativeProps) {
         setRouteGrowthAnimation(current => current?.key === key ? nextAnimation : current);
       }
+      if (shouldPaintGrowth) {
+        routeGrowthPendingPaintSampleRef.current = {
+          progress: frame.progress,
+          head: { ...frame.head },
+          visiblePointCount: frame.visiblePointCount,
+          travelledM: frame.travelledM,
+          totalM: frame.totalM,
+        };
+      }
       const bucket = Math.min(4, Math.floor(progress * 4));
       if (bucket !== animationTraceBucketRef.current) {
         animationTraceBucketRef.current = bucket;
@@ -648,7 +798,7 @@ export function OrderedRouteEditorScreen() {
         }, 'state');
       }
       if (progress >= 1) {
-        finishRouteAnimation('complete');
+        routeAnimationFrameRef.current = null;
         return;
       }
       routeAnimationFrameRef.current = requestAnimationFrame(tick);
@@ -662,17 +812,29 @@ export function OrderedRouteEditorScreen() {
       if (routePointEntryFallbackRef.current) clearTimeout(routePointEntryFallbackRef.current);
       routePointEntryFallbackRef.current = null;
       startedAt = performance.now();
-      cameraRef.current?.setCamera?.({ stops: cameraSequence });
+      routeAnimationFrameRef.current = requestAnimationFrame(tick);
+      routeHandoffTimeoutRef.current = setTimeout(
+        publishCanonicalOverlap,
+        durationMs + cameraFollowLagMs,
+      );
+      if (ownsCamera) {
+        routeCameraStartTimeoutRef.current = setTimeout(() => {
+          routeCameraStartTimeoutRef.current = null;
+          if (routeAnimationGenerationRef.current !== animationGeneration) return;
+          cameraRef.current?.setCamera?.({ stops: cameraSequence });
+        }, cameraFollowLagMs);
+      }
       recordRouteDrawingTrace('route_point_animation_camera_sequence', {
         animationId: key,
         stopCount: cameraSequence.length,
         entryDurationMs,
+        cameraFollowLagMs,
+        ownsCamera,
         entryAuthority: entryDurationMs > 0 ? 'map-idle-or-bounded-fallback' : 'already-centered',
         followDurationMs: durationMs,
       }, 'state');
-      routeAnimationFrameRef.current = requestAnimationFrame(tick);
     };
-    if (entryDurationMs > 0) {
+    if (entryDurationMs > 0 && ownsCamera) {
       routePointEntryReadyRef.current = beginFollowing;
       routePointEntryTargetRef.current = points[0];
       routePointEntryArrivedRef.current = false;
@@ -685,7 +847,7 @@ export function OrderedRouteEditorScreen() {
         animationMode: 'easeTo',
         animationDuration: entryDurationMs,
       });
-      routePointEntryFallbackRef.current = setTimeout(beginFollowing, entryDurationMs + 600);
+      routePointEntryFallbackRef.current = setTimeout(beginFollowing, entryDurationMs + 80);
     } else {
       // Mark this generation as startable so the shared idempotence guard
       // accepts the immediate path exactly once.
@@ -1331,7 +1493,16 @@ export function OrderedRouteEditorScreen() {
     };
     const bridge = {
       submitStroke: handleDrawStroke,
-      getPointAnimationSnapshot: () => routeGrowthAnimationRef.current,
+      getPointAnimationSnapshot: () => {
+        const animation = routeGrowthAnimationRef.current;
+        const painted = routeGrowthPaintedSampleRef.current;
+        return animation && painted ? {
+          ...animation,
+          progress: painted.progress,
+          head: { ...painted.head },
+          visiblePointCount: painted.visiblePointCount,
+        } : animation;
+      },
       getCurrentDraft: () => historyRef.current?.present ?? null,
       getApprovedPointTarget: () => approvedPointTargetRef.current,
       getCameraSnapshot: () => ({
@@ -1360,6 +1531,7 @@ export function OrderedRouteEditorScreen() {
     intent: PointTransactionIntent,
     baseRevision: number,
     resolution: 'point' = 'point',
+    ownsCamera = true,
   ): boolean => {
     const current = historyRef.current;
     if (!current) {
@@ -1378,7 +1550,8 @@ export function OrderedRouteEditorScreen() {
       const committed = commitResult(result, 'append-point');
       if (committed) {
         setPendingPointTarget(null);
-        animateAcceptedPoint(points, result.ok ? result.draft.parts.at(-1)?.id : undefined);
+        const committedPart = result.ok ? result.draft.parts.at(-1) : undefined;
+        animateAcceptedPoint(committedPart?.points ?? points, committedPart?.id, ownsCamera);
         setTool('browse');
       } else {
         setPendingPointTarget(null);
@@ -1393,7 +1566,7 @@ export function OrderedRouteEditorScreen() {
       if (committed) {
         setPendingPointTarget(null);
         const addedPart = result.ok ? result.draft.parts.find(part => !previousPartIds.has(part.id)) : undefined;
-        animateAcceptedPoint(points, addedPart?.id);
+        animateAcceptedPoint(addedPart?.points ?? points, addedPart?.id, ownsCamera);
         setTool('browse');
       } else {
         setPendingPointTarget(null);
@@ -1416,6 +1589,7 @@ export function OrderedRouteEditorScreen() {
     if (providerTransactionRef.current) return;
     finishRouteAnimation();
     const baseRevision = current.present.revision;
+    const userCameraGenerationAtRequest = userCameraInteractionGenerationRef.current;
     const operationId = uuidv4();
     selectRouteDrawingOperation(operationId, 'point');
     recordRouteDrawingTrace('route_point_provider_request', {
@@ -1532,7 +1706,8 @@ export function OrderedRouteEditorScreen() {
           }, 'state');
         } else {
           setPendingPointTarget({ ...(selection.effectiveTarget ?? selection.points.at(-1)!) });
-          const committed = applyResolvedPoint(selection.points, intent, baseRevision);
+          const ownsCamera = userCameraInteractionGenerationRef.current === userCameraGenerationAtRequest;
+          const committed = applyResolvedPoint(selection.points, intent, baseRevision, 'point', ownsCamera);
           recordRouteDrawingTrace('route_operation_terminal', {
             strokeId: operationId,
             outcome: committed ? 'committed' : 'failed',
@@ -1540,6 +1715,7 @@ export function OrderedRouteEditorScreen() {
             finalMode: committed ? 'Browse' : 'PointTargeting',
             busyReleased: true,
             finalRevision: historyRef.current?.present.revision ?? null,
+            cameraOwnership: ownsCamera ? 'point-animation' : 'user-gesture',
           }, 'state');
         }
       } else {
@@ -1919,6 +2095,24 @@ export function OrderedRouteEditorScreen() {
           pitchEnabled={tool !== 'draw'}
           onDidFinishLoadingMap={mapReady ? undefined : () => setMapReady(true)}
           onDidFinishRenderingMapFully={mapReady ? undefined : () => setMapReady(true)}
+          onDidFinishRenderingFrameFully={() => {
+            const pendingPaint = routeGrowthPendingPaintSampleRef.current;
+            if (pendingPaint) {
+              routeGrowthPaintedSampleRef.current = {
+                progress: pendingPaint.progress,
+                head: { ...pendingPaint.head },
+                visiblePointCount: pendingPaint.visiblePointCount,
+                travelledM: pendingPaint.travelledM,
+                totalM: pendingPaint.totalM,
+              };
+              routeGrowthPendingPaintSampleRef.current = null;
+            }
+            const overlap = routeGrowthAnimationRef.current;
+            if (routeHandoffRenderReadyRef.current && overlap?.canonicalOverlap) {
+              routeHandoffRenderReadyRef.current = false;
+              finishRouteAnimation('complete');
+            }
+          }}
           onMapLoadingError={() => setMapLoadState('error')}
           onCameraChanged={(event: any) => {
             const center = event?.properties?.center;
@@ -1947,6 +2141,8 @@ export function OrderedRouteEditorScreen() {
               && !webPerformanceProbeActive
               && now - lastAnimationCameraTraceAtRef.current >= 100) {
               lastAnimationCameraTraceAtRef.current = now;
+              const paintedSample = routeGrowthPaintedSampleRef.current;
+              const visibleHead = paintedSample?.head ?? activeAnimation.head;
               const expectedCenter = {
                 x: activeAnimation.expectedScreenCenter.x,
                 y: activeAnimation.expectedScreenCenter.y,
@@ -1956,11 +2152,12 @@ export function OrderedRouteEditorScreen() {
                 : null;
               const snapshot = {
                 animationId: activeAnimation.key,
-                progress: activeAnimation.progress,
-                head: activeAnimation.head,
+                progress: paintedSample?.progress ?? activeAnimation.progress,
+                logicalProgress: activeAnimation.progress,
+                head: visibleHead,
                 cameraCenter,
                 geographicHeadCenterErrorM: cameraCenter
-                  ? routePointDistanceM(activeAnimation.head, cameraCenter)
+                  ? routePointDistanceM(visibleHead, cameraCenter)
                   : null,
                 expectedUnobscuredScreenCenter: expectedCenter,
                 isUserInteraction: Boolean(event?.properties?.isUserInteraction
@@ -1968,7 +2165,7 @@ export function OrderedRouteEditorScreen() {
               };
               const project = mapViewRef.current?.getPointInView;
               if (typeof project === 'function') {
-                void Promise.resolve(project.call(mapViewRef.current, [activeAnimation.head.lng, activeAnimation.head.lat]))
+                void Promise.resolve(project.call(mapViewRef.current, [visibleHead.lng, visibleHead.lat]))
                   .then((screenPoint: unknown) => {
                     const values = Array.isArray(screenPoint) ? screenPoint.map(Number) : [];
                     recordRouteDrawingTrace('route_point_camera_observed', {
@@ -1989,6 +2186,7 @@ export function OrderedRouteEditorScreen() {
             }
             if (event?.properties?.isUserInteraction || event?.properties?.gestures?.isGestureActive) {
               userMovedCameraRef.current = true;
+              userCameraInteractionGenerationRef.current += 1;
               finishRouteAnimation('user-camera');
             }
           }}
@@ -2075,7 +2273,15 @@ export function OrderedRouteEditorScreen() {
               />
             </UserLocation>
           ) : null}
-          <FogLayer scopeOverride={planningMemoryScope} opacityScale={0.42} viewport={memoryCoverageView} />
+          <FogLayer
+            scopeOverride={planningMemoryScope} opacityScale={0.42}
+            viewport={memoryCoverageView}
+            onFogPreparing={() => {
+              if (!routeFogUnavailable) setRouteFogPending(true);
+            }}
+            onFogReady={() => setRouteFogPending(false)}
+            onFogUnavailable={() => setRouteFogPending(false)}
+          />
           {ShapeSource && LineLayer && trimOriginalFeature ? (
             <ShapeSource id="ordered-route-trim-original" shape={trimOriginalFeature}>
               <LineLayer id="ordered-route-trim-original-line" slot="top" style={{ lineColor: theme.foregroundSecondary, lineWidth: 7, lineOpacity: 0.34, lineDasharray: [1.5, 1.2], lineCap: 'round', lineJoin: 'round' }} />
@@ -2088,7 +2294,7 @@ export function OrderedRouteEditorScreen() {
             LineLayer={LineLayer}
             SymbolLayer={SymbolLayer}
             idPrefix="ordered-route"
-            hiddenPartId={routeGrowthAnimation?.hiddenPartId}
+            hiddenPartId={routeGrowthAnimation?.canonicalOverlap ? undefined : routeGrowthAnimation?.hiddenPartId}
           />
           {ShapeSource && LineLayer && animationFeature ? (
             <ShapeSource ref={routeGrowthSourceRef} id="ordered-route-growth" shape={animationFeature} lineMetrics>
@@ -2182,8 +2388,20 @@ export function OrderedRouteEditorScreen() {
               disabled={memorySubscriptions.length === 0}
               onPress={() => setPlanningMemoryScope('combined')}
               accessibilityRole="radio"
-              accessibilityState={{ selected: planningMemoryScope === 'combined', disabled: memorySubscriptions.length === 0 }}
-            ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine &amp; Friends</Text></TouchableOpacity>
+              accessibilityLabel={routeFogUnavailable
+                ? 'Mine and Friends exploration unavailable'
+                : 'Mine and Friends exploration'}
+              accessibilityState={{
+                selected: planningMemoryScope === 'combined',
+                disabled: memorySubscriptions.length === 0,
+                busy: planningMemoryScope === 'combined' && routeFogPending && !routeFogUnavailable,
+              }}
+            >
+              <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine &amp; Friends</Text>
+              <View style={styles.routeFogPendingSlot}>
+                {showRouteFogPending ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+              </View>
+            </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[styles.friendPickerAction, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }]}
@@ -2195,17 +2413,23 @@ export function OrderedRouteEditorScreen() {
             <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Friends</Text>
             <Text style={[styles.friendPickerCount, { color: theme.primary }]}>{memorySubscriptions.length} selected</Text>
           </TouchableOpacity>
-          {memorySubscriptions.length === 0 ? <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>No shared Friend Fog is available. Mine stays visible.</Text> : null}
+          {routeFogUnavailable ? (
+            <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>Shared exploration couldn’t refresh. Mine stays visible.</Text>
+          ) : memorySubscriptions.length === 0 ? (
+            <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>No shared Friend Fog is available. Mine stays visible.</Text>
+          ) : null}
         </View>
       ) : null}
 
       <View style={[
         styles.topBar,
-        { paddingTop: insets.top + Spacing.sm, paddingBottom: Spacing.sm, backgroundColor: theme.mapOverlay, borderBottomColor: theme.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth },
-      ]} pointerEvents="box-none">
-        <BackButton variant="inline" onPress={() => nav.goBack()} />
-        <View style={styles.topTitleWrap}>
-          <Text testID="route-editor-title" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
+        { paddingTop: insets.top + Spacing.sm, paddingBottom: Spacing.sm },
+      ]} pointerEvents="box-none" testID="route-editor-header">
+        <BackButton variant="pill" onPress={() => nav.goBack()} />
+          <View pointerEvents="none" style={styles.topTitleWrap}>
+          <View style={[styles.topTitleChip, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}>
+            <Text testID="route-editor-title" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
+          </View>
         </View>
         <View style={styles.topUtilityPlaceholder} />
       </View>
@@ -2341,6 +2565,7 @@ export function OrderedRouteEditorScreen() {
       <ModalCard
         visible={pendingLeave !== null}
         onDismiss={() => setPendingLeave(null)}
+        presentation="confirmation"
         testID="route-editor-leave-confirm"
       >
         <ModalCardHeader
@@ -2390,8 +2615,9 @@ export function OrderedRouteEditorScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, zIndex: 10, borderBottomWidth: 0 },
-  topTitleWrap: { flex: 1, alignItems: 'center' },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, zIndex: 10, borderBottomWidth: 0 },
+  topTitleWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  topTitleChip: { minHeight: 38, justifyContent: 'center', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md },
   topTitle: { fontSize: FontSize.h3, fontWeight: '800' },
   topSubtitle: { marginTop: 2, fontSize: FontSize.tiny, fontWeight: '600' },
   topUtility: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
@@ -2406,8 +2632,9 @@ const styles = StyleSheet.create({
   popoverRow: { flexDirection: 'row', gap: Spacing.xs, flexWrap: 'wrap' },
   friendPickerAction: { minHeight: 44, borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   friendPickerCount: { fontSize: FontSize.caption, fontWeight: '700' },
-  popoverChoice: { minHeight: 44, borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  popoverChoice: { minHeight: 44, borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   popoverChoiceText: { fontSize: FontSize.small, fontWeight: '700' },
+  routeFogPendingSlot: { width: 12, height: 16, alignItems: 'center', justifyContent: 'center' },
   popoverHint: { fontSize: FontSize.small, lineHeight: 17 },
   popoverAction: { minHeight: 38, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.sm, marginTop: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   popoverActionText: { fontSize: FontSize.caption, fontWeight: '700' },
@@ -2475,5 +2702,5 @@ const styles = StyleSheet.create({
   modalScroll: { maxHeight: 320 },
   searchInput: { minHeight: 48, borderWidth: 1, borderRadius: RadiusRole.input, paddingHorizontal: Spacing.md, fontSize: FontSize.body },
   searchMessage: { marginTop: Spacing.sm, fontSize: FontSize.small, lineHeight: 18 },
-  confirmBody: { padding: Spacing.lg, gap: Spacing.sm },
+  confirmBody: { gap: Spacing.sm },
 });

@@ -143,6 +143,7 @@ const styles = StyleSheet.create({
   },
   pillContent: {
     flexDirection: 'row', alignItems: 'center', gap: 2,
+    minHeight: 44,
     paddingHorizontal: Spacing.md, paddingVertical: 7,
   },
   pillText: { fontSize: FontSize.small, fontWeight: '600' },

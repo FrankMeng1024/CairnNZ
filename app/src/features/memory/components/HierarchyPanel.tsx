@@ -44,6 +44,7 @@ import { Colors, Radius, FontSize } from '../../../components/tokens';
 import { MemoryColors } from '../config/memoryConfig';
 import { Icon } from '../../../components/Icon';
 import { fetchPanelData, type PanelData, type PanelItem } from '../services/hierarchyService';
+import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 interface Props {
   titleId: string;                           // 'world' or a country id
@@ -75,6 +76,7 @@ export function HierarchyPanel({
   onClose,
   friendRegionSources = {},
 }: Props) {
+  const theme = useVisualTheme();
   const [data, setData] = useState<PanelData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +123,14 @@ export function HierarchyPanel({
   // Sort items: is_here first (green), then marked (desc), then walked (alpha)
   const visibleLevel = data?.title.id === 'world' ? 2 : 3;
   const ownIds = new Set(data?.items.map(item => item.id) ?? []);
-  const friendOnlyItems: PanelItem[] = Object.values(friendRegionSources)
+  type Ownership = 'mine' | 'friends' | 'both';
+  type OwnedPanelItem = PanelItem & { ownership: Ownership; friendNames: string[] };
+  const ownItems: OwnedPanelItem[] = (data?.items ?? []).map(item => ({
+    ...item,
+    ownership: friendRegionSources[item.id] ? 'both' : 'mine',
+    friendNames: friendRegionSources[item.id]?.names ?? [],
+  }));
+  const friendOnlyItems: OwnedPanelItem[] = Object.values(friendRegionSources)
     .filter(source => source.region.level === visibleLevel
       && (visibleLevel === 2 || source.region.parentId === data?.title.id)
       && !ownIds.has(source.region.id))
@@ -133,9 +142,11 @@ export function HierarchyPanel({
       is_here: visibleLevel === 2
         ? source.region.id === currentCountryId
         : source.region.id === currentCityId,
+      ownership: 'friends',
+      friendNames: source.names,
     }));
-  const visibleItems = data ? [...data.items, ...friendOnlyItems] : [];
-  const sortedItems: PanelItem[] = data
+  const visibleItems = data ? [...ownItems, ...friendOnlyItems] : [];
+  const sortedItems: OwnedPanelItem[] = data
     ? [
         ...visibleItems.filter((it) => it.is_here),
         ...visibleItems
@@ -161,11 +172,11 @@ export function HierarchyPanel({
   return (
     <>
       <Pressable style={styles.backdrop} onPress={onClose} testID="hierarchy-backdrop" />
-      <Animated.View style={styles.panel} pointerEvents="box-none" testID="hierarchy-panel">
+      <Animated.View style={[styles.panel, { backgroundColor: theme.surfaceElevated, shadowColor: theme.shadow }]} pointerEvents="box-none" testID="hierarchy-panel">
         {/* Header: title + ↑ button (hidden at world) */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <Text
-            style={styles.title}
+            style={[styles.title, { color: theme.foreground }]}
             numberOfLines={2}
             adjustsFontSizeToFit
             minimumFontScale={0.75}
@@ -175,7 +186,7 @@ export function HierarchyPanel({
           </Text>
           {data?.parent ? (
             <TouchableOpacity
-              style={styles.upBtn}
+              style={[styles.upBtn, { backgroundColor: theme.surface }]}
               onPress={onGoUp}
               activeOpacity={0.7}
               accessibilityLabel="Go up"
@@ -220,7 +231,12 @@ export function HierarchyPanel({
                     key={item.id}
                     testID={`hierarchy-row-${item.id}`}
                     accessibilityState={{ selected: isHere }}
-                    style={[styles.row, isHere && styles.rowHere]}
+                    accessibilityLabel={`${item.name_en}, ${item.ownership === 'both' ? 'Mine and Friends' : item.ownership === 'mine' ? 'Mine' : 'Friends'}`}
+                    style={[
+                      styles.row,
+                      { borderTopColor: theme.border },
+                      isHere && [styles.rowHere, { backgroundColor: theme.controlSelected }],
+                    ]}
                     onPress={() => onSelectItem(item.id, itemType, item.bbox)}
                     activeOpacity={0.6}
                   >
@@ -233,13 +249,29 @@ export function HierarchyPanel({
                       ]}
                     />
                     <Text
-                      style={[styles.rowName, isHere && styles.rowNameHere]}
+                      style={[styles.rowName, { color: theme.foreground }, isHere && [styles.rowNameHere, { color: theme.primary }]]}
                       numberOfLines={2}
                       adjustsFontSizeToFit
                       minimumFontScale={0.75}
                     >
                       {item.name_en}
                     </Text>
+                    <View
+                      style={styles.ownership}
+                      testID={`hierarchy-ownership-${item.id}`}
+                      accessibilityElementsHidden
+                    >
+                      {item.ownership === 'mine' || item.ownership === 'both' ? (
+                        <View style={[styles.ownershipBadge, { backgroundColor: theme.mapMineMemoryFill }]}>
+                          <Text style={styles.ownershipText}>M</Text>
+                        </View>
+                      ) : null}
+                      {item.ownership === 'friends' || item.ownership === 'both' ? (
+                        <View style={[styles.ownershipBadge, { backgroundColor: theme.mapFriendMemoryFill }]}>
+                          <Text style={styles.ownershipText}>F</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -350,6 +382,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   rowNameHere: { color: Colors.primary, fontWeight: '700' },
+  ownership: { flexDirection: 'row', alignItems: 'center', gap: 3, minWidth: 16, minHeight: 18 },
+  ownershipBadge: {
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ownershipText: { color: '#FFFFFF', fontSize: 9, lineHeight: 11, fontWeight: '800' },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   dotHere: { backgroundColor: Colors.primary },
   dotMarked: { backgroundColor: MemoryColors.sepia },

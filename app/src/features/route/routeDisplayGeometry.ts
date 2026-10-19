@@ -41,6 +41,7 @@ const DISPLAY_SAMPLE_M = 6;
 const RETRACE_CORRIDOR_M = 3.25;
 const RETRACE_HEADING_DEG = 28;
 const RETRACE_TURN_BRIDGE_M = 18;
+const RETRACE_LABEL_MIN_M = 40;
 
 function clone(point: RoutePoint): RoutePoint {
   return { ...point };
@@ -122,13 +123,39 @@ function traversalMultiplicity(matches: number[]): number {
  * coordinates. Sampling is used only for overlap recognition; persistence,
  * metrics and navigation keep using the untouched canonical geometry.
  *
- * Repeated intervals remain in original traversal order as a continuous
- * offset feature. Mapbox rounds the real turning vertex into the small U that
- * joins an out-and-back. Matching uses corridor and heading, so A-B can match
+ * Repeated intervals remain in the original canonical centerline. Recognition
+ * may add a restrained high-zoom traversal label, but never splits or offsets
+ * the painted journey. Matching uses corridor and heading, so A-B can match
  * B-M-A without requiring identical endpoint pairs.
  */
 export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): RouteDisplayGeometry {
   const gapAfter = new Set(geometry.gaps.map(gap => gap.afterPartId));
+  // Paint the ordered canonical coordinates as one uninterrupted source per
+  // real gap. Repeat recognition may add a restrained annotation, but it must
+  // never remove an interval from this source or move it to another offset
+  // source. Two sources produce independent caps at repeat transitions and
+  // their apparent separation changes with zoom and bearing.
+  const baseLines: RouteDisplayLine[] = [];
+  let activeBase: RouteDisplayLine | null = null;
+  geometry.parts.forEach((part, partIndex) => {
+    if (part.points.length < 2) return;
+    const hasGap = partIndex > 0 && gapAfter.has(geometry.parts[partIndex - 1].id);
+    const occurrenceIds = part.points.slice(0, -1).map((_, index) => `${part.id}:${index}`);
+    if (activeBase
+      && !hasGap
+      && routePointDistanceM(activeBase.coordinates.at(-1)!, part.points[0]) <= CONNECTED_M) {
+      activeBase.coordinates.push(...part.points.slice(1).map(clone));
+      activeBase.occurrenceIds.push(...occurrenceIds);
+      return;
+    }
+    activeBase = {
+      id: `base:${part.id}`,
+      coordinates: part.points.map(clone),
+      occurrenceIds,
+    };
+    baseLines.push(activeBase);
+  });
+
   const segments: DisplaySegment[] = [];
   geometry.parts.forEach((part, partIndex) => {
     part.points.slice(0, -1).forEach((point, pointIndex) => {
@@ -181,40 +208,13 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
     }
   }
 
-  // Most Routes do not retrace themselves. Preserve their exact canonical
-  // vertices in the display source: sampling above is recognition-only.
-  if (!repeated.some(Boolean)) {
-    const baseLines: RouteDisplayLine[] = [];
-    let active: RouteDisplayLine | null = null;
-    geometry.parts.forEach((part, partIndex) => {
-      const hasGap = partIndex > 0 && gapAfter.has(geometry.parts[partIndex - 1].id);
-      const occurrenceIds = part.points.slice(0, -1).map((_, index) => `${part.id}:${index}`);
-      if (active
-        && !hasGap
-        && routePointDistanceM(active.coordinates.at(-1)!, part.points[0]) <= CONNECTED_M) {
-        active.coordinates.push(...part.points.slice(1).map(clone));
-        active.occurrenceIds.push(...occurrenceIds);
-      } else {
-        active = {
-          id: `base:${part.id}`,
-          coordinates: part.points.map(clone),
-          occurrenceIds,
-        };
-        baseLines.push(active);
-      }
-    });
-    return { baseLines, repeatLanes: [], repeatLabels: [] };
-  }
+  // Sampling is recognition-only; the base source above always retains the
+  // exact canonical vertices.
+  if (!repeated.some(Boolean)) return { baseLines, repeatLanes: [], repeatLabels: [] };
 
-  const baseLines: RouteDisplayLine[] = [];
   const repeatLanes: RouteRepeatLane[] = [];
-  let activeBase: RouteDisplayLine | null = null;
   let activeRepeat: RouteRepeatLane | null = null;
 
-  const flushBase = () => {
-    if (activeBase) baseLines.push(activeBase);
-    activeBase = null;
-  };
   const flushRepeat = () => {
     if (activeRepeat) repeatLanes.push(activeRepeat);
     activeRepeat = null;
@@ -222,7 +222,6 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
 
   segments.forEach((segment, index) => {
     if (repeated[index]) {
-      flushBase();
       const multiplicity = traversalMultiplicity(matchIndexes[index]);
       if (activeRepeat
         && !segment.breakBefore
@@ -240,36 +239,24 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
           occurrenceIds: [segment.occurrenceId],
           direction: 'forward',
           multiplicity,
-          // Direction-relative +3 puts a reverse leg on the opposite physical
-          // side and keeps both legs joined at the canonical turn.
-          offsetPx: 3,
+          // Recognition metadata only. The renderer deliberately does not
+          // paint a separately offset lane.
+          offsetPx: 0,
         };
       }
       return;
     }
 
     flushRepeat();
-    if (activeBase
-      && !segment.breakBefore
-      && routePointDistanceM(activeBase.coordinates.at(-1)!, segment.a) <= CONNECTED_M) {
-      activeBase.coordinates.push(clone(segment.b));
-      if (!activeBase.occurrenceIds.includes(segment.occurrenceId)) {
-        activeBase.occurrenceIds.push(segment.occurrenceId);
-      }
-    } else {
-      flushBase();
-      activeBase = {
-        id: `base:${segment.id}`,
-        coordinates: [clone(segment.a), clone(segment.b)],
-        occurrenceIds: [segment.occurrenceId],
-      };
-    }
   });
-  flushBase();
   flushRepeat();
 
   const repeatLabels: RouteRepeatLabel[] = repeatLanes
-    .filter(lane => lane.multiplicity >= 4)
+    .filter(lane => lane.multiplicity >= 2
+      && lane.coordinates.slice(1).reduce(
+        (sum, point, index) => sum + routePointDistanceM(lane.coordinates[index], point),
+        0,
+      ) >= RETRACE_LABEL_MIN_M)
     .map(lane => {
       const middle = Math.floor((lane.coordinates.length - 1) / 2);
       const a = lane.coordinates[middle];
@@ -277,7 +264,7 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
       return {
         id: `repeat-label:${lane.id}`,
         coordinate: interpolate(a, b, 0.5),
-        text: `${lane.multiplicity} traversals`,
+        text: `${lane.multiplicity} passes`,
         occurrenceIds: [...lane.occurrenceIds],
         direction: lane.direction,
       };
