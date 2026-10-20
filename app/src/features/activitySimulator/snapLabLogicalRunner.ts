@@ -33,6 +33,7 @@ import { flushSyntheticMemoryNow } from '../memory/services/memoryPersistence';
 import { clearSyntheticMemoryForUser } from '../memory/services/memoryPersistence';
 import { readHikeTrackForProjection } from '../../services/hikeTrackWriter';
 import { purgeActivityStageLedgerRealmForOwner } from '../activity/activityStageLedger';
+import { beginActivityDiagnosticReplay } from '../activity/activityDiagnosticReplay';
 
 export interface SnapLabPublicRawEvent {
   ordinal: number;
@@ -249,7 +250,12 @@ let firstFinishResult: unknown = null;
       clockSpeed: 1,
     };
     const initialTransport = fixture.lifecycle.offlineAtFinish ? null : transportFor(fixture);
-    configureSnapLabRun(context, initialTransport?.fetch, initialTransport?.receipts);
+    configureSnapLabRun(
+      context,
+      initialTransport?.fetch,
+      initialTransport?.receipts,
+      initialTransport?.responses,
+    );
     configureSnapLabFaultPlan(options.activityId, {
       diagnosticWriteDelayMs: fixture.lifecycle.slowDiagnosticWriteMs,
       diagnosticWritesRemaining: fixture.lifecycle.slowDiagnosticWriteMs > 0 ? 3 : 0,
@@ -273,6 +279,13 @@ let firstFinishResult: unknown = null;
     if (owner.sessionId !== options.activityId || !owner.liveOwnerGeneration) {
       throw new Error('snap_lab_start_owner_mismatch');
     }
+    await beginActivityDiagnosticReplay({
+      ownerUserId: options.ownerUserId,
+      clientActivityId: options.activityId,
+      mode: fixture.mode === 'run' ? 'running' : 'hiking',
+      source: 'simulator',
+      wallTimeMs: logicalWallNow,
+    });
     const batchOrdinals = receiptBatchOrdinals(fixture.rawEvents);
     const batchIndexes = new Map<number, number>();
     const acceptanceReasons: Record<string, number> = {};
@@ -401,7 +414,7 @@ let firstFinishResult: unknown = null;
         networkCondition: 'online-restored',
         transportMode: configuredTransportMode({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
         evidenceLabel: configuredEvidenceLabel({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
-      }, restoredTransport.fetch, restoredTransport.receipts);
+      }, restoredTransport.fetch, restoredTransport.receipts, restoredTransport.responses);
       const firstUpgrade = await upgradeSnapLabActivityOnce(options.ownerUserId, options.activityId);
       const secondUpgrade = await upgradeSnapLabActivityOnce(options.ownerUserId, options.activityId);
       const snapshotAfter = secondUpgrade.record.routeSnapshots.find(item => item.id === snapshot.id);
@@ -560,7 +573,12 @@ export async function prepareSnapLabUiJourney(
     clockSpeed: 1,
   };
   const initialTransport = fixture.lifecycle.offlineAtFinish ? null : transportFor(fixture);
-  configureSnapLabRun(context, initialTransport?.fetch, initialTransport?.receipts);
+  configureSnapLabRun(
+    context,
+    initialTransport?.fetch,
+    initialTransport?.receipts,
+    initialTransport?.responses,
+  );
   useActivitySimulatorStore.setState({ hydratedUserId: options.ownerUserId });
   const simulator = useActivitySimulatorStore.getState();
   simulator.setEnabled(true);
@@ -593,6 +611,13 @@ export async function replaySnapLabUiJourney(
   if (owner.sessionId !== activityId || owner.status !== 'tracking' || !owner.liveOwnerGeneration) {
     throw new Error('snap_lab_ui_activity_owner_mismatch');
   }
+  await beginActivityDiagnosticReplay({
+    ownerUserId: owner.ownerUserId!,
+    clientActivityId: activityId,
+    mode: fixture.mode === 'run' ? 'running' : 'hiking',
+    source: 'simulator',
+    wallTimeMs: uiReplayLogicalWallNow,
+  });
   configureSnapLabFaultPlan(activityId, {
     diagnosticWriteDelayMs: fixture.lifecycle.slowDiagnosticWriteMs,
     diagnosticWritesRemaining: fixture.lifecycle.slowDiagnosticWriteMs > 0 ? 3 : 0,
@@ -702,7 +727,7 @@ export async function upgradeSnapLabUiJourneyAfterReconnect(
     transportMode: configuredTransportMode({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
     evidenceLabel: configuredEvidenceLabel({ ...fixture, lifecycle: { ...fixture.lifecycle, offlineAtFinish: false } }),
     requestIdentity: fixture.fixtureSha256,
-  }, transport.fetch, transport.receipts);
+  }, transport.fetch, transport.receipts, transport.responses);
   const first = await upgradeSnapLabActivityOnce(ownerUserId, activityId);
   const second = await upgradeSnapLabActivityOnce(ownerUserId, activityId);
   return { firstStatus: first.status, secondStatus: second.status, record: second.record };
@@ -737,7 +762,7 @@ export async function probeSnapLabFinalForFixture(
     transportMode: configuredTransportMode(fixture),
     evidenceLabel: configuredEvidenceLabel(fixture),
     requestIdentity: fixture.fixtureSha256,
-  }, transport.fetch, transport.receipts);
+  }, transport.fetch, transport.receipts, transport.responses);
   return runSnapLabFinal(canonical);
 }
 
@@ -754,6 +779,6 @@ export async function probeSnapLabFinalWithCapturedResponses(
     networkCondition: 'captured-real-response-replay',
     transportMode: 'captured',
     evidenceLabel: 'CAPTURED_REAL_RESPONSE',
-  }, transport.fetch, transport.receipts);
+  }, transport.fetch, transport.receipts, transport.responses);
   return runSnapLabFinal(canonical, { qualityTrace: true });
 }

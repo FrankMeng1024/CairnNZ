@@ -113,11 +113,43 @@ describe('Plant active-Activity location authority', () => {
       sessionId: 'real-activity',
       ownerUserId: 'owner-a',
       liveOwnerGeneration: 'real-generation',
+      activityMode: 'hiking',
     } as const;
     mockActivityFreshnessNow.mockReturnValue(wallNow);
 
     expect(resolveInitialPlantContext(tracking)).toMatchObject({ step: 'content', fromActivity: true });
     expect(mockActivityFreshnessNow).toHaveBeenCalledWith('real');
+  });
+
+  test('stale Activity location reacquires GPS without losing Activity identity', () => {
+    const wallNow = 1_800_000_000_000;
+    const tracking = {
+      status: 'tracking',
+      locationProviderSource: 'real',
+      locationAvailable: false,
+      lastCoordinate: { lat: -41.2864, lng: 174.7763, accuracy: 18 },
+      lastCoordinateTime: wallNow - 45_000,
+      sessionId: 'real-activity',
+      ownerUserId: 'owner-a',
+      liveOwnerGeneration: 'real-generation',
+      activityMode: 'hiking',
+    } as const;
+    mockActivityFreshnessNow.mockReturnValue(wallNow);
+
+    expect(resolveInitialPlantContext(tracking, {
+      kind: 'activity',
+      clientActivityId: 'real-activity',
+      ownerGeneration: 'real-generation',
+      activityMode: 'hiking',
+    })).toMatchObject({
+      step: 'gps',
+      fromActivity: true,
+      activityContext: {
+        ownerUserId: 'owner-a',
+        clientActivityId: 'real-activity',
+        ownerGeneration: 'real-generation',
+      },
+    });
   });
 
   test('standalone Plant still enters bounded GPS flow without an active Activity', () => {

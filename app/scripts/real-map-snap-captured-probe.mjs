@@ -14,7 +14,10 @@ const outputRoot = path.resolve(argument(
 ));
 const inputRoot = path.resolve(argument('--input', outputRoot));
 const inputActivityRoot = path.resolve(argument('--activities', path.join(inputRoot, 'activities')));
-const inputCaptureRoot = path.resolve(argument('--captures', path.join(inputRoot, 'http-captures')));
+const defaultCaptureRoot = fs.existsSync(path.join(inputRoot, 'http-captures'))
+  ? path.join(inputRoot, 'http-captures')
+  : path.join(inputRoot, 'captured-response-inputs');
+const inputCaptureRoot = path.resolve(argument('--captures', defaultCaptureRoot));
 const baseUrl = argument('--url', 'http://127.0.0.1:8098');
 const runIds = String(argument('--runs', 'X01-hike-normal,X02-hike-normal')).split(',').filter(Boolean);
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

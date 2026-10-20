@@ -1,0 +1,194 @@
+{
+  "schema": "cairn.hike-run.frozen-human-grades.v1",
+  "campaign": "quality-upgrade-20261020",
+  "rubricFrozenBeforeTuning": true,
+  "cleanTruthInstalledInApp": false,
+  "ordinary": {
+    "excellent": 12,
+    "total": 12,
+    "excellentPct": 100,
+    "target": ">90%"
+  },
+  "supportedDifficult": {
+    "graceful": 6,
+    "unacceptable": 0,
+    "total": 6
+  },
+  "unfiltered": {
+    "excellent": 12,
+    "graceful": 6,
+    "unacceptable": 0,
+    "total": 18,
+    "excellentPct": 66.7,
+    "usefulPct": 100
+  },
+  "limitations": [
+    "Small frozen engineering validation set; not an all-real-world GPS success-rate claim.",
+    "Structured engineering visual review is not an independent user study.",
+    "Native iPhone delivery, suspension and power evidence remains pending."
+  ],
+  "cases": [
+    {
+      "runId": "Q01-hike-normal",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "New York, United States",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Frozen live Mapbox walking Directions geometry; reviewed Central Park pedestrian drives and paths before noise.",
+      "reason": "Calm park line, ordered bends and return, credible endpoint; no reservoir or building chord."
+    },
+    {
+      "runId": "Q01-run-biased",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "New York, United States",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Frozen live Mapbox walking Directions geometry; reviewed Central Park pedestrian drives and paths before noise.",
+      "reason": "Biased observations remain a readable ordered run; local lateral error does not change route identity."
+    },
+    {
+      "runId": "Q02-hike-normal",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Boston, United States",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Frozen live Mapbox walking Directions geometry over public Boston Common and Beacon Hill sidewalks.",
+      "reason": "City corners and crossing order are retained without a block shortcut."
+    },
+    {
+      "runId": "Q02-hike-degraded",
+      "scope": "supported-difficult",
+      "grade": "GRACEFUL",
+      "region": "Boston, United States",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Frozen live Mapbox walking Directions geometry over public Boston Common and Beacon Hill sidewalks.",
+      "reason": "Visible local urban-canyon offset, but the loop and corners remain ordered and locally correctable."
+    },
+    {
+      "runId": "Q03-run-normal",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "San Francisco, United States",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Frozen live Mapbox walking Directions geometry over public Golden Gate Park pedestrian paths and crossings.",
+      "reason": "Curved path, crossing and stop/restart remain natural."
+    },
+    {
+      "runId": "Q03-run-degraded",
+      "scope": "supported-difficult",
+      "grade": "GRACEFUL",
+      "region": "San Francisco, United States",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Frozen live Mapbox walking Directions geometry over public Golden Gate Park pedestrian paths and crossings.",
+      "reason": "Lateral bias remains localized; park sequence and exit stay useful."
+    },
+    {
+      "runId": "Q04-hike-normal-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Sydney, Australia",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking Directions geometry on Domain and Royal Botanic Garden public paths.",
+      "reason": "Waterfront and garden bends are retained; no harbour chord; ongoing Plant returns to the same recording."
+    },
+    {
+      "runId": "Q04-run-biased-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Sydney, Australia",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking Directions geometry on Domain and Royal Botanic Garden public paths.",
+      "reason": "Biased run stays on the recognizable waterfront sequence with credible ends."
+    },
+    {
+      "runId": "Q05-hike-normal-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "London, United Kingdom",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking Directions geometry on public Hampstead Heath footpaths.",
+      "reason": "Off-road trail and fork order remain off-road and legible."
+    },
+    {
+      "runId": "Q05-hike-degraded-holdout",
+      "scope": "supported-difficult",
+      "grade": "GRACEFUL",
+      "region": "London, United Kingdom",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking Directions geometry on public Hampstead Heath footpaths.",
+      "reason": "Local trail drift is visible but does not snap the whole walk to a road; one local Route correction was proven."
+    },
+    {
+      "runId": "Q06-hike-normal-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Vancouver, Canada",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen Mapbox walking geometry with an intentionally repeated Stanley Park Seawall waypoint.",
+      "reason": "Shared out-and-back corridor, turnaround and endpoints are preserved without a water shortcut."
+    },
+    {
+      "runId": "Q06-run-degraded-holdout",
+      "scope": "supported-difficult",
+      "grade": "GRACEFUL",
+      "region": "Vancouver, Canada",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen Mapbox walking geometry with an intentionally repeated Stanley Park Seawall waypoint.",
+      "reason": "Turnaround area has localized error, while traversal order and shared corridor remain useful."
+    },
+    {
+      "runId": "Q07-hike-normal-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Singapore",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking geometry on the public Rail Corridor and park connector; one implausible provider detour was rejected before freezing.",
+      "reason": "Green corridor remains ordered through the supported outage boundary without parallel-road theft."
+    },
+    {
+      "runId": "Q07-hike-degraded-holdout",
+      "scope": "supported-difficult",
+      "grade": "GRACEFUL",
+      "region": "Singapore",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking geometry on the public Rail Corridor and park connector; one implausible provider detour was rejected before freezing.",
+      "reason": "Canopy drift stays locally visible; there is no invented long connector or wholesale road snap."
+    },
+    {
+      "runId": "Q08-hike-normal-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Wellington, New Zealand",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking geometry on public Wellington Botanic Garden paths and exit streets.",
+      "reason": "Switchback and garden exit sequence survive delayed/background delivery."
+    },
+    {
+      "runId": "Q08-hike-degraded-holdout",
+      "scope": "supported-difficult",
+      "grade": "GRACEFUL",
+      "region": "Wellington, New Zealand",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking geometry on public Wellington Botanic Garden paths and exit streets.",
+      "reason": "Delayed batch produces a bounded local defect while ordered switchbacks and the exit remain recognizable."
+    },
+    {
+      "runId": "Q09-hike-normal-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Kyoto, Japan",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking geometry on the public Philosopher's Path and street exit.",
+      "reason": "Canal path, crossings and final exit remain intact through offline Finish and reconnect."
+    },
+    {
+      "runId": "Q09-run-biased-holdout",
+      "scope": "ordinary",
+      "grade": "EXCELLENT",
+      "region": "Kyoto, Japan",
+      "routeFeasibility": "VALID",
+      "groundTruthProvenance": "Unseen frozen live Mapbox walking geometry on the public Philosopher's Path and street exit.",
+      "reason": "Biased running observations remain a clean ordered canal-to-street Activity after cold reopen."
+    }
+  ]
+}

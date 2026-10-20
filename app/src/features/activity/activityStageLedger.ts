@@ -1,5 +1,6 @@
 import { storage } from '../../store/storage';
 import { applySnapLabDiagnosticWriteDelay } from '../activitySimulator/snapLabFaultInjection';
+import { recordActivityDiagnosticReplayEvent } from './activityDiagnosticReplay';
 
 export type ActivityStage =
   | 'activity-start'
@@ -965,6 +966,23 @@ export function recordActivityStageEvent(input: {
   const monotonicTimeMs = input.monotonicTimeMs === undefined
     ? activityStageMonotonicNow()
     : input.monotonicTimeMs;
+  if ([
+    'activity-start', 'lifecycle', 'provider-state', 'final-job', 'final-selected',
+    'completion-presented', 'detail-selected', 'sync-state',
+  ].includes(input.stage)) {
+    void recordActivityDiagnosticReplayEvent({
+      ownerUserId: input.ownerUserId,
+      clientActivityId: input.clientActivityId,
+      kind: 'application-event',
+      wallTimeMs,
+      monotonicTimeMs,
+      data: {
+        stage: input.stage,
+        evidenceId: input.evidenceId ?? null,
+        details: privacySafeDetails(input.details ?? {}),
+      },
+    });
+  }
   const sequence = eventSequence += 1;
   const eventId = `${wallTimeMs.toString().padStart(13, '0')}-${sequence.toString().padStart(8, '0')}`;
   const event: ActivityStageLedgerEvent = {

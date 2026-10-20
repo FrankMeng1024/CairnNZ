@@ -1,5 +1,6 @@
 import {
   buildBaseFinalGeometry,
+  buildEvidenceSupportedLocalFinalGeometry,
   cleanCanonicalGeometry,
   cropGeometryToTracepoints,
   deriveSnapSectionRuns,
@@ -454,6 +455,48 @@ describe('O50 pedestrian geometry modes', () => {
 });
 
 describe('O50 free/off-network cleanup product contracts', () => {
+  test('Final display chronology does not manufacture movement inside a long observation gap', async () => {
+    const canonical = Array.from({ length: 11 }, (_unused, index) => ({
+      ...point(index * 10, 0, index, 8),
+      t: 1_700_000_000_000 + index * 4_000 + (index >= 5 ? 36_000 : 0),
+    }));
+    const result = await reconstructPedestrianFinalRoute(canonical, {
+      mapboxToken: '',
+      directionsFallback: false,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const gapStart = canonical[4].t!;
+    const gapEnd = canonical[5].t!;
+    expect(result.points.some(sample => sample.t! > gapStart && sample.t! < gapEnd)).toBe(false);
+    expect(result.points.map(sample => sample.t)).toEqual(
+      result.points.map(sample => sample.t).slice().sort((left, right) => Number(left) - Number(right)),
+    );
+  });
+
+  test('Base Final assigns evidence-corresponding time to every densified display point', () => {
+    const canonical = Array.from({ length: 11 }, (_unused, index) => ({
+      ...point(index * 10, 0, index, 8),
+      t: 1_700_000_000_000 + index * 4_000 + (index >= 5 ? 36_000 : 0),
+    }));
+    const base = buildBaseFinalGeometry(canonical);
+    expect(base.points.length).toBeGreaterThan(2);
+    expect(base.points.every(sample => Number.isFinite(sample.t))).toBe(true);
+    const gapStart = canonical[4].t!;
+    const gapEnd = canonical[5].t!;
+    expect(base.points.some(sample => sample.t! > gapStart && sample.t! < gapEnd)).toBe(false);
+  });
+
+  test('local evidence utility is not rejected solely because densification adds vertices', () => {
+    const canonical = Array.from({ length: 61 }, (_unused, index) => (
+      point(index * 4, Math.sin(index * 1.35) * 4.8, index, 14)
+    ));
+    const base = buildBaseFinalGeometry(canonical);
+    const local = buildEvidenceSupportedLocalFinalGeometry(canonical);
+    expect(local.diagnostics.localCandidatePointCount).toBeGreaterThanOrEqual(base.points.length);
+    expect(local.diagnostics.rejectionReason).toBe('path-length-sanity');
+  });
+
   test('straight 1–5 m urban wobble becomes a nearly straight consumer route', () => {
     const canonical = Array.from({ length: 61 }, (_unused, index) => (
       point(index * 4, Math.sin(index * 1.4) * 4.6, index, 14)
@@ -559,7 +602,9 @@ describe('O50 free/off-network cleanup product contracts', () => {
       t: 1_700_000_000_000 + index * 4_000,
     })));
     expect(base.diagnostics.pauseBoundaryCount).toBe(0);
-    expect(base.points).toEqual(dense.points);
+    expect(base.points.map(({ lat, lng }) => ({ lat, lng }))).toEqual(
+      dense.points.map(({ lat, lng }) => ({ lat, lng })),
+    );
   });
 
   test('a coherent closed loop inside the accuracy radius is not collapsed as a stationary cloud', () => {
@@ -666,6 +711,36 @@ describe('O50 free/off-network cleanup product contracts', () => {
     expect(critical.some(index => index >= 6 && index <= 9)).toBe(true);
     expect(geometryLength(cleaned)).toBeGreaterThan(105);
     expect(cleaned[cleaned.length - 1].lng).toBeCloseTo(canonical[canonical.length - 1].lng, 7);
+  });
+
+  test('metadata alignment cannot jump from an outbound pause to a later repeated corridor', () => {
+    const outbound = line(0, 120, 0, 16);
+    const pauseIndex = 5;
+    const pauseTime = outbound[pauseIndex].t!;
+    const paused = Array.from({ length: 8 }, (_unused, index) => ({
+      ...point(40, 0.35, 100 + index, 8),
+      t: pauseTime + (index + 1) * 4_000,
+    }));
+    const pauseDurationMs = paused.at(-1)!.t! - pauseTime;
+    const shiftedTail = outbound.slice(pauseIndex + 1).map(sample => ({
+      ...sample,
+      t: sample.t! + pauseDurationMs,
+    }));
+    const outboundWithPause = [...outbound.slice(0, pauseIndex + 1), ...paused, ...shiftedTail];
+    const uTurnTime = outboundWithPause.at(-1)!.t!;
+    const returning = line(120, 0, 0.4, 16).slice(1).map((sample, index) => ({
+      ...sample,
+      t: uTurnTime + (index + 1) * 4_000,
+    }));
+    const base = buildBaseFinalGeometry([...outboundWithPause, ...returning]);
+    const uTurnIndex = base.points.reduce((best, sample, index, points) => (
+      sample.lng > points[best].lng ? index : best
+    ), 0);
+    expect(base.points[uTurnIndex].t).toBeLessThanOrEqual(uTurnTime);
+    expect(base.points.slice(uTurnIndex + 1).every(sample => sample.t! >= uTurnTime)).toBe(true);
+    expect(base.points.map(sample => sample.t)).toEqual(
+      base.points.map(sample => sample.t).slice().sort((left, right) => Number(left) - Number(right)),
+    );
   });
 
   test('a long callback interval alone is not promoted to a stop boundary', () => {

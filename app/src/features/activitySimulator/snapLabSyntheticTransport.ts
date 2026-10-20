@@ -1,6 +1,7 @@
 import {
   sanitizeSnapLabRequestUrl,
   snapLabRequestFingerprint,
+  type SnapLabCassetteEntry,
   type SnapLabTransportReceipt,
 } from './snapLabTransport';
 
@@ -272,8 +273,10 @@ function directionsBody(options: SnapLabSyntheticTransportOptions, url: URL): un
 export function createSnapLabSyntheticGraphTransport(options: SnapLabSyntheticTransportOptions): {
   fetch: typeof fetch;
   receipts: () => SnapLabTransportReceipt[];
+  responses: () => SnapLabCassetteEntry[];
 } {
   const receipts: SnapLabTransportReceipt[] = [];
+  const responses: SnapLabCassetteEntry[] = [];
   let requestOrdinal = 0;
   const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     requestOrdinal += 1;
@@ -299,6 +302,19 @@ export function createSnapLabSyntheticGraphTransport(options: SnapLabSyntheticTr
     const complete = (status: number | null, errorCategory: string | null) => {
       receipts.push({ ...baseReceipt, status, completedAt: Date.now(), errorCategory });
     };
+    const respond = (status: number, body: unknown) => {
+      responses.push({
+        requestFingerprint,
+        method: 'GET',
+        sanitizedUrl,
+        status,
+        headers: { 'content-type': 'application/json' },
+        body,
+        provenance: 'DETERMINISTIC_TRANSPORT',
+        capturedAt: new Date().toISOString(),
+      });
+      return jsonResponse(status, body);
+    };
     if (method !== 'GET') {
       complete(405, 'METHOD_NOT_ALLOWED');
       return jsonResponse(405, { message: 'Method not allowed' });
@@ -309,21 +325,24 @@ export function createSnapLabSyntheticGraphTransport(options: SnapLabSyntheticTr
     }
     if (options.failureMode === 'nomatch') {
       complete(200, 'NO_MATCH');
-      return jsonResponse(200, endpoint === 'matching'
+      return respond(200, endpoint === 'matching'
         ? { code: 'NoMatch', tracepoints: [], matchings: [] }
         : { code: 'NoRoute', routes: [] });
     }
     if (options.failureMode === 'auth-then-unavailable') {
       const status = requestOrdinal % 2 === 1 ? 401 : 503;
       complete(status, status === 401 ? 'AUTH' : 'UNAVAILABLE');
-      return jsonResponse(status, { code: status === 401 ? 'Unauthorized' : 'ServiceUnavailable' });
+      return respond(status, { code: status === 401 ? 'Unauthorized' : 'ServiceUnavailable' });
     }
     const body = endpoint === 'matching' ? matchingBody(options, url) : directionsBody(options, url);
     complete(200, null);
-    return jsonResponse(200, body);
+    return respond(200, body);
   };
   return {
     fetch: fetchImpl as typeof fetch,
     receipts: () => receipts.map(receipt => ({ ...receipt })),
+    responses: () => responses.map(response => (
+      JSON.parse(JSON.stringify(response)) as SnapLabCassetteEntry
+    )),
   };
 }

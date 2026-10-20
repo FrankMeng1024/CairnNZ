@@ -637,11 +637,15 @@ describe('Free Activity integration contracts', () => {
     expect(detail).toContain('<PrimaryButton');
   });
 
-  test('Activity Detail stays factual while Routes import preserves real ordered segments', () => {
+  test('Activity Detail creates an independent Route while import preserves real ordered segments', () => {
     const detail = read('src/screens/MapHistoryScreen.tsx');
     const trails = read('src/screens/RoutesScreen.tsx');
     const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
-    expect(detail).not.toContain('activity-save-as-route');
+    expect(detail).toContain('testID="activity-create-route"');
+    expect(detail).toContain("creationSource: 'activity'");
+    expect(detail).toContain('fromSessionId: selectedSession.id');
+    expect(detail).toContain('creationSessionId: createRouteCreationSessionId()');
+    expect(detail).toContain('This Activity and its Memory stay unchanged.');
     expect(detail).not.toContain('Save as Route');
     expect(trails).toContain('Use an Activity');
     expect(editor).toContain('const segments = segmentTrace(points).segments');

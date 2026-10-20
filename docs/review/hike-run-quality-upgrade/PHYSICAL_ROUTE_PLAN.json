@@ -1,0 +1,167 @@
+{
+  "schema": "cairn.hike-run.physical-route-plan.v2",
+  "campaign": "quality-upgrade-20261020",
+  "frozenIntentAt": "2026-10-20T10:00:00+08:00",
+  "crs": "EPSG:4326",
+  "coordinateOrder": "longitude,latitude",
+  "mapboxProfile": "walking",
+  "cleanTruthBoundary": "The app receives only noisy observations and application events. Clean geometry, diary positions, intended turns, classification labels, and evaluation tolerances remain private evaluation evidence.",
+  "physicalValidityPolicy": {
+    "required": [
+      "live Mapbox walking Directions response with full GeoJSON geometry",
+      "every returned step is walking and no motorized or water transport is present",
+      "route is reviewed over a Mapbox basemap before it is valid evidence",
+      "public street, sidewalk, park path, shared path, or independently documented trail provenance",
+      "clean diary is frozen before sensor noise, loss, lifecycle, or network schedules"
+    ],
+    "reject": [
+      "straight chord through buildings, walls, water, or inaccessible terrain",
+      "unbounded detour, unsupported transport mode, or missing walk geometry",
+      "unreviewed manually invented geometry"
+    ]
+  },
+  "providerBudget": {
+    "freezeDirectionsMaximum": 9,
+    "candidateMapMatchingMaximum": 120,
+    "candidateDirectionsMaximum": 60,
+    "mapLoadsMaximum": 8,
+    "note": "Every live request is counted. Captured provider responses are replayed for deterministic comparisons."
+  },
+  "holdoutRouteIds": ["Q04", "Q05", "Q06", "Q07", "Q08", "Q09"],
+  "routes": [
+    {
+      "id": "Q01",
+      "title": "Central Park transverse, loop turn, and return",
+      "region": "New York, United States",
+      "category": "urban-park-return",
+      "question": "Can a park return and intersection pause remain calm without cutting the loop?",
+      "waypoints": [[-73.9733,40.7645],[-73.9682,40.7698],[-73.9640,40.7753],[-73.9709,40.7712]],
+      "expectedNamedContext": ["Central Park","East Drive","The Mall"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public Central Park pedestrian drives and paths","mustPreserve":["park-path turns","ordered partial return","no reservoir chord"]},
+      "stop": {"fraction":0.48,"durationS":42},
+      "variants": [
+        {"id":"Q01-hike-normal","mode":"hike","profile":"normal","seed":1030101,"sampleIntervalS":3,"scope":"ordinary"},
+        {"id":"Q01-run-biased","mode":"run","profile":"biased","seed":1030102,"sampleIntervalS":2,"scope":"ordinary"}
+      ]
+    },
+    {
+      "id": "Q02",
+      "title": "Boston Common and Beacon Hill street corners",
+      "region": "Boston, United States",
+      "category": "historic-urban-grid",
+      "question": "Are close city corners retained under one-sided urban bias?",
+      "waypoints": [[-71.0657,42.3550],[-71.0696,42.3578],[-71.0683,42.3613],[-71.0638,42.3598]],
+      "expectedNamedContext": ["Boston Common","Beacon Street","Charles Street"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public sidewalks around Boston Common and Beacon Hill","mustPreserve":["ordered corners","street crossings","no building chord"]},
+      "backgroundWindow": {"startFraction":0.30,"endFraction":0.58},
+      "variants": [
+        {"id":"Q02-hike-normal","mode":"hike","profile":"normal","seed":1030201,"sampleIntervalS":3,"scope":"ordinary"},
+        {"id":"Q02-hike-degraded","mode":"hike","profile":"degraded","seed":1030202,"sampleIntervalS":3,"scope":"supported-difficult"}
+      ]
+    },
+    {
+      "id": "Q03",
+      "title": "Golden Gate Park path and road-crossing run",
+      "region": "San Francisco, United States",
+      "category": "park-path-crossing",
+      "question": "Does a curving park run keep its path and crossing sequence after a short stop?",
+      "waypoints": [[-122.4665,37.7701],[-122.4597,37.7694],[-122.4540,37.7710],[-122.4488,37.7690]],
+      "expectedNamedContext": ["Golden Gate Park","JFK Promenade","Music Concourse"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public pedestrian park paths and crossings","mustPreserve":["path curvature","crossing order","stop and restart"]},
+      "stop": {"fraction":0.61,"durationS":35},
+      "variants": [
+        {"id":"Q03-run-normal","mode":"run","profile":"normal","seed":1030301,"sampleIntervalS":2,"scope":"ordinary"},
+        {"id":"Q03-run-degraded","mode":"run","profile":"degraded","seed":1030302,"sampleIntervalS":2,"scope":"supported-difficult"}
+      ]
+    },
+    {
+      "id": "Q04",
+      "title": "Sydney Domain and Botanic Garden waterfront paths",
+      "region": "Sydney, Australia",
+      "category": "waterfront-park-holdout",
+      "question": "Does an unseen waterfront walk avoid water chords and preserve garden bends?",
+      "waypoints": [[151.2131,-33.8690],[151.2178,-33.8642],[151.2213,-33.8615],[151.2173,-33.8685]],
+      "expectedNamedContext": ["The Domain","Royal Botanic Garden","Mrs Macquaries Road"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public Domain roads and Botanic Garden paths","mustPreserve":["waterfront sequence","garden bends","no harbour chord"]},
+      "variants": [
+        {"id":"Q04-hike-normal-holdout","mode":"hike","profile":"normal","seed":1030401,"sampleIntervalS":3,"scope":"ordinary","holdout":true},
+        {"id":"Q04-run-biased-holdout","mode":"run","profile":"biased","seed":1030402,"sampleIntervalS":2,"scope":"ordinary","holdout":true}
+      ]
+    },
+    {
+      "id": "Q05",
+      "title": "Hampstead Heath trail and path fork",
+      "region": "London, United Kingdom",
+      "category": "heath-trail-holdout",
+      "question": "Can an unseen off-road trail fork remain off-road and ordered?",
+      "waypoints": [[-0.1756,51.5608],[-0.1710,51.5651],[-0.1664,51.5684],[-0.1742,51.5697]],
+      "expectedNamedContext": ["Hampstead Heath","Parliament Hill","Heath paths"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public Hampstead Heath footpaths","mustPreserve":["off-road trail","fork order","no road snap"]},
+      "backgroundWindow": {"startFraction":0.38,"endFraction":0.67},
+      "variants": [
+        {"id":"Q05-hike-normal-holdout","mode":"hike","profile":"normal","seed":1030501,"sampleIntervalS":4,"scope":"ordinary","holdout":true},
+        {"id":"Q05-hike-degraded-holdout","mode":"hike","profile":"degraded","seed":1030502,"sampleIntervalS":4,"scope":"supported-difficult","holdout":true}
+      ]
+    },
+    {
+      "id": "Q06",
+      "title": "Stanley Park seawall out-and-back",
+      "region": "Vancouver, Canada",
+      "category": "seawall-retrace-holdout",
+      "question": "Does an unseen out-and-back preserve the shared corridor and turnaround?",
+      "waypoints": [[-123.1360,49.2953],[-123.1422,49.3001],[-123.1470,49.3060],[-123.1422,49.3001],[-123.1348,49.2941]],
+      "expectedNamedContext": ["Stanley Park Seawall","Coal Harbour Seawall"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry with repeated physical waypoint requested live before noise","corroboration":"Public Stanley Park seawall pedestrian route","mustPreserve":["turnaround","revisited corridor","no water shortcut"]},
+      "stop": {"fraction":0.46,"durationS":50},
+      "variants": [
+        {"id":"Q06-hike-normal-holdout","mode":"hike","profile":"normal","seed":1030601,"sampleIntervalS":4,"scope":"ordinary","holdout":true},
+        {"id":"Q06-run-degraded-holdout","mode":"run","profile":"degraded","seed":1030602,"sampleIntervalS":2,"scope":"supported-difficult","holdout":true}
+      ]
+    },
+    {
+      "id": "Q07",
+      "title": "Singapore Rail Corridor and park connector",
+      "region": "Singapore",
+      "category": "green-corridor-trail-holdout",
+      "question": "Does an unseen green-corridor walk survive canopy drift and GPS loss without snapping to parallel roads?",
+      "waypoints": [[103.7677,1.3579],[103.7718,1.3470],[103.7778,1.3390],[103.7817,1.3344]],
+      "expectedNamedContext": ["Bukit Timah Park Connector","Rail Corridor"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public Singapore Rail Corridor and Bukit Timah Park Connector","mustPreserve":["green corridor","unsupported outage","no parallel-road theft"]},
+      "gpsBlackout": {"startFraction":0.42,"endFraction":0.55},
+      "variants": [
+        {"id":"Q07-hike-normal-holdout","mode":"hike","profile":"normal","seed":1030701,"sampleIntervalS":5,"scope":"ordinary","holdout":true},
+        {"id":"Q07-hike-degraded-holdout","mode":"hike","profile":"degraded","seed":1030702,"sampleIntervalS":5,"scope":"supported-difficult","holdout":true}
+      ]
+    },
+    {
+      "id": "Q08",
+      "title": "Wellington Botanic Garden switchback descent",
+      "region": "Wellington, New Zealand",
+      "category": "garden-switchback-holdout",
+      "question": "Does an unseen hillside descent retain tight pedestrian switchbacks?",
+      "waypoints": [[174.7660,-41.2820],[174.7690,-41.2845],[174.7718,-41.2868],[174.7751,-41.2860]],
+      "expectedNamedContext": ["Wellington Botanic Garden","Garden paths","Bolton Street"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public Wellington Botanic Garden walking paths","mustPreserve":["ordered switchbacks","garden exit","no slope chord"]},
+      "lateBatch": {"startFraction":0.60,"endFraction":0.73,"deliveryDelayS":38},
+      "backgroundWindow": {"startFraction":0.52,"endFraction":0.80},
+      "variants": [
+        {"id":"Q08-hike-normal-holdout","mode":"hike","profile":"normal","seed":1030801,"sampleIntervalS":4,"scope":"ordinary","holdout":true},
+        {"id":"Q08-hike-degraded-holdout","mode":"hike","profile":"degraded","seed":1030802,"sampleIntervalS":4,"scope":"supported-difficult","holdout":true,"slowDiagnosticWriteMs":25}
+      ]
+    },
+    {
+      "id": "Q09",
+      "title": "Kyoto Philosopher's Path and street exit",
+      "region": "Kyoto, Japan",
+      "category": "canal-path-urban-exit-holdout",
+      "question": "Does an unseen canal-side path keep crossings and its final street exit through offline Finish?",
+      "waypoints": [[135.7953,35.0137],[135.7943,35.0203],[135.7930,35.0265],[135.7900,35.0294]],
+      "expectedNamedContext": ["Philosopher's Path","canal path","Ginkakuji approach"],
+      "routeFeasibility": {"groundTruthProvenance":"Mapbox Directions walking geometry requested live before noise","corroboration":"Public Philosopher's Path canal-side pedestrian route","mustPreserve":["canal path","crossing order","final street exit","no canal chord"]},
+      "variants": [
+        {"id":"Q09-hike-normal-holdout","mode":"hike","profile":"normal","seed":1030901,"sampleIntervalS":3,"scope":"ordinary","holdout":true,"offlineAtFinish":true},
+        {"id":"Q09-run-biased-holdout","mode":"run","profile":"biased","seed":1030902,"sampleIntervalS":2,"scope":"ordinary","holdout":true,"offlineAtFinish":true}
+      ]
+    }
+  ]
+}

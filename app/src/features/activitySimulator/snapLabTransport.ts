@@ -5,7 +5,7 @@ export interface SnapLabCassetteEntry {
   status: number;
   headers?: Record<string, string>;
   body: unknown;
-  provenance: 'CAPTURED_REAL_RESPONSE' | 'DETERMINISTIC_TRANSPORT';
+  provenance: 'CAPTURED_REAL_RESPONSE' | 'DETERMINISTIC_TRANSPORT' | 'LIVE_MAPBOX_RESPONSE';
   capturedAt?: string | null;
 }
 
@@ -63,6 +63,7 @@ function responseFromEntry(entry: SnapLabCassetteEntry): Response {
 export function createSnapLabCassetteTransport(entries: SnapLabCassetteEntry[]): {
   fetch: typeof fetch;
   receipts: () => SnapLabTransportReceipt[];
+  responses: () => SnapLabCassetteEntry[];
 } {
   const byFingerprint = new Map<string, SnapLabCassetteEntry>();
   for (const entry of entries) {
@@ -114,6 +115,9 @@ export function createSnapLabCassetteTransport(entries: SnapLabCassetteEntry[]):
   return {
     fetch: cassetteFetch as typeof fetch,
     receipts: () => recorded.map(receipt => ({ ...receipt })),
+    responses: () => entries.filter(entry => recorded.some(receipt => (
+      receipt.matched && receipt.requestFingerprint === entry.requestFingerprint
+    ))).map(entry => JSON.parse(JSON.stringify(entry)) as SnapLabCassetteEntry),
   };
 }
 
@@ -135,8 +139,10 @@ function liveEndpoint(url: URL): 'matching' | 'directions' {
 export function createSnapLabLiveTransport(): {
   fetch: typeof fetch;
   receipts: () => SnapLabTransportReceipt[];
+  responses: () => SnapLabCassetteEntry[];
 } {
   const recorded: SnapLabTransportReceipt[] = [];
+  const responses: SnapLabCassetteEntry[] = [];
   let ordinal = 0;
   const liveFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const startedAt = Date.now();
@@ -154,10 +160,24 @@ export function createSnapLabLiveTransport(): {
     try {
       const response = await globalThis.fetch(input, init);
       let responseCode: string | null = null;
+      let diagnosticBody: unknown = { unavailable: 'non-json-response' };
       try {
         const body = await response.clone().json() as { code?: unknown };
+        diagnosticBody = body;
         responseCode = typeof body?.code === 'string' ? body.code : null;
       } catch { /* a non-JSON response is still recorded by HTTP category */ }
+      responses.push({
+        requestFingerprint,
+        method: 'GET',
+        sanitizedUrl,
+        status: response.status,
+        headers: {
+          'content-type': response.headers?.get?.('content-type') ?? 'application/json',
+        },
+        body: diagnosticBody,
+        provenance: 'LIVE_MAPBOX_RESPONSE',
+        capturedAt: new Date().toISOString(),
+      });
       recorded.push({
         requestFingerprint,
         method,
@@ -196,5 +216,8 @@ export function createSnapLabLiveTransport(): {
   return {
     fetch: liveFetch as typeof fetch,
     receipts: () => recorded.map(receipt => ({ ...receipt })),
+    responses: () => responses.map(response => (
+      JSON.parse(JSON.stringify(response)) as SnapLabCassetteEntry
+    )),
   };
 }

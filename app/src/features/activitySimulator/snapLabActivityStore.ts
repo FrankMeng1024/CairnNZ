@@ -22,7 +22,8 @@ import {
   recordActivityStageEvent,
   type ActivityStageLedgerExport,
 } from '../activity/activityStageLedger';
-import type { SnapLabTransportReceipt } from './snapLabTransport';
+import type { SnapLabCassetteEntry, SnapLabTransportReceipt } from './snapLabTransport';
+import type { ActivityDiagnosticReplayExport } from '../activity/activityDiagnosticReplay';
 
 export type SnapLabTransportMode = 'offline' | 'deterministic' | 'captured' | 'live';
 export type SnapLabEvidenceLabel =
@@ -62,6 +63,7 @@ export interface SnapLabFinalRun {
   directionsRequestCount: number;
   acceptedIslandCount: number;
   transportReceipts: SnapLabTransportReceipt[];
+  providerResponses: SnapLabCassetteEntry[];
   refinementAuthority: RetainedLocalRefinementDecision | AcceptedRefinementDecision;
   timingDurationsMs: {
     localFinalGeneration: number;
@@ -98,6 +100,7 @@ export interface SnapLabActivityRecord {
   stageMonotonicTimestamps?: Record<string, number | null>;
   finishDurationsMs?: Record<string, number | null>;
   stageLedger: ActivityStageLedgerExport | null;
+  diagnosticReplay?: ActivityDiagnosticReplayExport | null;
   routeSnapshots: SnapLabRouteSnapshot[];
   roadUpgrade?: {
     attemptedAt: number;
@@ -125,6 +128,7 @@ const recordKey = (ownerUserId: string, activityId: string) => (
 let activeContext: SnapLabRunContext | null = null;
 let activeFetch: typeof fetch | null = null;
 let activeReceiptReader: (() => SnapLabTransportReceipt[]) | null = null;
+let activeResponseReader: (() => SnapLabCassetteEntry[]) | null = null;
 let writeTail: Promise<void> = Promise.resolve();
 
 function webRecordDatabaseAvailable(): boolean {
@@ -219,16 +223,19 @@ export function configureSnapLabRun(
   context: SnapLabRunContext,
   fetchImpl?: typeof fetch,
   receiptReader?: () => SnapLabTransportReceipt[],
+  responseReader?: () => SnapLabCassetteEntry[],
 ): void {
   activeContext = { ...context };
   activeFetch = fetchImpl ?? null;
   activeReceiptReader = receiptReader ?? null;
+  activeResponseReader = responseReader ?? null;
 }
 
 export function clearSnapLabRunConfiguration(): void {
   activeContext = null;
   activeFetch = null;
   activeReceiptReader = null;
+  activeResponseReader = null;
 }
 
 export function updateSnapLabRunContext(patch: Partial<SnapLabRunContext>): SnapLabRunContext {
@@ -433,14 +440,21 @@ export async function clearSnapLabActivities(ownerUserId: string): Promise<void>
 export async function clearSnapLabRealmForOwner(ownerUserId: string): Promise<void> {
   const writer = await import('../../services/hikeTrackWriter');
   await writer.purgeSnapLabHikeTracksForOwner(ownerUserId);
-  const [{ purgeSnapLabActivityRegistryForOwner }, { purgeActivityStageLedgerRealmForOwner }, memory] = await Promise.all([
+  const [
+    { purgeSnapLabActivityRegistryForOwner },
+    { purgeActivityStageLedgerRealmForOwner },
+    { purgeActivityDiagnosticReplayForOwner },
+    memory,
+  ] = await Promise.all([
     import('../activity/activityRegistry'),
     import('../activity/activityStageLedger'),
+    import('../activity/activityDiagnosticReplay'),
     import('../memory/services/memoryPersistence'),
   ]);
   await clearSnapLabActivities(ownerUserId);
   await purgeSnapLabActivityRegistryForOwner(ownerUserId);
   await purgeActivityStageLedgerRealmForOwner(ownerUserId, 'snap-lab');
+  await purgeActivityDiagnosticReplayForOwner(ownerUserId);
   await memory.clearSyntheticMemoryForUser(ownerUserId);
   const { useSessionStore } = await import('../../store/useSessionStore');
   useSessionStore.setState(state => ({
@@ -498,6 +512,7 @@ export async function runSnapLabFinal(
       directionsRequestCount: 0,
       acceptedIslandCount: 0,
       transportReceipts: [],
+      providerResponses: [],
       refinementAuthority: decideRetainedLocalRefinement({
         networkState: 'offline',
         deadlineReached: false,
@@ -578,6 +593,7 @@ export async function runSnapLabFinal(
     directionsRequestCount: segmentStats.reduce((sum, stats) => sum + stats.directionsRequestCount, 0),
     acceptedIslandCount,
     transportReceipts: activeReceiptReader?.() ?? [],
+    providerResponses: activeResponseReader?.() ?? [],
     refinementAuthority,
     timingDurationsMs: {
       localFinalGeneration: localFinalGenerationMs,

@@ -251,6 +251,43 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
       const coordinate = inner?.unproject?.(screenPoint);
       return coordinate ? [coordinate.lng, coordinate.lat] : null;
     },
+    getVisibleBounds: async () => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      const bounds = inner?.getBounds?.();
+      const northEast = bounds?.getNorthEast?.();
+      const southWest = bounds?.getSouthWest?.();
+      if (!northEast || !southWest) return null;
+      // Match RNMapbox MapView#getVisibleBounds: north-east, south-west.
+      return [
+        [northEast.lng, northEast.lat],
+        [southWest.lng, southWest.lat],
+      ];
+    },
+    queryRenderedFeaturesInRect: async (
+      screenRect: [number, number, number, number],
+      filter: unknown[] = [],
+      layerIDs: string[] | null = null,
+    ) => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!inner?.queryRenderedFeatures || !Array.isArray(screenRect) || screenRect.length !== 4) {
+        return { features: [] };
+      }
+      // RNMapbox rectangles use [top, left, bottom, right]; Mapbox GL JS
+      // expects [[left, top], [right, bottom]].
+      const [top, left, bottom, right] = screenRect;
+      const options: { layers?: string[]; filter?: unknown[] } = {};
+      if (Array.isArray(layerIDs) && layerIDs.length > 0) options.layers = layerIDs;
+      if (Array.isArray(filter) && filter.length > 0) options.filter = filter;
+      const features = inner.queryRenderedFeatures(
+        [[left, top], [right, bottom]],
+        options,
+      );
+      return {
+        features: features.map((feature: any) => (
+          typeof feature?.toJSON === 'function' ? feature.toJSON() : feature
+        )),
+      };
+    },
     setPointMotionBasemapActive: async (active: boolean) => {
       const inner = mapRef.current?.getMap?.() ?? mapRef.current;
       if (!inner) return;

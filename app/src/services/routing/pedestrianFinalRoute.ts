@@ -328,6 +328,19 @@ export interface PedestrianFinalOptions {
   requestReason?: string;
   /** QA-only forensic geometry trace; defaults to false. */
   qualityTrace?: boolean;
+  /** Explicit Owner-diagnostic sink. Production callers may provide it, but
+   * the sink is a no-op unless that Activity opted into local diagnostics. */
+  diagnosticResponseSink?: (exchange: {
+    phase: 'request' | 'response';
+    requestId: string;
+    requestKind: 'map-matching' | 'walking-directions';
+    requestFingerprint: string;
+    sanitizedUrl: string;
+    status: number | null;
+    headers: Record<string, string>;
+    body: unknown | null;
+    capturedAt: string;
+  }) => void;
 }
 
 export type PedestrianFinalResult =
@@ -1072,7 +1085,7 @@ export function buildBaseFinalGeometry(points: RawPoint[]): {
   const simplified = Array.from(keep)
     .sort((a, b) => a - b)
     .map(index => canonicalPoint(collapsed.points[index]));
-  const output = densifyGeometry(simplified, 16);
+  const output = attachDisplayMetadata(densifyGeometry(simplified, 16), points);
   return {
     points: output,
     diagnostics: {
@@ -1151,6 +1164,10 @@ export function buildEvidenceSupportedLocalFinalGeometry(points: RawPoint[]): {
   const corridorLimitM = clamp(effectiveUncertaintyM * 0.55, 4, 7);
   const baselineFingerprint = geometryFingerprint(baseline.points);
   const candidateFingerprint = geometryFingerprint(candidate);
+  const maximumBaselineCandidateDifferenceM = Math.max(
+    ...baseline.points.map(point => projectPointToPath(point, candidate).distanceM),
+    ...candidate.map(point => projectPointToPath(point, baseline.points).distanceM),
+  );
   const significantTurnCount = (geometry: Array<{ lat: number; lng: number }>) => {
     const headings: number[] = [];
     let anchor = 0;
@@ -1176,8 +1193,10 @@ export function buildEvidenceSupportedLocalFinalGeometry(points: RawPoint[]): {
   // material excursion/backtrack. RDP retains deviations larger than the
   // local tolerance; this independent ratio catches pathological shortcuts.
   else if (pathLengthRatio < 0.84 || pathLengthRatio > 1.03) rejectionReason = 'path-length-sanity';
-  else if (candidateFingerprint === baselineFingerprint) rejectionReason = 'no-meaningful-change';
-  else if (candidate.length >= baseline.points.length) rejectionReason = 'no-complexity-improvement';
+  else if (
+    candidateFingerprint === baselineFingerprint
+    || maximumBaselineCandidateDifferenceM < 0.5
+  ) rejectionReason = 'no-meaningful-change';
   if (rejectionReason) {
     const fallback = rejected(
       rejectionReason,
@@ -1215,31 +1234,137 @@ export function cleanCanonicalGeometry(points: RawPoint[]): SnappedPoint[] {
 
 function attachDisplayMetadata(points: SnappedPoint[], canonical: RawPoint[]): SnappedPoint[] {
   if (points.length === 0 || canonical.length === 0) return points;
-  const totalM = pathLength(points);
-  const startT = canonical[0].t;
-  const endT = canonical[canonical.length - 1].t;
-  let progressedM = 0;
-  return points.map((point, index) => {
-    if (index > 0) progressedM += hav(points[index - 1], point);
-    let nearest = canonical[0];
-    let nearestM = hav(point, nearest);
-    for (let candidateIndex = 1; candidateIndex < canonical.length; candidateIndex += 1) {
-      const distanceM = hav(point, canonical[candidateIndex]);
-      if (distanceM < nearestM) {
-        nearest = canonical[candidateIndex];
-        nearestM = distanceM;
-      }
+  const displayProgressM = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    displayProgressM.push(displayProgressM[index - 1] + hav(points[index - 1], points[index]));
+  }
+  const totalM = displayProgressM[displayProgressM.length - 1];
+
+  // Establish a chronological correspondence before attaching timestamps.
+  // An unrestricted nearest-vertex lookup is wrong on loops, out-and-backs
+  // and repeated corridors because it can jump to a later spatially-identical
+  // visit. Advancing the lower chainage bound preserves the evidence order.
+  const temporalAnchors: Array<{ progressM: number; point: RawPoint; t: number }> = [];
+  let minimumProgressM = 0;
+  let previousCanonical: RawPoint | null = null;
+  for (let canonicalIndex = 0; canonicalIndex < canonical.length; canonicalIndex += 1) {
+    const point = canonical[canonicalIndex];
+    if (point.t == null || !Number.isFinite(point.t)) continue;
+    const evidenceStepM = previousCanonical ? hav(previousCanonical, point) : 0;
+    const maximumProgressM = canonicalIndex === canonical.length - 1
+      ? totalM
+      : Math.min(totalM, minimumProgressM + Math.max(24, evidenceStepM * 3 + 6));
+    const projection = projectPointToPathAfterProgress(
+      point,
+      points,
+      displayProgressM,
+      minimumProgressM,
+      maximumProgressM,
+    );
+    const progressM = projection?.progressM ?? minimumProgressM;
+    minimumProgressM = Math.max(minimumProgressM, progressM);
+    temporalAnchors.push({ progressM: minimumProgressM, point, t: Number(point.t) });
+    previousCanonical = point;
+  }
+
+  const metadataAt = (progressM: number): { t?: number; alt?: number | null } => {
+    if (temporalAnchors.length === 0) return {};
+    let rightIndex = temporalAnchors.findIndex(anchor => anchor.progressM >= progressM - 0.01);
+    if (rightIndex < 0) rightIndex = temporalAnchors.length - 1;
+    let leftIndex = Math.max(0, rightIndex - 1);
+
+    // At a repeated chainage (a stationary interval), choose the last
+    // chronological observation at that place. This represents elapsed stop
+    // time as a time jump at one location instead of manufacturing movement
+    // through the stop window.
+    if (Math.abs(temporalAnchors[rightIndex].progressM - progressM) <= 0.01) {
+      while (
+        rightIndex + 1 < temporalAnchors.length
+        && Math.abs(temporalAnchors[rightIndex + 1].progressM - progressM) <= 0.01
+      ) rightIndex += 1;
+      leftIndex = rightIndex;
     }
-    const fraction = totalM > 0 ? progressedM / totalM : index / Math.max(1, points.length - 1);
+    const left = temporalAnchors[leftIndex];
+    const right = temporalAnchors[rightIndex];
+    const spanM = right.progressM - left.progressM;
+    const elapsedMs = right.t - left.t;
+    let timestamp = right.t;
+    if (spanM > 0.01 && elapsedMs >= 0) {
+      const fraction = clamp((progressM - left.progressM) / spanM, 0, 1);
+      // A long callback gap is unknown time, not proof of continuous motion.
+      // Use a monotonic step at the spatial midpoint so display metadata does
+      // not invent movement inside an outage/batched-delivery interval.
+      timestamp = elapsedMs > 12_000
+        ? (fraction < 0.5 ? left.t : right.t)
+        : Math.round(left.t + elapsedMs * fraction);
+    }
+    const altitudeSource = Math.abs(progressM - left.progressM)
+      <= Math.abs(right.progressM - progressM) ? left.point : right.point;
     return {
-      lat: point.lat,
-      lng: point.lng,
-      ...(nearest.alt != null ? { alt: nearest.alt } : {}),
-      ...(startT != null && endT != null && Number.isFinite(startT) && Number.isFinite(endT)
-        ? { t: Math.round(Number(startT) + (Number(endT) - Number(startT)) * fraction) }
-        : {}),
+      t: timestamp,
+      ...(altitudeSource.alt != null ? { alt: altitudeSource.alt } : {}),
     };
-  });
+  };
+
+  return points.map((point, index) => ({
+    lat: point.lat,
+    lng: point.lng,
+    ...metadataAt(totalM > 0 ? displayProgressM[index] : 0),
+  }));
+}
+
+function projectPointToPathAfterProgress(
+  point: { lat: number; lng: number },
+  path: Array<{ lat: number; lng: number }>,
+  cumulativeM: number[],
+  minimumProgressM: number,
+  maximumProgressM = cumulativeM.at(-1) ?? minimumProgressM,
+): (Projection & { progressM: number }) | null {
+  if (path.length < 2) return null;
+  const projector = localProjector(point);
+  const pointXY = { x: 0, y: 0 };
+  let best: (Projection & { progressM: number }) | null = null;
+  for (let index = 1; index < path.length; index += 1) {
+    const segmentStartM = cumulativeM[index - 1];
+    const segmentEndM = cumulativeM[index];
+    const segmentLengthM = segmentEndM - segmentStartM;
+    if (
+      segmentEndM < minimumProgressM - 0.01
+      || segmentStartM > maximumProgressM + 0.01
+      || segmentLengthM <= 0.001
+    ) continue;
+    const projected = projectXYToSegment(
+      pointXY,
+      projector.toXY(path[index - 1]),
+      projector.toXY(path[index]),
+    );
+    const minimumFraction = clamp(
+      (minimumProgressM - segmentStartM) / segmentLengthM,
+      0,
+      1,
+    );
+    const maximumFraction = clamp(
+      (maximumProgressM - segmentStartM) / segmentLengthM,
+      0,
+      1,
+    );
+    const fraction = clamp(projected.fraction, minimumFraction, maximumFraction);
+    const startXY = projector.toXY(path[index - 1]);
+    const endXY = projector.toXY(path[index]);
+    const projectedXY = {
+      x: startXY.x + (endXY.x - startXY.x) * fraction,
+      y: startXY.y + (endXY.y - startXY.y) * fraction,
+    };
+    const candidate = {
+      ...projected,
+      fraction,
+      segmentIndex: index - 1,
+      distanceM: Math.hypot(projectedXY.x, projectedXY.y),
+      progressM: segmentStartM + segmentLengthM * fraction,
+    };
+    if (!best || candidate.distanceM < best.distanceM - 0.01) best = candidate;
+  }
+  return best;
 }
 
 export function offsetNetworkGeometry(
@@ -2226,6 +2351,7 @@ async function mapMatchingWindow(
   reason = 'qualified-unresolved-window',
   requestFetch: typeof fetch = fetch,
   qualityTrace = false,
+  diagnosticResponseSink?: PedestrianFinalOptions['diagnosticResponseSink'],
 ): Promise<WindowResult> {
   const startedAt = Date.now();
   const diagnostic: PedestrianFinalRequestResult = {
@@ -2265,13 +2391,15 @@ async function mapMatchingWindow(
     && seconds.every((value, index) => index === 0 || value > Number(seconds[index - 1]));
   const timestampQuery = validTimes ? `&timestamps=${seconds.join(';')}` : '';
   const url = `${MAPBOX_MATCHING_ENDPOINT}/${coords}?geometries=geojson&overview=full&steps=true&tidy=false&radiuses=${radiuses}${timestampQuery}&access_token=${encodeURIComponent(token)}`;
+  const fingerprint = requestFingerprint('matching', `${coords}|${radiuses}|${seconds.join(';')}`);
+  const sanitizedUrl = url.replace(/([?&]access_token=)[^&]*/u, '$1<redacted>');
   let receiptId: string | null = null;
   if (governor) {
     try {
       const permit = await governor.authorize({
         phase,
         kind: 'map-matching',
-        fingerprint: requestFingerprint('matching', `${coords}|${radiuses}|${seconds.join(';')}`),
+        fingerprint,
         reason,
       });
       diagnostic.governorReason = permit.reason;
@@ -2299,12 +2427,25 @@ async function mapMatchingWindow(
   let completionRetryAfterMs: number | null = null;
   try {
     diagnostic.invoked = true;
+    diagnosticResponseSink?.({
+      phase: 'request', requestId, requestKind: 'map-matching', requestFingerprint: fingerprint,
+      sanitizedUrl, status: null, headers: {}, body: null, capturedAt: new Date().toISOString(),
+    });
     const response = await requestFetch(url, { signal: abort.controller.signal });
     diagnostic.httpStatus = response.status;
     completionRetryAfterMs = retryAfterMs(response);
     const headerBytes = Number(response.headers?.get?.('content-length'));
     if (Number.isFinite(headerBytes)) diagnostic.responseBytes = Math.max(0, headerBytes);
     if (!response.ok) {
+      diagnosticResponseSink?.({
+        phase: 'response', requestId, requestKind: 'map-matching', requestFingerprint: fingerprint,
+        sanitizedUrl, status: response.status,
+        headers: {
+          'content-type': response.headers?.get?.('content-type') ?? '',
+          'retry-after': response.headers?.get?.('retry-after') ?? '',
+        },
+        body: null, capturedAt: new Date().toISOString(),
+      });
       diagnostic.result = `http-${response.status}`;
       completionResult = 'http';
       return { candidates: [], request: diagnostic, sectionDecisions: [] };
@@ -2317,6 +2458,15 @@ async function mapMatchingWindow(
         geometry?: { coordinates?: Array<[number, number]> };
       }>;
     };
+    diagnosticResponseSink?.({
+      phase: 'response', requestId, requestKind: 'map-matching', requestFingerprint: fingerprint,
+      sanitizedUrl, status: response.status,
+      headers: {
+        'content-type': response.headers?.get?.('content-type') ?? '',
+        'retry-after': response.headers?.get?.('retry-after') ?? '',
+      },
+      body, capturedAt: new Date().toISOString(),
+    });
     if (diagnostic.responseBytes === 0) {
       try { diagnostic.responseBytes = new TextEncoder().encode(JSON.stringify(body)).length; } catch { /* diagnostic only */ }
     }
@@ -2714,6 +2864,7 @@ async function walkingDirectionsCandidate(
   reason = 'qualified-unresolved-directions-span',
   requestFetch: typeof fetch = fetch,
   qualityTrace = false,
+  diagnosticResponseSink?: PedestrianFinalOptions['diagnosticResponseSink'],
 ): Promise<DirectionsResult> {
   const sourceStart = authority.sourceStart;
   const sourceEnd = authority.sourceEnd;
@@ -2773,13 +2924,15 @@ async function walkingDirectionsCandidate(
   const end = subsection[subsection.length - 1];
   const coords = `${start.lng.toFixed(6)},${start.lat.toFixed(6)};${end.lng.toFixed(6)},${end.lat.toFixed(6)}`;
   const url = `${MAPBOX_DIRECTIONS_ENDPOINT}/${coords}?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=${encodeURIComponent(token)}`;
+  const fingerprint = requestFingerprint('directions', `${sourceStart}:${sourceEnd}:${coords}`);
+  const sanitizedUrl = url.replace(/([?&]access_token=)[^&]*/u, '$1<redacted>');
   let receiptId: string | null = null;
   if (governor) {
     try {
       const permit = await governor.authorize({
         phase,
         kind: 'walking-directions',
-        fingerprint: requestFingerprint('directions', `${sourceStart}:${sourceEnd}:${coords}`),
+        fingerprint,
         reason,
       });
       request.governorReason = permit.reason;
@@ -2807,12 +2960,25 @@ async function walkingDirectionsCandidate(
   let completionRetryAfterMs: number | null = null;
   try {
     request.invoked = true;
+    diagnosticResponseSink?.({
+      phase: 'request', requestId, requestKind: 'walking-directions', requestFingerprint: fingerprint,
+      sanitizedUrl, status: null, headers: {}, body: null, capturedAt: new Date().toISOString(),
+    });
     const response = await requestFetch(url, { signal: abort.controller.signal });
     request.httpStatus = response.status;
     completionRetryAfterMs = retryAfterMs(response);
     const headerBytes = Number(response.headers?.get?.('content-length'));
     if (Number.isFinite(headerBytes)) request.responseBytes = Math.max(0, headerBytes);
     if (!response.ok) {
+      diagnosticResponseSink?.({
+        phase: 'response', requestId, requestKind: 'walking-directions', requestFingerprint: fingerprint,
+        sanitizedUrl, status: response.status,
+        headers: {
+          'content-type': response.headers?.get?.('content-type') ?? '',
+          'retry-after': response.headers?.get?.('retry-after') ?? '',
+        },
+        body: null, capturedAt: new Date().toISOString(),
+      });
       request.result = `http-${response.status}`;
       completionResult = 'http';
       return { candidate: null, request, sectionDecision: baseDecision };
@@ -2824,6 +2990,15 @@ async function walkingDirectionsCandidate(
         legs?: Array<{ steps?: Array<{ name?: string }> }>;
       }>;
     };
+    diagnosticResponseSink?.({
+      phase: 'response', requestId, requestKind: 'walking-directions', requestFingerprint: fingerprint,
+      sanitizedUrl, status: response.status,
+      headers: {
+        'content-type': response.headers?.get?.('content-type') ?? '',
+        'retry-after': response.headers?.get?.('retry-after') ?? '',
+      },
+      body, capturedAt: new Date().toISOString(),
+    });
     if (request.responseBytes === 0) {
       try { request.responseBytes = new TextEncoder().encode(JSON.stringify(body)).length; } catch { /* diagnostic only */ }
     }
@@ -3250,6 +3425,7 @@ export async function reconstructPedestrianFinalRoute(
       options.requestReason ?? 'qualified-unresolved-window',
       options.fetchImpl,
       options.qualityTrace ?? false,
+      options.diagnosticResponseSink,
     ),
     totalAbort.controller.signal,
   );
@@ -3297,6 +3473,7 @@ export async function reconstructPedestrianFinalRoute(
         options.requestReason ?? 'qualified-unresolved-directions-span',
         options.fetchImpl,
         options.qualityTrace ?? false,
+        options.diagnosticResponseSink,
       );
       const direction = await Promise.race([
         directionPromise,

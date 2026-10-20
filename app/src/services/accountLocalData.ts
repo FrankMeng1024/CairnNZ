@@ -19,6 +19,7 @@ import {
   type AccountTransitionAuthority,
 } from './accountTransitionAuthority';
 import { purgeActivityStageLedgerForOwner } from '../features/activity/activityStageLedger';
+import { purgeActivityDiagnosticReplayForOwner } from '../features/activity/activityDiagnosticReplay';
 import { purgeNativeGpsEvidenceScopesForOwner } from '../features/activity/nativeGpsEvidence';
 
 const SCHEDULED_PURGE_KEY = '@cairn:account-deletion-local-purge:v1';
@@ -333,6 +334,7 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   await Promise.all(routeIds.map((routeId) => deleteExtras(routeId)));
   await clearSimulatorLogs(owner).catch(() => undefined);
   await purgeActivityStageLedgerForOwner(owner);
+  await purgeActivityDiagnosticReplayForOwner(owner);
   await purgeNativeGpsEvidenceScopesForOwner(owner);
   await purgeDurableMemoryEvidence(owner);
   // Newly introduced presentation coordinates/unread state also have an

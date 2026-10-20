@@ -626,4 +626,16 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(run).toContain('userPos={mapDisplayPosition}');
     expect(run).toContain('simulatorEnabled={simulatorLocationAuthoritative}');
   });
+
+  test('rendered-road QA uses the production handler only behind an explicit isolated Web gate', () => {
+    const hikeMap = read('src/screens/HikingMap.tsx');
+    const campaign = read('scripts/real-map-snap-ui-campaign.mjs');
+    expect(hikeMap).toContain("Platform.OS === 'web'");
+    expect(hikeMap).toContain('&& debugMode');
+    expect(hikeMap).toContain('&& simulatorEnabled');
+    expect(hikeMap).toContain('__cairnActivityRoadContextQaEnabled === true');
+    expect(hikeMap).toContain('deriveRoadAwareLiveTrack(trackPoints, effectiveRoadContext)');
+    expect(hikeMap).toContain("coordinateSource: roadContextQaAdapter ? 'simulator' : 'real'");
+    expect(campaign).toContain("adapter: 'explicit-debug-web-snap-lab; production handler; simulator-labelled; no production writes'");
+  });
 });

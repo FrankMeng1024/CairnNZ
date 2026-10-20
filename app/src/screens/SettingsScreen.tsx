@@ -62,6 +62,7 @@ import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackg
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { exportLatestActivityStageLedger } from '../features/activity/activityStageLedger';
+import { exportLatestActivityDiagnosticReplay } from '../features/activity/activityDiagnosticReplay';
 import {
   buildActivityNativeCrossLedgerReport,
   exportNativeGpsEvidence,
@@ -598,20 +599,24 @@ export function SettingsScreen() {
       const ledger = await exportLatestActivityStageLedger(ownerId);
       const nativeGpsEvidence = await exportNativeGpsEvidence(ownerId, ledger.clientActivityId);
       const nativeCrossLedgerReport = buildActivityNativeCrossLedgerReport(ledger, nativeGpsEvidence);
+      const diagnosticReplay = await exportLatestActivityDiagnosticReplay(ownerId, ledger);
       if (currentOwnerId() !== ownerId) return;
       const Clipboard = await import('expo-clipboard');
       await Clipboard.setStringAsync(JSON.stringify({
         schema: 'cairn-activity-forensic-export',
-        version: 2,
+        version: 3,
         stageLedger: ledger,
         nativeGpsEvidence,
         nativeCrossLedgerReport,
+        diagnosticReplay,
       }, null, 2));
       if (currentOwnerId() !== ownerId) return;
       Alert.alert(
         'Activity diagnostics copied',
-        ledger.clientActivityId
-          ? 'The latest local timing ledger is on your clipboard. It contains no coordinates or Mapbox token.'
+        diagnosticReplay
+          ? 'The latest opted-in Activity replay is on your clipboard. It includes precise coordinates and redacted provider evidence, stays local until you copy it, and contains no Mapbox token.'
+          : ledger.clientActivityId
+          ? 'The latest local timing ledger is on your clipboard. No coordinate replay was enabled for that Activity.'
           : 'No Activity timing events are stored on this device yet.',
       );
     } catch {
@@ -1004,7 +1009,7 @@ export function SettingsScreen() {
           <Row
             icon="FileText"
             title="Copy Activity diagnostics"
-            detail="Copies the latest local timing ledger without coordinates or access tokens"
+            detail="Owner Debug recordings include precise coordinates for local replay; access tokens are always removed"
             onPress={() => void copyActivityDiagnostics()}
             disabled={activityDiagnosticsCopying}
             busy={activityDiagnosticsCopying}

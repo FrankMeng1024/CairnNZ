@@ -19,11 +19,14 @@ const selectedEntries = manifest.entries.filter(entry => (
 ));
 const activityByRun = new Map();
 for (const root of resultRoots) {
-  const activities = path.join(root, 'activities');
-  if (!fs.existsSync(activities)) continue;
-  for (const name of fs.readdirSync(activities)) {
-    const file = path.join(activities, name, 'QA_ACTIVITY.json');
-    if (fs.existsSync(file)) activityByRun.set(name, { root, file, activity: JSON.parse(fs.readFileSync(file, 'utf8')) });
+  const activityRoots = ['activities', 'replayed-activities']
+    .map(name => path.join(root, name))
+    .filter(value => fs.existsSync(value));
+  for (const activities of activityRoots) {
+    for (const name of fs.readdirSync(activities)) {
+      const file = path.join(activities, name, 'QA_ACTIVITY.json');
+      if (fs.existsSync(file)) activityByRun.set(name, { root, file, activity: JSON.parse(fs.readFileSync(file, 'utf8')) });
+    }
   }
 }
 
@@ -118,6 +121,95 @@ function headingRms(points) {
   });
   return Math.sqrt(deltas.reduce((sum, value) => sum + value * value, 0) / Math.max(1, deltas.length));
 }
+function interpolateAtTime(points, timestamp) {
+  if (points.length === 0 || timestamp == null) return null;
+  if (timestamp <= points[0].t) return points[0];
+  if (timestamp >= points.at(-1).t) return points.at(-1);
+  let low = 0;
+  let high = points.length - 1;
+  while (low + 1 < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (points[middle].t <= timestamp) low = middle;
+    else high = middle;
+  }
+  const left = points[low];
+  const right = points[high];
+  const ratio = right.t === left.t ? 0 : (timestamp - left.t) / (right.t - left.t);
+  return {
+    x: left.x + (right.x - left.x) * ratio,
+    y: left.y + (right.y - left.y) * ratio,
+    t: timestamp,
+  };
+}
+function simplify(points, toleranceM = 6) {
+  if (points.length <= 2) return points.slice();
+  const keep = new Array(points.length).fill(false);
+  keep[0] = true;
+  keep[points.length - 1] = true;
+  const stack = [[0, points.length - 1]];
+  while (stack.length > 0) {
+    const [start, end] = stack.pop();
+    const left = points[start];
+    const right = points[end];
+    const dx = right.x - left.x;
+    const dy = right.y - left.y;
+    const denominator = dx * dx + dy * dy;
+    let furthest = -1;
+    let furthestDistance = -1;
+    for (let index = start + 1; index < end; index += 1) {
+      const point = points[index];
+      const ratio = denominator <= 0 ? 0 : Math.max(0, Math.min(1, (
+        (point.x - left.x) * dx + (point.y - left.y) * dy
+      ) / denominator));
+      const candidate = distance(point, { x: left.x + ratio * dx, y: left.y + ratio * dy });
+      if (candidate > furthestDistance) {
+        furthest = index;
+        furthestDistance = candidate;
+      }
+    }
+    if (furthest > start && furthestDistance > toleranceM) {
+      keep[furthest] = true;
+      stack.push([start, furthest], [furthest, end]);
+    }
+  }
+  return points.filter((_point, index) => keep[index]);
+}
+function topologyStats(points) {
+  let corners = 0;
+  let reversals = 0;
+  let maxTurnDeg = 0;
+  for (const segment of splitSegments(points)) {
+    const structural = simplify(segment.points, 6);
+    for (let index = 1; index < structural.length - 1; index += 1) {
+      const before = structural[index - 1];
+      const point = structural[index];
+      const after = structural[index + 1];
+      if (distance(before, point) < 10 || distance(point, after) < 10) continue;
+      const incoming = { x: point.x - before.x, y: point.y - before.y };
+      const outgoing = { x: after.x - point.x, y: after.y - point.y };
+      const denominator = Math.hypot(incoming.x, incoming.y) * Math.hypot(outgoing.x, outgoing.y);
+      if (denominator <= Number.EPSILON) continue;
+      const cosine = Math.max(-1, Math.min(1, (incoming.x * outgoing.x + incoming.y * outgoing.y) / denominator));
+      const turn = Math.acos(cosine) * 180 / Math.PI;
+      maxTurnDeg = Math.max(maxTurnDeg, turn);
+      if (turn >= 55) corners += 1;
+      if (turn >= 145) reversals += 1;
+    }
+  }
+  return { corners, reversals, maxTurnDeg };
+}
+function separatedRevisitPairs(points) {
+  const sampled = resample(points, Math.max(3, lengthM(points) / 60));
+  if (sampled.length < 8) return 0;
+  let pairs = 0;
+  const minimumSeparation = Math.max(6, Math.floor(sampled.length / 10));
+  for (let left = 0; left < sampled.length; left += 1) {
+    for (let right = left + minimumSeparation; right < sampled.length; right += 1) {
+      if (distance(sampled[left], sampled[right]) <= 12) pairs += 1;
+    }
+  }
+  return pairs;
+}
 function channelMetrics(rawPoints, truthPoints, origin, diary, supportObservationTimes) {
   const points = rawPoints.map(point => local(point, origin));
   const truth = truthPoints.map(point => local(point, origin));
@@ -140,14 +232,38 @@ function channelMetrics(rawPoints, truthPoints, origin, diary, supportObservatio
   const stopStart = stopTimes.length > 0 ? Math.min(...stopTimes) : null;
   const stopEnd = stopTimes.length > 0 ? Math.max(...stopTimes) : null;
   const stopped = stopStart == null ? [] : points.filter(point => point.t >= stopStart && point.t <= stopEnd);
+  const temporalDeviations = points
+    .filter(point => point.t != null)
+    .map(point => {
+      const truthAtTime = interpolateAtTime(truth, point.t);
+      return truthAtTime ? distance(point, truthAtTime) : null;
+    })
+    .filter(Number.isFinite);
+  const truthTopology = topologyStats(truth);
+  const outputTopology = topologyStats(points);
+  const steps = splitSegments(points).flatMap(segment => segment.points.slice(1).map((point, index) => ({
+    distanceM: distance(segment.points[index], point),
+    gapS: segment.points[index].t == null || point.t == null
+      ? null
+      : (point.t - segment.points[index].t) / 1000,
+  })));
+  const gapBoundarySteps = steps.filter(step => step.gapS != null && step.gapS > 6);
+  const stopTruth = stopEnd == null ? null : interpolateAtTime(truth, stopEnd);
+  const departure = stopTruth == null ? null : points.find(point => (
+    point.t != null && point.t > stopEnd && distance(point, stopTruth) > 5
+  ));
   return {
     pointCount: points.length,
     segmentCount: outputSegments.length,
     lengthM: Number(lengthM(points).toFixed(2)),
     distanceErrorPct: Number(((lengthM(points) - diary.distanceM) / diary.distanceM * 100).toFixed(2)),
     crossTrackMeanM: Number((deviations.reduce((sum, value) => sum + value, 0) / Math.max(1, deviations.length)).toFixed(2)),
+    crossTrackP50M: Number((percentile(deviations, 0.5) ?? 0).toFixed(2)),
     crossTrackP95M: Number((percentile(deviations, 0.95) ?? 0).toFixed(2)),
     crossTrackMaxM: Number((deviations.length ? Math.max(...deviations) : 0).toFixed(2)),
+    timeAlignedP50M: Number((percentile(temporalDeviations, 0.5) ?? 0).toFixed(2)),
+    timeAlignedP95M: Number((percentile(temporalDeviations, 0.95) ?? 0).toFixed(2)),
+    timeAlignedMaxM: Number((temporalDeviations.length ? Math.max(...temporalDeviations) : 0).toFixed(2)),
     truthCoverageWithinEnvelopePct: Number((covered / Math.max(1, truthSamples.length) * 100).toFixed(2)),
     supportedTruthCoverageWithinEnvelopePct: Number((supportedCovered / Math.max(1, supportedTruthSamples.length) * 100).toFixed(2)),
     supportedTruthFractionPct: Number((supportedTruthSamples.length / Math.max(1, truthSamples.length) * 100).toFixed(2)),
@@ -155,6 +271,19 @@ function channelMetrics(rawPoints, truthPoints, origin, diary, supportObservatio
     startDisplacementM: first ? Number(distance(first, truth[0]).toFixed(2)) : null,
     endpointDisplacementM: last ? Number(distance(last, truth.at(-1)).toFixed(2)) : null,
     stationaryGrowthM: Number(lengthM(stopped).toFixed(2)),
+    departureLagS: stopEnd == null || !departure ? null : Number(((departure.t - stopEnd) / 1000).toFixed(2)),
+    topology: {
+      truthCorners: truthTopology.corners,
+      retainedCorners: outputTopology.corners,
+      truthReversals: truthTopology.reversals,
+      retainedReversals: outputTopology.reversals,
+      truthSeparatedRevisitPairs: separatedRevisitPairs(truth),
+      retainedSeparatedRevisitPairs: separatedRevisitPairs(points),
+      maxTurnDeg: Number(outputTopology.maxTurnDeg.toFixed(2)),
+    },
+    maxConsecutiveStepM: Number((steps.length ? Math.max(...steps.map(step => step.distanceM)) : 0).toFixed(2)),
+    maxObservedTimeGapS: Number((steps.length ? Math.max(...steps.map(step => step.gapS ?? 0)) : 0).toFixed(2)),
+    maxGapBoundaryJumpM: Number((gapBoundarySteps.length ? Math.max(...gapBoundarySteps.map(step => step.distanceM)) : 0).toFixed(2)),
     firstTimestampMs: first?.t ?? null,
     lastTimestampMs: last?.t ?? null,
   };
@@ -219,18 +348,26 @@ function aggregate(channel) {
   return {
     caseCount: rows.length,
     crossTrackMeanM: mean('crossTrackMeanM'),
+    crossTrackP50MeanM: mean('crossTrackP50M'),
     crossTrackP95MeanM: mean('crossTrackP95M'),
+    crossTrackMaxMeanM: mean('crossTrackMaxM'),
+    timeAlignedP50MeanM: mean('timeAlignedP50M'),
+    timeAlignedP95MeanM: mean('timeAlignedP95M'),
+    timeAlignedMaxMeanM: mean('timeAlignedMaxM'),
     truthCoverageWithinEnvelopePct: mean('truthCoverageWithinEnvelopePct'),
     supportedTruthCoverageWithinEnvelopePct: mean('supportedTruthCoverageWithinEnvelopePct'),
     supportedTruthFractionPct: mean('supportedTruthFractionPct'),
     absoluteDistanceErrorMeanPct: Number((rows.reduce((sum, row) => sum + Math.abs(row.distanceErrorPct), 0) / Math.max(1, rows.length)).toFixed(2)),
     stationaryGrowthMeanM: mean('stationaryGrowthM'),
     endpointDisplacementMeanM: mean('endpointDisplacementM'),
+    departureLagMeanS: Number((rows.filter(row => row.departureLagS != null)
+      .reduce((sum, row) => sum + row.departureLagS, 0) / Math.max(1, rows.filter(row => row.departureLagS != null).length)).toFixed(2)),
+    maxGapBoundaryJumpMeanM: mean('maxGapBoundaryJumpM'),
   };
 }
 
 const report = {
-  schema: 'cairn.hike-run.hidden-truth-evaluation.v1',
+  schema: 'cairn.hike-run.hidden-truth-evaluation.v2',
   generatedAt: new Date().toISOString(),
   corpusSha256: manifest.corpusSha256,
   include,

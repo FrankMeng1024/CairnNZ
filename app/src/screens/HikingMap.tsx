@@ -447,6 +447,17 @@ export function HikingMap({
   // O18 MAP-01: react to user's saved map layer preference (outdoors / satellite).
   const mapLayer = useSettingsStore((s) => s.mapLayer);
   const debugMode = useSettingsStore((s) => s.debugMode);
+  // Review-only adapter: production/native never sees this global and normal
+  // Simulator runs keep the historical bypass. An explicit Debug Web harness
+  // may exercise the exact rendered-feature query + presentation branch while
+  // the surrounding Snap Lab realm remains test-labelled and write-isolated.
+  const roadContextQaAdapter = Boolean(
+    Platform.OS === 'web'
+    && debugMode
+    && simulatorEnabled
+    && (globalThis as unknown as { __cairnActivityRoadContextQaEnabled?: boolean })
+      .__cairnActivityRoadContextQaEnabled === true
+  );
   const theme = useVisualTheme();
   const mapTheme = useMapTheme();
   const hikeLightPreset = themeToStandardPreset(mapTheme);
@@ -601,6 +612,32 @@ export function HikingMap({
   const GAP_THRESHOLD_MS = 120_000;
   const GAP_DIST_THRESHOLD_M = 200;
   const [roadContext, setRoadContext] = useState<ActivityRoadContext | null>(null);
+  const roadContextQaEvidenceRef = useRef({
+    queryCount: 0,
+    lastAvailability: null as ActivityRoadContext['availability'] | null,
+    lastRoadFeatureCount: 0,
+    lastRenderedFeatureCount: 0,
+    canonicalPointCount: 0,
+    presentedPointCount: 0,
+    presentationChanged: false,
+  });
+  useEffect(() => {
+    if (!roadContextQaAdapter) return undefined;
+    const root = globalThis as unknown as {
+      __cairnActivityRoadContextQa?: {
+        refresh: () => void;
+        getEvidence: () => typeof roadContextQaEvidenceRef.current;
+      };
+    };
+    const bridge = {
+      refresh: () => setRoadViewportGeneration(generation => generation + 1),
+      getEvidence: () => ({ ...roadContextQaEvidenceRef.current }),
+    };
+    root.__cairnActivityRoadContextQa = bridge;
+    return () => {
+      if (root.__cairnActivityRoadContextQa === bridge) delete root.__cairnActivityRoadContextQa;
+    };
+  }, [roadContextQaAdapter]);
   const effectiveRoadContext = roadContext
     && roadContext.styleGeneration === routeStyleGeneration
     && roadContext.viewportGeneration === roadViewportGeneration
@@ -608,9 +645,17 @@ export function HikingMap({
     ? roadContext
     : null;
   const roadAwareTrackPoints = useMemo(
-    () => simulatorEnabled ? trackPoints : deriveRoadAwareLiveTrack(trackPoints, effectiveRoadContext),
-    [effectiveRoadContext, simulatorEnabled, trackPoints],
+    () => simulatorEnabled && !roadContextQaAdapter
+      ? trackPoints
+      : deriveRoadAwareLiveTrack(trackPoints, effectiveRoadContext),
+    [effectiveRoadContext, roadContextQaAdapter, simulatorEnabled, trackPoints],
   );
+  useEffect(() => {
+    if (!roadContextQaAdapter) return;
+    roadContextQaEvidenceRef.current.canonicalPointCount = trackPoints.length;
+    roadContextQaEvidenceRef.current.presentedPointCount = roadAwareTrackPoints.length;
+    roadContextQaEvidenceRef.current.presentationChanged = roadAwareTrackPoints !== trackPoints;
+  }, [roadAwareTrackPoints, roadContextQaAdapter, trackPoints]);
   const routePresentationRef = useRef(createIncrementalRoutePresentation());
   const routePresentation = useMemo(() => {
     routePresentationRef.current = updateIncrementalRoutePresentation(
@@ -627,7 +672,7 @@ export function HikingMap({
   } | null>(null);
   const presentedTailRawOrdinal = trackPoints[trackPoints.length - 1]?.rawOrdinal;
   useEffect(() => {
-    if (simulatorEnabled || !isFocused || trackPoints.length === 0
+    if ((simulatorEnabled && !roadContextQaAdapter) || !isFocused || trackPoints.length === 0
       || typeof presentedTailRawOrdinal !== 'number') return;
     const owner = useTrackingStore.getState();
     if (!owner.ownerUserId || !owner.sessionId || owner.status === 'idle') return;
@@ -659,9 +704,10 @@ export function HikingMap({
           ? null
           : Math.max(0, committedAtMs - trackPoints[trackPoints.length - 1]!.t!),
         nativeMapFrameMeasured: false,
+        qaRoadContextAdapter: roadContextQaAdapter,
       },
     });
-  }, [isFocused, presentedTailRawOrdinal, simulatorEnabled, trackPoints]);
+  }, [isFocused, presentedTailRawOrdinal, roadContextQaAdapter, simulatorEnabled, trackPoints]);
   const activeConfirmedSegment = routePresentation.activeHead;
   const trackingStatus = useTrackingStore(s => s.status);
   const trackingIsFinishing = useTrackingStore(s => s.isFinishing);
@@ -818,7 +864,7 @@ export function HikingMap({
     const eligible = Boolean(
       tail
       && trackPoints.length >= 2
-      && !simulatorEnabled
+      && (!simulatorEnabled || roadContextQaAdapter)
       && isFocused
       && mapAppState === 'active'
       && trackingStatus === 'tracking'
@@ -922,6 +968,12 @@ export function HikingMap({
           radiusM,
         });
         setRoadContext(context);
+        if (roadContextQaAdapter) {
+          roadContextQaEvidenceRef.current.queryCount += 1;
+          roadContextQaEvidenceRef.current.lastAvailability = context.availability;
+          roadContextQaEvidenceRef.current.lastRoadFeatureCount = context.structure.roadFeatureCount;
+          roadContextQaEvidenceRef.current.lastRenderedFeatureCount = context.structure.renderedFeatureCount;
+        }
         appendSimulatorLog('MAP_STATE', 'activity_road_context_queried', {
           screen: telemetryScreenPrefix,
           queryGeneration,
@@ -933,9 +985,10 @@ export function HikingMap({
           styleLayerCount: context.structure.styleLayerIds.length,
           coverageRadiusM: context.coverage.radiusM,
           networkRequestCount: 0,
+          qaRoadContextAdapter: roadContextQaAdapter,
         }, {
           clientActivityId: useTrackingStore.getState().sessionId,
-          coordinateSource: 'real',
+          coordinateSource: roadContextQaAdapter ? 'simulator' : 'real',
         });
       } catch (error) {
         if (cancelled || queryGeneration !== roadQueryGenerationRef.current) return;
@@ -954,12 +1007,17 @@ export function HikingMap({
           radiusM,
           availability: 'query-error',
         }));
+        if (roadContextQaAdapter) {
+          roadContextQaEvidenceRef.current.queryCount += 1;
+          roadContextQaEvidenceRef.current.lastAvailability = 'query-error';
+        }
         appendSimulatorLog('MAP_STATE', 'activity_road_context_query_failed', {
           screen: telemetryScreenPrefix,
           queryGeneration,
           error: error instanceof Error ? error.message : String(error),
           networkRequestCount: 0,
-        }, { coordinateSource: 'real' });
+          qaRoadContextAdapter: roadContextQaAdapter,
+        }, { coordinateSource: roadContextQaAdapter ? 'simulator' : 'real' });
       }
     })();
     return () => { cancelled = true; };
@@ -969,6 +1027,7 @@ export function HikingMap({
     mapFirstRender,
     roadViewportGeneration,
     routeStyleGeneration,
+    roadContextQaAdapter,
     simulatorEnabled,
     telemetryScreenPrefix,
     trackPoints,

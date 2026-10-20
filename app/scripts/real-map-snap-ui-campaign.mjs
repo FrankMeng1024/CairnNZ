@@ -131,6 +131,21 @@ const context = await chromium.launchPersistentContext(profileDir, {
   args: ['--disable-web-security'],
 });
 const page = context.pages()[0] ?? await context.newPage();
+await page.addInitScript(() => {
+  globalThis.__cairnActivityRoadContextQaEnabled = true;
+  globalThis.__cairnQaLongTasks = [];
+  try {
+    const observer = new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        globalThis.__cairnQaLongTasks.push({
+          startTime: entry.startTime,
+          duration: entry.duration,
+        });
+      }
+    });
+    observer.observe({ type: 'longtask', buffered: true });
+  } catch { /* Browser does not expose Long Tasks; report unsupported. */ }
+});
 page.on('pageerror', error => runtimeErrors.push(`pageerror [${active.runId}/${active.phase}]: ${error.message}`));
 page.on('console', message => {
   const text = message.text();
@@ -390,21 +405,42 @@ async function coldReloadAndOpen(activityId, activityName) {
 async function runJourney(entry) {
   const fixturePath = path.join(campaignRoot, entry.publicInputPath ?? entry.inputPath);
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
+  const expectedUnavailableFingerprints = new Set();
   // Captured responses are also valid for the post-reconnect phase of the
   // offline-at-Finish case. The offline policy still prevents a request while
   // saving; the cassette is consumed only by its one bounded reconnect.
   if (capturedRoot && capturedRuns.has(fixture.runId)) {
     const capturedRunId = capturedRunAliases.get(fixture.runId) ?? fixture.runId;
     const capturedActivityPath = path.join(capturedRoot, 'activities', capturedRunId, 'QA_ACTIVITY.json');
-    const receiptFingerprints = fs.existsSync(capturedActivityPath)
+    const capturedReceipts = fs.existsSync(capturedActivityPath)
       ? JSON.parse(fs.readFileSync(capturedActivityPath, 'utf8')).transportReceipts
-        .map(receipt => receipt.requestFingerprint)
       : fs.readdirSync(path.join(capturedRoot, 'http-captures'))
         .filter(name => name.endsWith('.json'))
         .map(name => JSON.parse(fs.readFileSync(path.join(capturedRoot, 'http-captures', name), 'utf8')))
         .filter(capture => capture.runId === capturedRunId)
-        .map(capture => capture.requestFingerprint);
-    if (receiptFingerprints.length === 0) throw new Error(`captured_response_inputs_missing:${fixture.runId}`);
+        .map(capture => ({
+          requestFingerprint: capture.requestFingerprint,
+          matched: true,
+          status: capture.status,
+        }));
+    for (const receipt of capturedReceipts) {
+      if (receipt.matched !== true || receipt.status == null) {
+        expectedUnavailableFingerprints.add(receipt.requestFingerprint);
+      }
+    }
+    // A response that arrived after the production timeout was captured at
+    // the browser boundary, but it was never consumed by the app. Replaying
+    // that body instantly changes fallback eligibility and is not exact.
+    const receiptFingerprints = capturedReceipts
+      .filter(receipt => receipt.matched === true && receipt.status != null)
+      .map(receipt => receipt.requestFingerprint);
+    // An offline-at-Finish cell may intentionally reopen after the frozen
+    // live-request ceiling has been exhausted. An empty exact cassette is a
+    // no-fallthrough provider outage: reconnect still executes, local Final
+    // remains authoritative, and no uncounted network request can escape.
+    if (receiptFingerprints.length === 0 && !fixture.lifecycle.offlineAtFinish) {
+      throw new Error(`captured_response_inputs_missing:${fixture.runId}`);
+    }
     const cassetteEntries = receiptFingerprints.map(requestFingerprint => {
       const source = path.join(capturedRoot, 'http-captures', `${requestFingerprint}.json`);
       const capture = JSON.parse(fs.readFileSync(source, 'utf8'));
@@ -431,6 +467,16 @@ async function runJourney(entry) {
   fs.mkdirSync(runDir, { recursive: true });
   fs.copyFileSync(fixturePath, path.join(runDir, 'PUBLIC_INPUT.json'));
   const activityName = `REAL_MAP ${fixture.runId}`;
+  const resourceStart = await page.evaluate(() => ({
+    performanceNow: performance.now(),
+    longTaskIndex: Array.isArray(globalThis.__cairnQaLongTasks) ? globalThis.__cairnQaLongTasks.length : null,
+    roadContextQueryCount: globalThis.__cairnActivityRoadContextQa?.getEvidence?.().queryCount ?? 0,
+    heap: performance.memory ? {
+      usedJSHeapSize: performance.memory.usedJSHeapSize,
+      totalJSHeapSize: performance.memory.totalJSHeapSize,
+      jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+    } : null,
+  }));
   active = { phase: 'configure', runId: fixture.runId, activityId: null };
   mark('configure');
   await mount(routeName);
@@ -493,9 +539,66 @@ async function runJourney(entry) {
   active.activityId = activityId;
 
   mark('raw-replay');
+  const rawReplayStartedAt = Date.now();
   const live = await page.evaluate(async ({ publicInput, id }) => (
     globalThis.__cairnStores.snapLabLogicalRunner.replaySnapLabUiJourney(publicInput, id)
   ), { publicInput: fixture, id: activityId });
+  const rawReplayWallMs = Date.now() - rawReplayStartedAt;
+  const roadAdapterMounted = await page.evaluate(() => Boolean(
+    globalThis.__cairnActivityRoadContextQa?.refresh
+    && globalThis.__cairnActivityRoadContextQa?.getEvidence
+  ));
+  if (!roadAdapterMounted) throw new Error('rendered_road_context_qa_adapter_not_mounted');
+  await page.evaluate(() => {
+    const tail = globalThis.__cairnStores.useTrackingStore.getState().trackPoints.at(-1);
+    if (!tail) return;
+    const delta = 0.0012;
+    globalThis.__cairnMap?.fitBounds?.(
+      [[tail.lng - delta, tail.lat - delta], [tail.lng + delta, tail.lat + delta]],
+      { padding: 40, duration: 0 },
+    );
+  });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => globalThis.__cairnActivityRoadContextQa?.refresh?.());
+  const renderedRoadContextExercised = await page.waitForFunction(startCount => (
+    (globalThis.__cairnActivityRoadContextQa?.getEvidence?.().queryCount ?? 0) > startCount
+  ), resourceStart.roadContextQueryCount, { timeout: 20_000 }).then(() => true).catch(() => false);
+  const roadContextBranch = await page.evaluate(() => (
+    globalThis.__cairnActivityRoadContextQa?.getEvidence?.() ?? null
+  ));
+  if (!renderedRoadContextExercised) {
+    writeJson(path.join(runDir, 'RENDERED_ROAD_CONTEXT_FAILURE.json'), {
+      startQueryCount: resourceStart.roadContextQueryCount,
+      roadContextBranch,
+      map: await page.evaluate(() => ({
+        exists: Boolean(globalThis.__cairnMap),
+        loaded: globalThis.__cairnMap?.loaded?.() ?? false,
+        styleLoaded: globalThis.__cairnMap?.isStyleLoaded?.() ?? false,
+        tilesLoaded: globalThis.__cairnMap?.areTilesLoaded?.() ?? false,
+        center: globalThis.__cairnMap?.getCenter?.() ?? null,
+      })),
+    });
+    throw new Error(`rendered_road_context_branch_not_exercised:${JSON.stringify(roadContextBranch)}`);
+  }
+  const resourceAfterReplay = await page.evaluate(start => {
+    const allLongTasks = Array.isArray(globalThis.__cairnQaLongTasks) ? globalThis.__cairnQaLongTasks : null;
+    const tasks = allLongTasks && start.longTaskIndex != null
+      ? allLongTasks.slice(start.longTaskIndex)
+      : null;
+    return {
+      performanceNow: performance.now(),
+      heap: performance.memory ? {
+        usedJSHeapSize: performance.memory.usedJSHeapSize,
+        totalJSHeapSize: performance.memory.totalJSHeapSize,
+        jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+      } : null,
+      longTasks: tasks == null ? null : {
+        count: tasks.length,
+        totalDurationMs: tasks.reduce((sum, task) => sum + task.duration, 0),
+        maxDurationMs: tasks.reduce((max, task) => Math.max(max, task.duration), 0),
+      },
+    };
+  }, resourceStart);
   if (live.preFinish.canonicalPointCount < 2 || live.preFinish.distanceM < 20) {
     throw new Error(`real_map_unsavable:${JSON.stringify(live.preFinish)}`);
   }
@@ -765,7 +868,13 @@ async function runJourney(entry) {
   if (expectedEvidenceLabel === 'CAPTURED_REAL_RESPONSE' && (
     persisted.transportReceipts.length === 0
     || persisted.transportReceipts.some(receipt => (
-      !receipt.matched || receipt.provenance !== 'CAPTURED_REAL_RESPONSE'
+      (!receipt.matched || receipt.provenance !== 'CAPTURED_REAL_RESPONSE')
+      && !(
+        expectedUnavailableFingerprints.has(receipt.requestFingerprint)
+        && receipt.matched === false
+        && receipt.status == null
+        && receipt.provenance === 'NO_CASSETTE_MATCH'
+      )
     ))
   )) {
     throw new Error('real_map_captured_response_identity_miss');
@@ -791,6 +900,11 @@ async function runJourney(entry) {
     campaignManifestSha256: manifestSha256,
     fixtureSha256: fixture.fixtureSha256,
     responseProvenance: expectedEvidenceLabel,
+    productionBranchCoverage: {
+      renderedRoadContext: roadContextBranch,
+      renderedRoadContextExercised,
+      adapter: 'explicit-debug-web-snap-lab; production handler; simulator-labelled; no production writes',
+    },
     plantDuringActivity,
     live,
     completion,
@@ -814,6 +928,19 @@ async function runJourney(entry) {
       acceptedIslandCount: persisted.acceptedIslandCount,
       transportReceiptCount: persisted.transportReceipts.length,
       routeSnapshotFingerprint: persisted.routeSnapshots[0].artifactFingerprint,
+    },
+    resourceBudget: {
+      rawReplayWallMs,
+      observationCount: fixture.rawEvents.length,
+      replayWallMsPerObservation: rawReplayWallMs / Math.max(1, fixture.rawEvents.length),
+      elapsedBrowserMs: resourceAfterReplay.performanceNow - resourceStart.performanceNow,
+      heapStart: resourceStart.heap,
+      heapAfterReplay: resourceAfterReplay.heap,
+      usedHeapGrowthBytes: resourceStart.heap && resourceAfterReplay.heap
+        ? resourceAfterReplay.heap.usedJSHeapSize - resourceStart.heap.usedJSHeapSize
+        : null,
+      longTasks: resourceAfterReplay.longTasks,
+      interpretation: 'Expo Web/Chrome harness proxy; not physical-device CPU, RSS, or battery evidence.',
     },
     result: 'SAVED_AND_COLD_REOPENED',
   };

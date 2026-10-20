@@ -1489,6 +1489,7 @@ export function OrderedRouteEditorScreen() {
         getApprovedPointTarget: () => RoutePoint | null;
         getCameraSnapshot: () => Record<string, unknown>;
         getPointAnimationFrameHistory: () => Array<{ atMs: number; progress: number }>;
+        classifyStroke: (points: RoutePoint[]) => Record<string, unknown>;
       };
     };
     const bridge = {
@@ -1512,6 +1513,18 @@ export function OrderedRouteEditorScreen() {
         pitch: cameraPitchRef.current,
         generation: cameraGenerationRef.current,
       }),
+      classifyStroke: (points: RoutePoint[]) => {
+        const draft = historyRef.current?.present;
+        const latitude = points[0]?.lat ?? cameraCenterRef.current?.lat ?? 0;
+        const attachmentToleranceM = routeAttachmentToleranceM(latitude, cameraZoomRef.current);
+        return {
+          cameraZoom: cameraZoomRef.current,
+          attachmentToleranceM,
+          ...(draft
+            ? classifyDrawTransactionWithDiagnostics(draft, points, undefined, attachmentToleranceM)
+            : { intent: { kind: 'reject', code: 'DISCONNECTED' }, diagnostics: null }),
+        };
+      },
       getPointAnimationFrameHistory: () => {
         const history = routeGrowthFrameHistoryRef.current!;
         return Array.from({ length: history.count }, (_, index) => ({

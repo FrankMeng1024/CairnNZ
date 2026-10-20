@@ -133,11 +133,13 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(hikeFinish).not.toContain("'Map Matching'");
   });
 
-  test('Settings exposes one privacy-safe owner action for the follow-up field ledger', () => {
+  test('Settings exposes one owner-bound export and accurately discloses opted-in coordinates', () => {
     expect(settings).toContain('title="Copy Activity diagnostics"');
     expect(settings).toContain('testID="settings-copy-activity-diagnostics"');
     expect(settings).toContain('exportLatestActivityStageLedger(ownerId)');
+    expect(settings).toContain('exportLatestActivityDiagnosticReplay(ownerId, ledger)');
     expect(settings).toContain('currentOwnerId() !== ownerId');
-    expect(settings).toContain('contains no coordinates or Mapbox token');
+    expect(settings).toContain('includes precise coordinates and redacted provider evidence');
+    expect(settings).toContain('contains no Mapbox token');
   });
 });

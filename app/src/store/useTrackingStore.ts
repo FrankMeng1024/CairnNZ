@@ -219,6 +219,15 @@ import {
   recordActivityStageEvent,
 } from '../features/activity/activityStageLedger';
 import {
+  beginActivityDiagnosticReplay,
+  exportActivityDiagnosticReplay,
+  finishActivityDiagnosticReplay,
+  recordActivityDiagnosticCanonicalPromotion,
+  recordActivityDiagnosticDecision,
+  recordActivityDiagnosticObservation,
+  recordActivityDiagnosticProviderExchange,
+} from '../features/activity/activityDiagnosticReplay';
+import {
   activateNativeGpsEvidenceScope,
   deactivateNativeGpsEvidenceScope,
 } from '../features/activity/nativeGpsEvidence';
@@ -1643,6 +1652,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
     stopActivityLifecycleTimer();
 
+    if (locationProviderSource === 'real' && useSettingsStore.getState().debugMode) {
+      // Enable the durable replay before the native source is activated so
+      // the first callback cannot outrun the explicit diagnostic session.
+      // A diagnostic setup failure remains non-blocking for recording.
+      await beginActivityDiagnosticReplay({
+        ownerUserId: userId,
+        clientActivityId: localSessionId,
+        mode,
+        source: 'real',
+        wallTimeMs: startWallClockTimestamp,
+      }).catch(error => {
+        crashLogger.breadcrumb(`activity:diagnostic_begin_failed ${String(error).slice(0, 80)}`);
+      });
+    }
+
     try {
       // Native permission education belongs only to the real provider. The
       // simulator is an internal source and must never provoke an OS prompt.
@@ -2671,6 +2695,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               selectedPersistence: null,
             },
             stageLedger: null,
+            diagnosticReplay: null,
             routeSnapshots: [],
             roadUpgrade: null,
           };
@@ -2826,9 +2851,35 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           });
           await flushActivityStageLedger(ownerUserId);
           const stageLedger = await exportLatestActivityStageLedger(ownerUserId, 'snap-lab');
+          await finishActivityDiagnosticReplay(ownerUserId, s.sessionId, {
+            selectedSource: snap.selectedSource,
+            artifactRevision: selectedRevision,
+            artifactFingerprint: selectedFingerprint,
+            finalGeometryState,
+          });
+          const diagnosticReplay = await exportActivityDiagnosticReplay({
+            ownerUserId,
+            clientActivityId: s.sessionId,
+            stageLedger,
+            finalArtifact: {
+              selectedSource: snap.selectedSource,
+              artifactRevision: selectedRevision,
+              artifactFingerprint: selectedFingerprint,
+              localFingerprint,
+              canonicalPointCount: s.trackPoints.length,
+              localFinalPointCount: snap.localFinal.length,
+              selectedFinalPointCount: snap.selectedFinal.length,
+              canonicalPoints: s.trackPoints,
+              localFinalPoints: snap.localFinal,
+              selectedFinalPoints: snap.selectedFinal,
+            },
+            providerReceipts: snap.transportReceipts,
+            providerResponses: snap.providerResponses,
+          });
           await saveSnapLabActivity({
             ...selectedRecord,
             stageLedger,
+            diagnosticReplay,
             stageTimestamps: {
               ...selectedRecord.stageTimestamps,
               qaActivityDurableAt,
@@ -3312,6 +3363,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 requestGovernor: mapboxRequestGovernor,
                 requestPhase: 'final',
                 requestReason: 'finish-qualified-unresolved-corridor',
+                diagnosticResponseSink: exchange => {
+                  void recordActivityDiagnosticProviderExchange({
+                    ownerUserId,
+                    clientActivityId: s.sessionId!,
+                    exchange,
+                  });
+                },
               });
               if (!snapRes.ok || snapRes.points.length < 2) {
                 const fallbackReason = 'reason' in snapRes
@@ -4252,6 +4310,34 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       });
     }
     if (s.locationProviderSource === 'real' && s.sessionId) {
+      const selectedSession = useSessionStore.getState().sessions.find(item => (
+        item.clientActivityId === s.sessionId || item.id === s.sessionId
+      ));
+      const selectedPoints = selectedSession?.trackPoints ?? buildBaseFinalTrackPoints(s.trackPoints);
+      await finishActivityDiagnosticReplay(ownerUserId, s.sessionId, {
+        finalArtifact: {
+          schemaVersion: 1,
+          algorithmVersion: selectedSession?.finalGeometryVersion ?? 'pedestrian-final-v2-base',
+          artifactRevision: selectedSession?.finalGeometryRevision
+            ?? finishResult?.finalGeometryRevision
+            ?? null,
+          artifactFingerprint: selectedSession?.finalGeometryFingerprint
+            ?? finishResult?.finalGeometryFingerprint
+            ?? activityGeometryFingerprint(selectedPoints),
+          canonicalFingerprint: activityGeometryFingerprint(s.trackPoints),
+          selectedSource: selectedSession?.finalGeometryState ?? null,
+          finalGeometryState: finishResult?.finalGeometryState ?? null,
+          canonicalPoints: s.trackPoints,
+          selectedFinalPoints: selectedPoints,
+          platform: Platform.OS,
+          locationProviderSource: 'real',
+        },
+        sync: { serverSaveAcknowledged, durableSaveCommitted, cleanupAfterRename },
+      }).catch(error => {
+        crashLogger.breadcrumb(`activity:diagnostic_finish_failed ${String(error).slice(0, 80)}`);
+      });
+    }
+    if (s.locationProviderSource === 'real' && s.sessionId) {
       void deactivateNativeGpsEvidenceScope(ownerUserId, s.sessionId).catch(() => undefined);
     }
     set((prev) => ({
@@ -4740,6 +4826,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const receiptActivityId = coord.clientActivityId ?? receiptSnapshot.sessionId;
     const receiptOwnerId = receiptSnapshot.ownerUserId;
     const receiptEvidenceId = `${coord.source ?? 'foreground'}:${Math.floor(timestamp ?? receiptWallTimeMs)}`;
+    if (receiptOwnerId && receiptActivityId) {
+      void recordActivityDiagnosticObservation({
+        ownerUserId: receiptOwnerId,
+        clientActivityId: receiptActivityId,
+        coordinate: coord,
+        observationTimeMs: Math.floor(timestamp ?? receiptWallTimeMs),
+      });
+    }
     if ((coord.source !== 'simulator' || coord.simulatorObservationMode === 'raw-gps')
       && receiptOwnerId && receiptActivityId) {
       void recordActivityStageEvent({
@@ -4801,6 +4895,16 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         candidateRawOrdinal?: number | null;
         promotedByRawOrdinal?: number | null;
       }): ActivityLocationAcceptance => {
+        if (before.ownerUserId && before.sessionId) {
+          void recordActivityDiagnosticDecision({
+            ownerUserId: before.ownerUserId,
+            clientActivityId: before.sessionId,
+            observationTimeMs: sampleTimestamp,
+            accepted: false,
+            reason: stage1?.decisionReason ?? reason,
+            segmentId: before.currentSegmentId,
+          });
+        }
         if (coordinateSource === 'real') latestRealCanonicalDecisionReason = reason;
         appendSimulatorLog('LOCATION', 'location_sample_rejected', {
           sampleSource: owned.source ?? 'foreground',
@@ -5924,6 +6028,24 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           coordinateSource,
         });
         if (!isSimulatorSample) latestRealCanonicalDecisionReason = acceptance.reason ?? 'accepted';
+        for (const promoted of acceptedPoints.slice(0, -1)) {
+          void recordActivityDiagnosticCanonicalPromotion({
+            ownerUserId: before.ownerUserId,
+            clientActivityId: before.sessionId!,
+            observationTimeMs: promoted.t,
+            promotedByObservationTimeMs: accepted.t,
+            reason: 'candidate-confirmed',
+            segmentId: promoted.segmentId ?? null,
+          });
+        }
+        void recordActivityDiagnosticDecision({
+          ownerUserId: before.ownerUserId,
+          clientActivityId: before.sessionId!,
+          observationTimeMs: accepted.t,
+          accepted: true,
+          reason: acceptance.reason ?? 'accepted',
+          segmentId: accepted.segmentId ?? null,
+        });
         return {
           accepted: true,
           reason: acceptance.reason ?? 'accepted',

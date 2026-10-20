@@ -18,6 +18,8 @@ const outputRoot = path.resolve(argument(
   '--output',
   '/Users/mzm/Downloads/Cairn_Hike_Run_Experience_Lab_Work/frozen-corpus',
 ));
+const providerCacheRootArgument = argument('--provider-cache');
+const providerCacheRoot = providerCacheRootArgument ? path.resolve(providerCacheRootArgument) : null;
 const token = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '').trim();
 
 if (!token.startsWith('pk.') || token.length < 40) {
@@ -27,6 +29,7 @@ if (fs.existsSync(outputRoot)) throw new Error(`freeze_output_already_exists:${o
 
 const planBytes = fs.readFileSync(planPath);
 const plan = JSON.parse(planBytes.toString('utf8'));
+const campaign = String(plan.campaign ?? 'overnight-experience-lab-20261020');
 const sha256 = value => crypto.createHash('sha256').update(
   Buffer.isBuffer(value) || typeof value === 'string' ? value : JSON.stringify(value),
 ).digest('hex');
@@ -103,17 +106,37 @@ async function fetchWalkingRoute(route) {
     steps: 'true',
     access_token: token,
   })) url.searchParams.set(name, value);
+  const sanitized = new URL(url);
+  sanitized.searchParams.set('access_token', '<redacted>');
+  const expectedRequestFingerprint = sha256(`GET ${sanitized}`);
+  const cachedPath = providerCacheRoot
+    ? path.join(providerCacheRoot, 'provider-responses', `${route.id}.json`)
+    : null;
+  if (cachedPath && fs.existsSync(cachedPath)) {
+    const cached = JSON.parse(fs.readFileSync(cachedPath, 'utf8'));
+    if (cached.requestFingerprint === expectedRequestFingerprint) {
+      return {
+        status: cached.status,
+        elapsedMs: cached.elapsedMs,
+        sanitizedUrl: cached.sanitizedUrl,
+        requestFingerprint: cached.requestFingerprint,
+        payload: cached.payload,
+        provenance: 'CAPTURED_LIVE_RESPONSE_REPLAY',
+        originalCapturedAt: cached.capturedAt,
+      };
+    }
+  }
   const startedAt = Date.now();
   const response = await fetch(url);
   const payload = await response.json();
-  const sanitized = new URL(url);
-  sanitized.searchParams.set('access_token', '<redacted>');
   return {
     status: response.status,
     elapsedMs: Date.now() - startedAt,
     sanitizedUrl: sanitized.toString(),
-    requestFingerprint: sha256(`GET ${sanitized}`),
+    requestFingerprint: expectedRequestFingerprint,
     payload,
+    provenance: 'LIVE_MAPBOX_REQUEST',
+    originalCapturedAt: null,
   };
 }
 
@@ -368,6 +391,8 @@ for (const route of plan.routes) {
     sanitizedUrl: response.sanitizedUrl,
     requestFingerprint: response.requestFingerprint,
     responseSha256: sha256(response.payload),
+    provenance: response.provenance,
+    originalCapturedAt: response.originalCapturedAt,
     payload: response.payload,
   };
   writeJson(path.join(outputRoot, 'provider-responses', `${route.id}.json`), receipt);
@@ -455,7 +480,7 @@ for (const [routeIndex, route] of plan.routes.entries()) {
     const scheduleSha256 = sha256(scheduleRecord);
     const publicFixtureBase = {
       schema: 'cairn.hike-run.public-provider-fixture.v1',
-      campaign: 'overnight-experience-lab-20261020',
+      campaign,
       caseId: route.id,
       runId: variant.id,
       mode: variant.mode,
@@ -489,7 +514,7 @@ for (const [routeIndex, route] of plan.routes.entries()) {
         trueBlackout: Boolean(route.gpsBlackout),
         offlineAtFinish: Boolean(variant.offlineAtFinish),
         restoreOnlineAfterColdOpen: Boolean(variant.offlineAtFinish),
-        slowDiagnosticWriteMs: variant.id === 'M05-hike-batched' ? 25 : 0,
+        slowDiagnosticWriteMs: Number(variant.slowDiagnosticWriteMs ?? 0),
         walReadFaultOnce: false,
         yieldedFinish: variant.id === 'X05-hike-offline-holdout',
       },

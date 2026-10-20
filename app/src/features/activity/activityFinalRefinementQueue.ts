@@ -32,6 +32,7 @@ import {
   activityFinalRefinementRequestCategory,
   decideRetainedLocalRefinement,
 } from './activityFinalRefinementDecision';
+import { recordActivityDiagnosticProviderExchange } from './activityDiagnosticReplay';
 
 export interface ActivityFinalRefinementJob {
   format: 'cairn-activity-final-refinement';
@@ -543,6 +544,13 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       requestPhase: 'final',
       requestReason: 'durable-final-qualified-unresolved-corridor',
       signal,
+      diagnosticResponseSink: exchange => {
+        void recordActivityDiagnosticProviderExchange({
+          ownerUserId: job.ownerUserId,
+          clientActivityId: job.clientActivityId,
+          exchange,
+        });
+      },
     });
     resultReasons.push('reason' in result ? result.reason : 'ok');
     const requests = result.stats.requestResults ?? [];
@@ -572,8 +580,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     const localImprovement = !networkMatched
       && result.stats.displayRefined
       && result.stats.wholeRouteValidation.accepted
-      && activityGeometryFingerprint(candidateSegment) !== activityGeometryFingerprint(baseSegments[segmentIndex])
-      && candidateSegment.length < baseSegments[segmentIndex].length;
+      && activityGeometryFingerprint(candidateSegment) !== activityGeometryFingerprint(baseSegments[segmentIndex]);
     if (!networkMatched && !localImprovement) continue;
     baseSegments[segmentIndex] = candidateSegment;
     if (networkMatched) matchedSegments += 1;

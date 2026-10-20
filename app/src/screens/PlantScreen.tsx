@@ -145,12 +145,8 @@ export function resolveInitialPlantContext(
   try {
     const tracking = trackingOverride ?? useTrackingStore.getState();
     const active = tracking.status === 'tracking' || tracking.status === 'paused';
-    const coordinate = tracking.lastCoordinate;
-    const ageMs = activityFreshnessNow(tracking.locationProviderSource) - (tracking.lastCoordinateTime ?? 0);
-    if (
+    const activityIdentityCurrent = Boolean(
       active
-      && tracking.locationAvailable
-      && coordinate
       && tracking.sessionId
       && tracking.ownerUserId
       && tracking.liveOwnerGeneration
@@ -159,18 +155,26 @@ export function resolveInitialPlantContext(
         && origin.clientActivityId === tracking.sessionId
         && origin.ownerGeneration === tracking.liveOwnerGeneration
         && origin.activityMode === tracking.activityMode
-      ))
+      )),
+    );
+    const activityContext = activityIdentityCurrent ? {
+      ownerUserId: tracking.ownerUserId!,
+      clientActivityId: tracking.sessionId!,
+      ownerGeneration: tracking.liveOwnerGeneration!,
+    } : null;
+    const coordinate = tracking.lastCoordinate;
+    const ageMs = activityFreshnessNow(tracking.locationProviderSource) - (tracking.lastCoordinateTime ?? 0);
+    if (
+      activityIdentityCurrent
+      && tracking.locationAvailable
+      && coordinate
       && ageMs >= 0
       && ageMs <= 30_000
     ) {
       return {
         step: 'content',
         fromActivity: true,
-        activityContext: {
-          ownerUserId: tracking.ownerUserId,
-          clientActivityId: tracking.sessionId,
-          ownerGeneration: tracking.liveOwnerGeneration,
-        },
+        activityContext,
         draft: {
           ...INITIAL_DRAFT,
           gpsLat: coordinate.lat,
@@ -182,6 +186,12 @@ export function resolveInitialPlantContext(
           locationCapturedAtMs: tracking.lastCoordinateTime ?? null,
         },
       };
+    }
+    // Activity identity and coordinate freshness are independent. During a
+    // provider outage/recovery the active Activity remains the owner of a
+    // Plant flow, while placement must acquire a fresh bounded GPS lock.
+    if (activityIdentityCurrent) {
+      return { step: 'gps', draft: INITIAL_DRAFT, fromActivity: true, activityContext };
     }
   } catch { /* standalone Plant starts with the bounded GPS flow */ }
   return { step: 'gps', draft: INITIAL_DRAFT, fromActivity: false, activityContext: null };

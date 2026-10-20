@@ -72,13 +72,17 @@ describe('Trails personal journey library screen contracts', () => {
     expect(read('src/screens/HikingMap.tsx')).toContain('id="planned-route-line"');
   });
 
-  test('Activity conversion is reachable only from Routes and saves an independent Route', () => {
+  test('Activity conversion is reachable from Detail and Routes and saves an independent Route', () => {
     const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
     expect(trails).toContain("createStep === 'source' ? 'route-create-source' : 'route-activity-picker'");
     expect(trails).toContain('testID="route-create-activity"');
     expect(trails).toContain("leaveCreateFlow({\n                    creationSource: 'activity',\n                    fromSessionId: session.id,\n                    creationSessionId: createRouteCreationSessionId(),");
     expect(trails).toContain('onClosed={finishCreateTransition}');
-    expect(detail).not.toContain('activity-save-as-route');
+    expect(detail).toContain('testID="activity-create-route"');
+    expect(detail).toContain("creationSource: 'activity'");
+    expect(detail).toContain('fromSessionId: selectedSession.id');
+    expect(detail).toContain('creationSessionId: createRouteCreationSessionId()');
+    expect(detail).toContain('This Activity and its Memory stay unchanged.');
     expect(detail).not.toContain('Save as Route');
     expect(editor).toContain('createImportedOrderedDraft');
     expect(editor).toContain("nav.replace('MapHistory', { routeId: savedId })");

@@ -79,6 +79,7 @@ import { uuidv4 } from '../services/offlineQueue';
 import { cairnDisplayTitle, splitTitleBody } from '../features/plant/services/noteEncoding';
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
 import { resolveActivityDetailBackAction } from '../features/activity/activityDetailNavigation';
+import { createRouteCreationSessionId } from '../features/route/routeCreationSession';
 import {
   ALMOST_DONE_CLONE_V1_ID,
   loadOrBuildAlmostDoneCloneV1,
@@ -1613,6 +1614,20 @@ function MapHistoryObjectScreen() {
     }).finally(() => setRouteDraftOpening(false));
   }, [routeDraftOpening, selectedSession]);
 
+  const createRouteFromActivity = useCallback(() => {
+    if (!selectedSession || routeDraftOpening) return;
+    setRouteDraftOpening(true);
+    nav.navigate('RouteEditor', {
+      creationSource: 'activity',
+      fromSessionId: selectedSession.id,
+      creationSessionId: createRouteCreationSessionId(),
+    });
+    // The editor owns an immutable imported draft after navigation. Release
+    // the local double-tap guard on the next turn so returning to Detail keeps
+    // the action usable without coupling either record's lifecycle.
+    setTimeout(() => setRouteDraftOpening(false), 0);
+  }, [nav, routeDraftOpening, selectedSession]);
+
   // Show real markers on map. Activity Detail requires explicit Activity
   // provenance or recorded marker membership; spatial proximity alone never
   // claims that an arbitrary Cairn came from this Activity.
@@ -2258,6 +2273,15 @@ function MapHistoryObjectScreen() {
                 </View>
               ) : (
                 <View style={styles.activityActions}>
+                  <PrimaryButton
+                    label="Create Route"
+                    onPress={createRouteFromActivity}
+                    disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
+                    loading={routeDraftOpening}
+                    renderIcon={color => <Icon name="Route" size={IconSize.sm} color={color} strokeWidth={2} />}
+                    testID="activity-create-route"
+                  />
+                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Creates a separate editable copy. This Activity and its Memory stay unchanged.</Text>
                   <TouchableOpacity
                     style={styles.activityDeleteAction}
                     onPress={() => setDeleteConfirm(true)}
