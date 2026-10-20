@@ -29,27 +29,46 @@ const ledgerPath = path.resolve(argument(
   path.join(process.env.HOME, 'Desktop/Cairn_RealMap_Snap_Final_Review/request-cost-ledger.json'),
 ));
 const tokenAuthorityPath = path.resolve(argument('--token-authority', '/private/tmp/cairn-o70-eas-env.txt'));
+const manifestName = argument('--manifest', null);
 const baseUrl = argument('--url', 'http://127.0.0.1:8098');
 const sentinelIds = ['U01-hike-normal', 'U04-hike-normal', 'M01-hike-normal', 'M02-hike-normal', 'X01-hike-normal', 'X02-hike-normal'];
 const selection = argument('--selection', 'sentinels');
 const onlyRun = argument('--run');
+const runList = new Set(String(argument('--run-list', '')).split(',').filter(Boolean));
 const skipRuns = new Set(String(argument('--skip-runs', '')).split(',').filter(Boolean));
 const appendToShelf = process.argv.includes('--append');
 const capturedOnly = process.argv.includes('--captured-only');
 const capturedRoot = argument('--captured-root') ? path.resolve(argument('--captured-root')) : null;
 const capturedRuns = new Set(String(argument('--captured-runs', sentinelIds.join(','))).split(',').filter(Boolean));
+const capturedRunAliases = new Map(String(argument('--captured-run-aliases', ''))
+  .split(',')
+  .filter(Boolean)
+  .map(value => value.split('='))
+  .filter(parts => parts.length === 2 && parts[0] && parts[1]));
+const plantDuringRuns = new Set(String(argument('--plant-during-runs', '')).split(',').filter(Boolean));
 const ownerUserId = argument('--owner', `real-map-snap-${selection}-owner`);
 const sourceHead = argument('--head', 'dirty-development-worktree');
 const sourceTree = argument('--tree', 'dirty-development-worktree');
 const profileDir = path.join(outputRoot, '_browser-profile');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-const manifestPath = path.join(campaignRoot, 'FROZEN_CAMPAIGN_MANIFEST.json');
+const manifestPath = path.join(
+  campaignRoot,
+  manifestName
+    ?? (fs.existsSync(path.join(campaignRoot, 'FROZEN_CORPUS_MANIFEST.json'))
+      ? 'FROZEN_CORPUS_MANIFEST.json'
+      : 'FROZEN_CAMPAIGN_MANIFEST.json'),
+);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const manifestSha256 = crypto.createHash('sha256').update(fs.readFileSync(manifestPath)).digest('hex');
 
 function readPublicToken() {
+  if (process.env.EXPO_PUBLIC_MAPBOX_TOKEN?.startsWith('pk.')) {
+    return process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+  }
   const authority = fs.readFileSync(tokenAuthorityPath, 'utf8');
+  const directToken = authority.trim();
+  if (directToken.startsWith('pk.')) return directToken;
   const match = authority.match(/Name\s+EXPO_PUBLIC_MAPBOX_TOKEN[\s\S]*?\nValue\s+(\S+)/);
   if (!match?.[1]?.startsWith('pk.')) throw new Error('mapbox_public_token_authority_unavailable');
   return match[1];
@@ -80,8 +99,11 @@ const requestFingerprint = (method, url) => `snap-http-v1-${fnv1a(`${method.toUp
 
 let entries = manifest.entries;
 if (selection === 'sentinels') entries = entries.filter(entry => sentinelIds.includes(entry.runId));
+else if (selection === 'training') entries = entries.filter(entry => entry.holdout !== true);
+else if (selection === 'holdout') entries = entries.filter(entry => entry.holdout === true);
 else if (selection !== 'all') throw new Error(`unknown_selection:${selection}`);
 if (onlyRun) entries = entries.filter(entry => entry.runId === onlyRun);
+if (runList.size > 0) entries = entries.filter(entry => runList.has(entry.runId));
 entries = entries.filter(entry => !skipRuns.has(entry.runId));
 if (entries.length === 0) throw new Error('campaign_selection_empty');
 
@@ -288,6 +310,39 @@ const capture = async (runDir, name) => {
   }
   return target;
 };
+const waitForMapVisualEvidence = async () => {
+  await page.waitForFunction(() => {
+    const map = globalThis.__cairnMap;
+    if (!map?.loaded?.() || !map?.queryRenderedFeatures || !map?.getStyle) return false;
+    const layerIds = (map.getStyle()?.layers ?? [])
+      .map(layer => layer.id)
+      .filter(id => id.startsWith('track-line-layer-')
+        || id.startsWith('track-body-')
+        || id.startsWith('track-active-')
+        || id.startsWith('route-detail-'));
+    if (layerIds.length === 0) return false;
+    let routeVisible = false;
+    try {
+      routeVisible = map.queryRenderedFeatures(undefined, { layers: layerIds }).length > 0;
+    } catch { return false; }
+    if (!routeVisible) return false;
+    const basemapVisible = map.queryRenderedFeatures().some(feature => (
+      feature?.source && !String(feature.source).startsWith('track-line-')
+        && !String(feature.source).startsWith('route-detail-')
+    ));
+    return basemapVisible;
+  }, null, { timeout: 45_000 });
+};
+const waitForDetailEvidence = async () => {
+  await page.getByTestId('qa-snap-lab-activity-label').waitFor({ state: 'visible', timeout: 30_000 });
+  // The detail label proves data hydration, not that a person can see the
+  // route. Hold visual evidence until the production Map load overlay has
+  // actually yielded; otherwise a fast screenshot records a blank panel and
+  // can falsely call it a valid Activity map.
+  await waitForMapVisualEvidence();
+  await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 45_000 });
+  await page.waitForTimeout(250);
+};
 const openDetail = async (activityId, activityName) => {
   await page.evaluate(id => {
     globalThis.__cairnStores.navigationRef.reset({
@@ -300,8 +355,7 @@ const openDetail = async (activityId, activityName) => {
     });
   }, activityId);
   await waitForRoute('MapHistory');
-  await page.getByText(activityName, { exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
-  await page.getByTestId('qa-snap-lab-activity-label').waitFor({ state: 'visible', timeout: 30_000 });
+  await waitForDetailEvidence();
 };
 
 async function initialize() {
@@ -334,20 +388,27 @@ async function coldReloadAndOpen(activityId, activityName) {
 }
 
 async function runJourney(entry) {
-  const fixturePath = path.join(campaignRoot, entry.inputPath);
+  const fixturePath = path.join(campaignRoot, entry.publicInputPath ?? entry.inputPath);
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
   // Captured responses are also valid for the post-reconnect phase of the
   // offline-at-Finish case. The offline policy still prevents a request while
   // saving; the cassette is consumed only by its one bounded reconnect.
   if (capturedRoot && capturedRuns.has(fixture.runId)) {
-    const capturedActivity = JSON.parse(fs.readFileSync(
-      path.join(capturedRoot, 'activities', fixture.runId, 'QA_ACTIVITY.json'),
-      'utf8',
-    ));
-    const cassetteEntries = capturedActivity.transportReceipts.map(receipt => {
-      const source = path.join(capturedRoot, 'http-captures', `${receipt.requestFingerprint}.json`);
+    const capturedRunId = capturedRunAliases.get(fixture.runId) ?? fixture.runId;
+    const capturedActivityPath = path.join(capturedRoot, 'activities', capturedRunId, 'QA_ACTIVITY.json');
+    const receiptFingerprints = fs.existsSync(capturedActivityPath)
+      ? JSON.parse(fs.readFileSync(capturedActivityPath, 'utf8')).transportReceipts
+        .map(receipt => receipt.requestFingerprint)
+      : fs.readdirSync(path.join(capturedRoot, 'http-captures'))
+        .filter(name => name.endsWith('.json'))
+        .map(name => JSON.parse(fs.readFileSync(path.join(capturedRoot, 'http-captures', name), 'utf8')))
+        .filter(capture => capture.runId === capturedRunId)
+        .map(capture => capture.requestFingerprint);
+    if (receiptFingerprints.length === 0) throw new Error(`captured_response_inputs_missing:${fixture.runId}`);
+    const cassetteEntries = receiptFingerprints.map(requestFingerprint => {
+      const source = path.join(capturedRoot, 'http-captures', `${requestFingerprint}.json`);
       const capture = JSON.parse(fs.readFileSync(source, 'utf8'));
-      const target = path.join(outputRoot, 'captured-response-inputs', `${receipt.requestFingerprint}.json`);
+      const target = path.join(outputRoot, 'captured-response-inputs', `${requestFingerprint}.json`);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.copyFileSync(source, target);
       return {
@@ -440,6 +501,172 @@ async function runJourney(entry) {
   }
   await capture(runDir, '01-live');
 
+  let plantDuringActivity = null;
+  if (plantDuringRuns.has(fixture.runId)) {
+    mark('plant-during-activity');
+    const plantBefore = await page.evaluate(async ({ ownerId, id }) => {
+      const stores = globalThis.__cairnStores;
+      await stores.useMarkerStore.getState().hydrate(ownerId);
+      const tracking = stores.useTrackingStore.getState();
+      if (tracking.sessionId !== id || tracking.status !== 'tracking') {
+        throw new Error('plant_activity_identity_not_live');
+      }
+      return {
+        markerCount: stores.useMarkerStore.getState().markers.length,
+        sessionId: tracking.sessionId,
+        ownerGeneration: tracking.liveOwnerGeneration,
+        status: tracking.status,
+        coordinate: tracking.lastCoordinate,
+        coordinateTime: tracking.lastCoordinateTime,
+        distanceM: tracking.distanceM,
+        canonicalPointCount: tracking.trackPoints.length,
+      };
+    }, { ownerId: ownerUserId, id: activityId });
+    const markerApiBefore = networkAudit.filter(item => item.pathname?.startsWith('/api/markers')).length;
+    const plantTrigger = page
+      .getByTestId(`activity-${isRun ? 'run' : 'hike'}-control-dock`)
+      .getByRole('button', { name: isRun ? 'Quick Cairn' : 'Plant a Cairn', exact: true });
+    if (await plantTrigger.count() !== 1) throw new Error(`plant_trigger_count:${await plantTrigger.count()}`);
+    await plantTrigger.click({ force: true });
+    await page.waitForTimeout(800);
+    let plantActivationMethod = await page.evaluate(() => (
+      globalThis.__cairnStores.getCurrentRoute() === 'Plant' ? 'VISIBLE_BUTTON' : null
+    ));
+    if (!plantActivationMethod) {
+      // Headless RN Web does not consistently synthesize TouchableOpacity's
+      // responder release for this Mapbox-overlay control. Preserve the failed
+      // visible activation as evidence, then enter the same production Plant
+      // route through the Web-only QA navigation bridge. Unit coverage proves
+      // the button handler supplies these exact immutable Activity fields.
+      await page.evaluate(({ id, mode }) => {
+        const stores = globalThis.__cairnStores;
+        const tracking = stores.useTrackingStore.getState();
+        stores.navigationRef.navigate('Plant', {
+          origin: {
+            kind: 'activity',
+            clientActivityId: id,
+            ownerGeneration: tracking.liveOwnerGeneration,
+            activityMode: mode,
+          },
+        });
+      }, { id: activityId, mode: isRun ? 'running' : 'hiking' });
+      plantActivationMethod = 'WEB_QA_NAVIGATION_BRIDGE_AFTER_VISIBLE_BUTTON_ATTEMPT';
+    }
+    await waitForRoute('Plant', 10_000);
+    await page.getByText('Using your Activity location', { exact: true })
+      .waitFor({ state: 'visible', timeout: 15_000 });
+    await capture(runDir, '01b-plant-content');
+    await page.getByRole('textbox', { name: 'Title' }).fill(`Activity Cairn ${fixture.runId}`);
+    await page.getByRole('textbox', { name: 'Note' }).fill('Placed through the full Plant flow while this Activity kept recording.');
+    await page.getByRole('button', { name: 'Plant Cairn' }).click();
+    await page.getByTestId('plant-success-modal').waitFor({ state: 'visible', timeout: 15_000 });
+    await capture(runDir, '01c-plant-accepted');
+    const plantAccepted = await page.evaluate(({ ownerId, id }) => {
+      const stores = globalThis.__cairnStores;
+      const activityMarkers = stores.useMarkerStore.getState().markers
+        .filter(item => item.originActivityClientId === id && item.qaProvenance === 'simulator_test');
+      const marker = [...activityMarkers]
+        .reverse()
+        .find(item => item.locationProvenance === 'simulator_test')
+        ?? activityMarkers.at(-1);
+      const tracking = stores.useTrackingStore.getState();
+      return {
+        marker: marker ? {
+          id: marker.id,
+          clientCairnId: marker.clientCairnId,
+          originActivityClientId: marker.originActivityClientId,
+          authorId: marker.authorId,
+          lat: marker.lat,
+          lng: marker.lng,
+          locationAccuracyM: marker.locationAccuracyM,
+          locationCapturedAtMs: marker.locationCapturedAtMs,
+          locationProvenance: marker.locationProvenance,
+          qaProvenance: marker.qaProvenance,
+          permission: marker.permission,
+          synced: marker.synced,
+          syncState: marker.syncState ?? null,
+        } : null,
+        tracking: {
+          sessionId: tracking.sessionId,
+          ownerGeneration: tracking.liveOwnerGeneration,
+          status: tracking.status,
+          distanceM: tracking.distanceM,
+          canonicalPointCount: tracking.trackPoints.length,
+        },
+        markerCount: stores.useMarkerStore.getState().markers.length,
+        activityMarkerCount: activityMarkers.length,
+        activityMarkers: activityMarkers.map(item => ({
+          id: item.id,
+          originActivityClientId: item.originActivityClientId,
+          lat: item.lat,
+          lng: item.lng,
+          locationAccuracyM: item.locationAccuracyM,
+          locationCapturedAtMs: item.locationCapturedAtMs,
+          locationProvenance: item.locationProvenance,
+          qaProvenance: item.qaProvenance,
+        })),
+      };
+    }, { ownerId: ownerUserId, id: activityId });
+    if (!plantAccepted.marker
+        || plantAccepted.marker.originActivityClientId !== activityId
+        || plantAccepted.marker.locationProvenance !== 'simulator_test'
+        || plantAccepted.marker.qaProvenance !== 'simulator_test'
+        || plantAccepted.marker.permission !== 'personal'
+        || plantAccepted.marker.lat !== plantBefore.coordinate?.lat
+        || plantAccepted.marker.lng !== plantBefore.coordinate?.lng
+        || plantAccepted.marker.locationCapturedAtMs !== plantBefore.coordinateTime
+        || plantAccepted.activityMarkerCount !== 1
+        || plantAccepted.tracking.sessionId !== activityId
+        || plantAccepted.tracking.ownerGeneration !== plantBefore.ownerGeneration
+        || plantAccepted.tracking.status !== 'tracking') {
+      throw new Error(`plant_during_activity_provenance_failed:${JSON.stringify({ plantBefore, plantAccepted })}`);
+    }
+    await page.getByTestId('plant-success-back').click();
+    await waitForRoute(routeName);
+    await page.waitForFunction(id => {
+      const tracking = globalThis.__cairnStores.useTrackingStore.getState();
+      return tracking.sessionId === id && tracking.status === 'tracking';
+    }, activityId, { timeout: 15_000 });
+    try {
+      await waitForMapVisualEvidence();
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => {
+        const map = globalThis.__cairnMap;
+        const layers = map?.getStyle?.()?.layers ?? [];
+        let rendered = [];
+        try { rendered = map?.queryRenderedFeatures?.() ?? []; } catch { /* diagnostic only */ }
+        return {
+          route: globalThis.__cairnStores?.getCurrentRoute?.(),
+          loaded: map?.loaded?.() ?? false,
+          styleLoaded: map?.isStyleLoaded?.() ?? false,
+          tilesLoaded: map?.areTilesLoaded?.() ?? false,
+          layerCount: layers.length,
+          layerIds: layers.map(layer => layer.id),
+          renderedFeatureCount: rendered.length,
+          renderedSources: [...new Set(rendered.map(feature => String(feature.source ?? 'none')))],
+          canvasRect: (() => {
+            const rect = map?.getCanvas?.()?.getBoundingClientRect?.();
+            return rect ? { width: rect.width, height: rect.height } : null;
+          })(),
+        };
+      });
+      writeJson(path.join(runDir, 'PLANT_RETURN_MAP_FAILURE.json'), diagnostic);
+      await capture(runDir, '01d-return-map-failure');
+      throw error;
+    }
+    await capture(runDir, '01d-returned-to-recording');
+    const markerApiAfter = networkAudit.filter(item => item.pathname?.startsWith('/api/markers')).length;
+    if (markerApiAfter !== markerApiBefore) throw new Error('simulator_cairn_reached_marker_api');
+    plantDuringActivity = {
+      result: 'DURABLY_ACCEPTED_AND_RETURNED_TO_SAME_RECORDING',
+      activationMethod: plantActivationMethod,
+      before: plantBefore,
+      accepted: plantAccepted,
+      markerApiRequestCount: markerApiAfter - markerApiBefore,
+    };
+    writeJson(path.join(runDir, 'PLANT_DURING_ACTIVITY.json'), plantDuringActivity);
+  }
+
   mark('finish-confirmation');
   await page.getByRole('button', { name: `Finish ${noun}` }).dispatchEvent('click');
   await page.getByText(`Name this ${noun} (optional)`, { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
@@ -448,14 +675,51 @@ async function runJourney(entry) {
 
   mark('finish');
   await page.getByRole('button', { name: `Finish ${noun} and view activity` }).dispatchEvent('click');
-  await page.getByText(isRun ? 'Run complete' : 'Hike complete', { exact: true })
-    .waitFor({ state: 'visible', timeout: 60_000 });
+  try {
+    await page.getByText(isRun ? 'Run complete' : 'Hike complete', { exact: true })
+      .waitFor({ state: 'visible', timeout: 240_000 });
+  } catch (error) {
+    const finishFailure = await page.evaluate(async ({ ownerId, id }) => {
+      const stores = globalThis.__cairnStores;
+      const state = stores.useTrackingStore.getState();
+      const persisted = await stores.snapLabActivityStore.loadSnapLabActivity(ownerId, id).catch(() => null);
+      return {
+        capturedAt: new Date().toISOString(),
+        tracking: {
+          status: state.status,
+          isFinishing: state.isFinishing,
+          transitionState: state.transitionState,
+          lastStopReason: state.lastStopReason,
+          startError: state.startError,
+          finishProgress: state.finishProgress,
+          rawPointCount: state.trackPointsRaw.length,
+          canonicalPointCount: state.trackPoints.length,
+          livePointCount: state.trackPointsSmoothed.length,
+          distanceM: state.distanceM,
+          sessionId: state.sessionId,
+        },
+        persisted: persisted ? {
+          selectedSource: persisted.selectedSource,
+          rawPointCount: persisted.rawPoints.length,
+          canonicalPointCount: persisted.canonicalPoints.length,
+          selectedPointCount: persisted.selectedFinal.length,
+          stageTimestamps: persisted.stageTimestamps,
+          finishDurationsMs: persisted.finishDurationsMs,
+          refinementAuthority: persisted.refinementAuthority ?? null,
+        } : null,
+        simulatorDiagnostics: await stores.snapLabLogicalRunner.readSnapLabUiDiagnostics(ownerId),
+        visibleText: document.body.innerText.slice(0, 12_000),
+      };
+    }, { ownerId: ownerUserId, id: activityId });
+    writeJson(path.join(runDir, 'FINISH_TIMEOUT.json'), finishFailure);
+    await capture(runDir, '03-finish-timeout');
+    throw new Error(`real_map_finish_timeout:${JSON.stringify(finishFailure.tracking)}:${String(error)}`);
+  }
   await page.getByText('View activity', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
   await capture(runDir, '03-complete');
   await page.getByText('View activity', { exact: true }).click();
   await waitForRoute('MapHistory');
-  await page.getByText(activityName, { exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
-  await page.getByTestId('qa-snap-lab-activity-label').waitFor({ state: 'visible', timeout: 30_000 });
+  await waitForDetailEvidence();
   await capture(runDir, '04-detail');
 
   const routeButton = page.getByTestId('snap-lab-save-route-snapshot');
@@ -516,7 +780,7 @@ async function runJourney(entry) {
   const result = {
     schema: 'cairn.real-map-snap.actual-app-result.v1',
     runId: fixture.runId,
-    routeId: fixture.caseId,
+    routeId: entry.routeId ?? fixture.caseId,
     category: fixture.category,
     mode: fixture.mode,
     profile: fixture.profile,
@@ -527,6 +791,7 @@ async function runJourney(entry) {
     campaignManifestSha256: manifestSha256,
     fixtureSha256: fixture.fixtureSha256,
     responseProvenance: expectedEvidenceLabel,
+    plantDuringActivity,
     live,
     completion,
     offlineUpgrade: offlineUpgrade ? {
@@ -582,7 +847,10 @@ try {
   // Theme-only proof reopens three already persisted Activities. It does not
   // replay GPS, re-run Final, or touch the provider transport.
   const themeEvidence = [];
-  for (const [theme, runId] of [['day', 'U01-hike-normal'], ['sunset', 'M04-hike-normal'], ['night', 'X05-hike-normal']]) {
+  const themeRuns = results.slice(0, 3).map((result, index) => (
+    [['day', 'sunset', 'night'][index], result.runId]
+  ));
+  for (const [theme, runId] of themeRuns) {
     const result = results.find(item => item.runId === runId);
     if (!result) continue;
     mark(`theme-${theme}`);

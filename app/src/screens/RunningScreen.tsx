@@ -31,8 +31,6 @@ import {
   authorizeBorrowedRouteStart,
   finalizeBorrowedRouteUse,
 } from '../features/friends/services/friendContent';
-import { useMarkerStore, type CairnActivityContext } from '../store/useMarkerStore';
-import { getCurrentRegion } from '../config/regions';
 import { formatDuration } from '../utils/geo';
 import { useDistance } from '../utils/distanceFormat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../components/tokens';
@@ -70,11 +68,6 @@ import { appendSimulatorLog } from '../features/activitySimulator/simulatorLog';
 import { useSimulatorKeepAwake } from '../features/activitySimulator/useSimulatorKeepAwake';
 import { resolveSimulatorControlsVisible, resolveSimulatorMapState } from '../features/activitySimulator/simulatorMapState';
 import { HikingMap } from './HikingMap';
-import {
-  executeCairnCommit,
-  resetCairnCommitForNewContext,
-  type CairnCommitGate,
-} from '../features/cairns/cairnCommitBoundary';
 import {
   ActivityControlDock,
   ActivityRecenterButton,
@@ -305,10 +298,8 @@ export function RunningScreen() {
   }, [isFocused, refreshBackgroundLocationPermission, simulatorLocationAuthoritative, status]);
   const sessionId = useTrackingStore(s => s.sessionId);
   const remoteStartConflict = useTrackingStore(s => s.remoteStartConflict);
-  const activityOwnerUserId = useTrackingStore(s => s.ownerUserId);
   const liveOwnerGeneration = useTrackingStore(s => s.liveOwnerGeneration);
   const activityMode = useTrackingStore(s => s.activityMode);
-  const linkMarker = useTrackingStore(s => s.linkMarker);
   const setActivityMode = useTrackingStore(s => s.setActivityMode);
   // O12: settings-aware distance/pace formatting.
   const dist = useDistance();
@@ -344,20 +335,6 @@ export function RunningScreen() {
   const lastStopReason = useTrackingStore(s => s.lastStopReason);
   const clearLastStopReason = useTrackingStore(s => s.clearLastStopReason);
   const discardCurrentSession = useTrackingStore(s => s.discardCurrentSession);
-  const addMarker = useMarkerStore(s => s.addMarker);
-  // Toast for the "cairn planted" feedback shown after the user uses
-  // the unlock-protected plant button. Only relevant in the unlocked
-  // running state — in pre-/post-run states this stays null.
-  const [plantToast, setPlantToast] = useState<string | null>(null);
-  const [quickCairnInFlight, setQuickCairnInFlight] = useState(false);
-  const quickCairnGateRef = useRef<CairnCommitGate>({ current: null });
-  const mountedRef = useRef(true);
-
-  useEffect(() => () => { mountedRef.current = false; }, []);
-  useEffect(() => {
-    resetCairnCommitForNewContext(quickCairnGateRef.current, setQuickCairnInFlight);
-    setPlantToast(null);
-  }, [activityOwnerUserId, liveOwnerGeneration, sessionId]);
 
   const operationalState = deriveActivityOperationalState({
     trackingStatus: status,
@@ -651,107 +628,6 @@ export function RunningScreen() {
     }
   }
 
-  // Plant a cairn at the user's current GPS position.
-  //
-  // Fix 6 (R2-CAIRN-QUICK-PLANT-TYPE): quick-plant now drops a 'personal'
-  // cairn (gray 4-tier marker per CONCEPT_TRUTH §Cairn Markers) instead of
-  // a 'danger' hazard flag. Running quick-plant is the "worth stopping for"
-  // gesture — a private marker on the user's own map — not a public
-  // hazard broadcast. A hazard mid-run should be an explicit choice via
-  // PlantScreen, not the default.
-  async function handlePlantCairn() {
-    const trackingAtPress = useTrackingStore.getState();
-    const activityContext: CairnActivityContext | null = (
-      (trackingAtPress.status === 'tracking' || trackingAtPress.status === 'paused')
-      && trackingAtPress.sessionId
-      && trackingAtPress.ownerUserId
-      && trackingAtPress.liveOwnerGeneration
-    ) ? {
-      ownerUserId: trackingAtPress.ownerUserId,
-      clientActivityId: trackingAtPress.sessionId,
-      ownerGeneration: trackingAtPress.liveOwnerGeneration,
-    } : null;
-    const contextIsCurrent = () => {
-      if (!mountedRef.current || !activityContext) return false;
-      if (String(useAppStore.getState().user?.id ?? '') !== activityContext.ownerUserId) return false;
-      if (String(useMarkerStore.getState().userId ?? '') !== activityContext.ownerUserId) return false;
-      const current = useTrackingStore.getState();
-      return (
-        (current.status === 'tracking' || current.status === 'paused')
-        && current.ownerUserId === activityContext.ownerUserId
-        && current.sessionId === activityContext.clientActivityId
-        && current.liveOwnerGeneration === activityContext.ownerGeneration
-      );
-    };
-    if (!activityContext || !contextIsCurrent()) return;
-
-    const freshnessNow = trackingAtPress.locationProviderSource === 'simulator'
-      ? simulatorVirtualTimestamp
-      : activityFreshnessNow(trackingAtPress.locationProviderSource);
-    const acceptedFixIsFresh = trackingAtPress.lastCoordinate
-      && trackingAtPress.lastCoordinateTime !== null
-      && freshnessNow - Number(trackingAtPress.lastCoordinateTime) <= 30_000;
-    if (!acceptedFixIsFresh || (trackingAtPress.locationProviderSource === 'simulator' && simulatorSignal === 'lost')) {
-      // Should be rare — locked mode keeps GPS active. Don't throw,
-      // just bail out silently with a haptic to acknowledge press.
-      haptic.notification('warning');
-      setPlantToast('Current GPS location unavailable');
-      setTimeout(() => {
-        if (contextIsCurrent()) setPlantToast(null);
-      }, 2000);
-      return;
-    }
-    await executeCairnCommit({
-      gate: quickCairnGateRef.current,
-      isContextCurrent: contextIsCurrent,
-      onLockChange: locked => {
-        if (contextIsCurrent()) setQuickCairnInFlight(locked);
-      },
-      commit: () => {
-        haptic.impact('heavy');
-        const region = getCurrentRegion();
-        return addMarker({
-          type: 'cairn',
-          regionCode: region.code,
-          lat: trackingAtPress.lastCoordinate!.lat,
-          lng: trackingAtPress.lastCoordinate!.lng,
-          note: '',
-          authorId: activityContext.ownerUserId,
-          permission: 'personal',
-          originActivityClientId: activityContext.clientActivityId,
-          activityContext,
-        });
-      },
-      onCommittedCurrent: result => {
-        // This second exact check closes the narrow completion-to-link race.
-        if (!linkMarker(result.marker.id, activityContext)) return;
-        appendSimulatorLog('ACTIVITY_STATE', 'run_quick_cairn_location_selected', {
-          locationSource: trackingAtPress.locationProviderSource === 'simulator'
-            ? 'last-canonically-accepted-simulator'
-            : 'last-canonically-accepted-real',
-          acceptedFixTimestamp: trackingAtPress.lastCoordinateTime,
-        }, {
-          userId: activityContext.ownerUserId,
-          clientActivityId: activityContext.clientActivityId,
-          coordinateSource: trackingAtPress.locationProviderSource === 'simulator' ? 'simulator' : 'real',
-          virtualTimestamp: trackingAtPress.locationProviderSource === 'simulator' ? simulatorVirtualTimestamp : null,
-        });
-        setPlantToast('Cairn saved');
-        setTimeout(() => {
-          if (contextIsCurrent()) setPlantToast(null);
-        }, 1500);
-      },
-      onPreCommitFailure: (_error, contextCurrent) => {
-        if (!contextCurrent) return;
-        setPlantToast('Failed to plant cairn');
-        setTimeout(() => {
-          if (contextIsCurrent()) setPlantToast(null);
-        }, 2000);
-      },
-      releaseOnCommittedCurrent: true,
-    });
-  }
-
   // Sleep-run 2026-08-16 rev-2: activeRouteName was rendered under the
   // compass ring which has been removed. If we later surface an active
   // route badge on R1, re-derive it from routes + selectedRoute at the
@@ -829,13 +705,6 @@ export function RunningScreen() {
       label: 'Location signal is too weak to map reliably',
       tone: 'warning',
       icon: 'Navigation',
-    });
-  }
-  if (plantToast) {
-    runNotices.push({
-      label: plantToast,
-      tone: plantToast === 'Cairn saved' ? 'healthy' : 'warning',
-      icon: plantToast === 'Cairn saved' ? 'Flag' : 'TriangleAlert',
     });
   }
   // Pace: min/km (or min/mi if imperial) — seconds per meter → minutes per unit
@@ -1128,13 +997,23 @@ export function RunningScreen() {
           syncWarning={remoteStartConflict
             ? 'Saved locally · another unfinished Activity must be resolved before sync'
             : null}
-          cairnDisabled={!locationAvailable || quickCairnInFlight}
           onPauseResume={() => {
             haptic.impact('light');
             if (status === 'paused') void resumeTracking();
             else void pauseTracking();
           }}
-          onCairn={() => { void handlePlantCairn(); }}
+          onCairn={() => {
+            haptic.selection();
+            if (!sessionId || !liveOwnerGeneration) return;
+            nav.navigate('Plant', {
+              origin: {
+                kind: 'activity',
+                clientActivityId: sessionId,
+                ownerGeneration: liveOwnerGeneration,
+                activityMode: 'running',
+              },
+            });
+          }}
           onFinish={() => {
             haptic.impact('medium');
             openSaveSheet();
@@ -1579,16 +1458,6 @@ const runStyles = StyleSheet.create({
   },
   signalLostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
   signalLostText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
-  // Toast confirmation after plant.
-  plantToast: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(30,42,36,0.90)',
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
-    borderRadius: Radius.pill,
-    marginBottom: Spacing.sm,
-  },
-  plantToastText: { color: RunConcept.paper, fontWeight: '700', fontSize: FontSize.small },
-
   // Save-name sheet — lightweight local sheet co-rendered on top of R1/R2
   // when the user taps Done. Only collects an optional name; the actual
   // stopTracking + R4 transition happens in handleStop.

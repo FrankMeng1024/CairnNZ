@@ -35,6 +35,12 @@ function mergePair(cached: Marker, server: Marker): Marker {
     localId: cached.localId ?? server.localId ?? server.clientCairnId,
     serverCairnId: server.serverCairnId ?? cached.serverCairnId,
     authorId: server.authorId || cached.authorId,
+    // The deployed marker API does not yet round-trip these immutable local
+    // placement facts. Server hydration must not erase them from this device.
+    locationAccuracyM: cached.locationAccuracyM ?? server.locationAccuracyM,
+    locationCapturedAtMs: cached.locationCapturedAtMs ?? server.locationCapturedAtMs,
+    locationProvenance: cached.locationProvenance ?? server.locationProvenance,
+    gpsAgeS: cached.gpsAgeS ?? server.gpsAgeS,
     synced: isLocallyAuthoritative(cached) ? cached.synced : true,
     syncState: isLocallyAuthoritative(cached) ? cached.syncState : 'synced',
   };

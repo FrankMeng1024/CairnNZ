@@ -91,6 +91,9 @@ describe('Cairn create acknowledgement ordering', () => {
       note: '',
       authorId: 'local',
       permission: 'personal',
+      locationAccuracyM: 6.5,
+      locationCapturedAtMs: 1_800_000_000_000,
+      locationProvenance: 'real',
     })).marker;
     await settle();
 
@@ -101,7 +104,42 @@ describe('Cairn create acknowledgement ordering', () => {
       serverCairnId: '42',
       syncState: 'synced',
       synced: true,
+      locationAccuracyM: 6.5,
+      locationCapturedAtMs: 1_800_000_000_000,
+      locationProvenance: 'real',
     });
+    const requestBody = JSON.parse(mockAuthenticatedFetch.mock.calls[0][1].body);
+    expect(requestBody).not.toHaveProperty('locationAccuracyM');
+    expect(requestBody).not.toHaveProperty('locationCapturedAtMs');
+    expect(requestBody).not.toHaveProperty('locationProvenance');
+  });
+
+  test('placement evidence survives in the durable create outbox before acknowledgement', async () => {
+    let acceptCreate!: (value: any) => void;
+    mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { acceptCreate = resolve; }));
+    const created = (await useMarkerStore.getState().addMarker({
+      type: 'cairn',
+      regionCode: 'nz',
+      lat: -43.595,
+      lng: 170.142,
+      note: 'Outbox evidence',
+      authorId: 'local',
+      permission: 'personal',
+      locationAccuracyM: 9,
+      locationCapturedAtMs: 1_800_000_010_000,
+      locationProvenance: 'real',
+    })).marker;
+    await settle();
+
+    await expect(offlineMarkers.getEntry(created.id)).resolves.toMatchObject({
+      data: {
+        locationAccuracyM: 9,
+        locationCapturedAtMs: 1_800_000_010_000,
+        locationProvenance: 'real',
+      },
+    });
+    acceptCreate({ ok: true, status: 201, json: async () => ({ id: 42, user_id: 'owner-a' }) });
+    await settle();
   });
 
   test('reports a durable A-owned acceptance without projecting or throwing after an A-to-B switch', async () => {

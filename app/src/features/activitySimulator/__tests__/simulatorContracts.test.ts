@@ -141,7 +141,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(tracking).toContain('cairnsRolledBack: false');
   });
 
-  test('Full Plant and Quick Cairn fail closed during Simulator GPS loss', () => {
+  test('Full Plant owns Simulator GPS recovery and Run never silently quick-plants', () => {
     const sampler = read('src/features/plant/services/gpsSampler.ts');
     const provider = read('src/features/activitySimulator/activityLocationProvider.ts');
     const running = read('src/screens/RunningScreen.tsx');
@@ -153,9 +153,10 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(sampler).toContain("locationSource: 'last-canonically-accepted-simulator'");
     expect(provider).toContain('tracking.lastCoordinate');
     expect(provider).toContain('tracking.lastCoordinateTime');
-    expect(running).toContain("trackingAtPress.locationProviderSource === 'simulator' && simulatorSignal === 'lost'");
-    expect(running).toContain("locationSource: trackingAtPress.locationProviderSource === 'simulator'");
-    expect(running).toContain("? 'last-canonically-accepted-simulator'");
+    expect(running).toContain("nav.navigate('Plant'");
+    expect(running).toContain("activityMode: 'running'");
+    expect(running).not.toContain('handlePlantCairn');
+    expect(running).not.toContain('trackingAtPress.locationProviderSource');
   });
 
   test('Cairn provenance/offline commit and Activity/passive Memory use shared authorities', () => {

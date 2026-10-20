@@ -306,6 +306,9 @@ export function PlantScreen() {
             gpsAgeS: final.locationCapturedAtMs == null
               ? undefined
               : Math.max(0, Math.floor((Date.now() - final.locationCapturedAtMs) / 1000)),
+            locationAccuracyM: final.accuracyM ?? undefined,
+            locationCapturedAtMs: final.locationCapturedAtMs ?? undefined,
+            locationProvenance: final.locationProvenance ?? undefined,
             approximate: false,
             voiceMemoUri: final.voiceUri ?? undefined,
             voiceMemoDurationMs: final.voiceMs ?? undefined,

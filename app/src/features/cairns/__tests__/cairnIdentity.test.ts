@@ -54,6 +54,22 @@ describe('one owned Cairn identity', () => {
     expect(mergeOwnedCairns([accepted], [stale])[0].note).toBe('New words');
   });
 
+  test('server hydration preserves immutable placement evidence held by this device', () => {
+    const cached = marker({
+      locationAccuracyM: 7.5,
+      locationCapturedAtMs: 1_800_000_000_000,
+      locationProvenance: 'real',
+      gpsAgeS: 2,
+    });
+    const hydrated = mergeOwnedCairns([cached], [marker()])[0];
+    expect(hydrated).toMatchObject({
+      locationAccuracyM: 7.5,
+      locationCapturedAtMs: 1_800_000_000_000,
+      locationProvenance: 'real',
+      gpsAgeS: 2,
+    });
+  });
+
   test('tombstones exclude cache, server and late acknowledgement projections', () => {
     const tombstones = new Set(['client-a']);
     expect(mergeOwnedCairns([marker()], [marker()], tombstones)).toEqual([]);

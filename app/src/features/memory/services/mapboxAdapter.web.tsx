@@ -40,6 +40,7 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
+import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
@@ -51,6 +52,12 @@ const POINT_MOTION_RASTER_LAYER_ID = 'cairn-point-motion-basemap-layer';
 const LOCAL_QA_MAPBOX_TOKEN = 'pk.cairn-local-qa-no-network';
 const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
   && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
+
+// Cairn Web is a single-page app with several Mapbox surfaces. Keeping the
+// documented shared worker pool warm prevents a completed style request from
+// racing the last Map's worker termination while navigation constructs the
+// next Map. `prewarm()` is synchronous and idempotent in GL JS v2.
+if (typeof window !== 'undefined') mapboxgl.prewarm();
 const LOCAL_QA_STYLE = {
   version: 8 as const,
   name: 'Cairn local QA canvas',
@@ -99,6 +106,7 @@ interface MapViewProps {
   onDidFinishLoadingMap?: () => void;
   onDidFinishRenderingMapFully?: () => void;
   onDidFinishRenderingFrameFully?: () => void;
+  onMapLoadingError?: (event: unknown) => void;
   // v297 — high-frequency camera change events used by PinAdjustStep
   // to keep a "latest pan position" ref in sync with map state, so
   // the confirm-tap handler can read the true map center without the
@@ -174,6 +182,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   onDidFinishLoadingMap,
   onDidFinishRenderingMapFully,
   onDidFinishRenderingFrameFully,
+  onMapLoadingError,
   attributionEnabled = true,
   logoEnabled = true,
   logoPosition,
@@ -189,6 +198,11 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   React.useImperativeHandle(ref, () => ({
     requestRender: () => {
       const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      inner?.triggerRepaint?.();
+    },
+    refreshLayout: () => {
+      const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+      inner?.resize?.();
       inner?.triggerRepaint?.();
     },
     isSourceLoaded: (sourceId: string) => {
@@ -399,13 +413,29 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
         <MapGL
           {...(localQaTestMode ? ({ testMode: true } as any) : {})}
           ref={(r) => {
+            const previous = mapRef.current?.getMap?.() ?? mapRef.current;
             mapRef.current = r;
+            if (!r) {
+              if (typeof window !== 'undefined' && (window as any).__cairnMap === previous) {
+                delete (window as any).__cairnMap;
+              }
+              return;
+            }
             // Expose underlying mapbox-gl Map on `window.__cairnMap` for
             // Playwright introspection (see feedback_playwright_before_realdevice.md).
             // No-op for end users — there is no UI that depends on it.
-            if (typeof window !== 'undefined' && r) {
+            if (typeof window !== 'undefined') {
               const inner = r.getMap?.() ?? r;
               (window as any).__cairnMap = inner;
+
+              // GL JS v2 schedules IndexedDB tile-cache trimming by sending
+              // through the map's dispatcher from an asynchronous tile
+              // response. If navigation removes that dispatcher first, v2
+              // dereferences an empty actor (`undefined.send`). Browser quota
+              // eviction already bounds this optional cache; disable only the
+              // racy worker-side trim cadence for Cairn's Web SPA. Native
+              // RNMapbox and tile rendering/caching are unchanged.
+              inner._setCacheLimits?.(500, Number.POSITIVE_INFINITY);
 
               // Pin-as-zoom-anchor: tell mapbox-gl to anchor every pinch
               // and wheel zoom on the viewport center (which is where
@@ -496,6 +526,16 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
             // well; MemoryMap only accepts one after its exact Fog authority
             // has committed, so early blank/style frames cannot release UI.
             onDidFinishRenderingFrameFully?.();
+          }}
+          onError={(event) => {
+            // Register the SDK's supported error boundary. Without a listener,
+            // GL JS prints every ErrorEvent directly to console; during SPA
+            // teardown that turns a contained stale-style callback into an
+            // unhandled runtime error. Production consumers can now surface
+            // their existing map-unavailable state, while adapters without an
+            // explicit boundary preserve Mapbox's console behavior.
+            if (onMapLoadingError) onMapLoadingError(event);
+            else console.error((event as any)?.error ?? event);
           }}
           onMove={(e) => {
             if (!onCameraChanged) return;
@@ -919,7 +959,15 @@ export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ 
 
 export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
   const filterProps = filter ? { filter: filter as any } : {};
-  return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(style) as any} />;
+  const paintStyle: Record<string, any> = {};
+  for (const [key, value] of Object.entries(style ?? {})) {
+    // Match LineLayer's compatibility boundary. GL JS v2 rejects the v3
+    // Standard-style emissive property and otherwise drops the whole puck
+    // layer; native RNMapbox continues to receive it through its own adapter.
+    if (key === 'circleEmissiveStrength') continue;
+    paintStyle[key] = value;
+  }
+  return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(paintStyle) as any} />;
 }
 
 export function SymbolLayer({ id, style, __sourceId, filter }: LayerProps) {
@@ -1110,12 +1158,23 @@ function WebStyleImport({ config = {} }: WebStyleImportProps) {
       if (attachFrame != null) cancelAnimationFrame(attachFrame);
       if (!map) return;
       map.off?.('style.load', apply);
-      for (const [layerId, visibility] of originalVisibility) {
-        try {
-          if (!map.getLayer?.(layerId)) continue;
-          map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
-        } catch { /* unmounted style */ }
-      }
+      // React disposes child effects before react-map-gl clears the parent
+      // ref. Mutating layers synchronously in that window can enqueue a GL JS
+      // v2 worker message after Map.remove(), producing the recurring
+      // `undefined.send` error during Activity/theme navigation. Defer one
+      // frame and restore only when this exact map is still mounted. A config
+      // change on a live map retains the restoration behavior; a map teardown
+      // skips it entirely.
+      requestAnimationFrame(() => {
+        const currentMap = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+        if (currentMap !== map || !map.isStyleLoaded?.()) return;
+        for (const [layerId, visibility] of originalVisibility) {
+          try {
+            if (!map.getLayer?.(layerId)) continue;
+            map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
+          } catch { /* replaced style */ }
+        }
+      });
     };
   }, [
     config.showPlaceLabels,

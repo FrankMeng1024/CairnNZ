@@ -519,12 +519,17 @@ export function HikingMap({
   }, [mapFirstRender, mapEpoch]);
   useEffect(() => {
     if (!isFocused) return undefined;
-    const nextEpoch = hasFocusedRef.current ? mapEpoch + 1 : mapEpoch;
+    // Web navigation keeps the already-loaded canvas mounted beneath Plant.
+    // Replacing it on focus can produce a route-only frame whose hosted
+    // basemap tiles never repopulate. Native RNMapbox still receives the
+    // established fresh-key boundary on every screen re-entry.
+    const returningWebMap = hasFocusedRef.current && Platform.OS === 'web';
+    const nextEpoch = hasFocusedRef.current && Platform.OS !== 'web' ? mapEpoch + 1 : mapEpoch;
     const mountId = `${telemetryScreenPrefix}-map-${Date.now().toString(36)}-${nextEpoch}`;
     mapMountIdRef.current = mountId;
-    if (hasFocusedRef.current) setMapEpoch(nextEpoch);
+    if (hasFocusedRef.current && Platform.OS !== 'web') setMapEpoch(nextEpoch);
     hasFocusedRef.current = true;
-    setMapFirstRender(false);
+    setMapFirstRender(returningWebMap ? activityMapHasRendered : false);
     setMapLoadState('loading');
     firstRealLocationSeenRef.current = false;
     initialCameraAppliedRef.current = false;
@@ -800,6 +805,12 @@ export function HikingMap({
   const firstRealLocationSeenRef = useRef(false);
   const initialCameraAppliedRef = useRef(false);
   const mapboxCadenceRef = useRef(createMapboxCadenceState());
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isFocused) return undefined;
+    const frame = requestAnimationFrame(() => mapViewRef.current?.refreshLayout?.());
+    return () => cancelAnimationFrame(frame);
+  }, [isFocused]);
 
   useEffect(() => {
     const tail = trackPoints[trackPoints.length - 1];

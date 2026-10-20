@@ -79,6 +79,14 @@ export interface Marker {
   alt?: number;
   approximate?: boolean;   // true if placed with stale/no GPS signal
   gpsAgeS?: number;        // seconds since last GPS fix when placed
+  /** Immutable quality of the accepted fix used to place this Cairn.
+   * Kept in the owner-scoped cache/outbox even while the production marker
+   * API remains on its older strict schema. */
+  locationAccuracyM?: number;
+  /** Device observation time for the accepted placement fix. */
+  locationCapturedAtMs?: number;
+  /** Real fixes may sync; simulator fixes are permanently QA-local. */
+  locationProvenance?: 'real' | 'simulator_test';
   // O1 batch 40: photoUrls removed — 0 external readers
   // v80 #45 — optional 5s voice memo. Stored as a local file:// URI in
   // FileSystem.documentDirectory. NOT uploaded to backend in v80 (next
@@ -381,6 +389,9 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       permission: data.permission,
       approximate: data.approximate || false,
       originActivityClientId: activeActivityClientId,
+      locationAccuracyM: data.locationAccuracyM,
+      locationCapturedAtMs: data.locationCapturedAtMs,
+      locationProvenance: data.locationProvenance,
     };
     let localId: string;
     try {
@@ -1187,6 +1198,9 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
             permission: data.permission,
             approximate: data.approximate,
             originActivityClientId: data.originActivityClientId ?? null,
+            locationAccuracyM: data.locationAccuracyM,
+            locationCapturedAtMs: data.locationCapturedAtMs,
+            locationProvenance: data.locationProvenance,
             synced: false,
             syncState: entry.syncState,
           });
@@ -1290,6 +1304,9 @@ setMarkerCreateAckHandler(
             permission: latestData.permission,
             approximate: latestData.approximate,
             originActivityClientId: latestData.originActivityClientId ?? null,
+            locationAccuracyM: latestData.locationAccuracyM,
+            locationCapturedAtMs: latestData.locationCapturedAtMs,
+            locationProvenance: latestData.locationProvenance,
             synced: !supersededWhileSyncing,
             syncState: (supersededWhileSyncing ? 'pending' : 'synced') as SyncState,
             publicSnapshot: null,

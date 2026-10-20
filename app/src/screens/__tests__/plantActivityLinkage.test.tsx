@@ -195,6 +195,9 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
       lat: -41.2865,
       lng: 174.7762,
       regionCode,
+      locationAccuracyM: 8,
+      locationCapturedAtMs: 1_800_000_000_000,
+      locationProvenance: 'real',
     });
     expect(linkedCairnsForActivity(currentRegionMarkers, activitySession()).map(marker => marker.id))
       .toEqual(['cairn-client-id']);

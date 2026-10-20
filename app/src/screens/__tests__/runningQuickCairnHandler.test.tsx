@@ -1,11 +1,9 @@
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 
-const mockAddMarker = jest.fn();
-const mockLinkMarker = jest.fn();
 const mockAppendSimulatorLog = jest.fn();
+const mockNavigate = jest.fn();
 let mockAppUserId = 'owner-a';
-let mockMarkerOwnerId = 'owner-a';
 let mockTrackingState: Record<string, any>;
 let mockRouteParams: Record<string, any>;
 let mockRoutes: Array<Record<string, any>>;
@@ -18,21 +16,11 @@ const mockClearActivityRouteReference = jest.fn();
 let latestControlProps: Record<string, any> | null = null;
 let latestStartProps: Record<string, any> | null = null;
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     canGoBack: () => true,
     goBack: jest.fn(),
-    navigate: jest.fn(),
+    navigate: mockNavigate,
     dispatch: jest.fn(),
   }),
   useRoute: () => ({ params: mockRouteParams }),
@@ -56,13 +44,6 @@ jest.mock('../../store/useAppStore', () => ({
   useAppStore: Object.assign(
     (selector: (state: any) => unknown) => selector({ user: mockAppUserId ? { id: mockAppUserId } : null }),
     { getState: () => ({ user: mockAppUserId ? { id: mockAppUserId } : null }) },
-  ),
-}));
-
-jest.mock('../../store/useMarkerStore', () => ({
-  useMarkerStore: Object.assign(
-    (selector: (state: any) => unknown) => selector({ addMarker: mockAddMarker, userId: mockMarkerOwnerId }),
-    { getState: () => ({ addMarker: mockAddMarker, userId: mockMarkerOwnerId }) },
   ),
 }));
 
@@ -230,27 +211,13 @@ jest.mock('../../components/activity/ActivityRecordingChrome', () => {
 
 import { RunningScreen } from '../RunningScreen';
 
-function committed(markerId: string) {
-  return {
-    state: 'durably-accepted',
-    ownerId: 'owner-a',
-    projection: 'current',
-    marker: {
-      id: markerId,
-      clientCairnId: markerId,
-      originActivityClientId: 'activity-s1',
-    },
-  };
-}
-
-describe('Running normal Quick Cairn handler', () => {
+describe('Running full Plant handoff', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     latestControlProps = null;
     latestStartProps = null;
     mockAppUserId = 'owner-a';
-    mockMarkerOwnerId = 'owner-a';
     mockRouteParams = {};
     mockRoutes = [];
     mockActivityRouteReference = null;
@@ -277,7 +244,6 @@ describe('Running normal Quick Cairn handler', () => {
       sessionId: 'activity-s1',
       ownerUserId: 'owner-a',
       liveOwnerGeneration: 'generation-s1',
-      linkMarker: mockLinkMarker,
       setActivityMode: jest.fn(),
       startTracking: jest.fn(),
       stopTracking: jest.fn(),
@@ -289,46 +255,26 @@ describe('Running normal Quick Cairn handler', () => {
       clearLastStopReason: jest.fn(),
       discardCurrentSession: jest.fn(),
     };
-    mockLinkMarker.mockImplementation((_markerId: string, context: any) => (
-      mockTrackingState.ownerUserId === context.ownerUserId
-      && mockTrackingState.sessionId === context.clientActivityId
-      && mockTrackingState.liveOwnerGeneration === context.ownerGeneration
-    ));
   });
 
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  test('same-tick presses call addMarker once and keep the visible Cairn control busy until acceptance', async () => {
-    const durable = deferred<any>();
-    mockAddMarker.mockReturnValue(durable.promise);
-    const screen = render(<RunningScreen />);
+  test('opens the full Plant flow with the exact active Run identity and does not silently create a blank Cairn', () => {
+    render(<RunningScreen />);
     expect(latestControlProps).not.toBeNull();
 
-    act(() => {
-      latestControlProps!.onCairn();
-      latestControlProps!.onCairn();
-    });
-    expect(mockAddMarker).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('run-cairn-busy').props.children).toBe('true');
-    expect(mockAddMarker.mock.calls[0][0]).toMatchObject({
-      type: 'cairn',
-      note: '',
-      permission: 'personal',
-      regionCode: 'nz',
-      originActivityClientId: 'activity-s1',
-      activityContext: {
-        ownerUserId: 'owner-a',
+    act(() => { latestControlProps!.onCairn(); });
+    expect(latestControlProps!.cairnDisabled).toBeUndefined();
+    expect(mockNavigate).toHaveBeenCalledWith('Plant', {
+      origin: {
+        kind: 'activity',
         clientActivityId: 'activity-s1',
         ownerGeneration: 'generation-s1',
+        activityMode: 'running',
       },
     });
-
-    await act(async () => { durable.resolve(committed('cairn-s1')); });
-    expect(mockLinkMarker).toHaveBeenCalledWith('cairn-s1', expect.objectContaining({ clientActivityId: 'activity-s1' }));
-    expect(screen.getByText('Cairn saved')).toBeTruthy();
-    expect(screen.getByTestId('run-cairn-busy').props.children).toBe('false');
   });
 
   test('selected Route stays pre-start with no recording reference until explicit Start captures it', async () => {
@@ -370,60 +316,18 @@ describe('Running normal Quick Cairn handler', () => {
       .toBeLessThan(mockTrackingState.startTracking.mock.invocationCallOrder[0]);
   });
 
-  test.each([
-    ['S1 becomes S2', () => {
-      mockTrackingState = {
-        ...mockTrackingState,
-        sessionId: 'activity-s2',
-        liveOwnerGeneration: 'generation-s2',
-      };
-    }],
-    ['owner A becomes B', () => {
-      mockAppUserId = 'owner-b';
-      mockMarkerOwnerId = 'owner-b';
-      mockTrackingState = {
-        ...mockTrackingState,
-        ownerUserId: 'owner-b',
-        sessionId: 'activity-b',
-        liveOwnerGeneration: 'generation-b',
-      };
-    }],
-  ])('suppresses late link and stale success feedback when %s', async (_label, transition) => {
-    const durable = deferred<any>();
-    mockAddMarker.mockReturnValue(durable.promise);
-    const screen = render(<RunningScreen />);
+  test('still opens Plant during GPS loss so the bounded lock/recovery flow can explain and reacquire location', () => {
+    mockTrackingState = {
+      ...mockTrackingState,
+      locationAvailable: false,
+      lastCoordinate: null,
+      lastCoordinateTime: null,
+    };
+    render(<RunningScreen />);
+    expect(latestControlProps!.cairnDisabled).toBeUndefined();
     act(() => { latestControlProps!.onCairn(); });
-    transition();
-    screen.rerender(<RunningScreen />);
-
-    await act(async () => { durable.resolve(committed('late-cairn')); });
-    expect(mockLinkMarker).not.toHaveBeenCalled();
-    expect(screen.queryByText('Cairn saved')).toBeNull();
-    expect(screen.queryByText('Failed to plant cairn')).toBeNull();
-  });
-
-  test('a genuine pre-commit failure releases busy state and allows one successful retry', async () => {
-    mockAddMarker
-      .mockRejectedValueOnce(new Error('storage full'))
-      .mockResolvedValueOnce(committed('retry-cairn'));
-    const screen = render(<RunningScreen />);
-    act(() => { latestControlProps!.onCairn(); });
-    await waitFor(() => expect(screen.getByText('Failed to plant cairn')).toBeTruthy());
-    expect(screen.getByTestId('run-cairn-busy').props.children).toBe('false');
-
-    act(() => { latestControlProps!.onCairn(); });
-    await waitFor(() => expect(screen.getByText('Cairn saved')).toBeTruthy());
-    expect(mockAddMarker).toHaveBeenCalledTimes(2);
-    expect(mockLinkMarker).toHaveBeenCalledTimes(1);
-  });
-
-  test('unmount before durable acceptance produces no late link or state update', async () => {
-    const durable = deferred<any>();
-    mockAddMarker.mockReturnValue(durable.promise);
-    const screen = render(<RunningScreen />);
-    act(() => { latestControlProps!.onCairn(); });
-    screen.unmount();
-    await act(async () => { durable.resolve(committed('unmounted-cairn')); });
-    expect(mockLinkMarker).not.toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('Plant', expect.objectContaining({
+      origin: expect.objectContaining({ clientActivityId: 'activity-s1' }),
+    }));
   });
 });

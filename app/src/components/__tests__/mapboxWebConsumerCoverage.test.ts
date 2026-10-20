@@ -60,5 +60,21 @@ describe('real Mapbox Web consumer coverage', () => {
     expect(adapter).toContain('const filterProps = filter ? { filter: filter as any } : {}');
     expect(adapter).not.toContain('filter={filter as any}');
     expect(adapter).toContain("if (key === 'lineEmissiveStrength') continue");
+    expect(adapter).toContain("if (key === 'circleEmissiveStrength') continue");
+  });
+
+  test('Web style-import cleanup never sends layer mutations into a removed GL worker', () => {
+    expect(adapter).toContain("import mapboxgl from 'mapbox-gl'");
+    expect(adapter).toContain("if (typeof window !== 'undefined') mapboxgl.prewarm();");
+    expect(adapter).toContain('inner._setCacheLimits?.(500, Number.POSITIVE_INFINITY);');
+    expect(adapter).toContain('refreshLayout: () => {');
+    expect(adapter).toContain('inner?.resize?.();');
+    expect(adapter).toContain("delete (window as any).__cairnMap;");
+    expect(adapter).toContain('if (onMapLoadingError) onMapLoadingError(event);');
+    expect(adapter).toContain('else console.error((event as any)?.error ?? event);');
+    expect(adapter).toContain('requestAnimationFrame(() => {');
+    expect(adapter).toContain('if (currentMap !== map || !map.isStyleLoaded?.()) return;');
+    expect(adapter.indexOf('if (currentMap !== map || !map.isStyleLoaded?.()) return;'))
+      .toBeLessThan(adapter.indexOf("map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible')"));
   });
 });

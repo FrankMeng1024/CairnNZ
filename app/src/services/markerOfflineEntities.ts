@@ -39,6 +39,11 @@ export interface MarkerCreatePayload {
   location_name?: string | null;
   /** Immutable provenance written in the same outbox record as the Cairn. */
   originActivityClientId?: string | null;
+  /** Client-durable placement evidence. Deliberately omitted from the
+   * current strict HTTP body until the backend contract is versioned. */
+  locationAccuracyM?: number;
+  locationCapturedAtMs?: number;
+  locationProvenance?: 'real' | 'simulator_test';
 }
 
 export interface MarkerCreateServerResponse {

@@ -1,0 +1,248 @@
+{
+  "schema": "cairn.hike-run.physical-route-plan.v1",
+  "frozenIntentAt": "2026-10-20T02:10:00+08:00",
+  "crs": "EPSG:4326",
+  "coordinateOrder": "longitude,latitude",
+  "mapboxProfile": "walking",
+  "cleanTruthBoundary": "The app receives only noisy observations and application events. Clean geometry, diary positions, intended turns, noise labels, and evaluation tolerances remain outside the product boundary.",
+  "physicalValidityPolicy": {
+    "required": [
+      "Mapbox walking Directions HTTP 200 with GeoJSON geometry",
+      "every returned step uses walking mode",
+      "no ferry, shuttle, cableway, or other non-pedestrian segment",
+      "route geometry is reviewed on a real Mapbox basemap",
+      "named street, park, passage, bridge, or trail provenance is recorded",
+      "realistic speed, acceleration, stop, restart, and timestamp constraints"
+    ],
+    "reject": [
+      "arbitrary straight line across buildings, walls, water, or inaccessible terrain",
+      "implausible detour or transport mode",
+      "route returned only by a non-walking profile",
+      "unreviewed manual geometry"
+    ]
+  },
+  "providerBudget": {
+    "alreadySpentPreflightDirections": 20,
+    "freezeDirectionsMaximum": 11,
+    "baselineAndCandidateNavigationMaximum": 80,
+    "mapLoadsMaximum": 4,
+    "note": "Geocoding/style preflights are counted separately in the final usage report. Identical final requests use captured-response replay after the representative live subset."
+  },
+  "holdoutRouteIds": ["SH04", "M04", "X05"],
+  "routes": [
+    {
+      "id": "SH01",
+      "title": "Shanghai Fuxing Park to Xintiandi street walk",
+      "region": "Shanghai, China",
+      "category": "urban-grid",
+      "question": "Do calm straight sections and ordered city corners survive one-sided drift?",
+      "waypoints": [[121.4616, 31.2197], [121.4675, 31.2200], [121.4760, 31.2190]],
+      "expectedNamedContext": ["Nanchang Road", "Chongqing South Road", "Zizhong Road", "Jinan Road"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking geometry frozen before noise generation",
+        "corroboration": "Named central-Shanghai public streets from returned walking steps",
+        "mustPreserve": ["ordered corners", "street crossings", "no building chord"]
+      },
+      "backgroundWindow": {"startFraction": 0.35, "endFraction": 0.62},
+      "variants": [
+        {"id": "SH01-hike-normal", "mode": "hike", "profile": "normal", "seed": 920101, "sampleIntervalS": 3},
+        {"id": "SH01-hike-biased", "mode": "hike", "profile": "biased", "seed": 920102, "sampleIntervalS": 3}
+      ]
+    },
+    {
+      "id": "SH02",
+      "title": "Shanghai Century Park greenway and park-edge walk",
+      "region": "Shanghai, China",
+      "category": "park-path",
+      "question": "Does a park/greenway curve remain recognizable through a crossing stop and slow restart?",
+      "waypoints": [[121.54823, 31.215469], [121.554985, 31.217105], [121.559406, 31.214077]],
+      "expectedNamedContext": ["Shanghai Greenway", "Jinzhan Bridge", "Huamu Road"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking geometry frozen before noise generation",
+        "corroboration": "Returned walking steps identify park greenway and bridge context",
+        "mustPreserve": ["greenway curvature", "bridge approach", "stop and restart"]
+      },
+      "stop": {"fraction": 0.43, "durationS": 45},
+      "variants": [
+        {"id": "SH02-hike-stop", "mode": "hike", "profile": "normal", "seed": 920201, "sampleIntervalS": 3},
+        {"id": "SH02-run-degraded", "mode": "run", "profile": "degraded", "seed": 920202, "sampleIntervalS": 2}
+      ]
+    },
+    {
+      "id": "SH04",
+      "title": "Shanghai Lujiazui riverside and street running route",
+      "region": "Shanghai, China",
+      "category": "urban-canyon-parallel-path",
+      "question": "Does an unseen urban-canyon Run retain its riverside/road sequence without parallel-road theft?",
+      "waypoints": [[121.4963, 31.2415], [121.5008, 31.2390], [121.5038, 31.2360]],
+      "expectedNamedContext": ["Binjiang Avenue", "Lujiazui Ring Road", "Century Avenue"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking geometry frozen before noise generation",
+        "corroboration": "Returned walking steps identify the riverside and Lujiazui street network",
+        "mustPreserve": ["riverside sequence", "road crossing", "no river chord", "no parallel-road switch"]
+      },
+      "variants": [
+        {"id": "SH04-run-holdout", "mode": "run", "profile": "biased", "seed": 920401, "sampleIntervalS": 2, "holdout": true}
+      ]
+    },
+    {
+      "id": "U05",
+      "title": "Old Papatoetoe Chambers Laneway passage",
+      "region": "Auckland, New Zealand",
+      "category": "urban-passage",
+      "question": "Does the open pedestrian passage remain valid without a wall or building shortcut?",
+      "waypoints": [[174.8490, -36.9792], [174.8527353, -36.9798454], [174.8525, -36.9806], [174.85237, -36.98136], [174.8530, -36.9820]],
+      "expectedNamedContext": ["Station Road", "Saint George Street", "Chambers Laneway"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking geometry frozen before noise generation",
+        "corroboration": "Auckland Urban Development Office confirms the open-to-sky passage; O70 OSM-foot response independently follows it",
+        "mustPreserve": ["passage order", "no unsupported building shortcut"]
+      },
+      "variants": [
+        {"id": "U05-hike-degraded", "mode": "hike", "profile": "degraded", "seed": 920501, "sampleIntervalS": 3}
+      ]
+    },
+    {
+      "id": "U06",
+      "title": "Queenstown shop approach, stop, blackout, and exit",
+      "region": "Queenstown, New Zealand",
+      "category": "urban-stop-loss",
+      "question": "Does stationary noise stay bounded and GPS recovery resume without a fictional connector?",
+      "waypoints": [[168.6602, -45.0300], [168.6619, -45.0320], [168.6580, -45.0330]],
+      "expectedNamedContext": ["Memorial Street", "Camp Street", "Beach Street"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking geometry frozen before noise generation",
+        "corroboration": "O70 OSM-foot response independently follows the dense pedestrian street approach",
+        "mustPreserve": ["pre-loss approach", "explicit unsupported interval", "post-loss exit"]
+      },
+      "stop": {"fraction": 0.30, "durationS": 55},
+      "gpsBlackout": {"startFraction": 0.46, "endFraction": 0.61},
+      "variants": [
+        {"id": "U06-hike-loss", "mode": "hike", "profile": "degraded", "seed": 920601, "sampleIntervalS": 3}
+      ]
+    },
+    {
+      "id": "M01",
+      "title": "Lower Hooker Valley Track",
+      "region": "Aoraki / Mount Cook, New Zealand",
+      "category": "alpine-trail",
+      "question": "Does a well-mapped winding alpine trail remain continuous without being treated as an urban road?",
+      "waypoints": [[170.093769, -43.719181], [170.088878, -43.697526]],
+      "expectedNamedContext": ["Hooker Valley Track", "Hooker Hut Track"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking trail geometry frozen before noise generation",
+        "corroboration": "New Zealand Department of Conservation and the O70 OSM-foot response independently confirm the track and suspension-bridge corridor",
+        "mustPreserve": ["trail turns", "bridge approach", "no alpine shortcut"]
+      },
+      "backgroundWindow": {"startFraction": 0.35, "endFraction": 0.62},
+      "variants": [
+        {"id": "M01-hike-normal", "mode": "hike", "profile": "normal", "seed": 921001, "sampleIntervalS": 8}
+      ]
+    },
+    {
+      "id": "M02",
+      "title": "Queenstown Hill Walkway switchbacks",
+      "region": "Queenstown, New Zealand",
+      "category": "switchback-trail",
+      "question": "Are tight ordered bends retained near competing hillside access roads?",
+      "waypoints": [[168.670791, -45.026519], [168.678897, -45.018933]],
+      "expectedNamedContext": ["Queenstown Hill Walkway"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking trail geometry frozen before noise generation",
+        "corroboration": "O70 OSM-foot response independently preserves the same switchback corridor",
+        "mustPreserve": ["ordered switchbacks", "no hillside road shortcut"]
+      },
+      "variants": [
+        {"id": "M02-hike-biased", "mode": "hike", "profile": "biased", "seed": 921101, "sampleIntervalS": 5}
+      ]
+    },
+    {
+      "id": "M04",
+      "title": "Whakarewarewa Redwoods fork and loop",
+      "region": "Rotorua, New Zealand",
+      "category": "forest-loop-retrace",
+      "question": "Does an unseen forest loop retain fork order, return corridor, and closed topology?",
+      "waypoints": [[176.2723, -38.1565], [176.2800, -38.1580], [176.2820, -38.1620], [176.2780, -38.1640], [176.2740, -38.1620], [176.2723, -38.1565]],
+      "expectedNamedContext": ["Tikokorangi Shared Path", "Quarry Track", "Tokorangi Pa Track", "Redwood Walk"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking trail geometry frozen before noise generation",
+        "corroboration": "O70 OSM-foot response independently preserves the same forest loop and return corridor",
+        "mustPreserve": ["fork order", "revisited corridor", "one closed loop"]
+      },
+      "variants": [
+        {"id": "M04-hike-holdout", "mode": "hike", "profile": "normal", "seed": 921201, "sampleIntervalS": 9, "holdout": true}
+      ]
+    },
+    {
+      "id": "M05",
+      "title": "Routeburn forest track loss and late batch",
+      "region": "Fiordland, New Zealand",
+      "category": "forest-trail-batching",
+      "question": "Are poor observations, true GPS loss, and late background delivery kept distinct?",
+      "waypoints": [[168.278327, -44.718089], [168.258664, -44.711070]],
+      "expectedNamedContext": ["Routeburn Track"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking trail geometry frozen before noise generation",
+        "corroboration": "New Zealand Department of Conservation and the O70 OSM-foot response independently confirm the forest/river track",
+        "mustPreserve": ["pre-loss forest track", "unsupported interval", "post-loss recovery", "observation order independent from delivery order"]
+      },
+      "gpsBlackout": {"startFraction": 0.39, "endFraction": 0.56},
+      "lateBatch": {"startFraction": 0.70, "endFraction": 0.79, "deliveryDelayS": 45},
+      "backgroundWindow": {"startFraction": 0.62, "endFraction": 0.86},
+      "variants": [
+        {"id": "M05-hike-batched", "mode": "hike", "profile": "degraded", "seed": 921301, "sampleIntervalS": 6}
+      ]
+    },
+    {
+      "id": "X04",
+      "title": "Rotorua Government Gardens U-turn and recovery",
+      "region": "Rotorua, New Zealand",
+      "category": "u-turn-retrace-loss",
+      "question": "Are a genuine U-turn, stop, retrace, GPS loss, and recovery consistent in Hike and Run?",
+      "waypoints": [[176.2520, -38.1360], [176.2570, -38.1350], [176.2600, -38.1320], [176.2570, -38.1350], [176.2520, -38.1390]],
+      "expectedNamedContext": ["Arawa Street", "Queens Drive", "Oruawhata Drive", "Fenton Park - City Cycleway"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking geometry with repeated physical waypoint frozen before noise generation",
+        "corroboration": "O70 OSM-foot response independently preserves the U-turn and revisited corridor",
+        "mustPreserve": ["one U-turn", "revisited corridor", "unsupported interval", "post-loss continuation"]
+      },
+      "stop": {"fraction": 0.36, "durationS": 50},
+      "gpsBlackout": {"startFraction": 0.51, "endFraction": 0.66},
+      "backgroundWindow": {"startFraction": 0.42, "endFraction": 0.82},
+      "variants": [
+        {"id": "X04-hike-loss", "mode": "hike", "profile": "degraded", "seed": 921401, "sampleIntervalS": 4},
+        {"id": "X04-run-degraded", "mode": "run", "profile": "degraded", "seed": 921402, "sampleIntervalS": 2}
+      ]
+    },
+    {
+      "id": "X05",
+      "title": "Queenstown lakefront and Gardens offline Finish",
+      "region": "Queenstown, New Zealand",
+      "category": "mixed-path-offline",
+      "question": "Does an unseen walk remain locally reviewable after offline Finish and reconcile once after reconnect?",
+      "waypoints": [[168.6600, -45.0310], [168.6630, -45.0370], [168.6650, -45.0380], [168.6610, -45.0340]],
+      "expectedNamedContext": ["Camp Street", "Park Shared Path", "Park Street"],
+      "routeFeasibility": {
+        "status": "MAPBOX_WALKING_PREFLIGHT_OK_RENDER_REVIEW_REQUIRED",
+        "groundTruthProvenance": "Mapbox Directions walking geometry frozen before noise generation",
+        "corroboration": "O70 OSM-foot response independently follows the lakefront and Gardens shared paths",
+        "mustPreserve": ["lakefront approach", "garden path", "local artifact identity across reconnect"]
+      },
+      "backgroundWindow": {"startFraction": 0.40, "endFraction": 0.68},
+      "variants": [
+        {"id": "X05-hike-online-holdout", "mode": "hike", "profile": "biased", "seed": 921501, "sampleIntervalS": 4, "holdout": true, "offlineAtFinish": false},
+        {"id": "X05-hike-offline-holdout", "mode": "hike", "profile": "biased", "seed": 921501, "sampleIntervalS": 4, "holdout": true, "offlineAtFinish": true}
+      ]
+    }
+  ]
+}
