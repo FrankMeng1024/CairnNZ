@@ -9,7 +9,8 @@ All listed successful closure runs identify source head `ab76e4195373e1372d689ab
 - Plant/application flow: 18/18 assertions pass, explicitly Web-only application-handler scope.
 - Actual client modules → isolated backend/MySQL: 4/4 scenarios pass; DB assertions pass; teardown occurs after evidence capture.
 - Focused diagnostic/delivery/UI/background tests: four suites pass; 26 assertions pass and one environment-gated assertion skips.
-- Pre-commit changed-file gate: Activity FULL verification passed 650/650 (continuity 128, cadence 5, background 32, gap 15, elevation 5, matching 42, telemetry 40, integration 114, memory-gap 12, journal 60, memory 37, offline-sync 68, simulator 56, server 23, static 13).
+- Pre-commit changed-file routing selected Activity CORE and passed 650/650 (continuity 128, cadence 5, background 32, gap 15, elevation 5, matching 42, telemetry 40, integration 114, memory-gap 12, journal 60, memory 37, offline-sync 68, simulator 56, server 23, static 13).
+- Post-commit explicit `--gate=core` passed 670/670 with the same functional group counts and static 33/33. The 20-test difference is expected: with no working-tree change, explicit gate validation scopes static checking to the selected test sources rather than the 13 changed TypeScript files. The unedited log is `verification/verify-changed-core.log`.
 - `git diff --check`, Node syntax and shell syntax checks passed before the source commit.
 
 ## Later expanded full-gate negative result
@@ -29,4 +30,3 @@ A repository-wide `npx tsc --noEmit` was attempted and reached known baseline er
 ## Packaging validation
 
 Each closure ZIP is built with standard `ZIP_DEFLATED`, contains no symlinks or nested ZIP dependency, is freshly extracted into an empty temporary directory, and validates every file against its root `MANIFEST.sha256`. `ZIP_VALIDATION.json` records counts and status. Inspection requires no absolute path.
-

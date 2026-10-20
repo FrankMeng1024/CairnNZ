@@ -63,7 +63,7 @@
 2. **原生设备待测。** iPhone 后台悬挂、Core Location 真批次、GPS loss/recovery、Plant 覆盖层下的原生持续定位与能耗均没有新证据。
 3. **真正未建图路线来源缺失。** 现有 Q05/地图证据使用 provider 冻结结果与地图目视来源；没有独立于受评 matching provider 的可核验未建图路线来源，不能作广义“unmapped trail”保证。
 4. **Mapbox ledger 有一条未知完成状态。** 原账本 120 次 dispatched、119 次 completed；第 120 条指纹 `snap-http-v1-c4b4049b` 对应 Q09-run-biased-holdout，账本无完成状态，而后续存档回放写明 `NO_CASSETTE_MATCH`。其 live upstream 结局未知。本轮没有为补账再次购买请求。
-5. **显式 repo-wide full gate 失败。** 提交前按变更映射的 Activity full gate 为 650/650；提交后另行显式扩大到整个仓库 Activity 集时，2346 通过、6 失败、5 跳过。失败包括三个 Memory/Activity 性能预算套件和一个 Public/Cairn 单飞静态契约，原始日志完整保留；本轮没有修改这些超范围问题，也没有重跑到绿。全库 TypeScript 同样有既存的 Playwright/生成预览类型错误，不能声称全库 typecheck 干净。
+5. **显式 repo-wide full gate 失败。** 提交前按变更自动路由的 Activity core gate 为 650/650；提交后为固化原始日志而显式执行同一 core gate为 670/670。功能分组计数一致，20 项差值仅来自无工作树改动时对直接测试源执行了 33 项而不是 13 项 scoped static 检查。另行显式扩大到整个仓库 Activity 集时，2346 通过、6 失败、5 跳过。失败包括三个 Memory/Activity 性能预算套件和一个 Public/Cairn 单飞静态契约，原始日志完整保留；本轮没有修改这些超范围问题，也没有重跑到绿。全库 TypeScript 同样有既存的 Playwright/生成预览类型错误，不能声称全库 typecheck 干净。
 
 ## 发布边界
 
