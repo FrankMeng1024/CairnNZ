@@ -137,7 +137,8 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(settings).toContain('title="Copy Activity diagnostics"');
     expect(settings).toContain('testID="settings-copy-activity-diagnostics"');
     expect(settings).toContain('exportLatestActivityStageLedger(ownerId)');
-    expect(settings).toContain('exportLatestActivityDiagnosticReplay(ownerId, ledger)');
+    expect(settings).toContain('exportActivityDiagnosticReplayIfPresent({');
+    expect(settings).toContain('clientActivityId: ledger.clientActivityId');
     expect(settings).toContain('currentOwnerId() !== ownerId');
     expect(settings).toContain('includes precise coordinates and redacted provider evidence');
     expect(settings).toContain('contains no Mapbox token');

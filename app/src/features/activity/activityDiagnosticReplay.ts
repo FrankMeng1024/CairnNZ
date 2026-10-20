@@ -33,7 +33,7 @@ interface ActivityDiagnosticReplayChunk {
 
 interface ActivityDiagnosticReplayMeta {
   schema: 'cairn-activity-diagnostic-replay-meta';
-  version: 1;
+  version: 1 | 2;
   ownerUserId: string;
   clientActivityId: string;
   enabledAtMs: number;
@@ -43,11 +43,15 @@ interface ActivityDiagnosticReplayMeta {
   persistedBytes: number;
   complete: boolean;
   incompleteReason: string | null;
+  recordingState?: 'recording' | 'finished';
+  recordingFinishedAtMs?: number | null;
+  recoveryCount?: number;
+  volatileTailMayBeMissing?: boolean;
 }
 
 export interface ActivityDiagnosticReplayExport {
   schema: 'cairn-activity-diagnostic-replay-export';
-  version: 1;
+  version: 2;
   exportedAt: string;
   ownerUserId: 'current-owner';
   clientActivityId: string;
@@ -65,6 +69,12 @@ export interface ActivityDiagnosticReplayExport {
     contiguousRecordOrdinals: boolean;
     everyChunkChecksumValid: boolean;
     pendingWriteCount: number;
+    durableRecordsComplete: boolean;
+    recordingFinished: boolean;
+    selfContainedReplayComplete: boolean;
+    recoveryCount: number;
+    volatileTailMayBeMissing: boolean;
+    postFinishRecordCount: number;
   };
   checksumAlgorithm: 'fnv1a32';
   recordsChecksum: string;
@@ -107,9 +117,14 @@ interface ActiveReplay {
   flushRequested: boolean;
   complete: boolean;
   incompleteReason: string | null;
+  recordingState: 'recording' | 'finished';
+  recordingFinishedAtMs: number | null;
+  recoveryCount: number;
+  volatileTailMayBeMissing: boolean;
 }
 
 const activeReplays = new Map<string, ActiveReplay>();
+const replayRecovery = new Map<string, Promise<ActiveReplay | null>>();
 const encoded = (value: string) => encodeURIComponent(value);
 const activityKey = (ownerUserId: string, clientActivityId: string) => (
   `${ROOT}${encoded(ownerUserId)}:${encoded(clientActivityId)}`
@@ -139,19 +154,23 @@ function chunkChecksum(chunk: Omit<ActivityDiagnosticReplayChunk, 'checksum'>): 
   return fnv1a32(JSON.stringify(chunk));
 }
 
-function metaSnapshot(replay: ActiveReplay, disabledAtMs: number | null): ActivityDiagnosticReplayMeta {
+function metaSnapshot(replay: ActiveReplay): ActivityDiagnosticReplayMeta {
   return {
     schema: 'cairn-activity-diagnostic-replay-meta',
-    version: 1,
+    version: 2,
     ownerUserId: replay.ownerUserId,
     clientActivityId: replay.clientActivityId,
     enabledAtMs: replay.enabledAtMs,
-    disabledAtMs,
+    disabledAtMs: replay.recordingFinishedAtMs,
     chunkCount: replay.chunks.length,
     recordCount: replay.recordCount,
     persistedBytes: replay.persistedBytes,
     complete: replay.complete,
     incompleteReason: replay.incompleteReason,
+    recordingState: replay.recordingState,
+    recordingFinishedAtMs: replay.recordingFinishedAtMs,
+    recoveryCount: replay.recoveryCount,
+    volatileTailMayBeMissing: replay.volatileTailMayBeMissing,
   };
 }
 
@@ -177,7 +196,7 @@ async function persistChunk(replay: ActiveReplay, chunkOrdinal: number): Promise
   );
   await storage.setItem(
     metaKey(replay.ownerUserId, replay.clientActivityId),
-    JSON.stringify(metaSnapshot(replay, null)),
+    JSON.stringify(metaSnapshot(replay)),
     { strict: true },
   );
 }
@@ -208,7 +227,7 @@ function scheduleDirtyChunkWrite(replay: ActiveReplay, force = false): void {
       replay.incompleteReason = `durable-write-failed:${String(error).slice(0, 80)}`;
       await storage.setItem(
         metaKey(replay.ownerUserId, replay.clientActivityId),
-        JSON.stringify(metaSnapshot(replay, null)),
+        JSON.stringify(metaSnapshot(replay)),
         { strict: true },
       ).catch(() => undefined);
     } finally {
@@ -240,9 +259,111 @@ async function trimOwner(ownerUserId: string, keepActivityId: string): Promise<v
     .slice(MAX_ACTIVITIES_PER_OWNER - 1)
     .map(([activityId]) => activityId);
   for (const activityId of evicted) {
-    const prefix = `${activityKey(ownerUserId, activityId)}:`;
+    const identity = activityKey(ownerUserId, activityId);
+    const active = activeReplays.get(identity);
+    if (active) await active.tail.catch(() => undefined);
+    activeReplays.delete(identity);
+    const prefix = `${identity}:`;
     await storage.removeItemsStrict(keys.filter(key => key.startsWith(prefix)));
   }
+}
+
+async function recoverActivityDiagnosticReplay(
+  ownerUserId: string,
+  clientActivityId: string,
+): Promise<ActiveReplay | null> {
+  const rawMeta = await storage.getItemStrict(metaKey(ownerUserId, clientActivityId));
+  if (!rawMeta) return null;
+  let meta: ActivityDiagnosticReplayMeta;
+  try {
+    meta = JSON.parse(rawMeta) as ActivityDiagnosticReplayMeta;
+  } catch {
+    return null;
+  }
+  if (meta.schema !== 'cairn-activity-diagnostic-replay-meta'
+    || meta.ownerUserId !== ownerUserId
+    || meta.clientActivityId !== clientActivityId) return null;
+
+  const prefix = `${activityKey(ownerUserId, clientActivityId)}:chunk:`;
+  const keys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(prefix)).sort();
+  const chunks: ActivityDiagnosticReplayChunk[] = [];
+  let durableShapeValid = true;
+  for (const key of keys) {
+    const raw = await storage.getItemStrict(key);
+    try {
+      const chunk = raw ? JSON.parse(raw) as ActivityDiagnosticReplayChunk : null;
+      if (!chunk
+        || chunk.schema !== 'cairn-activity-diagnostic-replay-chunk'
+        || chunk.ownerUserId !== ownerUserId
+        || chunk.clientActivityId !== clientActivityId
+        || !validChunkChecksum(chunk)) {
+        durableShapeValid = false;
+        continue;
+      }
+      chunks.push(chunk);
+    } catch {
+      durableShapeValid = false;
+    }
+  }
+  chunks.sort((left, right) => left.chunkOrdinal - right.chunkOrdinal);
+  const records = chunks.flatMap(chunk => chunk.records);
+  durableShapeValid = durableShapeValid
+    && chunks.every((chunk, index) => chunk.chunkOrdinal === index)
+    && records.every((record, index) => record.ordinal === index)
+    && chunks.length === meta.chunkCount
+    && records.length === meta.recordCount;
+  const finish = [...records].reverse().find(record => record.kind === 'diagnostic-finish');
+  const recordingFinishedAtMs = meta.recordingFinishedAtMs
+    ?? meta.disabledAtMs
+    ?? finish?.wallTimeMs
+    ?? null;
+  const recordingState = meta.recordingState
+    ?? (recordingFinishedAtMs == null ? 'recording' : 'finished');
+  const recoveredDuringRecording = recordingState === 'recording';
+  const replay: ActiveReplay = {
+    ownerUserId,
+    clientActivityId,
+    enabledAtMs: meta.enabledAtMs,
+    chunks,
+    recordCount: records.length,
+    persistedBytes: records.reduce((total, record) => total + recordBytes(record), 0),
+    tail: Promise.resolve(),
+    pendingWriteCount: 0,
+    dirtyChunkOrdinals: new Set(),
+    writeScheduled: false,
+    flushRequested: false,
+    complete: meta.complete === true && durableShapeValid,
+    incompleteReason: durableShapeValid
+      ? meta.incompleteReason
+      : 'missing-or-inconsistent-durable-records',
+    recordingState,
+    recordingFinishedAtMs,
+    recoveryCount: Math.max(0, meta.recoveryCount ?? 0) + 1,
+    // There is no honest way to infer whether a partially filled in-memory
+    // chunk existed at process death. Preserve the durable prefix, continue
+    // appending, and make that uncertainty fail-visible in every export.
+    volatileTailMayBeMissing: !!meta.volatileTailMayBeMissing || recoveredDuringRecording,
+  };
+  activeReplays.set(activityKey(ownerUserId, clientActivityId), replay);
+  await storage.setItem(metaKey(ownerUserId, clientActivityId), JSON.stringify(metaSnapshot(replay)), {
+    strict: true,
+  });
+  return replay;
+}
+
+function ensureActivityDiagnosticReplay(
+  ownerUserId: string,
+  clientActivityId: string,
+): Promise<ActiveReplay | null> {
+  const identity = activityKey(ownerUserId, clientActivityId);
+  const active = activeReplays.get(identity);
+  if (active) return Promise.resolve(active);
+  const pending = replayRecovery.get(identity);
+  if (pending) return pending;
+  const recovery = recoverActivityDiagnosticReplay(ownerUserId, clientActivityId)
+    .finally(() => replayRecovery.delete(identity));
+  replayRecovery.set(identity, recovery);
+  return recovery;
 }
 
 /** Explicit opt-in. It is never called by normal Activity start or upload. */
@@ -255,8 +376,15 @@ export async function beginActivityDiagnosticReplay(input: {
 }): Promise<void> {
   if (!input.ownerUserId || !input.clientActivityId) throw new Error('diagnostic_replay_identity_required');
   const identity = activityKey(input.ownerUserId, input.clientActivityId);
-  const existingKeys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(`${identity}:`));
-  await storage.removeItemsStrict(existingKeys);
+  const existing = await ensureActivityDiagnosticReplay(input.ownerUserId, input.clientActivityId);
+  if (existing) {
+    if (existing.recordingState === 'finished') {
+      throw new Error('diagnostic_replay_identity_already_finished');
+    }
+    // Start can be called again during recovery or a double-tap. The durable
+    // stream is append-only: never erase already captured evidence.
+    return;
+  }
   await trimOwner(input.ownerUserId, input.clientActivityId);
   const replay: ActiveReplay = {
     ownerUserId: input.ownerUserId,
@@ -272,6 +400,10 @@ export async function beginActivityDiagnosticReplay(input: {
     flushRequested: false,
     complete: true,
     incompleteReason: null,
+    recordingState: 'recording',
+    recordingFinishedAtMs: null,
+    recoveryCount: 0,
+    volatileTailMayBeMissing: false,
   };
   activeReplays.set(identity, replay);
   await recordActivityDiagnosticReplayEvent({
@@ -282,7 +414,7 @@ export async function beginActivityDiagnosticReplay(input: {
   await flushActivityDiagnosticReplay(input.ownerUserId, input.clientActivityId);
 }
 
-export function recordActivityDiagnosticReplayEvent(input: {
+export async function recordActivityDiagnosticReplayEvent(input: {
   ownerUserId: string;
   clientActivityId: string;
   kind: ActivityDiagnosticReplayKind;
@@ -290,8 +422,12 @@ export function recordActivityDiagnosticReplayEvent(input: {
   wallTimeMs?: number;
   monotonicTimeMs?: number | null;
 }): Promise<void> {
-  const replay = activeReplays.get(activityKey(input.ownerUserId, input.clientActivityId));
+  const replay = activeReplays.get(activityKey(input.ownerUserId, input.clientActivityId))
+    ?? await ensureActivityDiagnosticReplay(input.ownerUserId, input.clientActivityId);
   if (!replay || !replay.complete) return Promise.resolve();
+  if (replay.recordingState === 'finished'
+    && input.kind !== 'provider-exchange'
+    && input.kind !== 'application-event') return Promise.resolve();
   const record: ActivityDiagnosticReplayRecord = {
     ordinal: replay.recordCount,
     kind: input.kind,
@@ -336,7 +472,9 @@ export function recordActivityDiagnosticReplayEvent(input: {
   // natural durability boundary; lifecycle/stage events additionally flush
   // the current partial chunk so backgrounding and Save are crash-resilient.
   if (chunkCompleted) scheduleDirtyChunkWrite(replay);
-  else if (input.kind === 'application-event') scheduleDirtyChunkWrite(replay, true);
+  else if (input.kind === 'application-event'
+    || input.kind === 'provider-exchange'
+    || input.kind === 'diagnostic-finish') scheduleDirtyChunkWrite(replay, true);
   return Promise.resolve();
 }
 
@@ -448,21 +586,24 @@ export async function finishActivityDiagnosticReplay(
   clientActivityId: string,
   data: Record<string, unknown> = {},
 ): Promise<void> {
-  const replay = activeReplays.get(activityKey(ownerUserId, clientActivityId));
+  const replay = activeReplays.get(activityKey(ownerUserId, clientActivityId))
+    ?? await ensureActivityDiagnosticReplay(ownerUserId, clientActivityId);
   if (!replay) return;
+  if (replay.recordingState === 'finished') return;
   await recordActivityDiagnosticReplayEvent({
     ownerUserId,
     clientActivityId,
     kind: 'diagnostic-finish',
     data,
   });
+  replay.recordingState = 'finished';
+  replay.recordingFinishedAtMs = Date.now();
   await flushActivityDiagnosticReplay(ownerUserId, clientActivityId);
   await storage.setItem(
     metaKey(ownerUserId, clientActivityId),
-    JSON.stringify(metaSnapshot(replay, Date.now())),
+    JSON.stringify(metaSnapshot(replay)),
     { strict: true },
   );
-  activeReplays.delete(activityKey(ownerUserId, clientActivityId));
 }
 
 function validChunkChecksum(chunk: ActivityDiagnosticReplayChunk): boolean {
@@ -505,31 +646,58 @@ export async function exportActivityDiagnosticReplay(input: {
     record.kind === 'diagnostic-finish'
     && record.data.finalArtifact
   ))?.data.finalArtifact as Record<string, unknown> | undefined;
+  const finishRecordIndex = records.findIndex(record => record.kind === 'diagnostic-finish');
+  const recordingFinished = (meta?.recordingState === 'finished' || meta?.disabledAtMs != null)
+    && finishRecordIndex >= 0;
+  const recoveryCount = Math.max(0, meta?.recoveryCount ?? 0);
+  const volatileTailMayBeMissing = !!meta?.volatileTailMayBeMissing;
+  const postFinishRecordCount = finishRecordIndex < 0
+    ? 0
+    : records.slice(finishRecordIndex + 1).filter(record => (
+      record.kind === 'provider-exchange' || record.kind === 'application-event'
+    )).length;
   const declaredMissing = [
+    ...(recordingFinished ? [] : ['recording-finish']),
+    ...(volatileTailMayBeMissing ? ['volatile-tail-after-process-recovery'] : []),
     ...(input.stageLedger ? [] : ['stage-ledger']),
     ...(input.finalArtifact || finishedArtifact ? [] : ['final-artifact']),
   ];
-  const complete = meta?.complete === true
+  const durableRecordsComplete = meta?.complete === true
     && records.length === meta.recordCount
     && parsedChunks.length === meta.chunkCount
     && contiguousRecordOrdinals
     && everyChunkChecksumValid
     && pendingWriteCount === 0;
+  const complete = durableRecordsComplete && recordingFinished && !volatileTailMayBeMissing;
+  const selfContainedReplayComplete = complete && declaredMissing.length === 0;
+  const reason = !durableRecordsComplete
+    ? meta?.incompleteReason ?? 'missing-or-inconsistent-durable-records'
+    : !recordingFinished
+      ? 'recording-not-finished'
+      : volatileTailMayBeMissing
+        ? 'volatile-tail-may-be-missing-after-process-recovery'
+        : null;
   return {
     schema: 'cairn-activity-diagnostic-replay-export',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     ownerUserId: 'current-owner',
     clientActivityId: input.clientActivityId,
     privacy: { localOnly: true, explicitOptIn: true, coordinatesIncluded: true, automaticUpload: false },
     completeness: {
       complete,
-      reason: complete ? null : meta?.incompleteReason ?? 'missing-or-inconsistent-durable-records',
+      reason,
       chunkCount: parsedChunks.length,
       recordCount: records.length,
       contiguousRecordOrdinals,
       everyChunkChecksumValid,
       pendingWriteCount,
+      durableRecordsComplete,
+      recordingFinished,
+      selfContainedReplayComplete,
+      recoveryCount,
+      volatileTailMayBeMissing,
+      postFinishRecordCount,
     },
     checksumAlgorithm: 'fnv1a32',
     recordsChecksum: fnv1a32(JSON.stringify(records)),
@@ -540,6 +708,19 @@ export async function exportActivityDiagnosticReplay(input: {
     providerResponses: input.providerResponses ?? recordedProviderResponses,
     declaredMissing,
   };
+}
+
+/** Export only the explicitly selected Activity. Unlike the legacy "latest"
+ * helper, this cannot silently pair one Activity's timing ledger with another
+ * Activity's coordinate stream. */
+export async function exportActivityDiagnosticReplayIfPresent(input: {
+  ownerUserId: string;
+  clientActivityId: string;
+  stageLedger?: ActivityStageLedgerExport | null;
+}): Promise<ActivityDiagnosticReplayExport | null> {
+  const rawMeta = await storage.getItemStrict(metaKey(input.ownerUserId, input.clientActivityId));
+  if (!rawMeta) return null;
+  return exportActivityDiagnosticReplay(input);
 }
 
 /**
@@ -603,6 +784,10 @@ export function replayObservationsFromDiagnosticExport(value: ActivityDiagnostic
 }
 
 export async function purgeActivityDiagnosticReplayForOwner(ownerUserId: string): Promise<void> {
+  const pendingRecoveries = [...replayRecovery.entries()]
+    .filter(([key]) => key.startsWith(ownerPrefix(ownerUserId)));
+  await Promise.all(pendingRecoveries.map(([, recovery]) => recovery.catch(() => null)));
+  pendingRecoveries.forEach(([key]) => replayRecovery.delete(key));
   for (const [key, replay] of activeReplays) {
     if (replay.ownerUserId !== ownerUserId) continue;
     await replay.tail.catch(() => undefined);

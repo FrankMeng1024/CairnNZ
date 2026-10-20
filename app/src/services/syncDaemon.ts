@@ -42,6 +42,10 @@ import {
   removeAcknowledgedActivity,
   updateCompletedActivitySyncState,
 } from '../features/activity/activityRegistry';
+import {
+  flushActivityDiagnosticReplay,
+  recordActivityDiagnosticReplayEvent,
+} from '../features/activity/activityDiagnosticReplay';
 import { deleteAcknowledgedHikeTrackArtifacts } from './hikeTrackWriter';
 import networkMonitor from './networkMonitor';
 import { toServerPoint } from '../features/activity/activityContracts';
@@ -59,6 +63,25 @@ let isDraining = false;
 let pendingSignal = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryDueAt = 0;
+
+async function recordSyncDiagnostic(
+  ownerUserId: string,
+  clientActivityId: string,
+  phase: 'attempt' | 'ack' | 'phone-cleanup-complete',
+  data: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    await recordActivityDiagnosticReplayEvent({
+      ownerUserId,
+      clientActivityId,
+      kind: 'application-event',
+      data: { event: 'completed-activity-sync', phase, ...data },
+    });
+    // Explicit diagnostic opt-in makes this a forensic durability boundary.
+    // Normal Activities have no recorder, so this remains a cheap no-op.
+    await flushActivityDiagnosticReplay(ownerUserId, clientActivityId);
+  } catch { /* diagnostics must never change sync disposition */ }
+}
 
 function retryBackoffMs(attemptCount: number): number {
   return Math.min(5_000 * Math.pow(2, Math.max(0, attemptCount - 1)), 30 * 60_000);
@@ -464,6 +487,9 @@ export async function cleanupAcknowledgedActivityArtifacts(
     // deletion owns their removal; only raw recovery material is cleaned here.
     await deleteAcknowledgedHikeTrackArtifacts(clientActivityId, userId);
     await removeAcknowledgedActivity(userId, clientActivityId);
+    await recordSyncDiagnostic(userId, clientActivityId, 'phone-cleanup-complete', {
+      serverDeletionRequested: false,
+    });
     if (simulatorActivity) {
       const { appendSimulatorLog } = require('../features/activitySimulator/simulatorLog');
       appendSimulatorLog('SYNC_CLEANUP', 'simulator_activity_local_cleanup_complete', {
@@ -557,6 +583,10 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
       remoteMapped: !!hike.remoteId,
       wakeFromOfflineQueue: true,
     },
+  });
+  await recordSyncDiagnostic(hike.userId, hike.localId, 'attempt', {
+    attemptCount: hike.attemptCount ?? 0,
+    remoteMapped: !!hike.remoteId,
   });
 
   try {
@@ -803,6 +833,11 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
         idempotentReplay: !!result.idempotent_replay,
         elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
       },
+    });
+    await recordSyncDiagnostic(hike.userId, hike.localId, 'ack', {
+      serverActivityId: result.session_id,
+      activityIdentityMatched: result.client_activity_id === hike.localId,
+      idempotentReplay: !!result.idempotent_replay,
     });
     if (simulatorActivity) {
       const { appendSimulatorLog } = require('../features/activitySimulator/simulatorLog');

@@ -285,6 +285,22 @@ export function RootNavigator() {
               // runner boundary and remains in the external scorer.
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.snapLabLogicalRunner = require('../features/activitySimulator/snapLabLogicalRunner');
+              // Hike/Run closure QA: actual durable outbox, sync, registry and
+              // request modules against a loopback-only isolated backend.
+              // Exposed on Web only; no production screen or native bundle
+              // gains a new mutation path.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.pendingSyncStore = require('../services/pendingSyncStore');
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.syncDaemon = require('../services/syncDaemon');
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.sessionService = require('../services/sessionService');
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.activityRegistry = require('../features/activity/activityRegistry');
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.activityDiagnosticReplay = require('../features/activity/activityDiagnosticReplay');
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.tokenStore = require('../services/tokenStore');
               // Route-following: exposed so Playwright can drive turn-by-turn
               // scenarios without going through the Simulator panel. Both stores
               // stay accessible for the whole session; test cleans up.

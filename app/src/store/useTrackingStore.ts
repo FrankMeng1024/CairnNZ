@@ -242,6 +242,7 @@ let tokenRefreshEpoch = 0;
 let realTelemetryHealthInterval: ReturnType<typeof setInterval> | null = null;
 let activityLifecycleInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
+let activityAppStateQaHandler: ((nextState: AppStateStatus) => void) | null = null;
 let remoteStartNetworkUnsubscribe: (() => void) | null = null;
 const ACTIVITY_LOCATION_TIME_INTERVAL_MS = 1_000;
 let backgroundTaskActive = false;
@@ -1843,7 +1844,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // restarts. Real GPS now coalesces by actual owner state and generation;
       // the timer remains Simulator-only so its frozen lifecycle is unchanged.
       let activeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-      appStateSubscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const handleActivityAppStateChange = (nextState: AppStateStatus) => {
         if (get().status !== 'tracking') return;
         const lifecycleOwner = get();
         appendSimulatorLog(
@@ -1939,7 +1940,12 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             });
           }
         }
-      });
+      };
+      // The browser closure harness dispatches this exact handler. It does not
+      // emulate iOS suspension; it proves the application ownership branch
+      // without replacing it with a JSON label or test-only reimplementation.
+      if (Platform.OS === 'web') activityAppStateQaHandler = handleActivityAppStateChange;
+      appStateSubscription = AppState.addEventListener('change', handleActivityAppStateChange);
 
       // Re-check AppState AFTER listener registered: if state changed during
       // the brief window between initial activation and addEventListener,
@@ -6798,6 +6804,40 @@ function enqueueActivation(task: () => Promise<void>): Promise<void> {
     actualSettlement,
     new Promise<void>((resolve) => setTimeout(resolve, 5000)),
   ]);
+}
+
+/** Web-only QA entry into the same AppState callback installed by Start.
+ * Native AppState remains the sole production caller. The returned snapshot
+ * makes ownership transitions auditable without claiming OS suspension. */
+export async function dispatchActivityAppStateForQa(
+  nextState: Extract<AppStateStatus, 'active' | 'background' | 'inactive'>,
+): Promise<{
+  appState: string;
+  sessionId: string | null;
+  ownerGeneration: string | null;
+  status: TrackingState['status'];
+  locationProviderSource: ActivityLocationSource;
+  simulatorSourceActive: boolean;
+}> {
+  if (Platform.OS !== 'web') throw new Error('activity_app_state_qa_web_only');
+  const before = useTrackingStore.getState();
+  if (before.status !== 'tracking' || before.locationProviderSource !== 'simulator') {
+    throw new Error('activity_app_state_qa_requires_live_simulator_activity');
+  }
+  if (!activityAppStateQaHandler) throw new Error('activity_app_state_qa_handler_missing');
+  activityAppStateQaHandler(nextState);
+  // The production Simulator foreground branch deliberately debounces for 2s.
+  if (nextState === 'active') await new Promise<void>(resolve => setTimeout(resolve, 2_100));
+  await activationChain;
+  const after = useTrackingStore.getState();
+  return {
+    appState: nextState,
+    sessionId: after.sessionId,
+    ownerGeneration: after.liveOwnerGeneration,
+    status: after.status,
+    locationProviderSource: after.locationProviderSource,
+    simulatorSourceActive,
+  };
 }
 
 function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Promise<void> {

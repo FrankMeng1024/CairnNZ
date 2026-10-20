@@ -1,18 +1,12 @@
 import fs from 'fs';
-import {
-  activityGeometryFingerprint,
-  buildLocalFinalTrackPoints,
-} from '../activityFinalArtifact';
 import { replayObservationsFromDiagnosticExport } from '../activityDiagnosticReplay';
-import { probeSnapLabFinalWithCapturedResponses } from '../../activitySimulator/snapLabLogicalRunner';
-import type { SnapLabCassetteEntry } from '../../activitySimulator/snapLabTransport';
-import type { TrackPoint } from '../../../store/useSessionStore';
+import { diagnosticReplayFixture } from '../../activitySimulator/diagnosticReplayFixture';
 
 const exportPath = process.env.CAIRN_DIAGNOSTIC_EXPORT_PATH;
 const freshProcessTest = exportPath ? test : test.skip;
 
 describe('standalone Activity diagnostic replay', () => {
-  freshProcessTest('reconstructs local and selected Final fingerprints from the export alone', async () => {
+  freshProcessTest('builds a raw-only replay fixture without importing output geometry', async () => {
     const source = JSON.parse(fs.readFileSync(exportPath!, 'utf8'));
     const diagnostic = source.diagnosticReplay ?? source;
     expect(diagnostic.declaredMissing).toEqual([]);
@@ -20,47 +14,24 @@ describe('standalone Activity diagnostic replay', () => {
     const decisions = diagnostic.records.filter((record: any) => (
       record.kind === 'observation-decision'
     ));
-    const promotions = diagnostic.records.filter((record: any) => (
-      record.kind === 'canonical-promotion'
-    ));
-    const artifact = diagnostic.finalArtifact as {
-      selectedSource: 'local' | 'matched' | 'hybrid';
-      artifactFingerprint: string;
-      localFingerprint: string;
-      canonicalPointCount: number;
-      canonicalPoints: TrackPoint[];
-    };
     expect(observations).toHaveLength(decisions.length);
-    const canonicalDecisionTimes = new Set([
-      ...decisions
-        .filter((record: any) => record.data.accepted === true)
-        .map((record: any) => record.data.observationTimeMs),
-      ...promotions.map((record: any) => record.data.observationTimeMs),
-    ]);
-    expect(canonicalDecisionTimes.size).toBe(artifact.canonicalPointCount);
-    expect(artifact.canonicalPoints.every(point => canonicalDecisionTimes.has(point.t))).toBe(true);
-    expect(artifact.canonicalPoints).toHaveLength(artifact.canonicalPointCount);
-
-    const local = buildLocalFinalTrackPoints(artifact.canonicalPoints);
-    expect(activityGeometryFingerprint(local)).toBe(artifact.localFingerprint);
-
-    const providerResponses = diagnostic.providerResponses as SnapLabCassetteEntry[];
-    if (artifact.selectedSource === 'local') {
-      expect(activityGeometryFingerprint(local)).toBe(artifact.artifactFingerprint);
-      return;
-    }
-    expect(providerResponses.length).toBeGreaterThan(0);
-    const replayed = await probeSnapLabFinalWithCapturedResponses(
-      artifact.canonicalPoints,
-      providerResponses,
-      {
-        caseId: 'standalone-diagnostic-replay',
-        profileId: 'fresh-process',
-        seed: 1,
-        requestIdentity: diagnostic.recordsChecksum,
+    const fixture = diagnosticReplayFixture(diagnostic);
+    expect(fixture.rawEvents).toHaveLength(observations.length);
+    expect(fixture.rawEvents[0]).toMatchObject({
+      observationTimeMs: observations[0].timestampMs,
+      coordinate: {
+        lat: observations[0].coordinate.lat,
+        lng: observations[0].coordinate.lng,
       },
-    );
-    expect(replayed.selectedSource).toBe(artifact.selectedSource);
-    expect(activityGeometryFingerprint(replayed.selectedFinal)).toBe(artifact.artifactFingerprint);
+      callbackIdentity: observations[0].coordinate.callbackIdentity ?? null,
+      nativeBatchSequence: observations[0].coordinate.nativeBatchSequence ?? null,
+      nativeBatchIndex: observations[0].coordinate.nativeBatchIndex ?? null,
+    });
+    expect(fixture.transportConfig?.mode).toBe('captured-real');
+    expect(fixture.transportConfig?.cassetteEntries).toEqual(diagnostic.providerResponses);
+    const encodedFixture = JSON.stringify(fixture);
+    expect(encodedFixture).not.toContain('canonicalPoints');
+    expect(encodedFixture).not.toContain('localFinalPoints');
+    expect(encodedFixture).not.toContain('selectedFinalPoints');
   });
 });

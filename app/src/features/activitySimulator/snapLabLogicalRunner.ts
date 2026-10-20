@@ -27,13 +27,18 @@ import {
   configureSnapLabFaultPlan,
   snapLabFaultPlanSnapshot,
 } from './snapLabFaultInjection';
-import { useTrackingStore, type ActivityCoordinate } from '../../store/useTrackingStore';
+import {
+  dispatchActivityAppStateForQa,
+  useTrackingStore,
+  type ActivityCoordinate,
+} from '../../store/useTrackingStore';
 import { useMemoryStore } from '../memory/store/useMemoryStore';
 import { flushSyntheticMemoryNow } from '../memory/services/memoryPersistence';
 import { clearSyntheticMemoryForUser } from '../memory/services/memoryPersistence';
 import { readHikeTrackForProjection } from '../../services/hikeTrackWriter';
 import { purgeActivityStageLedgerRealmForOwner } from '../activity/activityStageLedger';
 import { beginActivityDiagnosticReplay } from '../activity/activityDiagnosticReplay';
+import { auditSnapLabDeliveryAuthenticity } from './snapLabDeliveryAudit';
 
 export interface SnapLabPublicRawEvent {
   ordinal: number;
@@ -42,10 +47,19 @@ export interface SnapLabPublicRawEvent {
   appState: string;
   observedLocal?: { x: number; y: number };
   coordinate: { lat: number; lng: number };
+  altitudeM?: number | null;
   accuracyM: number | null;
+  verticalAccuracyM?: number | null;
   speedMps: number | null;
   speedAccuracyMps: number | null;
+  courseDeg?: number | null;
+  courseAccuracyDeg?: number | null;
   source: 'simulator';
+  duplicateOfProviderOrdinal?: number;
+  callbackIdentity?: string | null;
+  nativeBatchSequence?: number | null;
+  nativeBatchIndex?: number | null;
+  receiptMonotonicTimeMs?: number | null;
 }
 
 export interface SnapLabPublicFixture {
@@ -107,6 +121,12 @@ export interface SnapLabLogicalRunResult {
   acceptedCallbackCount: number;
   rejectedCallbackCount: number;
   acceptanceReasons: Record<string, number>;
+  acceptanceReceipts: Array<{
+    ordinal: number;
+    observationTimeMs: number;
+    accepted: boolean;
+    reason: string;
+  }>;
   preFinish: {
     rawPointCount: number;
     canonicalPointCount: number;
@@ -216,6 +236,12 @@ export async function runSnapLabLogicalJourney(
   if (useTrackingStore.getState().status !== 'idle') throw new Error('snap_lab_runner_requires_idle_activity');
   const firstRaw = fixture.rawEvents[0];
   if (!firstRaw) throw new Error('snap_lab_fixture_has_no_observations');
+  if (fixture.clock.deliveryMode.includes('late-batch')) {
+    const deliveryAudit = auditSnapLabDeliveryAuthenticity(fixture.rawEvents, fixture.clock.deliveryMode);
+    if (!deliveryAudit.authenticForConfiguredNativeBatchModel) {
+      throw new Error(`snap_lab_unrealistic_native_delivery:${JSON.stringify(deliveryAudit.issues.slice(0, 3))}`);
+    }
+  }
 
   // Each matrix cell is an independent experiment. The orchestrator retains
   // the returned cold-reopened QA Activity snapshot before this disposable
@@ -272,7 +298,14 @@ let firstFinishResult: unknown = null;
     useTrackingStore.getState().setActivityMode(fixture.mode === 'run' ? 'running' : 'hiking');
     activitySimulatorEngine.armExternalRawReplay();
     const started = await useTrackingStore.getState().startTracking(options.activityId);
-    if (!started) throw new Error(`snap_lab_start_failed:${useTrackingStore.getState().startError ?? 'unknown'}`);
+    if (!started) {
+      const webFailure = (globalThis as unknown as { __cairnActivityStartFailure?: string | null })
+        .__cairnActivityStartFailure;
+      throw new Error(
+        `snap_lab_start_failed:${useTrackingStore.getState().startError ?? 'unknown'}`
+        + (webFailure ? `:${webFailure}` : ''),
+      );
+    }
     await activitySimulatorEngine.stopRuntime();
 
     const owner = useTrackingStore.getState();
@@ -291,6 +324,7 @@ let firstFinishResult: unknown = null;
     const acceptanceReasons: Record<string, number> = {};
     const observationDurations: number[] = [];
     const observationWork: Array<{ ordinal: number; durationMs: number; accepted: boolean; reason: string }> = [];
+    const acceptanceReceipts: SnapLabLogicalRunResult['acceptanceReceipts'] = [];
     const replayLongTasks: Array<{ startTime: number; duration: number }> = [];
     const observationIntervals: Array<{ startTime: number; endTime: number }> = [];
     let longTaskObserver: PerformanceObserver | null = null;
@@ -323,18 +357,22 @@ let firstFinishResult: unknown = null;
       });
       const coordinate: ActivityCoordinate = {
         ...event.coordinate,
+        ...(event.altitudeM == null ? {} : { alt: event.altitudeM }),
         ...(event.accuracyM == null ? {} : { accuracy: event.accuracyM }),
+        ...(event.verticalAccuracyM == null ? {} : { verticalAccuracy: event.verticalAccuracyM }),
         speed: event.speedMps,
         speedAccuracy: event.speedAccuracyMps,
+        course: event.courseDeg,
+        courseAccuracy: event.courseAccuracyDeg,
         source: 'simulator',
         simulatorObservationMode: 'raw-gps',
         clientActivityId: options.activityId,
         ownerGeneration: owner.liveOwnerGeneration,
         receiptWallTimeMs: logicalWallNow,
-        receiptMonotonicTimeMs: performance.now(),
-        callbackIdentity: `snap-lab:${fixture.caseId}:${fixture.profile}`,
-        nativeBatchSequence: batchOrdinals.get(event.deliveryTimeMs) ?? 1,
-        nativeBatchIndex: batchIndex,
+        receiptMonotonicTimeMs: event.receiptMonotonicTimeMs ?? performance.now(),
+        callbackIdentity: event.callbackIdentity ?? `snap-lab:${fixture.caseId}:${fixture.profile}`,
+        nativeBatchSequence: event.nativeBatchSequence ?? batchOrdinals.get(event.deliveryTimeMs) ?? 1,
+        nativeBatchIndex: event.nativeBatchIndex ?? batchIndex,
         appStateAtReceipt: event.appState,
       };
       const startedAt = performance.now();
@@ -345,6 +383,12 @@ let firstFinishResult: unknown = null;
       observationDurations.push(durationMs);
       const reason = decision.reason ?? (decision.accepted ? 'accepted' : 'rejected');
       observationWork.push({ ordinal: event.ordinal, durationMs, accepted: decision.accepted, reason });
+      acceptanceReceipts.push({
+        ordinal: event.ordinal,
+        observationTimeMs: event.observationTimeMs,
+        accepted: decision.accepted,
+        reason,
+      });
       acceptanceReasons[reason] = (acceptanceReasons[reason] ?? 0) + 1;
       if (decision.accepted) acceptedCallbackCount += 1;
       else rejectedCallbackCount += 1;
@@ -487,6 +531,7 @@ let firstFinishResult: unknown = null;
       acceptedCallbackCount,
       rejectedCallbackCount,
       acceptanceReasons,
+      acceptanceReceipts,
       preFinish,
       firstFinishResult,
       retryFinishResult,
@@ -596,17 +641,25 @@ export async function prepareSnapLabUiJourney(
 export async function replaySnapLabUiJourney(
   fixture: SnapLabPublicFixture,
   activityId: string,
+  range: { startIndex?: number; endIndex?: number } = {},
 ): Promise<{
   delivered: number;
   accepted: number;
   rejected: number;
   acceptanceReasons: Record<string, number>;
+  acceptanceReceipts: SnapLabLogicalRunResult['acceptanceReceipts'];
   preFinish: SnapLabLogicalRunResult['preFinish'];
 }> {
   if (!publicFixtureIsSafe(fixture as SnapLabPublicFixture & Record<string, unknown>)) {
     throw new Error('snap_lab_private_authority_crossed_product_boundary');
   }
   if (!uiReplayOriginalDateNow || uiReplayLogicalWallNow === null) throw new Error('snap_lab_ui_clock_not_active');
+  if (fixture.clock.deliveryMode.includes('late-batch')) {
+    const deliveryAudit = auditSnapLabDeliveryAuthenticity(fixture.rawEvents, fixture.clock.deliveryMode);
+    if (!deliveryAudit.authenticForConfiguredNativeBatchModel) {
+      throw new Error(`snap_lab_unrealistic_native_delivery:${JSON.stringify(deliveryAudit.issues.slice(0, 3))}`);
+    }
+  }
   const owner = useTrackingStore.getState();
   if (owner.sessionId !== activityId || owner.status !== 'tracking' || !owner.liveOwnerGeneration) {
     throw new Error('snap_lab_ui_activity_owner_mismatch');
@@ -626,10 +679,16 @@ export async function replaySnapLabUiJourney(
   await activitySimulatorEngine.stopRuntime();
   const batchOrdinals = receiptBatchOrdinals(fixture.rawEvents);
   const batchIndexes = new Map<number, number>();
+  const startIndex = Math.max(0, Math.min(fixture.rawEvents.length, range.startIndex ?? 0));
+  const endIndex = Math.max(startIndex, Math.min(fixture.rawEvents.length, range.endIndex ?? fixture.rawEvents.length));
+  for (const event of fixture.rawEvents.slice(0, startIndex)) {
+    batchIndexes.set(event.deliveryTimeMs, (batchIndexes.get(event.deliveryTimeMs) ?? 0) + 1);
+  }
   const acceptanceReasons: Record<string, number> = {};
   let accepted = 0;
   let rejected = 0;
-  for (const event of fixture.rawEvents) {
+  const acceptanceReceipts: SnapLabLogicalRunResult['acceptanceReceipts'] = [];
+  for (const event of fixture.rawEvents.slice(startIndex, endIndex)) {
     uiReplayLogicalWallNow = fixture.clock.observationStartMs
       + 12 * 60 * 60_000 + 60_000
       + Math.max(0, event.deliveryTimeMs - fixture.clock.observationStartMs);
@@ -643,21 +702,31 @@ export async function replaySnapLabUiJourney(
     });
     const decision = await useTrackingStore.getState().addTrackPoint({
       ...event.coordinate,
+      ...(event.altitudeM == null ? {} : { alt: event.altitudeM }),
       ...(event.accuracyM == null ? {} : { accuracy: event.accuracyM }),
+      ...(event.verticalAccuracyM == null ? {} : { verticalAccuracy: event.verticalAccuracyM }),
       speed: event.speedMps,
       speedAccuracy: event.speedAccuracyMps,
+      course: event.courseDeg,
+      courseAccuracy: event.courseAccuracyDeg,
       source: 'simulator',
       simulatorObservationMode: 'raw-gps',
       clientActivityId: activityId,
       ownerGeneration: owner.liveOwnerGeneration,
       receiptWallTimeMs: uiReplayLogicalWallNow,
-      receiptMonotonicTimeMs: performance.now(),
-      callbackIdentity: `snap-lab-ui:${fixture.caseId}:${fixture.profile}`,
-      nativeBatchSequence: batchOrdinals.get(event.deliveryTimeMs) ?? 1,
-      nativeBatchIndex: batchIndex,
+      receiptMonotonicTimeMs: event.receiptMonotonicTimeMs ?? performance.now(),
+      callbackIdentity: event.callbackIdentity ?? `snap-lab-ui:${fixture.caseId}:${fixture.profile}`,
+      nativeBatchSequence: event.nativeBatchSequence ?? batchOrdinals.get(event.deliveryTimeMs) ?? 1,
+      nativeBatchIndex: event.nativeBatchIndex ?? batchIndex,
       appStateAtReceipt: event.appState,
     }, event.observationTimeMs);
     const reason = decision.reason ?? (decision.accepted ? 'accepted' : 'rejected');
+    acceptanceReceipts.push({
+      ordinal: event.ordinal,
+      observationTimeMs: event.observationTimeMs,
+      accepted: decision.accepted,
+      reason,
+    });
     acceptanceReasons[reason] = (acceptanceReasons[reason] ?? 0) + 1;
     if (decision.accepted) accepted += 1;
     else rejected += 1;
@@ -673,10 +742,11 @@ export async function replaySnapLabUiJourney(
   // monotonic performance clock, while completeSnapLabUiJourney restores the
   // host wall clock immediately after the Activity reaches its terminal UI.
   return {
-    delivered: fixture.rawEvents.length,
+    delivered: endIndex - startIndex,
     accepted,
     rejected,
     acceptanceReasons,
+    acceptanceReceipts,
     preFinish: {
       rawPointCount: state.trackPointsRaw.length,
       canonicalPointCount: state.trackPoints.length,
@@ -702,6 +772,15 @@ export async function completeSnapLabUiJourney(ownerUserId: string, activityId: 
   clearSnapLabFaultPlan(activityId);
   endUiReplayClock();
   return { simulatorDiagnostics, faultPlanAfter };
+}
+
+/** Dispatches the exact web-installed Activity AppState handler and returns
+ * its settled ownership snapshot. This is application lifecycle evidence,
+ * not a claim about native OS suspension. */
+export async function dispatchSnapLabApplicationState(
+  nextState: 'active' | 'background' | 'inactive',
+) {
+  return dispatchActivityAppStateForQa(nextState);
 }
 
 /** Read-only failure evidence for the external browser orchestrator. */

@@ -62,7 +62,7 @@ import { getHomeBackground, getRegisteredBackgroundLayout, getWeatherReviewBackg
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { exportLatestActivityStageLedger } from '../features/activity/activityStageLedger';
-import { exportLatestActivityDiagnosticReplay } from '../features/activity/activityDiagnosticReplay';
+import { exportActivityDiagnosticReplayIfPresent } from '../features/activity/activityDiagnosticReplay';
 import {
   buildActivityNativeCrossLedgerReport,
   exportNativeGpsEvidence,
@@ -599,7 +599,13 @@ export function SettingsScreen() {
       const ledger = await exportLatestActivityStageLedger(ownerId);
       const nativeGpsEvidence = await exportNativeGpsEvidence(ownerId, ledger.clientActivityId);
       const nativeCrossLedgerReport = buildActivityNativeCrossLedgerReport(ledger, nativeGpsEvidence);
-      const diagnosticReplay = await exportLatestActivityDiagnosticReplay(ownerId, ledger);
+      const diagnosticReplay = ledger.clientActivityId
+        ? await exportActivityDiagnosticReplayIfPresent({
+          ownerUserId: ownerId,
+          clientActivityId: ledger.clientActivityId,
+          stageLedger: ledger,
+        })
+        : null;
       if (currentOwnerId() !== ownerId) return;
       const Clipboard = await import('expo-clipboard');
       await Clipboard.setStringAsync(JSON.stringify({

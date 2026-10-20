@@ -263,6 +263,35 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       .toEqual([1_000, 5_000, 9_000, 13_000, 17_000]);
   });
 
+  it('sorts a contiguous delayed native callback before the monotonic WAL boundary', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-batch', true, {
+      clientActivityId: 'activity-batch',
+      userId: 'user-a',
+      ownerGeneration: 'generation-batch',
+      segmentId: 'segment-batch',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+    });
+
+    // Expo may hand TaskManager multiple CLLocation values in one callback.
+    // The native callback boundary, not fixture array order, owns chronology.
+    await handler({
+      data: { locations: [
+        pointAt(9_000, -41.00008, 174),
+        pointAt(1_000, -41, 174),
+        pointAt(5_000, -41.00004, 174),
+      ] },
+      error: null,
+    });
+
+    expect(appendBackgroundHikePoints).toHaveBeenCalledTimes(1);
+    expect(appendBackgroundHikePoints.mock.calls[0][0].map((item: any) => item.t))
+      .toEqual([1_000, 5_000, 9_000]);
+    expect(task.drainBackgroundLocations().map((item: any) => item.timestamp))
+      .toEqual([1_000, 5_000, 9_000]);
+  });
+
   it('commits durable Memory responsibility after WAL without a mounted React screen', async () => {
     const task = require('../backgroundLocationTask');
     await task.persistBackgroundContext('activity-a', true, {

@@ -273,6 +273,17 @@ function buildRawEvents(route, variant, diary, observationStartMs) {
   let driftNorthM = 0;
   let direction = { east: 1, north: 0 };
   const observations = [];
+  const lateBatchStart = route.lateBatch
+    ? (diary.positions.find(point => point.progress >= route.lateBatch.startFraction)
+      ?? diary.positions[diary.positions.length - 1])
+    : null;
+  const lateBatchEnd = route.lateBatch
+    ? (diary.positions.find(point => point.progress >= route.lateBatch.endFraction)
+      ?? diary.positions[diary.positions.length - 1])
+    : null;
+  const lateBatchDeliveryTimeMs = route.lateBatch && lateBatchEnd
+    ? observationStartMs + (lateBatchEnd.elapsedS + route.lateBatch.deliveryDelayS) * 1_000
+    : null;
   for (let diaryIndex = 0; diaryIndex < diary.positions.length; diaryIndex += intervalS) {
     const truth = diary.positions[diaryIndex];
     const progress = truth.progress;
@@ -306,12 +317,13 @@ function buildRawEvents(route, variant, diary, observationStartMs) {
     );
     const observationTimeMs = observationStartMs + truth.elapsedS * 1_000;
     let deliveryTimeMs = observationTimeMs + Math.max(0, Math.round(gaussian(random) * 140));
-    if (route.lateBatch
-      && progress >= route.lateBatch.startFraction
-      && progress <= route.lateBatch.endFraction) {
-      const batchTruth = diary.positions.find(point => point.progress >= route.lateBatch.endFraction)
-        ?? diary.positions[diary.positions.length - 1];
-      deliveryTimeMs = observationStartMs + (batchTruth.elapsedS + route.lateBatch.deliveryDelayS) * 1_000;
+    if (lateBatchStart && lateBatchDeliveryTimeMs != null
+      && observationTimeMs >= observationStartMs + lateBatchStart.elapsedS * 1_000
+      && observationTimeMs <= lateBatchDeliveryTimeMs) {
+      // One native callback owns the complete contiguous held window. The old
+      // fixture allowed newer callbacks to overtake it, which exercised the
+      // stale-owner fence but was not the configured Expo/CoreLocation batch.
+      deliveryTimeMs = lateBatchDeliveryTimeMs;
     }
     const inBackground = route.backgroundWindow
       && progress >= route.backgroundWindow.startFraction
@@ -503,7 +515,7 @@ for (const [routeIndex, route] of plan.routes.entries()) {
         observationStartMs,
         observationEndMs: observationStartMs + diary.durationS * 1_000,
         observationIntervalSeconds: variant.sampleIntervalS,
-        deliveryMode: route.lateBatch ? 'arrival-ordered-with-late-batch' : 'arrival-ordered',
+        deliveryMode: route.lateBatch ? 'native-callback-batched-late-window' : 'arrival-ordered',
       },
       rawEvents,
       eventSchedule: {
