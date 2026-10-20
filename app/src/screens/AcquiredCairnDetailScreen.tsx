@@ -7,7 +7,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { authenticatedFetch } from '../services/apiService';
 import { BackButton } from '../components/BackButton';
-import { ContentSurface } from '../components/ContentSurface';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Icon } from '../components/Icon';
 import { FontSize, Spacing } from '../components/tokens';
@@ -24,6 +23,8 @@ import {
   type CachedAcquiredCairnRevision,
 } from '../features/cairns/acquiredCairnHistoryCache';
 import { useAppStore } from '../store/useAppStore';
+import { splitTitleBody } from '../features/plant/services/noteEncoding';
+import { CairnPaper, CairnStatusPill, CairnStoneMark } from '../features/cairns/components/CairnPaper';
 
 type DetailRoute = RouteProp<RootStackParamList, 'AcquiredCairnDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -157,7 +158,7 @@ export function AcquiredCairnDetailScreen() {
 
   const confirmRemove = () => Alert.alert(
     'Remove from my Memory?',
-    'This removes your acquired pages from this collection. It does not affect the author or your Fog.',
+    'This hides your acquired pages and prevents future automatic encounters with this Cairn unless the collection is restored. It does not affect the author or your Fog. There is no in-app restore after removal yet.',
     [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => void updateCollection('remove') },
@@ -225,14 +226,26 @@ export function AcquiredCairnDetailScreen() {
           ) : null}
           {revisions[pageIndex] ? (() => {
             const revision = revisions[pageIndex];
+            const words = splitTitleBody(revision.text ?? '');
             return (
-            <ContentSurface key={revision.revision_id} level="record" style={styles.card}>
+            <CairnPaper key={revision.revision_id} style={styles.card} testID="acquired-cairn-paper">
               <View style={styles.revisionHeader}>
-                <Text style={[styles.revisionTitle, { color: theme.foreground }]}>Found {new Date(revision.acquired_at).toLocaleDateString()}</Text>
-                <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{pageIndex === 0 ? 'Latest acquired' : 'Earlier acquired'}</Text>
+                <View style={styles.revisionIdentity}>
+                  <CairnStoneMark size={34} tone={revision.source_audience === 'friends' ? 'friends' : 'public'} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.revisionTitle, { color: theme.foreground }]}>Found {new Date(revision.acquired_at).toLocaleDateString()}</Text>
+                    <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{revision.source_audience === 'friends' ? 'Left by a friend' : 'Left anonymously'}</Text>
+                  </View>
+                </View>
+                <CairnStatusPill label={pageIndex === 0 ? 'Latest found' : `Version ${revision.content_revision}`} tone="muted" />
               </View>
               {revision.availability === 'available' ? (
-                <Text style={[styles.body, { color: theme.foreground }]}>{revision.text?.trim() || 'A moment here'}</Text>
+                <View style={styles.noteCopy}>
+                  {words.title.trim() ? <Text style={[styles.noteTitle, { color: theme.foreground }]}>{words.title}</Text> : null}
+                  <Text style={[styles.body, { color: words.body.trim() ? theme.foreground : theme.muted }]}>
+                    {words.body.trim() || (words.title.trim() ? '' : 'A quiet marker of this place.')}
+                  </Text>
+                </View>
               ) : (
                 <View style={styles.unavailable}>
                   <Icon name="Shield" size={16} color={theme.iconInactive} />
@@ -257,7 +270,7 @@ export function AcquiredCairnDetailScreen() {
                   </TouchableOpacity>
                 </View>
               ) : null}
-            </ContentSurface>
+            </CairnPaper>
             );
           })() : null}
           {revisions.length > 1 ? (
@@ -283,6 +296,7 @@ export function AcquiredCairnDetailScreen() {
           ) : null}
           <View style={styles.collectionActions}>
             <PrimaryButton label="Archive from default view" variant="secondary" onPress={() => void updateCollection('archive')} />
+            <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Archive keeps every acquired version and can be restored here. Remove hides the collection and blocks future automatic encounters with this Cairn; there is no in-app restore after removal yet.</Text>
             <TouchableOpacity onPress={confirmRemove} accessibilityRole="button" style={styles.removeAction}>
               <Text style={[styles.removeText, { color: theme.destructive }]}>Remove from my Memory</Text>
             </TouchableOpacity>
@@ -304,7 +318,10 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.xl, gap: Spacing.md, paddingBottom: Spacing.xxl },
   card: { padding: Spacing.lg, gap: Spacing.md },
   revisionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  revisionIdentity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingRight: Spacing.sm },
   revisionTitle: { fontSize: FontSize.body, fontWeight: '700' },
+  noteCopy: { paddingTop: Spacing.sm, gap: Spacing.sm },
+  noteTitle: { fontSize: FontSize.h2, lineHeight: 28, fontWeight: '700' },
   body: { fontSize: FontSize.body, lineHeight: 21 },
   meta: { fontSize: FontSize.small },
   unavailable: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
@@ -317,6 +334,7 @@ const styles = StyleSheet.create({
   pageButtonText: { fontSize: FontSize.small, fontWeight: '700' },
   disabled: { opacity: 0.35 },
   collectionActions: { gap: Spacing.md, marginTop: Spacing.md },
+  collectionHelp: { fontSize: FontSize.small, lineHeight: 17 },
   removeAction: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   removeText: { fontSize: FontSize.small, fontWeight: '700' },
 });

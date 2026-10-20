@@ -14,15 +14,10 @@ import { AppState, Platform } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// R113 restore: navigationRef for Playwright web QA (Round loop). Removed
-// in O11 pre-launch cleanup (commit 6bb108e), restored here for the 433-
-// case reverse-test loop. Guarded on Platform.OS==='web' — native/production
-// bundles get null because Metro tree-shakes Platform.OS branches.
-// MUST DELETE before App Store submission (production build).
-// Track memory feedback_sleep_map_round_2026_08_05.md.
-export const navigationRef = Platform.OS === 'web'
-  ? createNavigationContainerRef()
-  : null as unknown as ReturnType<typeof createNavigationContainerRef>;
+// Shared navigation authority for web QA and validated native notification
+// responses. Notification handling rechecks the current account and retained
+// acquisition before this ref is allowed to navigate.
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 import { AuthScreen } from '../screens/AuthScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -66,6 +61,12 @@ import {
 import { usePublicCairnStore } from '../features/public/services/publicCairns';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import networkMonitor from '../services/networkMonitor';
+import {
+  configureCairnNotificationPresentation,
+  consumeCairnNotificationResponse,
+  resumeEncounterNotifications,
+  type CairnNotificationDestination,
+} from '../features/cairns/cairnEncounterNotifications';
 
 // v302: mark immediately after all transitive imports above resolved.
 // If app dies between `render_about_to_mount_root` (App.tsx) and
@@ -152,6 +153,43 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const { isLoggedIn, user } = useAppStore();
   const visualTheme = useVisualTheme();
+  const pendingNotificationOpen = React.useRef<CairnNotificationDestination | null>(null);
+  const pendingNotificationResponse = React.useRef<unknown | null>(null);
+  const openCairnNotification = React.useCallback(async (destination: CairnNotificationDestination) => {
+    const ownerId = String(useAppStore.getState().user?.id ?? '');
+    if (!useAppStore.getState().isLoggedIn || ownerId !== destination.viewerId) return;
+    const presentation = useCairnPresentationStore.getState();
+    if (presentation.viewerId !== ownerId) await presentation.initialize(ownerId);
+    else await presentation.refresh();
+    if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
+    if (!navigationRef.isReady()) {
+      pendingNotificationOpen.current = destination;
+      return;
+    }
+    const state = useCairnPresentationStore.getState();
+    const candidates = [...state.pendingGroups, ...state.activeGroupMembers];
+    const group = destination.presentationGroupId
+      ? candidates.find(item => item.id === destination.presentationGroupId) ?? null
+      : null;
+    if (group?.singleMarkerId) {
+      navigationRef.navigate('AcquiredCairnDetail', { markerId: group.singleMarkerId });
+    } else {
+      navigationRef.navigate('AllCairns', { initialSection: 'found' });
+    }
+  }, []);
+  const receiveCairnNotification = React.useCallback(async (response: unknown) => {
+    const app = useAppStore.getState();
+    const ownerId = app.isLoggedIn ? String(app.user?.id ?? '') : '';
+    if (!ownerId) {
+      // A cold-start response may arrive before persisted auth has hydrated.
+      // Keep it only in memory, then re-authorize after the real account is
+      // available; never infer an owner from notification data.
+      pendingNotificationResponse.current = response;
+      return;
+    }
+    const destination = await consumeCairnNotificationResponse(response, ownerId);
+    if (destination) await openCairnNotification(destination);
+  }, [openCairnNotification]);
   React.useEffect(() => {
     if (!isLoggedIn || !user?.id) {
       usePublicCairnStore.getState().clearForAccountBoundary();
@@ -162,7 +200,28 @@ export function RootNavigator() {
     void drainBorrowedRouteTerminalOutbox();
     void usePublicCairnStore.getState().initialize(String(user.id));
     void useCairnPresentationStore.getState().initialize(String(user.id));
-  }, [isLoggedIn, user?.id]);
+    void resumeEncounterNotifications(String(user.id));
+    if (pendingNotificationResponse.current) {
+      const pending = pendingNotificationResponse.current;
+      pendingNotificationResponse.current = null;
+      void receiveCairnNotification(pending);
+    }
+  }, [isLoggedIn, receiveCairnNotification, user?.id]);
+  React.useEffect(() => {
+    void configureCairnNotificationPresentation();
+    if (Platform.OS === 'web') return undefined;
+    let active = true;
+    let subscription: { remove: () => void } | null = null;
+    void import('expo-notifications').then(async Notifications => {
+      if (!active) return;
+      subscription = Notifications.addNotificationResponseReceivedListener(response => {
+        if (active) void receiveCairnNotification(response);
+      });
+      const initial = await Notifications.getLastNotificationResponseAsync();
+      if (active && initial) await receiveCairnNotification(initial);
+    }).catch(() => undefined);
+    return () => { active = false; subscription?.remove(); };
+  }, [receiveCairnNotification]);
   React.useEffect(() => networkMonitor.onChange(state => {
     if (state.state === 'online') {
       const app = useAppStore.getState();
@@ -251,6 +310,9 @@ export function RootNavigator() {
       ref={navigationRef ?? undefined}
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
+        const pending = pendingNotificationOpen.current;
+        pendingNotificationOpen.current = null;
+        if (pending) void openCairnNotification(pending);
         // R113 restore: expose nav helpers + internal QA stores
         // to __cairnStores for Playwright web QA. Guarded on Platform.OS==='web'.
         try {

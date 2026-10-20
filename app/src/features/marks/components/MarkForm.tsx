@@ -19,6 +19,8 @@ import { MarkerPermission } from '../../../store/useMarkerStore';
 import { haptic } from '../../../services/hapticService';
 import { log } from '../../../services/appLog';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { CairnPaper, CairnStoneMark } from '../../cairns/components/CairnPaper';
+import { CAIRN_TERMS, cairnAudienceCopy } from '../../cairns/cairnExperience';
 
 export interface MarkFormProps {
   // Values
@@ -74,6 +76,7 @@ export function MarkForm(props: MarkFormProps) {
   const titleDanger = title.length >= titleMaxChars;
   const noteWarn = note.length >= Math.floor(noteMaxChars * 0.9);
   const noteDanger = note.length >= noteMaxChars;
+  const audience = cairnAudienceCopy(visibility);
 
   return (
     <View>
@@ -132,61 +135,70 @@ export function MarkForm(props: MarkFormProps) {
       </ScrollView>
       </> : null}
 
-      {/* TITLE */}
-      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Name <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
-        placeholder="Name this place or moment"
-        placeholderTextColor={theme.muted}
-        maxLength={titleMaxChars}
-        value={title}
-        onChangeText={onTitleChange}
-        returnKeyType="next"
-        blurOnSubmit={false}
-        autoFocus={autoFocus === 'title'}
-        accessibilityLabel="Title"
-      />
-      {title.length > 0 ? (
-        <Text
-          style={[
-            styles.charCounter, { color: theme.muted },
-            titleWarn && { color: Colors.warning },
-            titleDanger && { color: Colors.danger },
-          ]}
-          accessibilityLiveRegion={titleWarn ? 'polite' : 'none'}
-        >
-          {title.length} / {titleMaxChars}
-        </Text>
-      ) : null}
+      <CairnPaper style={styles.editorPaper} animated={mode === 'create'} accessibilityLabel="Cairn note">
+        <View style={styles.paperHeading}>
+          <CairnStoneMark size={30} tone={visibility === 'group' ? 'friends' : visibility === 'public' ? 'public' : 'owner'} />
+          <View style={styles.paperHeadingCopy}>
+            <Text style={[styles.paperEyebrow, { color: theme.foregroundSecondary }]}>A NOTE FOR THIS PLACE</Text>
+            <Text style={[styles.paperPrompt, { color: theme.foreground }]}>{CAIRN_TERMS.notePrompt}</Text>
+          </View>
+        </View>
 
-      {/* NOTE */}
-      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Note <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
-      <TextInput
-        style={[styles.input, styles.textArea, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
-        placeholder="What did you notice here?"
-        placeholderTextColor={theme.muted}
-        maxLength={noteMaxChars}
-        value={note}
-        onChangeText={onNoteChange}
-        multiline
-        textAlignVertical="top"
-        returnKeyType="default"
-        blurOnSubmit={false}
-        autoFocus={autoFocus === 'note'}
-        accessibilityLabel="Note"
-      />
-      {note.length > 0 ? (
-        <Text
-          style={[
-            styles.charCounter, { color: theme.muted },
-            noteWarn && { color: Colors.warning },
-            noteDanger && { color: Colors.danger },
-          ]}
-          accessibilityLiveRegion={noteWarn ? 'polite' : 'none'}
-        >
-          {note.length} / {noteMaxChars}
-        </Text>
-      ) : null}
+        {/* The note is the primary artifact; the short title is supporting
+            context. Both remain optional for private/friends creation. */}
+        <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Note <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
+        <TextInput
+          style={[styles.input, styles.textArea, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
+          placeholder="Something worth noticing, remembering, or finding…"
+          placeholderTextColor={theme.muted}
+          maxLength={noteMaxChars}
+          value={note}
+          onChangeText={onNoteChange}
+          multiline
+          textAlignVertical="top"
+          returnKeyType="default"
+          blurOnSubmit={false}
+          autoFocus={autoFocus === 'note'}
+          accessibilityLabel="Cairn note"
+        />
+        {note.length > 0 ? (
+          <Text
+            style={[
+              styles.charCounter, { color: theme.muted },
+              noteWarn && { color: Colors.warning },
+              noteDanger && { color: Colors.danger },
+            ]}
+            accessibilityLiveRegion={noteWarn ? 'polite' : 'none'}
+          >
+            {note.length} / {noteMaxChars}
+          </Text>
+        ) : null}
+
+        <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Short title <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
+          placeholder="Name this moment"
+          placeholderTextColor={theme.muted}
+          maxLength={titleMaxChars}
+          value={title}
+          onChangeText={onTitleChange}
+          returnKeyType="done"
+          autoFocus={autoFocus === 'title'}
+          accessibilityLabel="Short title"
+        />
+        {title.length > 0 ? (
+          <Text
+            style={[
+              styles.charCounter, { color: theme.muted },
+              titleWarn && { color: Colors.warning },
+              titleDanger && { color: Colors.danger },
+            ]}
+            accessibilityLiveRegion={titleWarn ? 'polite' : 'none'}
+          >
+            {title.length} / {titleMaxChars}
+          </Text>
+        ) : null}
+      </CairnPaper>
 
       {/* WHO CAN SEE THIS */}
       {showVisibilityPicker ? <>
@@ -200,7 +212,7 @@ export function MarkForm(props: MarkFormProps) {
           onPress={() => { haptic.selection(); onVisibilityChange('personal'); }}
         />
         <VisChip
-          label="Friends can discover"
+          label="Friends"
           iconName="Users"
           active={visibility === 'group'}
           activeTone="primary"
@@ -216,12 +228,7 @@ export function MarkForm(props: MarkFormProps) {
           />
         ) : null}
       </View>
-      {visibility === 'group' ? (
-        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>Friends who genuinely pass nearby may acquire this version and keep that copy even after later edits or unsharing. Avoid sensitive details. No notification is sent.</Text>
-      ) : null}
-      {visibility === 'public' ? (
-        <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>After review, people who genuinely pass nearby may acquire this exact version. It is anonymous to strangers, but current friends may recognize you; acquired copies can remain. Avoid sensitive details.</Text>
-      ) : null}
+      <Text style={[styles.visibilityHelp, { color: theme.foregroundSecondary }]}>{audience.summary}</Text>
       </> : null}
 
       {/* LOCATION LOCKED — edit mode only. */}
@@ -291,6 +298,11 @@ function VisChip({ label, iconName, active, activeTone, disabled, onPress }: Vis
 }
 
 const styles = StyleSheet.create({
+  editorPaper: { marginTop: Spacing.sm },
+  paperHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingRight: 24, marginBottom: Spacing.md },
+  paperHeadingCopy: { flex: 1 },
+  paperEyebrow: { fontSize: 10, lineHeight: 14, fontWeight: '700', letterSpacing: 1 },
+  paperPrompt: { fontSize: FontSize.body, lineHeight: 21, fontWeight: '700', marginTop: 2 },
   // R114/O24 (2026-08-12): field labels changed from ALL CAPS to sentence
   // case per user request — the aggressive uppercase felt out of place in
   // the app's warm typographic voice. Kept small + secondary color so
@@ -341,7 +353,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   textArea: {
-    minHeight: 120,
+    minHeight: 148,
     paddingTop: 10,
   },
   charCounter: {

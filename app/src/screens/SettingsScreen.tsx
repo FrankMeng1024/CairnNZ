@@ -67,6 +67,11 @@ import {
   exportNativeGpsEvidence,
 } from '../features/activity/nativeGpsEvidence';
 import { offlineMapsFeatureEnabled } from '../features/offlineMaps/offlineMapContracts';
+import {
+  getEncounterNotificationState,
+  setEncounterNotificationsEnabled,
+  type EncounterNotificationState,
+} from '../features/cairns/cairnEncounterNotifications';
 
 type Page = 'root' | 'account' | 'privacy' | 'content-review' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
@@ -283,6 +288,13 @@ export function SettingsScreen() {
   const [permissionCanAskAgain, setPermissionCanAskAgain] = useState(true);
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [encounterNotifications, setEncounterNotifications] = useState<EncounterNotificationState>({
+    supported: false,
+    enabled: false,
+    permission: 'unavailable',
+    detail: 'Checking this installed app…',
+  });
+  const [encounterNotificationsBusy, setEncounterNotificationsBusy] = useState(false);
 
   const [nameOpen, setNameOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -414,6 +426,8 @@ export function SettingsScreen() {
     setFeedbackState('idle');
     setFeedbackError('');
     setFeedbackSubmissionId(Crypto.randomUUID());
+    setEncounterNotifications({ supported: false, enabled: false, permission: 'unavailable', detail: 'Checking this installed app…' });
+    setEncounterNotificationsBusy(false);
   }, [renderedOwnerId]);
 
   const refreshPermission = useCallback(async () => {
@@ -430,6 +444,13 @@ export function SettingsScreen() {
       setBackgroundPermissionStatus('unavailable');
       setPermissionCanAskAgain(false);
     }
+  }, []);
+
+  const refreshEncounterNotifications = useCallback(async () => {
+    const ownerId = currentOwnerId();
+    if (!ownerId) return;
+    const result = await getEncounterNotificationState(ownerId);
+    if (settingsMounted.current && currentOwnerId() === ownerId) setEncounterNotifications(result);
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -494,12 +515,16 @@ export function SettingsScreen() {
 
   useEffect(() => {
     void refreshPermission();
+    void refreshEncounterNotifications();
     void refreshProfile();
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void refreshPermission();
+      if (state === 'active') {
+        void refreshPermission();
+        void refreshEncounterNotifications();
+      }
     });
     return () => subscription.remove();
-  }, [refreshPermission, refreshProfile]);
+  }, [refreshEncounterNotifications, refreshPermission, refreshProfile]);
 
   useEffect(() => {
     if (page !== 'privacy') return;
@@ -743,6 +768,36 @@ export function SettingsScreen() {
             value={permissionLoading ? 'Checking…' : exploreEnabled ? 'On' : memoryLocationTransitionRequired ? 'Review' : 'Off'}
             onPress={exploreEnabled ? () => openPage('privacy') : () => void enableUnifiedMemoryLocation()}
             testID="settings-explore-open"
+          />
+          <Divider color={background.settingsCardBorderColor} />
+          <ToggleRow
+            icon="MapPin"
+            title="Encounter notifications"
+            detail={encounterNotifications.detail}
+            value={encounterNotifications.enabled}
+            disabled={!encounterNotifications.supported || encounterNotificationsBusy}
+            onChange={(next) => {
+              const ownerId = currentOwnerId();
+              if (!ownerId || encounterNotificationsBusy) return;
+              setEncounterNotificationsBusy(true);
+              void setEncounterNotificationsEnabled(ownerId, next).then(result => {
+                if (!settingsMounted.current || currentOwnerId() !== ownerId) return;
+                setEncounterNotifications(result);
+                if (next && !result.enabled && result.permission === 'denied') {
+                  Alert.alert(
+                    'Notifications are off',
+                    'Open system Settings to allow encounter notifications. Cairns will still save to Memory without them.',
+                    [
+                      { text: 'Not now', style: 'cancel' },
+                      { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+                    ],
+                  );
+                }
+              }).finally(() => {
+                if (settingsMounted.current && currentOwnerId() === ownerId) setEncounterNotificationsBusy(false);
+              });
+            }}
+            testID="settings-encounter-notifications"
           />
         </ContentSurface>
 

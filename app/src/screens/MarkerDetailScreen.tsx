@@ -76,6 +76,7 @@ import { CairnIdentityLine } from '../features/cairns/CairnIdentityLine';
 import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
+import { CairnPaper, CairnStoneMark } from '../features/cairns/components/CairnPaper';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -403,24 +404,30 @@ export function MarkerDetailScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 1. Title */}
-        <Text
-          style={[styles.title, !privateTitle && !privateBody && styles.titleEmpty, { color: privateTitle || privateBody ? visualTheme.foreground : visualTheme.muted }]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
+        <CairnPaper
+          key={`owned-cairn-paper:${marker.contentRevision ?? 1}:${marker.note}`}
+          style={styles.notePaper}
+          testID="owned-cairn-paper"
         >
-          {displayTitle}
-        </Text>
-
-        {/* 2. Body */}
-        {privateBody ? <Text style={[styles.body, { color: visualTheme.foregroundSecondary }]}>{privateBody}</Text> : null}
-
-        <CairnIdentityLine
-          isOwner={isOwner}
-          permission={marker.permission}
-          authorName={marker.authorName}
-          qa={marker.qaProvenance === 'simulator_test'}
-        />
+          <View style={styles.notePaperHeader}>
+            <CairnStoneMark size={36} tone={marker.permission === 'group' ? 'friends' : marker.permission === 'public' ? 'public' : 'owner'} />
+            <Text style={[styles.notePaperEyebrow, { color: visualTheme.foregroundSecondary }]}>YOUR CAIRN · LEFT HERE</Text>
+          </View>
+          <Text
+            style={[styles.title, !privateTitle && !privateBody && styles.titleEmpty, { color: privateTitle || privateBody ? visualTheme.foreground : visualTheme.muted }]}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            {displayTitle}
+          </Text>
+          {privateBody ? <Text style={[styles.body, { color: visualTheme.foregroundSecondary }]}>{privateBody}</Text> : null}
+          <CairnIdentityLine
+            isOwner={isOwner}
+            permission={marker.permission}
+            authorName={marker.authorName}
+            qa={marker.qaProvenance === 'simulator_test'}
+          />
+        </CairnPaper>
 
         {isOwner && Number(marker.thanksCount ?? 0) > 0 ? (
           <View
@@ -518,7 +525,7 @@ export function MarkerDetailScreen() {
             </View>
             <Text style={[styles.snapshotBody, { color: visualTheme.foreground }]}>
               {marker.publicSubmissionCode === 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED'
-                ? 'This Cairn is saved. Finish its source Activity, then save Public again to request review.'
+                ? 'This Cairn is saved. When its eligible source Activity finishes, Public review can proceed automatically; you do not need to save it again.'
                 : marker.publicSubmissionCode === 'PUBLIC_TEXT_REQUIRED'
                   ? 'This Cairn is saved, but Public discovery needs useful text.'
                   : marker.publicState === 'published'
@@ -579,6 +586,11 @@ export function MarkerDetailScreen() {
           contentContainerStyle={styles.editBody}
           testID="cairn-edit-content"
         >
+          <Text style={[styles.editVersionTruth, { color: visualTheme.foregroundSecondary }]}>
+            {editPermission === 'personal'
+              ? 'Saving changes updates your private Cairn. Its place and original Activity stay fixed.'
+              : 'Saving creates a new encounterable version. People who already found an earlier version keep it in their Memory.'}
+          </Text>
           <MarkForm
             type={editType}
             title={editTitle}
@@ -610,7 +622,7 @@ export function MarkerDetailScreen() {
         </BottomSheetContent>
         <View style={[styles.editFooter, { backgroundColor: visualTheme.sheetSurface, borderTopColor: visualTheme.borderSubtle }]}>
           <PrimaryButton
-            label="Save changes"
+            label={editPermission === 'personal' ? 'Save changes' : 'Save new version'}
             onPress={() => { void saveEdit(); }}
             loading={saving}
             disabled={!editDirty}
@@ -695,6 +707,15 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
+  notePaper: { marginBottom: Spacing.md },
+  notePaperHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    paddingRight: 22,
+  },
+  notePaperEyebrow: { flex: 1, fontSize: 10, lineHeight: 14, fontWeight: '700', letterSpacing: 1 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -749,6 +770,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 18,
   },
+  editVersionTruth: { fontSize: FontSize.caption, lineHeight: 18, marginBottom: Spacing.sm },
   thanksAcknowledgement: {
     alignSelf: 'flex-start',
     flexDirection: 'row',

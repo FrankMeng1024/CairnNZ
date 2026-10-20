@@ -10,8 +10,10 @@
  *   - Fetch the notification list for the in-app inbox
  *
  * Contract:
- *   - Call registerForPush() on app boot after successful login.
- *     Idempotent — the same token is upserted server-side.
+ *   - Request permission only from an explicit, informed user action.
+ *   - On later authenticated boots, registerForPush({ requestPermission: false })
+ *     may silently restore a previously granted, server-enabled registration.
+ *     The same token is upserted server-side.
  *   - Call unregisterCurrent() on logout so the retired token stops
  *     receiving pushes.
  *
@@ -24,7 +26,7 @@ import { crashLogger } from './crashLogger';
 
 let cachedToken: string | null = null;
 
-export async function registerForPush(): Promise<string | null> {
+export async function registerForPush(options: { requestPermission?: boolean } = {}): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   try {
     const Notifications = await import('expo-notifications');
@@ -40,6 +42,7 @@ export async function registerForPush(): Promise<string | null> {
     const settings = await Notifications.getPermissionsAsync();
     let status = settings.status;
     if (status !== 'granted') {
+      if (options.requestPermission === false) return null;
       const req = await Notifications.requestPermissionsAsync();
       status = req.status;
     }
@@ -70,16 +73,21 @@ export async function registerForPush(): Promise<string | null> {
 
     // Ship to backend (best-effort).
     try {
-      await authenticatedFetch('/api/push/register', {
+      const registered = await authenticatedFetch('/api/push/register', {
         method: 'POST',
         body: JSON.stringify({
           token,
           platform: Platform.OS === 'ios' ? 'ios' : 'android',
         }),
       });
+      if (!registered.ok) {
+        crashLogger.breadcrumb(`push:register_failed status=${registered.status}`);
+        return null;
+      }
       crashLogger.breadcrumb(`push:registered platform=${Platform.OS}`);
     } catch (regErr: any) {
       crashLogger.breadcrumb(`push:register_failed ${String(regErr?.message || regErr).slice(0, 80)}`);
+      return null;
     }
     return token;
   } catch (err: any) {

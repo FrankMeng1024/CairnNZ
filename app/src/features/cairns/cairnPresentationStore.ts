@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { authenticatedFetch } from '../../services/apiService';
 import { useAppStore } from '../../store/useAppStore';
 import { storage } from '../../store/storage';
+import { splitTitleBody } from '../plant/services/noteEncoding';
 
 const CACHE_PREFIX = 'cairn:presentation:v1:';
 
@@ -28,6 +29,9 @@ export interface AcquiredCairnMapMarker {
   sourceAudience: 'friends' | 'public' | null;
   authorName: string | null;
   currentFriend: boolean;
+  title?: string | null;
+  preview?: string | null;
+  revisionCount?: number;
 }
 
 interface PendingAck {
@@ -315,6 +319,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
             || !Number.isFinite(lat) || !Number.isFinite(lng)
             || Math.abs(lat) > 90 || Math.abs(lng) > 180) return [];
           seen.add(markerId);
+          const words = splitTitleBody(typeof raw?.text === 'string' ? raw.text : '');
           return [{
             markerId,
             lat,
@@ -326,6 +331,9 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
             authorName: typeof raw?.author_name === 'string' && raw.author_name.trim()
               ? raw.author_name.trim().slice(0, 120) : null,
             currentFriend: Boolean(raw?.is_current_friend),
+            title: words.title.trim() || null,
+            preview: words.body.trim().slice(0, 180) || null,
+            revisionCount: Math.max(1, Number(raw?.revision_count) || 1),
           }];
         });
         snapshot.unreadCount = Math.max(0, Number(body?.unread_count) || 0);

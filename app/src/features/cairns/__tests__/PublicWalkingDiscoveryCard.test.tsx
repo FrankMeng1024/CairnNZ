@@ -18,9 +18,10 @@ jest.mock('../../../store/useAppStore', () => {
 jest.mock('../../../hooks/useVisualTheme', () => ({
   useVisualTheme: () => ({
     sheetSurface: '#fff', borderStrong: '#ccc', shadow: '#000', controlSelected: '#eee',
-    primary: '#315b4e', foregroundSecondary: '#666', foreground: '#111', iconInactive: '#777',
+    primary: '#315b4e', onPrimary: '#fff', foregroundSecondary: '#666', foreground: '#111', iconInactive: '#777',
   }),
 }));
+jest.mock('../../../services/hapticService', () => ({ haptic: { notification: jest.fn() } }));
 
 import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
@@ -58,20 +59,31 @@ describe('foreground Cairn presentation component', () => {
   });
 
   test('renders one restrained cue and updates its count in place', async () => {
+    // The store owns surface arbitration; exercise the component with an
+    // already-claimed group so this unit does not race the async refresh it
+    // also initiates on focus.
+    useCairnPresentationStore.setState({
+      pendingGroups: [], activeGroup: group, activeGroupMembers: [group], activeSurface: 'hike',
+    });
     const view = render(<PublicWalkingDiscoveryCard surface="hike" safeTop={0} onOpen={jest.fn()} />);
-    await view.findByText('A Cairn is now in Memory');
+    await view.findByText('A note was waiting here');
     act(() => useCairnPresentationStore.setState({
       activeGroup: { ...group, cairnCount: 3, singleMarkerId: null, eventThroughId: '19', eventCount: 3 },
     }));
-    await view.findByText('3 Cairns are now in Memory');
-    expect(view.queryByText('A Cairn is now in Memory')).toBeNull();
-    expect(view.getAllByText('Recording continues')).toHaveLength(1);
+    await view.findByText('3 notes were waiting here');
+    expect(view.queryByText('A note was waiting here')).toBeNull();
+    expect(view.getAllByText('Saved in Memory · Recording continues')).toHaveLength(1);
+    expect(view.getByText('Open')).toBeTruthy();
+    expect(view.getByText('Later')).toBeTruthy();
   });
 
   test('defers while another modal owns attention', async () => {
+    useCairnPresentationStore.setState({
+      pendingGroups: [group], activeGroup: null, activeGroupMembers: [], activeSurface: null,
+    });
     const view = render(<PublicWalkingDiscoveryCard surface="run" safeTop={0} blocked onOpen={jest.fn()} />);
     await waitFor(() => expect(useCairnPresentationStore.getState().presentationBlocked).toBe(true));
-    expect(view.queryByText('A Cairn is now in Memory')).toBeNull();
+    expect(view.queryByText('A note was waiting here')).toBeNull();
     expect(useCairnPresentationStore.getState().pendingGroups).toHaveLength(1);
   });
 });

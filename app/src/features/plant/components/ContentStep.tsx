@@ -29,6 +29,9 @@ import { BackButton } from '../../../components/BackButton';
 import { MarkForm } from '../../marks/components/MarkForm';
 import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { PrimaryButton } from '../../../components/PrimaryButton';
+import { CairnPlaceAnchor } from '../../cairns/components/CairnPaper';
+import { CAIRN_TERMS, cairnAudienceCopy, publicCreationBlockReason } from '../../cairns/cairnExperience';
 
 interface Props {
   initialTitle: string;
@@ -48,6 +51,9 @@ interface Props {
   onAdjustLocation?: () => void;
   activityLocation?: boolean;
   publicEnabled?: boolean;
+  accuracyM?: number | null;
+  capturedAtMs?: number | null;
+  locationProvenance?: 'real' | 'simulator_test' | null;
 }
 
 export function ContentStep({
@@ -61,6 +67,9 @@ export function ContentStep({
   onAdjustLocation,
   activityLocation = false,
   publicEnabled = false,
+  accuracyM = null,
+  capturedAtMs = null,
+  locationProvenance = null,
 }: Props) {
   const theme = useVisualTheme();
   const [type, setType] = useState<MarkerType>(initialType);
@@ -68,8 +77,20 @@ export function ContentStep({
   const [text, setText] = useState(initialText);
   const [visibility, setVisibility] = useState<MarkerPermission>(initialVisibility);
 
-  const hasContent = title.length > 0 || text.length > 0;
-  const canSubmit = !submitting && (!ContentConfig.requireAtLeastOneContent || hasContent);
+  const hasContent = title.trim().length > 0 || text.trim().length > 0;
+  const publicBlock = publicCreationBlockReason({
+    permission: visibility,
+    publicEnabled,
+    activityLocation,
+    hasUsefulText: hasContent,
+  });
+  const canSubmit = !submitting
+    && (!ContentConfig.requireAtLeastOneContent || hasContent)
+    && !publicBlock;
+  const audience = cairnAudienceCopy(visibility);
+  const ageSeconds = capturedAtMs == null ? null : Math.max(0, Math.floor((Date.now() - capturedAtMs) / 1000));
+  const accuracyLabel = accuracyM == null ? 'accuracy unavailable' : `±${Math.max(1, Math.round(accuracyM))} m`;
+  const ageLabel = ageSeconds == null ? 'capture time unavailable' : ageSeconds < 10 ? 'just captured' : `${ageSeconds}s old`;
 
   return (
     <KeyboardAvoidingView
@@ -89,7 +110,7 @@ export function ContentStep({
               <BackButton variant="inline" onPress={() => { Keyboard.dismiss(); onBack(); }} />
             </View>
             <View style={styles.headerCopy}>
-              <Text style={[styles.title, { color: theme.foreground }]}>Leave a Cairn</Text>
+              <Text style={[styles.title, { color: theme.foreground }]}>{CAIRN_TERMS.leaveTitle}</Text>
               <Text style={[styles.headerEyebrow, { color: theme.foregroundSecondary }]}>MARK THIS PLACE</Text>
             </View>
             <View style={styles.headerBalance} accessibilityElementsHidden />
@@ -102,23 +123,20 @@ export function ContentStep({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>A trace for this place. Add a note now or come back later.</Text>
+            <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>A folded note held by this place. You can leave it empty when saving only for yourself or friends.</Text>
 
-            {activityLocation ? (
-              <TouchableOpacity
-                style={[styles.locationTrust, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={onAdjustLocation ?? onBack}
-                accessibilityRole="button"
-                accessibilityLabel="Using Activity location. Adjust location"
-              >
-                <Icon name="MapPin" size={16} color={theme.primary} strokeWidth={2.2} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.locationTrustTitle, { color: theme.foreground }]}>Using your Activity location</Text>
-                  <Text style={[styles.locationTrustBody, { color: theme.foregroundSecondary }]}>Trusted recorded position · Tap to adjust</Text>
-                </View>
-                <Icon name="ChevronRight" size={16} color={theme.iconInactive} />
-              </TouchableOpacity>
-            ) : null}
+            <TouchableOpacity
+              onPress={onAdjustLocation ?? onBack}
+              accessibilityRole="button"
+              accessibilityLabel={`${activityLocation ? 'Using Activity location' : 'Location confirmed'}. ${accuracyLabel}. Adjust location`}
+            >
+              <CairnPlaceAnchor
+                title={activityLocation ? 'Using this Activity’s location' : 'Location confirmed'}
+                detail={`${accuracyLabel} · ${ageLabel}${locationProvenance === 'simulator_test' ? ' · Simulator test' : ''}`}
+                status="Adjust"
+                compact
+              />
+            </TouchableOpacity>
 
             {/* R114/O24 (2026-08-12): autoFocus="title" removed — user
                 requested no page ever pop the keyboard automatically on
@@ -150,14 +168,19 @@ export function ContentStep({
                 The "frozen forever" hint only matters if Public is offered, so suppress
                 it when the public option is disabled. Kept conditional so v1.1+ revert is
                 a one-line config flip without re-touching this component. */}
-            {publicEnabled && visibility === 'public' && (
-              <Text style={styles.permanentHint}>
-                Public requires useful text, a completed Activity at this place, and review of this exact version.
+            {publicBlock ? (
+              <Text
+                style={[styles.actionTruth, { color: theme.destructive }]}
+                accessibilityLiveRegion="polite"
+              >
+                {publicBlock}
               </Text>
-            )}
-            <TouchableOpacity
-              style={[styles.primary, { backgroundColor: theme.primary }, !canSubmit && styles.primaryDisabled]}
+            ) : null}
+            <PrimaryButton
+              label={submitting ? 'Leaving this Cairn…' : audience.action}
+              loading={submitting}
               disabled={!canSubmit}
+              renderIcon={(color) => <Icon name={visibility === 'personal' ? 'Lock' : visibility === 'group' ? 'Users' : 'Globe'} size={17} color={color} strokeWidth={2.2} />}
               onPress={() => {
                 Keyboard.dismiss();
                 onSubmit({
@@ -169,12 +192,8 @@ export function ContentStep({
                   voiceMs: null,
                 });
               }}
-              accessibilityRole="button"
-              accessibilityLabel={submitting ? 'Planting' : 'Plant Cairn'}
-              accessibilityState={{ disabled: !canSubmit }}
-            >
-              <Text style={[styles.primaryText, { color: theme.onPrimary }]}>{submitting ? 'Planting…' : 'Plant Cairn'}</Text>
-            </TouchableOpacity>
+              testID="plant-submit"
+            />
           </View>
         </View>
     </KeyboardAvoidingView>
@@ -214,19 +233,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: Spacing.md,
   },
-  locationTrust: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    borderWidth: 1,
-    borderRadius: Radius.button,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  locationTrustTitle: { fontSize: FontSize.caption, fontWeight: '700' },
-  locationTrustBody: { fontSize: FontSize.small, marginTop: 2 },
   // Concept alignment (2026-08-16): voice memo box gets an info-blue
   // tone (water blue) per Plant-2 concept — subtle blue-ink card that
   // reads as a preview/dev-callout distinct from primary form fields.
@@ -249,24 +255,11 @@ const styles = StyleSheet.create({
   },
   // R114 (2026-08-07): primary CTA now Colors.primary (forest green) —
   // was MemoryColors.sepia. Unifies with all other Mark surfaces.
-  primary: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 14,
-    borderRadius: Radius.button,
-    alignItems: 'center',
-  },
-  primaryDisabled: { opacity: 0.4 },
-  primaryText: {
-    color: '#ffffff',
-    fontSize: FontSize.body,
-    fontWeight: '600',
-  },
-  permanentHint: {
+  actionTruth: {
     fontSize: FontSize.small,
-    color: Colors.textSecondary,
-    textAlign: 'center',
+    lineHeight: 16,
+    textAlign: 'left',
     marginBottom: 8,
-    fontStyle: 'italic',
   },
   backRow: {
     // Retained for reference only; back moved to headerRow (R114/O24).

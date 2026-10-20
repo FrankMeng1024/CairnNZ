@@ -80,7 +80,7 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   });
 
   test('delete confirmation states non-cascade semantics and truthful queued deletion', () => {
-    expect(deleteDialog).toContain('Its source Activity, independent Routes, and ordinary personal Memory remain.');
+    expect(deleteDialog).toContain('Its source Activity, Routes, and ordinary personal Memory are unchanged.');
     expect(detail).toContain("result.remoteState === 'queued'");
     [
       detail,

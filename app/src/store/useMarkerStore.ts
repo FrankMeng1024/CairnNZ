@@ -79,6 +79,10 @@ export interface Marker {
   alt?: number;
   approximate?: boolean;   // true if placed with stale/no GPS signal
   gpsAgeS?: number;        // seconds since last GPS fix when placed
+  placementAccuracyM?: number;
+  placementObservedAtMs?: number;
+  placementSource?: 'gps_window' | 'watcher_recent' | 'last_known' | 'activity' | 'simulator_test';
+  placementSampleCount?: number;
   // O1 batch 40: photoUrls removed — 0 external readers
   // v80 #45 — optional 5s voice memo. Stored as a local file:// URI in
   // FileSystem.documentDirectory. NOT uploaded to backend in v80 (next
@@ -189,6 +193,10 @@ function fromBackend(row: {
   publication_epoch?: number | string | null;
   content_revision?: number | string | null;
   thanks_count?: number | string | null;
+  placement_accuracy_m?: number | string | null;
+  placement_observed_at?: string | null;
+  placement_source?: Marker['placementSource'] | null;
+  placement_sample_count?: number | string | null;
 }): Marker {
   // v300: backend may return public_snapshot as either a parsed object
   // (mysql2 JSON columns auto-parse) or a JSON string (some drivers /
@@ -225,6 +233,10 @@ function fromBackend(row: {
     thanksCount: row.thanks_count == null ? undefined : Number(row.thanks_count),
     synced: true,
     approximate: row.approximate === true || row.approximate === 1 || false,
+    placementAccuracyM: row.placement_accuracy_m == null ? undefined : Number(row.placement_accuracy_m),
+    placementObservedAtMs: row.placement_observed_at ? new Date(row.placement_observed_at).getTime() : undefined,
+    placementSource: row.placement_source ?? undefined,
+    placementSampleCount: row.placement_sample_count == null ? undefined : Number(row.placement_sample_count),
     publicSnapshot,
     // Sprint 68 STORY-00532: author display name for Friend-tier marks.
     // Sprint 67 backend nulls this for Public marks (anonymized).
@@ -381,6 +393,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
       permission: data.permission,
       approximate: data.approximate || false,
       originActivityClientId: activeActivityClientId,
+      placementAccuracyM: data.placementAccuracyM,
+      placementObservedAtMs: data.placementObservedAtMs,
+      placementSource: data.placementSource,
+      placementSampleCount: data.placementSampleCount,
     };
     let localId: string;
     try {
@@ -1187,6 +1203,10 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
             permission: data.permission,
             approximate: data.approximate,
             originActivityClientId: data.originActivityClientId ?? null,
+            placementAccuracyM: data.placementAccuracyM,
+            placementObservedAtMs: data.placementObservedAtMs,
+            placementSource: data.placementSource,
+            placementSampleCount: data.placementSampleCount,
             synced: false,
             syncState: entry.syncState,
           });
@@ -1290,6 +1310,10 @@ setMarkerCreateAckHandler(
             permission: latestData.permission,
             approximate: latestData.approximate,
             originActivityClientId: latestData.originActivityClientId ?? null,
+            placementAccuracyM: latestData.placementAccuracyM,
+            placementObservedAtMs: latestData.placementObservedAtMs,
+            placementSource: latestData.placementSource,
+            placementSampleCount: latestData.placementSampleCount,
             synced: !supersededWhileSyncing,
             syncState: (supersededWhileSyncing ? 'pending' : 'synced') as SyncState,
             publicSnapshot: null,

@@ -45,6 +45,7 @@ type FoundCairn = {
   type: Marker['type'];
   text: string | null;
   author_name: string | null;
+  source_audience: 'friends' | 'public';
   availability: 'available' | 'under_review' | 'unavailable' | 'removed';
   acquired_at: string;
   opened_at: string | null;
@@ -120,7 +121,7 @@ function FoundCairnRow({ cairn, archived, onRestore, restoring }: { cairn: Found
     >
       <View style={styles.row}>
         <View style={styles.rowIcon}>
-          <CairnPinV10 tier="friend" type={cairn.type} size="detail" />
+          <CairnPinV10 tier={cairn.source_audience === 'public' ? 'public' : 'friend'} type={cairn.type} size="detail" />
         </View>
         <View style={styles.rowCopy}>
           <Text style={[styles.rowTitle, { color: theme.foreground }]} numberOfLines={1}>
@@ -129,7 +130,9 @@ function FoundCairnRow({ cairn, archived, onRestore, restoring }: { cairn: Found
               : cairn.availability === 'under_review' ? 'Content under review' : 'Content unavailable'}
           </Text>
           <Text style={[styles.rowMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
-            {cairn.author_name ? `Left by ${cairn.author_name}` : 'Acquired Cairn'} · {cairn.revision_count} {Number(cairn.revision_count) === 1 ? 'version' : 'versions'}
+            {cairn.author_name
+              ? `Left by ${cairn.author_name}`
+              : cairn.source_audience === 'public' ? 'Left anonymously' : 'Left by a friend'} · {cairn.revision_count} {Number(cairn.revision_count) === 1 ? 'version' : 'versions'}
           </Text>
           <Text style={[styles.rowMeta, { color: theme.muted }]}>{new Date(cairn.acquired_at).toLocaleDateString()}</Text>
         </View>

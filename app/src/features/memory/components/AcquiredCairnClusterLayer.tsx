@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import { buildAcquiredCairnFeatureCollection } from './acquiredCairnClusters';
+import { buildAcquiredCairnFeatureCollection, loadAllClusterLeaves } from './acquiredCairnClusters';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 /**
@@ -42,8 +42,8 @@ export function AcquiredCairnClusterLayer({
       return;
     }
     try {
-      const leaves = await sourceRef.current?.getClusterLeaves(feature, Math.min(clusterCount, 1000), 0);
-      await openFeatures(Array.isArray(leaves?.features) ? leaves.features : Array.isArray(leaves) ? leaves : []);
+      const leaves = await loadAllClusterLeaves(sourceRef.current, feature, clusterCount);
+      await openFeatures(leaves);
     } catch {
       onOpenGroup([]);
     }
@@ -59,14 +59,23 @@ export function AcquiredCairnClusterLayer({
         cluster
         clusterRadius={38}
         clusterMaxZoomLevel={24}
-        clusterProperties={{ unread_total: ['+', ['get', 'unread']] }}
+        clusterProperties={{
+          unread_total: ['+', ['get', 'unread']],
+          friends_total: ['+', ['get', 'friends']],
+          public_total: ['+', ['get', 'public']],
+        }}
         onPress={onPress}
       >
         <CircleLayer
           id="acquired-cairn-cluster-circles"
           filter={['has', 'point_count']}
           style={{
-            circleColor: theme.primary,
+            circleColor: [
+              'case',
+              ['==', ['get', 'friends_total'], ['get', 'point_count']], theme.primary,
+              ['==', ['get', 'public_total'], ['get', 'point_count']], '#B77743',
+              theme.accent,
+            ],
             circleRadius: ['step', ['get', 'point_count'], 18, 10, 22, 50, 27],
             circleStrokeColor: theme.surfaceElevated,
             circleStrokeWidth: 2,
@@ -91,6 +100,16 @@ export function AcquiredCairnClusterLayer({
             circleStrokeColor: theme.surfaceElevated,
             circleStrokeWidth: 1.5,
             circleTranslate: [14, -14],
+          }}
+        />
+        <CircleLayer
+          id="acquired-cairn-single-audience"
+          filter={['!', ['has', 'point_count']]}
+          style={{
+            circleRadius: 15,
+            circleColor: ['case', ['==', ['get', 'public'], 1], '#B77743', theme.primary],
+            circleStrokeColor: theme.surfaceElevated,
+            circleStrokeWidth: 2,
           }}
         />
         <SymbolLayer

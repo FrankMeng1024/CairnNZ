@@ -169,6 +169,14 @@ const KIND_TO_PREF = {
   announcement:    'pref_announcements',
 };
 
+// Encounter alerts are a new, explicitly enabled capability. Historical
+// push preferences defaulted to "all on", so absence of a row cannot be
+// interpreted as consent for location-derived encounter notifications.
+function preferenceAllows(kind, rows) {
+  if (kind === 'memory_hit') return rows.length > 0 && rows[0].enabled === 1;
+  return rows.length === 0 || rows[0].enabled !== 0;
+}
+
 async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = null, title, body }) {
   if (!recipientUserId || !kind || !title) return null;
   // Sprint 6 round-17 R17F8: reject whitespace-only title/body. `if (!title)`
@@ -199,15 +207,15 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
     ? `${cleanKind}:${relatedId}`
     : `${cleanKind}:null:${Math.floor(Date.now() / (60 * 60 * 1000))}`;
   // Check user's preferences before queueing (server-side gate).
-  // Sprint 6 review C4: read from user_push_prefs (source of truth). Row
-  // may not exist — default is all-on, so absence = allow.
+  // Read from user_push_prefs (source of truth). Legacy notification kinds
+  // retain their historical defaults; memory_hit requires an explicit row.
   const prefColumn = KIND_TO_PREF[cleanKind];
   if (prefColumn) {
     const [prefsRows] = await pool.execute(
       `SELECT ${prefColumn} AS enabled FROM user_push_prefs WHERE user_id = ? LIMIT 1`,
       [recipientUserId],
     );
-    if (prefsRows.length > 0 && prefsRows[0].enabled === 0) {
+    if (!preferenceAllows(cleanKind, prefsRows)) {
       // Record as dropped so the audit trail is intact.
       await pool.execute(
         `INSERT IGNORE INTO notification_log
@@ -284,7 +292,7 @@ async function sendPending({ batchSize = 100 } = {}) {
   try {
     await conn.beginTransaction();
     [rows] = await conn.execute(
-      `SELECT id, recipient_user_id, kind, title, body
+      `SELECT id, recipient_user_id, kind, related_id, title, body
        FROM notification_log
        WHERE status = 'queued'
        ORDER BY id ASC
@@ -354,7 +362,12 @@ async function sendPending({ batchSize = 100 } = {}) {
           to: t.token,
           title: row.title,
           body: row.body || undefined,
-          data: { kind: row.kind, id: row.id },
+          data: {
+            kind: row.kind,
+            notification_log_id: String(row.id),
+            related_id: row.related_id == null ? null : String(row.related_id),
+            viewer_id: String(row.recipient_user_id),
+          },
         }));
       if (messages.length === 0) {
         await pool.execute(
@@ -471,4 +484,5 @@ module.exports = {
   listRecent,
   sendPending,
   purgeStale,
+  preferenceAllows,
 };

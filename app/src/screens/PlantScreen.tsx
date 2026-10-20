@@ -23,7 +23,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, Animated, Easing, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -35,11 +35,9 @@ import {
   type CairnActivityContext,
 } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
-// v422 offline-first: 使 Plant flow 明确告知用户是否离线保存
-import networkMonitor from '../services/networkMonitor';
 import { MarkerType } from '../config/markerTypes';
 import { GpsLockStep } from '../features/plant/components/GpsLockStep';
-import type { PlantLocationProvenance } from '../features/plant/components/GpsLockStep';
+import type { PlantLocationCaptureMethod, PlantLocationProvenance } from '../features/plant/components/GpsLockStep';
 import { PinAdjustStep } from '../features/plant/components/PinAdjustStep';
 import { ContentStep } from '../features/plant/components/ContentStep';
 import { VisibilityConfig } from '../features/plant/config/plantConfig';
@@ -60,6 +58,9 @@ import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Icon } from '../components/Icon';
 import { Spacing } from '../components/tokens';
+import { CairnStoneMark, useReduceMotion } from '../features/cairns/components/CairnPaper';
+import { CAIRN_MOTION } from '../features/cairns/cairnExperience';
+import { cairnMatchesIdentity } from '../features/cairns/cairnIdentity';
 
 type Step = 'gps' | 'pin' | 'content';
 
@@ -79,6 +80,8 @@ interface PlantDraft {
   locationProvenance: PlantLocationProvenance | null;
   /** Trusted observation time. Never reconstructed from draft restore time. */
   locationCapturedAtMs: number | null;
+  locationSampleCount: number | null;
+  locationCaptureMethod: PlantLocationCaptureMethod | null;
   type: MarkerType;
   title: string;
   text: string;
@@ -113,6 +116,8 @@ const INITIAL_DRAFT: PlantDraft = {
   accuracyM: null,
   locationProvenance: null,
   locationCapturedAtMs: null,
+  locationSampleCount: null,
+  locationCaptureMethod: null,
   type: DEFAULT_TYPE,
   title: '',
   text: '',
@@ -147,10 +152,8 @@ export function resolveInitialPlantContext(
     const active = tracking.status === 'tracking' || tracking.status === 'paused';
     const coordinate = tracking.lastCoordinate;
     const ageMs = activityFreshnessNow(tracking.locationProviderSource) - (tracking.lastCoordinateTime ?? 0);
-    if (
+    const exactActivityIdentity = Boolean(
       active
-      && tracking.locationAvailable
-      && coordinate
       && tracking.sessionId
       && tracking.ownerUserId
       && tracking.liveOwnerGeneration
@@ -159,7 +162,15 @@ export function resolveInitialPlantContext(
         && origin.clientActivityId === tracking.sessionId
         && origin.ownerGeneration === tracking.liveOwnerGeneration
         && origin.activityMode === tracking.activityMode
-      ))
+      )),
+    );
+    if (
+      exactActivityIdentity
+      && tracking.locationAvailable
+      && coordinate
+      && Number.isFinite(coordinate.accuracy)
+      && Number(coordinate.accuracy) >= 0
+      && Number(coordinate.accuracy) <= 100
       && ageMs >= 0
       && ageMs <= 30_000
     ) {
@@ -167,9 +178,9 @@ export function resolveInitialPlantContext(
         step: 'content',
         fromActivity: true,
         activityContext: {
-          ownerUserId: tracking.ownerUserId,
-          clientActivityId: tracking.sessionId,
-          ownerGeneration: tracking.liveOwnerGeneration,
+          ownerUserId: tracking.ownerUserId!,
+          clientActivityId: tracking.sessionId!,
+          ownerGeneration: tracking.liveOwnerGeneration!,
         },
         draft: {
           ...INITIAL_DRAFT,
@@ -180,6 +191,20 @@ export function resolveInitialPlantContext(
           accuracyM: coordinate.accuracy ?? null,
           locationProvenance: tracking.locationProviderSource === 'simulator' ? 'simulator_test' : 'real',
           locationCapturedAtMs: tracking.lastCoordinateTime ?? null,
+          locationSampleCount: 1,
+          locationCaptureMethod: 'activity',
+        },
+      };
+    }
+    if (exactActivityIdentity) {
+      return {
+        step: 'gps',
+        draft: INITIAL_DRAFT,
+        fromActivity: true,
+        activityContext: {
+          ownerUserId: tracking.ownerUserId!,
+          clientActivityId: tracking.sessionId!,
+          ownerGeneration: tracking.liveOwnerGeneration!,
         },
       };
     }
@@ -195,6 +220,8 @@ export function PlantScreen() {
   // to a deep slate so Plant matches Home/Settings/Friends at night. Child
   // step components read their text color from the passed-through tokens.
   const visualTheme = useVisualTheme();
+  const reduceMotion = useReduceMotion();
+  const leaveReveal = useRef(new Animated.Value(0)).current;
   // O1: recordCircleUnlock selector removed (v351 stopped calling it, dead ref
   // triggered re-render every time useMemoryStore changed)
   const userId = useAppStore((s) => s.user?.id ?? '');
@@ -205,13 +232,76 @@ export function PlantScreen() {
   const [step, setStep] = useState<Step>(initialContext.step);
   const [draft, setDraft] = useState<PlantDraft>(initialContext.draft);
   const [submitting, setSubmitting] = useState(false);
-  const [plantedResult, setPlantedResult] = useState<{ markerId: string; offline: boolean; qa: boolean } | null>(null);
+  const [plantedResult, setPlantedResult] = useState<{
+    markerId: string;
+    qa: boolean;
+    fromActivity: boolean;
+    visibility: MarkerPermission;
+  } | null>(null);
+  const markers = useMarkerStore((state) => state.markers);
   const commitGateRef = useRef<CairnCommitGate>({ current: null });
   const mountedRef = useRef(true);
   const publicEnabled = usePublicCairnStore((state) => state.enabled);
-  // v299: success modal removed. PlantScreen.commit now navigates
-  // directly to MarkerDetailScreen.
   useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    if (!plantedResult) {
+      leaveReveal.setValue(0);
+      return;
+    }
+    leaveReveal.setValue(reduceMotion ? 1 : 0);
+    Animated.timing(leaveReveal, {
+      toValue: 1,
+      duration: reduceMotion ? CAIRN_MOTION.reducedMs : CAIRN_MOTION.leaveMs,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [leaveReveal, plantedResult, reduceMotion]);
+  const plantedMarker = plantedResult
+    ? markers.find(marker => cairnMatchesIdentity(marker, plantedResult.markerId))
+    : null;
+  const activitySuffix = plantedResult?.fromActivity ? ' Your Activity remains open.' : '';
+  const successCopy = (() => {
+    if (!plantedResult) return { title: '', body: '' };
+    if (plantedResult.qa) {
+      return {
+        title: 'Cairn saved for this test',
+        body: `It stays in the Simulator test workspace and will not sync to your real Cairns.${activitySuffix}`,
+      };
+    }
+    if (plantedMarker?.syncState === 'failed') {
+      return {
+        title: 'Cairn saved on this iPhone',
+        body: `Sync needs attention, but your note and place are still saved here. Open the Cairn to retry.${activitySuffix}`,
+      };
+    }
+    const synced = plantedMarker?.synced === true || plantedMarker?.syncState === 'synced';
+    if (!synced) {
+      return plantedResult.visibility === 'public'
+        ? {
+            title: 'Cairn saved for review',
+            body: `It is saved on this iPhone. Once it syncs, this exact version will be submitted for review.${activitySuffix}`,
+          }
+        : {
+            title: 'Cairn saved on this iPhone',
+            body: `It is queued to sync. You can read it now, and retry from the Cairn if sync needs attention.${activitySuffix}`,
+          };
+    }
+    if (plantedResult.visibility === 'public') {
+      if (plantedMarker?.publicState === 'published') {
+        return { title: 'Cairn published', body: `This exact version is now available for qualified encounters.${activitySuffix}` };
+      }
+      if (plantedMarker?.publicState === 'rejected' || plantedMarker?.publicState === 'suspended') {
+        return { title: 'Cairn not published', body: `It is saved privately. Open the Cairn to see its review status.${activitySuffix}` };
+      }
+      return { title: 'Submitted for review', body: `This exact version is saved and waiting for review.${activitySuffix}` };
+    }
+    return {
+      title: 'Cairn left here',
+      body: plantedResult.fromActivity
+        ? 'It is synced with this Activity. Your Activity remains open.'
+        : 'It is synced in your Memory at this place.',
+    };
+  })();
 
   /**
    * K3 fix (v0.2.6.3): on mount, hydrate any failed-plant draft from
@@ -307,6 +397,10 @@ export function PlantScreen() {
               ? undefined
               : Math.max(0, Math.floor((Date.now() - final.locationCapturedAtMs) / 1000)),
             approximate: false,
+            placementAccuracyM: final.accuracyM ?? undefined,
+            placementObservedAtMs: final.locationCapturedAtMs ?? undefined,
+            placementSource: final.locationCaptureMethod ?? undefined,
+            placementSampleCount: final.locationSampleCount ?? undefined,
             voiceMemoUri: final.voiceUri ?? undefined,
             voiceMemoDurationMs: final.voiceMs ?? undefined,
             qaProvenance: final.locationProvenance === 'simulator_test' ? 'simulator_test' : undefined,
@@ -355,14 +449,13 @@ export function PlantScreen() {
         },
         onCommittedCurrent: async result => {
           try { haptic.notification('success'); } catch { /* silent */ }
-          const isOnline = networkMonitor.getState()?.state === 'online';
-          await new Promise<void>((resolve) => setTimeout(resolve, 250));
           if (!contextIsCurrent()) return;
-          if (initialContext.fromActivity && nav.canGoBack()) {
-            setPlantedResult({ markerId: result.marker.id, offline: !isOnline, qa: result.marker.qaProvenance === 'simulator_test' });
-          } else {
-            nav.replace('MarkerDetail', { markerId: result.marker.id });
-          }
+          setPlantedResult({
+            markerId: result.marker.id,
+            qa: result.marker.qaProvenance === 'simulator_test',
+            fromActivity: initialContext.fromActivity,
+            visibility: final.visibility,
+          });
         },
         onPostCommitFailure: error => {
           log('plant.post_commit_effect_failed', { msg: String((error as any)?.message ?? error).slice(0, 200) });
@@ -393,7 +486,7 @@ export function PlantScreen() {
       <View style={styles.container}>
         {step === 'gps' && (
           <GpsLockStep
-            onLocked={(lat, lng, accuracyM, locationProvenance, observedAtMs) => {
+            onLocked={(lat, lng, accuracyM, locationProvenance, observedAtMs, sampleCount, captureMethod) => {
               log('plant.step_gps_to_pin', { accuracyM });
               // v298 N5: GPS anchor + initial pin both = locked point,
               // but gpsLat/gpsLng is then frozen — step 2 confirm only
@@ -408,6 +501,8 @@ export function PlantScreen() {
                 accuracyM,
                 locationProvenance,
                 locationCapturedAtMs: observedAtMs,
+                locationSampleCount: sampleCount,
+                locationCaptureMethod: captureMethod,
               }));
               setStep('pin');
             }}
@@ -441,6 +536,9 @@ export function PlantScreen() {
             initialVisibility={draft.visibility}
             initialType={draft.type}
             activityLocation={initialContext.fromActivity}
+            accuracyM={draft.accuracyM}
+            capturedAtMs={draft.locationCapturedAtMs}
+            locationProvenance={draft.locationProvenance}
             submitting={submitting}
             publicEnabled={publicEnabled}
             onSubmit={onContentSubmit}
@@ -450,13 +548,24 @@ export function PlantScreen() {
         )}
       </View>
       <ModalCard visible={Boolean(plantedResult)} dismissible={false} testID="plant-success-modal">
+        <Animated.View style={[
+          styles.successMark,
+          {
+            opacity: leaveReveal,
+            transform: [
+              { translateY: leaveReveal.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) },
+              { scale: leaveReveal.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }) },
+            ],
+          },
+        ]}>
+          <CairnStoneMark
+            size={54}
+            tone={plantedResult?.visibility === 'group' ? 'friends' : plantedResult?.visibility === 'public' ? 'public' : 'owner'}
+          />
+        </Animated.View>
         <ModalCardHeader
-          title="Cairn planted"
-          body={plantedResult?.qa
-            ? "It is saved in the Simulator test workspace and won't sync to your real Cairns. Your Activity is still recording."
-            : plantedResult?.offline
-            ? "It is saved on this iPhone and will sync when you're online. Your Activity is still recording."
-            : 'It is saved with this Activity. Your Activity is still recording.'}
+          title={successCopy.title}
+          body={successCopy.body}
         />
         <View style={styles.successActions}>
           <PrimaryButton
@@ -468,15 +577,17 @@ export function PlantScreen() {
             }}
             testID="plant-success-view"
           />
-          <PrimaryButton
-            label="Back to Activity"
-            variant="secondary"
-            onPress={() => {
-              setPlantedResult(null);
-              nav.goBack();
-            }}
-            testID="plant-success-back"
-          />
+          {plantedResult?.fromActivity ? (
+            <PrimaryButton
+              label="Back to Activity"
+              variant="secondary"
+              onPress={() => {
+                setPlantedResult(null);
+                nav.goBack();
+              }}
+              testID="plant-success-back"
+            />
+          ) : null}
         </View>
       </ModalCard>
     </SafeAreaView>
@@ -487,4 +598,5 @@ const styles = StyleSheet.create({
   root:      { flex: 1 },
   container: { flex: 1, padding: 20 },
   successActions: { gap: Spacing.sm },
+  successMark: { alignItems: 'center', marginBottom: Spacing.sm },
 });

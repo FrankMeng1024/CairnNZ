@@ -27,6 +27,7 @@ import { useMemoryStore } from '../../memory/store/useMemoryStore';
 import { log } from '../../../services/appLog';
 
 export type PlantLocationProvenance = 'real' | 'simulator_test';
+export type PlantLocationCaptureMethod = 'gps_window' | 'watcher_recent' | 'last_known' | 'activity' | 'simulator_test';
 
 interface Props {
   onLocked: (
@@ -35,6 +36,8 @@ interface Props {
     accuracyM: number,
     provenance: PlantLocationProvenance,
     observedAtMs: number,
+    sampleCount: number,
+    captureMethod: PlantLocationCaptureMethod,
   ) => void;
   onCancel: () => void;
 }
@@ -74,7 +77,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
     if (__DEV__ && Platform.OS === 'web') {
       log('plant.gps_lock_web_mock', { lat: WEB_MOCK_LAT, lng: WEB_MOCK_LNG });
       const t = setTimeout(() => {
-        onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M, 'simulator_test', Date.now());
+        onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M, 'simulator_test', Date.now(), 1, 'simulator_test');
       }, 100);
       return () => clearTimeout(t);
     }
@@ -162,6 +165,8 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
             accuracyM: watcherFix.accuracyM,
             provenance: watcherFix.provenance,
             observedAtMs: watcherFix.ts,
+            sampleCount: 1,
+            captureMethod: 'watcher_recent' as const,
           };
         }
         const last = await Location.getLastKnownPositionAsync({
@@ -188,6 +193,8 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
             accuracyM: last.coords.accuracy,
             provenance: 'real' as const,
             observedAtMs: last.timestamp,
+            sampleCount: 1,
+            captureMethod: 'last_known' as const,
           };
         }
       } catch (e: any) {
@@ -199,7 +206,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
       if (fast) {
         setProgress(1);
         setBusy(false);
-        onLockedRef.current(fast.lat, fast.lng, fast.accuracyM, fast.provenance, fast.observedAtMs);
+        onLockedRef.current(fast.lat, fast.lng, fast.accuracyM, fast.provenance, fast.observedAtMs, fast.sampleCount, fast.captureMethod);
         return;
       }
       // No fast fix → fall through to the slow 15s sampler.
@@ -231,6 +238,8 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
             res.accuracyMeters,
             res.provenance ?? 'real',
             res.observedAtMs ?? Date.now(),
+            res.samplesUsed,
+            res.provenance === 'simulator_test' ? 'simulator_test' : 'gps_window',
           );
         }
       });

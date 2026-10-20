@@ -29,6 +29,7 @@ const {
   acquireCairnRevision,
 } = require('../services/cairnHistory');
 const { logicalRevisionStateSql } = require('../services/ownedCairnLibrary');
+const PushNotification = require('../models/PushNotification');
 
 const router = express.Router();
 router.use(authenticate);
@@ -154,11 +155,28 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
            WHERE removed_collection.viewer_id=? AND removed_collection.marker_id=marker.id
              AND removed_collection.removed_at IS NOT NULL
         )
+        AND NOT EXISTS (
+          SELECT 1
+            FROM cairn_qa_fixtures qa_fixture
+            JOIN cairn_qa_fixture_batches qa_batch
+              ON qa_batch.batch_id=qa_fixture.batch_id
+           WHERE qa_fixture.marker_id=marker.id
+             AND (
+               qa_fixture.safety_state<>'field_verified'
+               OR qa_batch.state<>'active'
+               OR qa_batch.expires_at<=UTC_TIMESTAMP(3)
+               OR NOT EXISTS (
+                 SELECT 1 FROM cairn_qa_fixture_readers qa_reader
+                  WHERE qa_reader.batch_id=qa_batch.batch_id
+                    AND qa_reader.viewer_id=?
+               )
+             )
+        )
       ORDER BY marker.id ASC
       FOR SHARE`,
     [viewerId, viewerId, viewerId, viewerId, viewerId,
       point.lng, point.lat, ENCOUNTER_RADIUS_M, visit.enteredAtMs,
-      viewerId, viewerId, viewerId, visit.id, viewerId],
+      viewerId, viewerId, viewerId, visit.id, viewerId, viewerId],
   );
 
   // Public discovery is a pilot on both sides of the exchange. Friend-only
@@ -225,10 +243,27 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
            WHERE removed_collection.viewer_id=? AND removed_collection.marker_id=marker.id
              AND removed_collection.removed_at IS NOT NULL
         )
+        AND NOT EXISTS (
+          SELECT 1
+            FROM cairn_qa_fixtures qa_fixture
+            JOIN cairn_qa_fixture_batches qa_batch
+              ON qa_batch.batch_id=qa_fixture.batch_id
+           WHERE qa_fixture.marker_id=marker.id
+             AND (
+               qa_fixture.safety_state<>'field_verified'
+               OR qa_batch.state<>'active'
+               OR qa_batch.expires_at<=UTC_TIMESTAMP(3)
+               OR NOT EXISTS (
+                 SELECT 1 FROM cairn_qa_fixture_readers qa_reader
+                  WHERE qa_reader.batch_id=qa_batch.batch_id
+                    AND qa_reader.viewer_id=?
+               )
+             )
+        )
       ORDER BY marker.id ASC
       FOR SHARE`,
     [viewerId, viewerId, viewerId, viewerId, point.lng, point.lat, ENCOUNTER_RADIUS_M,
-      visit.enteredAtMs, viewerId, viewerId, viewerId, visit.id, viewerId],
+      visit.enteredAtMs, viewerId, viewerId, viewerId, visit.id, viewerId, viewerId],
   );
   const visitStartedMs = Number(visit.enteredAtMs);
   const friendPublicRows = publicRows.filter(row => (
@@ -318,7 +353,7 @@ router.post('/discover', mutationLimiter, async (req, res) => {
       }
     }
     await conn.commit();
-    return res.json({
+    const responseBody = {
       acquired,
       visit_id: String(visit.id),
       local_visit_limit: MAX_CAIRNS_PER_LOCAL_VISIT,
@@ -326,7 +361,27 @@ router.post('/discover', mutationLimiter, async (req, res) => {
       same_locality_revisit_minutes: SAME_LOCALITY_REVISIT_MINUTES,
       presentation_merge_window_seconds: PRESENTATION_MERGE_WINDOW_SECONDS,
       haptic_min_interval_seconds: HAPTIC_MIN_INTERVAL_SECONDS,
-    });
+    };
+    res.json(responseBody);
+    // A system notification is downstream of the committed acquisition and
+    // keyed to the durable presentation group. Later members merged into the
+    // same visit group cannot create a notification storm because enqueue's
+    // recipient+kind+related-id key is unique.
+    if (acquired.length > 0 && batchPresentationGroupId) {
+      const updatedOnly = acquired.every(item => item.category === 'updated');
+      const title = updatedOnly
+        ? 'A familiar Cairn has new words'
+        : acquired.length === 1 ? 'You found a Cairn' : `You found ${acquired.length} Cairns`;
+      void PushNotification.enqueue({
+        recipientUserId: viewerId,
+        actorUserId: null,
+        kind: 'memory_hit',
+        relatedId: batchPresentationGroupId,
+        title,
+        body: 'Saved in Memory. Open Cairn when you are ready.',
+      }).catch(error => console.error('[cairn-memory/notification]', error.message));
+    }
+    return undefined;
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
     console.error('[cairn-memory/discover]', error.message);

@@ -48,6 +48,14 @@ const markerCreate = Joi.object({
   alt: alt,
   permission: Joi.string().valid('personal', 'group', 'public').default('personal'),
   approximate: Joi.boolean().default(false),
+  // O88: durable capture-time provenance. The four values are one atomic
+  // evidence tuple. Legacy clients remain valid by omitting all four.
+  placement_accuracy_m: Joi.number().min(0).max(100),
+  placement_observed_at: isoDate,
+  placement_source: Joi.string().valid(
+    'gps_window', 'watcher_recent', 'last_known', 'activity'
+  ),
+  placement_sample_count: Joi.number().integer().min(1).max(100),
   // Sprint 6 round-25 R25F6: restrict voice_memo_url scheme to https only
   // (no javascript:, no file:, no http:). Pre-fix, Joi.uri() accepted any
   // scheme, so if the feature were wired up (currently the handler drops
@@ -59,7 +67,12 @@ const markerCreate = Joi.object({
   // schemes would 400, which is desired).
   voice_memo_url: Joi.string().uri({ scheme: ['https'] }).max(512).allow(null),
   voice_memo_duration_ms: Joi.number().integer().min(0).max(65535).allow(null),
-});
+}).and(
+  'placement_accuracy_m',
+  'placement_observed_at',
+  'placement_source',
+  'placement_sample_count',
+);
 
 const markerUpdate = Joi.object({
   type: Joi.string().valid(

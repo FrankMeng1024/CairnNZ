@@ -50,6 +50,19 @@ async function api(actor, path, { method = 'GET', body, expected = 200 } = {}) {
   return payload;
 }
 
+async function waitForNotificationRows(db, viewerId, expectedCount) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const [rows] = await db.execute(
+      `SELECT kind,related_id,status,title,body FROM notification_log
+        WHERE recipient_user_id=? AND kind='memory_hit' ORDER BY id`,
+      [viewerId],
+    );
+    if (rows.length >= expectedCount) return rows;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  return [];
+}
+
 async function actor(db, label, { operator = false } = {}) {
   const [insert] = await db.execute(
     `INSERT INTO users
@@ -337,6 +350,13 @@ async function main() {
     assert.equal(found.unread_count, 3);
     assert.ok(found.cairns.every(item => item.author_name == null));
     assert.equal(new Set(first.acquired.map(item => item.presentation_group_id)).size, 1);
+    const optOutNotifications = await waitForNotificationRows(db, viewer.id, 1);
+    assert.equal(optOutNotifications.length, 1);
+    assert.equal(optOutNotifications[0].status, 'dropped_by_pref');
+    assert.equal(String(optOutNotifications[0].related_id), first.acquired[0].presentation_group_id);
+    assert.ok(!optOutNotifications[0].title.includes(owner.label));
+    assert.ok(!optOutNotifications[0].body.includes(String(placeA.lat)));
+    pass('DISC-PROD-01a.notification-opt-in', 'one committed presentation group created one content-free audit row, and the absent encounter preference dropped it before transport');
     pass('DISC-PROD-01.dense-locality', 'real API/MySQL discovery selected exactly 3 of 200, retries added none, and unread counted three Cairn groups');
 
     // The first foreground cue is available immediately; the 20-second
@@ -476,7 +496,7 @@ async function main() {
     pass('DISC-PROD-02a.friend-guarantee', 'five eligible Friend Cairns beat the normal cap and two hundred Public candidates, shared one presentation group, and stayed as acquired history after unfriend while future Friend-only eligibility ended');
 
     const overflowTimings = {};
-    for (const total of [20, 100]) {
+    for (const total of [20, 60, 100]) {
       const loadViewer = await actor(db, `FriendLoad${total}`);
       await makeFriends(db, friendOwner, loadViewer);
       const loadPlace = { lat: -40.1000 - total * 0.0001, lng: 175.1000 };
@@ -495,7 +515,7 @@ async function main() {
       assert.equal(loadLibrary.cairns.length, total);
       assert.equal(loadLibrary.unread_count, total);
     }
-    pass('DISC-PROD-02aa.friend-overflow-load', `20 and 100 same-author Friend Cairns were all acquired into one presentation group; API timings ${JSON.stringify(overflowTimings)} ms`);
+    pass('DISC-PROD-02aa.friend-overflow-load', `20, 60, and 100 same-author Friend Cairns were all acquired into one presentation group; API timings ${JSON.stringify(overflowTimings)} ms`);
 
     const publicFriendViewer = await actor(db, 'PublicFriendViewer');
     await makeFriends(db, friendOwner, publicFriendViewer);
@@ -577,12 +597,22 @@ async function main() {
     const distant = await seedPublicCairn(db, owner, operator, {
       ...placeB, text: 'Different locality without global cooldown',
     });
+    await db.execute(
+      `INSERT INTO user_push_prefs (user_id,pref_memory_hits)
+       VALUES (?,1) ON DUPLICATE KEY UPDATE pref_memory_hits=1`,
+      [viewer.id],
+    );
     await acceptedPresence(viewer, placeB.lat, placeB.lng, Date.now() + 1_000);
     const elsewhere = await api(viewer, '/api/cairn-memory/discover', { method: 'POST', body: {} });
     assert.equal(elsewhere.acquired.length, 1);
     assert.equal(elsewhere.acquired[0].marker_id, distant.markerId);
     assert.notEqual(elsewhere.visit_id, first.visit_id);
+    const optedInNotifications = await waitForNotificationRows(db, viewer.id, 2);
+    assert.equal(optedInNotifications.length, 2);
+    assert.equal(optedInNotifications[1].status, 'queued');
+    assert.equal(String(optedInNotifications[1].related_id), elsewhere.acquired[0].presentation_group_id);
     pass('DISC-PROD-03.no-global-cooldown', 'fresh accepted evidence in a genuinely different locality acquired immediately despite the first visit reaching its cap');
+    pass('DISC-PROD-03aa.notification-after-acquisition', 'explicit server opt-in queued exactly one alert only after a different-locality acquisition committed; its durable related id was the presentation group');
 
     const temporalViewer = await actor(db, 'TemporalViewer');
     const temporalPlace = { lat: -46.4132, lng: 168.3538 };

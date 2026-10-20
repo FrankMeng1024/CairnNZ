@@ -169,6 +169,11 @@ fi
 apply_sql_file "$BACKEND_DIR/src/migrations/047_friend_request_lifecycle.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/048_friends_memory_history_repair.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/049_retire_legacy_memory_sharing.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/050_complete_legacy_memory_retirement.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/051_memory_coverage_read_model.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/052_cairn_placement_provenance.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/053_cairn_qa_fixture_cohorts.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/054_memory_hit_push_explicit_opt_in.sql"
 
 MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
   DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \

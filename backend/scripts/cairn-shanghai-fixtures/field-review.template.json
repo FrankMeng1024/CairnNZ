@@ -1,0 +1,11 @@
+{
+  "batch_id": "o88-shanghai-encounter-20261020",
+  "manifest_sha256": "REPLACE_WITH_PLAN_OUTPUT",
+  "coordinate_system": "WGS84",
+  "reviewer": "REPLACE_WITH_AUTHORIZED_REVIEWER",
+  "reviewed_at": "REPLACE_WITH_ISO_TIMESTAMP",
+  "field_verified_fixture_keys": [
+    "REPLACE_WITH_ALL_60_KEYS_AFTER_PUBLIC_GROUND_AND_COORDINATE_REVIEW"
+  ],
+  "notes": "Confirm every point is legal public ground, walkable, not a private entrance/roadway/sensitive place, and correctly transformed to WGS84."
+}

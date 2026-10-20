@@ -39,6 +39,10 @@ export interface MarkerCreatePayload {
   location_name?: string | null;
   /** Immutable provenance written in the same outbox record as the Cairn. */
   originActivityClientId?: string | null;
+  placementAccuracyM?: number;
+  placementObservedAtMs?: number;
+  placementSource?: 'gps_window' | 'watcher_recent' | 'last_known' | 'activity' | 'simulator_test';
+  placementSampleCount?: number;
 }
 
 export interface MarkerCreateServerResponse {
@@ -153,6 +157,7 @@ export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCre
     // the outbox entity across this boundary.
     const {
       type, text, lat, lng, alt, permission, approximate, originActivityClientId,
+      placementAccuracyM, placementObservedAtMs, placementSource, placementSampleCount,
     } = data;
     return fetchOrThrow('/api/markers', 'POST', {
       type,
@@ -164,6 +169,18 @@ export const offlineMarkers = createOfflineEntity<MarkerCreatePayload, MarkerCre
       approximate,
       client_cairn_id: localId,
       origin_activity_client_id: originActivityClientId ?? null,
+      ...(placementAccuracyM == null
+        || placementObservedAtMs == null
+        || placementSource == null
+        || placementSampleCount == null
+        || placementSource === 'simulator_test'
+        ? {}
+        : {
+            placement_accuracy_m: placementAccuracyM,
+            placement_observed_at: new Date(placementObservedAtMs).toISOString(),
+            placement_source: placementSource,
+            placement_sample_count: placementSampleCount,
+          }),
       client_op_id: localId,
     });
   },

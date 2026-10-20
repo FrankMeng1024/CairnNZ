@@ -7,6 +7,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "public:operator": "node scripts/public-cairn-operator.js",
+    "cairn:shanghai": "node scripts/cairn-shanghai-field-test.js",
     "test:public:api": "scripts/run-public-cairn-harness.sh",
     "test:public:disabled": "HARNESS_MODE=disabled scripts/run-public-cairn-harness.sh",
     "test": "echo \"Error: no test specified\" && exit 1"

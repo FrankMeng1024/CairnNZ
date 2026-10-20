@@ -56,6 +56,7 @@ import { AppButton } from '../../../components/AppButton';
 import { useMarkerStore } from '../../../store/useMarkerStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
+import { PublicWalkingDiscoveryCard } from '../../public/components/PublicWalkingDiscoveryCard';
 import { stableAcquiredGroupOrder } from '../components/acquiredCairnClusters';
 import { pullMemoryFromServer } from '../../../services/memorySync';
 import { publishInitialMemoryReconcile } from '../services/memoryPersistence';
@@ -1404,6 +1405,17 @@ export function MemoryScreen() {
         </TouchableOpacity>
       ) : null}
 
+      <PublicWalkingDiscoveryCard
+        surface="memory"
+        safeTop={insets.top}
+        safeBottom={insets.bottom}
+        bottomOffset={176}
+        blocked={Boolean(showHint || acquiredGroupIds || pickModalOpen || hierarchyOpen || !memoryEntryUsable)}
+        onOpen={(markerId) => markerId
+          ? nav.navigate('AcquiredCairnDetail', { markerId })
+          : nav.navigate('AllCairns', { initialSection: 'found' })}
+      />
+
       <ModalCard visible={showHint && isMemoryFocused} onDismiss={dismissHint} testID="memory-unlock-guidance">
           <View>
             <Text style={[styles.hintTitle, { color: theme.foreground }]}>Walk to unlock your memory</Text>
@@ -1449,8 +1461,15 @@ export function MemoryScreen() {
                 accessibilityLabel={`${source}, ${row.unread ? 'unread' : 'read'}, found ${acquired}`}
               >
                 <View style={styles.acquiredGroupCopy}>
-                  <Text style={[styles.acquiredGroupTitle, { color: theme.foreground }]}>{source}</Text>
-                  <Text style={[styles.acquiredGroupMeta, { color: theme.foregroundSecondary }]}>{acquired}</Text>
+                  <Text style={[styles.acquiredGroupTitle, { color: theme.foreground }]} numberOfLines={1}>
+                    {row.title || row.preview || source}
+                  </Text>
+                  <Text style={[styles.acquiredGroupMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
+                    {source} · {acquired}{Number(row.revisionCount) > 1 ? ` · ${row.revisionCount} versions` : ''}
+                  </Text>
+                  {row.title && row.preview ? (
+                    <Text style={[styles.acquiredGroupPreview, { color: theme.muted }]} numberOfLines={2}>{row.preview}</Text>
+                  ) : null}
                 </View>
                 {row.unread ? <View style={[styles.acquiredGroupUnread, { backgroundColor: theme.primary }]} /> : null}
                 <Icon name="ChevronRight" size={16} color={theme.iconInactive} />
@@ -1827,5 +1846,6 @@ const styles = StyleSheet.create({
   acquiredGroupCopy: { flex: 1 },
   acquiredGroupTitle: { fontSize: FontSize.body, fontWeight: '700' },
   acquiredGroupMeta: { fontSize: FontSize.small, marginTop: 2 },
+  acquiredGroupPreview: { fontSize: FontSize.small, lineHeight: 16, marginTop: 4 },
   acquiredGroupUnread: { width: 8, height: 8, borderRadius: 4 },
 });

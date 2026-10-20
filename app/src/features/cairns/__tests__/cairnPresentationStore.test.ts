@@ -395,7 +395,11 @@ describe('Cairn presentation coordinator', () => {
     }));
     await useCairnPresentationStore.getState().refreshAcquiredMap();
     expect(useCairnPresentationStore.getState().acquiredMarkers).toEqual([
-      { markerId: '1', lat: -41.28, lng: 174.77, unread: true, acquiredAt: null, sourceAudience: null, authorName: null, currentFriend: false },
+      {
+        markerId: '1', lat: -41.28, lng: 174.77, unread: true, acquiredAt: null,
+        sourceAudience: null, authorName: null, currentFriend: false,
+        title: null, preview: null, revisionCount: 1,
+      },
     ]);
   });
 });
