@@ -26,7 +26,7 @@
 5. 补充真实客户端 outbox/sync/session/registry/diagnostic/token 模块到 loopback 后端与一次性 MySQL 的闭环脚本，并让同步诊断记录 attempt、ack 和 phone-cleanup-complete。
 6. 补充 Plant 打开期间继续记录、应用 background/foreground handler、返回同一 Activity、Finish、冷启动重开的 Web 产品流证据。此处是 Web 应用处理器证据，不冒充 iOS 原生系统行为。
 
-完整差异见 CORE 包 `identity/81574c0d-to-ab76e419.patch` 与 `source/changed/`。
+完整差异见 CORE 包 `identity/81574c0d-to-ab76e419.patch` 与 `source/tested-tree/`。
 
 ## 主要结果
 
@@ -68,4 +68,3 @@
 ## 发布边界
 
 本轮没有 merge main、部署后端、发布 OTA、运行 EAS Build、修改 app/runtime/build 版本、递增 O87 或修改真实生产记录。建议维持 HOLD，待至少完成：有真实 token 的 Q05/Q08 困难 Route 纠正；物理 iPhone 原生后台/GPS/功耗矩阵；对 full gate 新暴露失败的归属与稳定性审计。
-

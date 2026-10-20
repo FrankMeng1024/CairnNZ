@@ -164,7 +164,6 @@ def copy_selected_old_core(old: Path, core: Path) -> None:
         "evidence",
         "experiments",
         "failures",
-        "old-regression",
         "provider",
         "reports",
         "route-correction",
@@ -173,29 +172,135 @@ def copy_selected_old_core(old: Path, core: Path) -> None:
         "backend",
     ]:
         copy_tree(old / name, core / "prior-evidence" / name)
+    regression = old / "old-regression"
+    regression_out = core / "prior-evidence" / "old-regression"
+    copy_tree(regression / "captured-probes", regression_out / "captured-probes")
+    copy_tree(regression / "prior-metrics", regression_out / "prior-metrics")
+    for metrics in sorted(regression.glob("metrics-*.json")):
+        copy_file(metrics, regression_out / metrics.name)
+    replay_receipts = []
+    for activity_path in sorted((regression / "replayed-activities").glob("*/QA_ACTIVITY.json")):
+        activity = json.loads(activity_path.read_text(encoding="utf-8"))
+        receipt = {
+            "schema": "cairn.hike-run.old-capture-replay-receipt.v1",
+            "sourceQaActivitySha256": sha256(activity_path),
+            "sourceQaActivityBytes": activity_path.stat().st_size,
+            "activityId": activity.get("activityId"),
+            "context": activity.get("context"),
+            "requestCount": activity.get("requestCount"),
+            "directionsRequestCount": activity.get("directionsRequestCount"),
+            "transportReceipts": activity.get("transportReceipts"),
+            "pointCounts": {
+                key: len(activity.get(key) or [])
+                for key in ["rawPoints", "canonicalPoints", "liveBeforeFinish", "localFinal", "selectedFinal"]
+            },
+            "selectedSource": activity.get("selectedSource"),
+            "sessionPersistence": {
+                key: (activity.get("session") or {}).get(key)
+                for key in [
+                    "clientActivityId", "syncState", "finalGeometryState",
+                    "finalGeometryRevision", "finalGeometryFingerprint",
+                ]
+            },
+            "refinementAuthority": activity.get("refinementAuthority"),
+        }
+        destination = regression_out / "replay-receipts" / activity_path.parent.name / "REPLAY_RECEIPT.json"
+        write_json(destination, receipt)
+        replay_receipts.append({
+            "caseId": activity_path.parent.name,
+            "receipt": destination.relative_to(regression_out).as_posix(),
+            "sourceQaActivitySha256": receipt["sourceQaActivitySha256"],
+        })
+    write_json(
+        regression_out / "REPLAY_RECEIPT_INDEX.json",
+        {
+            "schema": "cairn.hike-run.old-capture-replay-index.v1",
+            "caseCount": len(replay_receipts),
+            "allCasesHaveReceipts": len(replay_receipts) == 15,
+            "note": "Exact value subsets extracted from the original QA_ACTIVITY files; source hashes bind each receipt to the unchanged original package.",
+            "receipts": replay_receipts,
+        },
+    )
     campaign_out = core / "prior-evidence" / "new-campaign"
     campaign = old / "new-campaign"
+    diagnostic_exports = []
     for phase in ["baseline", "development", "holdout"]:
         source_phase = campaign / phase
         for path in sorted(source_phase.rglob("*")):
             if not path.is_file():
                 continue
-            if path.name in {
-                "QA_ACTIVITY.json",
-                "RUN_RESULTS.json",
+            if path.name == "QA_ACTIVITY.json":
+                activity = json.loads(path.read_text(encoding="utf-8"))
+                diagnostic = activity.get("diagnosticReplay")
+                if not isinstance(diagnostic, dict):
+                    raise RuntimeError(f"Missing diagnosticReplay: {path}")
+                destination = campaign_out / phase / "diagnostic-exports" / path.parent.name / "DIAGNOSTIC_EXPORT.json"
+                write_json(destination, diagnostic)
+                diagnostic_exports.append({
+                    "phase": phase,
+                    "caseId": path.parent.name,
+                    "sourceQaActivitySha256": sha256(path),
+                    "sourceQaActivityBytes": path.stat().st_size,
+                    "diagnosticExport": destination.relative_to(campaign_out).as_posix(),
+                    "diagnosticExportSha256": sha256(destination),
+                    "recordsChecksum": diagnostic.get("recordsChecksum"),
+                    "recordCount": len(diagnostic.get("records") or []),
+                })
+            elif path.name in {
                 "metrics-v2.json",
                 "NETWORK_BOUNDARY_AUDIT.json",
                 "THEME_EVIDENCE.json",
                 "PLANT_DURING_ACTIVITY.json",
             }:
                 copy_file(path, campaign_out / path.relative_to(campaign))
+    write_json(
+        campaign_out / "DIAGNOSTIC_EXPORT_INDEX.json",
+        {
+            "schema": "cairn.hike-run.diagnostic-export-index.v1",
+            "caseCount": len(diagnostic_exports),
+            "all18Present": len(diagnostic_exports) == 18,
+            "extraction": "The diagnosticReplay JSON value was parsed from each original QA_ACTIVITY and reserialized without dropping any field. Source file hashes bind each value to the original complete package.",
+            "exports": diagnostic_exports,
+        },
+    )
 
 
 def make_final_source_tree(repo: Path, old: Path, core: Path) -> list[str]:
     destination = core / "source" / "tested-tree"
-    copy_tree(old / "source" / "candidate-tree", destination)
     changed = run(repo, "git", "diff", "--name-only", f"{REVIEW_BASE}..{TESTED_HEAD}").decode().splitlines()
-    for relative in changed:
+    exact_dependencies = {
+        "app/package.json",
+        "app/package-lock.json",
+        "app/tsconfig.json",
+        "app/babel.config.js",
+        "app/jest.config.js",
+        "app/scripts/overnight-hike-run-freeze-corpus.mjs",
+        "app/src/navigation/RootNavigator.tsx",
+        "app/src/screens/SettingsScreen.tsx",
+        "app/src/services/backgroundLocationTask.ts",
+        "app/src/services/syncDaemon.ts",
+        "app/src/store/useTrackingStore.ts",
+        "app/src/store/useSessionStore.ts",
+        "app/src/store/useMemoryStore.ts",
+        "app/src/store/useMarkerStore.ts",
+        "app/src/store/useRouteStore.ts",
+    }
+    dependency_prefixes = (
+        "app/scripts/hike-run-",
+        "app/src/features/activity/",
+        "app/src/features/activitySimulator/",
+        "app/src/services/routing/",
+        "app/src/utils/",
+        "backend/scripts/hike-run-",
+        "backend/scripts/run-hike-run-",
+        "backend/src/",
+    )
+    repository_files = run(repo, "git", "ls-tree", "-r", "--name-only", TESTED_HEAD).decode().splitlines()
+    selected = sorted(set(changed) | {
+        relative for relative in repository_files
+        if relative in exact_dependencies or relative.startswith(dependency_prefixes)
+    })
+    for relative in selected:
         try:
             content = run(repo, "git", "show", f"{TESTED_HEAD}:{relative}")
         except subprocess.CalledProcessError:
@@ -212,6 +317,16 @@ def make_final_source_tree(repo: Path, old: Path, core: Path) -> list[str]:
     )
     (core / "identity" / "81574c0d-to-ab76e419.patch").write_bytes(
         run(repo, "git", "diff", "--binary", f"{REVIEW_BASE}..{TESTED_HEAD}")
+    )
+    write_json(
+        core / "source" / "SOURCE_SELECTION.json",
+        {
+            "testedHead": TESTED_HEAD,
+            "testedTree": TESTED_TREE,
+            "changedFiles": changed,
+            "includedFiles": selected,
+            "selectionRule": "All changed modules plus unchanged Activity, simulator, routing, utility, store, backend, configuration and closure-script dependencies required to inspect the implementation.",
+        },
     )
     return changed
 
@@ -277,7 +392,7 @@ def build_core(args: argparse.Namespace, stage: Path) -> None:
         "Start with `reports/CLOSURE_REPORT_CN.md`, `reports/CLOSURE_ISSUE_LEDGER.md`, and "
         "`reports/CLOSURE_EVIDENCE_INDEX.md`. The overall disposition is HOLD. "
         "All inspection paths are relative; no external network or absolute local path is required. "
-        "The complete 18-Activity JSON exports are preserved under `prior-evidence/new-campaign/`; "
+        "All 18 complete diagnosticReplay JSON values are preserved under `prior-evidence/new-campaign/`; "
         "the new raw-only replay receipts are under `diagnostic-replay/`.\n",
     )
 

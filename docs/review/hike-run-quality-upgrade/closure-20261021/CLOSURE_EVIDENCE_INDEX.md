@@ -5,7 +5,7 @@ All paths below are relative to the root of the CORE archive unless marked VISUA
 | Claim or question | Primary evidence | Notes |
 |---|---|---|
 | Exact code under test | `identity/SOURCE_IDENTITY.json`, `identity/GIT_IDENTITY.txt`, `identity/81574c0d-to-ab76e419.patch` | Product/evidence scripts ran at `ab76e419...`, tree `5457ef40...`. |
-| What changed | `source/changed/`, the patch, `reports/CLOSURE_REPORT_CN.md` | Full changed files, not excerpts. |
+| What changed | `source/tested-tree/`, `source/SOURCE_SELECTION.json`, the patch, `reports/CLOSURE_REPORT_CN.md` | Full changed files and required unchanged dependencies, not excerpts. |
 | Original strict findings | `strict-review/REVIEW_CN.md`, `EVIDENCE.md`, `CODEX_CLOSURE_PROMPT_EN.md` | Includes independent audit and closure contract verbatim. |
 | Independent metrics and original probes | `strict-review/independent_metrics.json`, `diagnostic_lifecycle_probe_results.json`, `independent_pack_audit.json` | Negative findings retained. |
 | Same GPS inputs / Q08 correction | `q08/FIXTURE_REPAIR_REPORT.json`, `FROZEN_CORPUS_MANIFEST.json`, both authentic fixtures | Repair changes delivery schedule, not coordinates or observation times. |
@@ -22,4 +22,3 @@ All paths below are relative to the root of the CORE archive unless marked VISUA
 | Remaining limitations | `reports/CLOSURE_REPORT_CN.md`, `CLOSURE_ISSUE_LEDGER.md` | HOLD and native pending are explicit. |
 
 The original complete archive remains outside these closure packages and is identified by SHA-256 `5f85d0c8ee5bf5dd1cc3303596b1a77be222a829e4fc58b0a46fff0fd3c658d7` and byte size `18,042,156`.
-
