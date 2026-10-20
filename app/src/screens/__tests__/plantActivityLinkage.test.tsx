@@ -11,6 +11,10 @@ const mockDraftGet = jest.fn();
 const mockDraftRemove = jest.fn();
 const mockDraftSet = jest.fn();
 let mockContentSubmit: ((payload: any) => void) | null = null;
+let mockContentAdjust: (() => void) | null = null;
+let mockDraftChange: ((patch: any) => void) | null = null;
+let mockGpsLocked: ((...args: any[]) => void) | null = null;
+let mockPinConfirm: ((lat: number, lng: number) => void) | null = null;
 const activityId = 'activity-client-id';
 let mockAppUserId = 'owner-a';
 let mockMarkerOwnerId = 'owner-a';
@@ -37,8 +41,8 @@ jest.mock('react-native-safe-area-context', () => {
 
 jest.mock('../../store/useMarkerStore', () => ({
   useMarkerStore: Object.assign(
-    (selector: (state: any) => unknown) => selector({ addMarker: mockAddMarker, userId: mockMarkerOwnerId }),
-    { getState: () => ({ addMarker: mockAddMarker, userId: mockMarkerOwnerId }) },
+    (selector: (state: any) => unknown) => selector({ addMarker: mockAddMarker, markers: [], userId: mockMarkerOwnerId }),
+    { getState: () => ({ addMarker: mockAddMarker, markers: [], userId: mockMarkerOwnerId }) },
   ),
 }));
 
@@ -59,14 +63,20 @@ jest.mock('../../features/activitySimulator/simulatorTime', () => ({
   activityFreshnessNow: () => 1_800_000_001_000,
 }));
 
-jest.mock('../../features/plant/components/GpsLockStep', () => ({ GpsLockStep: () => null }));
-jest.mock('../../features/plant/components/PinAdjustStep', () => ({ PinAdjustStep: () => null }));
+jest.mock('../../features/plant/components/GpsLockStep', () => ({
+  GpsLockStep: ({ onLocked }: any) => { mockGpsLocked = onLocked; return null; },
+}));
+jest.mock('../../features/plant/components/PinAdjustStep', () => ({
+  PinAdjustStep: ({ onConfirm }: any) => { mockPinConfirm = onConfirm; return null; },
+}));
 jest.mock('../../features/plant/components/ContentStep', () => {
   const ReactModule = require('react');
   const { Pressable, Text } = require('react-native');
   return {
-    ContentStep: ({ onSubmit }: any) => {
+    ContentStep: ({ onSubmit, onAdjustLocation, onDraftChange }: any) => {
       mockContentSubmit = onSubmit;
+      mockContentAdjust = onAdjustLocation;
+      mockDraftChange = onDraftChange;
       return ReactModule.createElement(
         Pressable,
         {
@@ -135,6 +145,10 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockContentSubmit = null;
+    mockContentAdjust = null;
+    mockDraftChange = null;
+    mockGpsLocked = null;
+    mockPinConfirm = null;
     mockAppUserId = 'owner-a';
     mockMarkerOwnerId = 'owner-a';
     mockRouteParams = {
@@ -286,10 +300,97 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     await waitFor(() => expect(mockAddMarker).toHaveBeenCalledTimes(2));
     expect(mockDraftSet.mock.calls[0][0]).toContain('owner-a');
     const persisted = JSON.parse(mockDraftSet.mock.calls[0][1]);
-    expect(persisted).toMatchObject({ title: 'Retry', text: 'Preserve this', visibility: 'personal' });
-    expect(persisted).not.toHaveProperty('lat');
-    expect(persisted).not.toHaveProperty('gpsLat');
-    expect(persisted).not.toHaveProperty('accuracyM');
+    expect(persisted).toMatchObject({
+      v: 4,
+      ownerUserId: 'owner-a',
+      activityContext: {
+        ownerUserId: 'owner-a',
+        clientActivityId: activityId,
+        ownerGeneration: 'activity-generation-1',
+      },
+      draft: {
+        title: 'Retry', text: 'Preserve this', visibility: 'personal',
+        lat: -41.2865, lng: 174.7762, gpsLat: -41.2865, gpsLng: 174.7762,
+        accuracyM: 8, locationCapturedAtMs: 1_800_000_000_000,
+        locationCaptureMethod: 'activity',
+      },
+    });
+  });
+
+  test('keeps words, audience, Activity identity, and fresh placement through adjust, failure, and retry', async () => {
+    mockAddMarker
+      .mockRejectedValueOnce(new Error('network unavailable'))
+      .mockResolvedValueOnce({
+        state: 'durably-accepted',
+        ownerId: 'owner-a',
+        projection: 'current',
+        marker: { id: 'adjusted-cairn', clientCairnId: 'adjusted-cairn', originActivityClientId: activityId },
+      });
+    render(<PlantScreen />);
+    await waitFor(() => expect(mockDraftGet).toHaveBeenCalled());
+
+    act(() => {
+      mockDraftChange!({
+        title: 'Keep across adjustment',
+        text: 'The same note returns after a fresh fix.',
+        visibility: 'group',
+      });
+    });
+    act(() => { mockContentAdjust!(); });
+    expect(mockGpsLocked).not.toBeNull();
+    act(() => {
+      mockGpsLocked!(-41.287, 174.777, 6, 'real', 1_800_000_000_500, 4, 'activity');
+    });
+    expect(mockPinConfirm).not.toBeNull();
+    act(() => { mockPinConfirm!(-41.2871, 174.7771); });
+
+    const payload = {
+      type: 'cairn',
+      title: 'Keep across adjustment',
+      text: 'The same note returns after a fresh fix.',
+      voiceUri: null,
+      voiceMs: null,
+      visibility: 'group',
+    };
+    act(() => { mockContentSubmit!(payload); });
+    await waitFor(() => expect(mockAlert).toHaveBeenCalledWith(
+      "Couldn't plant this cairn",
+      expect.stringContaining('draft is saved'),
+      [{ text: 'OK' }],
+    ));
+    act(() => { mockContentSubmit!(payload); });
+    await waitFor(() => expect(mockAddMarker).toHaveBeenCalledTimes(2));
+
+    expect(mockAddMarker.mock.calls[0][0]).toMatchObject({
+      note: 'Keep across adjustment\u001eThe same note returns after a fresh fix.',
+      permission: 'group',
+      lat: -41.2871,
+      lng: 174.7771,
+      placementAccuracyM: 6,
+      placementObservedAtMs: 1_800_000_000_500,
+      placementSampleCount: 4,
+      placementSource: 'activity',
+      activityContext: {
+        clientActivityId: activityId,
+        ownerGeneration: 'activity-generation-1',
+      },
+    });
+    expect(mockAddMarker.mock.calls[1][0]).toEqual(mockAddMarker.mock.calls[0][0]);
+    const persistedFailure = mockDraftSet.mock.calls
+      .map(([, value]) => JSON.parse(value))
+      .find(value => value?.draft?.title === 'Keep across adjustment');
+    expect(persistedFailure).toMatchObject({
+      v: 4,
+      ownerUserId: 'owner-a',
+      origin: { kind: 'activity', clientActivityId: activityId },
+      draft: {
+        title: 'Keep across adjustment',
+        text: 'The same note returns after a fresh fix.',
+        visibility: 'group',
+        lat: -41.2871,
+        lng: 174.7771,
+      },
+    });
   });
 
   test('restores failed words without replacing the current Activity location', async () => {

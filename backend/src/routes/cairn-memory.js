@@ -3,6 +3,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
+const { performance } = require('node:perf_hooks');
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { eligibleSourceProvenanceSql } = require('../services/activitySourceProvenance');
@@ -30,6 +31,7 @@ const {
 } = require('../services/cairnHistory');
 const { logicalRevisionStateSql } = require('../services/ownedCairnLibrary');
 const PushNotification = require('../models/PushNotification');
+const { qaFixtureEligibleSql } = require('../services/qaFixtureEligibility');
 
 const router = express.Router();
 router.use(authenticate);
@@ -47,6 +49,54 @@ const mutationLimiter = rateLimit({
 function positiveId(value) {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function libraryPageLimit(value) {
+  if (value == null || value === '') return 100;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 200 ? parsed : null;
+}
+
+function mysqlCursorTimestamp(value) {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) return null;
+  const pad = (part, width = 2) => String(part).padStart(width, '0');
+  // mysql2 interprets a timezone-free DATETIME using the process timezone.
+  // Serializing with toISOString() would shift the wall-clock value (eight
+  // hours in the Shanghai closure run) and make the next keyset page empty.
+  // Preserve the exact local components that mysql2 read from the column.
+  return `${pad(value.getFullYear(), 4)}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+    + ` ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+    + `.${pad(value.getMilliseconds(), 3)}`;
+}
+
+function encodeLibraryCursor(row, timestampField) {
+  const sortAt = mysqlCursorTimestamp(row?.[timestampField]);
+  if (!sortAt) throw new Error('library_cursor_timestamp_invalid');
+  return Buffer.from(JSON.stringify({ v: 1, sort_at: sortAt, marker_id: String(row.marker_id) }))
+    .toString('base64url');
+}
+
+function decodeLibraryCursor(value) {
+  if (value == null || value === '') return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
+    const markerId = positiveId(parsed?.marker_id);
+    const sortAt = parsed?.sort_at;
+    if (parsed?.v !== 1 || !markerId
+      || typeof sortAt !== 'string'
+      || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/.test(sortAt)
+      || !Number.isFinite(new Date(sortAt.replace(' ', 'T')).getTime())) return undefined;
+    return { markerId, sortAt };
+  } catch {
+    return undefined;
+  }
+}
+
+function setDiscoveryTiming(res, stages) {
+  const entries = Object.entries(stages)
+    .filter(([, duration]) => Number.isFinite(duration) && duration >= 0)
+    .map(([name, duration]) => `${name};dur=${duration.toFixed(1)}`);
+  if (entries.length) res.set('Server-Timing', entries.join(', '));
 }
 
 async function loadFreshAcceptedEvidence(conn, viewerId) {
@@ -288,19 +338,34 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
 
 router.post('/discover', mutationLimiter, async (req, res) => {
   const viewerId = req.user.userId;
+  const requestStartedAt = performance.now();
+  const timing = {};
+  let stageStartedAt = requestStartedAt;
+  const finishStage = (name) => {
+    const now = performance.now();
+    timing[name] = now - stageStartedAt;
+    stageStartedAt = now;
+  };
   const conn = await pool.getConnection();
+  finishStage('pool');
   try {
     await conn.beginTransaction();
     await conn.execute('SELECT id FROM users WHERE id=? FOR UPDATE', [viewerId]);
+    finishStage('lock');
     const evidenceRows = await loadFreshAcceptedEvidence(conn, viewerId);
     const latestEvidence = selectQualifyingEncounterEvidence(evidenceRows);
+    finishStage('evidence');
     if (!latestEvidence) {
       await conn.commit();
+      finishStage('commit');
+      timing.total = performance.now() - requestStartedAt;
+      setDiscoveryTiming(res, timing);
       return res.json({ acquired: [], reason: 'fresh_continuous_presence_required' });
     }
     const observation = { lat: Number(latestEvidence.lat), lng: Number(latestEvidence.lng) };
     const visit = await ensureLocalVisit(conn, viewerId, observation);
     const capacity = await remainingVisitCapacity(conn, visit.id);
+    finishStage('visit');
     const candidates = await loadDiscoveryCandidates(conn, viewerId, visit, observation);
     // Every selected Cairn must have the two accepted observations inside its
     // own 50 m radius. The 120 m visit boundary is never used as proximity.
@@ -318,8 +383,12 @@ router.post('/discover', mutationLimiter, async (req, res) => {
       });
     }
     const selected = selectDiscoveryCandidates(candidates, capacity);
+    finishStage('candidates');
     if (selected.length === 0 && capacity <= 0) {
       await conn.commit();
+      finishStage('commit');
+      timing.total = performance.now() - requestStartedAt;
+      setDiscoveryTiming(res, timing);
       return res.json({ acquired: [], reason: 'local_visit_limit', visit_id: String(visit.id) });
     }
     const acquired = [];
@@ -352,7 +421,31 @@ router.post('/discover', mutationLimiter, async (req, res) => {
         });
       }
     }
+    finishStage('acquire');
+    // Notification intent is part of the same transaction as acquisition.
+    // Provider delivery remains asynchronous and can fail independently, but
+    // a committed acquisition can no longer be orphaned by a crash between
+    // COMMIT and best-effort enqueue.
+    if (acquired.length > 0 && batchPresentationGroupId) {
+      const updatedOnly = acquired.every(item => item.category === 'updated');
+      const title = updatedOnly
+        ? 'A familiar Cairn has new words'
+        : acquired.length === 1 ? 'You found a Cairn' : `You found ${acquired.length} Cairns`;
+      await PushNotification.enqueue({
+        recipientUserId: viewerId,
+        actorUserId: null,
+        kind: 'memory_hit',
+        relatedId: batchPresentationGroupId,
+        title,
+        body: 'Saved in Memory. Open Cairn when you are ready.',
+        connection: conn,
+      });
+    }
+    finishStage('outbox');
     await conn.commit();
+    finishStage('commit');
+    timing.total = performance.now() - requestStartedAt;
+    setDiscoveryTiming(res, timing);
     const responseBody = {
       acquired,
       visit_id: String(visit.id),
@@ -363,24 +456,6 @@ router.post('/discover', mutationLimiter, async (req, res) => {
       haptic_min_interval_seconds: HAPTIC_MIN_INTERVAL_SECONDS,
     };
     res.json(responseBody);
-    // A system notification is downstream of the committed acquisition and
-    // keyed to the durable presentation group. Later members merged into the
-    // same visit group cannot create a notification storm because enqueue's
-    // recipient+kind+related-id key is unique.
-    if (acquired.length > 0 && batchPresentationGroupId) {
-      const updatedOnly = acquired.every(item => item.category === 'updated');
-      const title = updatedOnly
-        ? 'A familiar Cairn has new words'
-        : acquired.length === 1 ? 'You found a Cairn' : `You found ${acquired.length} Cairns`;
-      void PushNotification.enqueue({
-        recipientUserId: viewerId,
-        actorUserId: null,
-        kind: 'memory_hit',
-        relatedId: batchPresentationGroupId,
-        title,
-        body: 'Saved in Memory. Open Cairn when you are ready.',
-      }).catch(error => console.error('[cairn-memory/notification]', error.message));
-    }
     return undefined;
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
@@ -395,9 +470,15 @@ router.get('/library', async (req, res) => {
   const section = req.query.section === 'left' ? 'left' : req.query.section === 'found' ? 'found' : null;
   const collectionState = req.query.state === 'archived' ? 'archived' : 'active';
   if (!section) return res.status(400).json({ error: 'section must be left or found' });
+  const limit = libraryPageLimit(req.query.limit);
+  const cursor = decodeLibraryCursor(req.query.cursor);
+  if (!limit || cursor === undefined) return res.status(400).json({ error: 'Invalid library page request' });
   try {
     if (section === 'left') {
-      const [rows] = await pool.execute(
+      const cursorSql = cursor
+        ? 'AND (marker.updated_at<? OR (marker.updated_at=? AND marker.id<?))'
+        : '';
+      const [pageRows] = await pool.execute(
         `SELECT marker.id AS marker_id,marker.type,
                 CASE WHEN COALESCE(moderation.state,'available')='available'
                           AND (${logicalRevisionStateSql})='available'
@@ -423,12 +504,24 @@ router.get('/library', async (req, res) => {
            LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
           WHERE collection.viewer_id=? AND collection.relationship='left'
             AND collection.removed_at IS NULL
-          ORDER BY marker.updated_at DESC,marker.id DESC LIMIT 1000`,
-        [req.user.userId],
+            ${cursorSql}
+          ORDER BY marker.updated_at DESC,marker.id DESC LIMIT ${limit + 1}`,
+        [req.user.userId, ...(cursor ? [cursor.sortAt, cursor.sortAt, cursor.markerId] : [])],
       );
-      return res.json({ section, cairns: rows, unread_count: 0 });
+      const hasMore = pageRows.length > limit;
+      const rows = hasMore ? pageRows.slice(0, limit) : pageRows;
+      return res.json({
+        section,
+        cairns: rows,
+        unread_count: 0,
+        has_more: hasMore,
+        next_cursor: hasMore && rows.length ? encodeLibraryCursor(rows[rows.length - 1], 'updated_at') : null,
+      });
     }
-    const [rows] = await pool.execute(
+    const cursorSql = cursor
+      ? 'AND (latest.acquired_at<? OR (latest.acquired_at=? AND collection.marker_id<?))'
+      : '';
+    const [pageRows] = await pool.execute(
       `WITH latest AS (
          SELECT acquisition.*,
                 ROW_NUMBER() OVER (PARTITION BY acquisition.marker_id
@@ -436,6 +529,7 @@ router.get('/library', async (req, res) => {
            FROM cairn_acquisitions acquisition
            JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
           WHERE acquisition.viewer_id=? AND acquisition.removed_at IS NULL
+            AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
        )
        SELECT collection.marker_id,collection.archived_at,collection.removed_at,
               revision.id AS revision_id,revision.content_revision,revision.content_type AS type,
@@ -503,15 +597,42 @@ router.get('/library', async (req, res) => {
           AND collection.archived_at IS ${collectionState === 'archived' ? 'NOT NULL' : 'NULL'}
           AND collection.removed_at IS NULL
           AND revision.availability IN ('available','under_review','unavailable')
-        ORDER BY latest.acquired_at DESC,collection.marker_id DESC LIMIT 1000`,
-      [req.user.userId, req.user.userId],
+          AND ${qaFixtureEligibleSql('revision.marker_id', 'collection.viewer_id')}
+          ${cursorSql}
+        ORDER BY latest.acquired_at DESC,collection.marker_id DESC LIMIT ${limit + 1}`,
+      [req.user.userId, req.user.userId,
+        ...(cursor ? [cursor.sortAt, cursor.sortAt, cursor.markerId] : [])],
     );
+    const hasMore = pageRows.length > limit;
+    const rows = hasMore ? pageRows.slice(0, limit) : pageRows;
+    let unreadCount = 0;
+    if (collectionState === 'active') {
+      const [[unread]] = await pool.execute(
+        `SELECT COUNT(DISTINCT collection.marker_id) AS unread_count
+           FROM cairn_collections collection
+          WHERE collection.viewer_id=? AND collection.relationship='found'
+            AND collection.archived_at IS NULL AND collection.removed_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM cairn_acquisitions acquisition
+              JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+              LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+               WHERE acquisition.viewer_id=collection.viewer_id
+                 AND acquisition.marker_id=collection.marker_id
+                 AND acquisition.removed_at IS NULL AND acquisition.opened_at IS NULL
+                 AND revision.availability='available'
+                 AND COALESCE(moderation.state,'available')='available'
+                 AND ${qaFixtureEligibleSql('revision.marker_id', 'collection.viewer_id')}
+            )`,
+        [req.user.userId],
+      );
+      unreadCount = Math.max(0, Number(unread?.unread_count) || 0);
+    }
     return res.json({
       section,
       cairns: rows,
-      unread_count: collectionState === 'active'
-        ? rows.filter(row => Boolean(row.has_unread)).length
-        : 0,
+      unread_count: unreadCount,
+      has_more: hasMore,
+      next_cursor: hasMore && rows.length ? encodeLibraryCursor(rows[rows.length - 1], 'acquired_at') : null,
     });
   } catch (error) {
     console.error('[cairn-memory/library]', error.message);
@@ -542,6 +663,7 @@ router.get('/cairns/:marker_id/history', async (req, res) => {
         WHERE acquisition.viewer_id=? AND acquisition.marker_id=?
           AND acquisition.removed_at IS NULL
           AND collection.removed_at IS NULL
+          AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
         ORDER BY revision.content_revision DESC,acquisition.acquired_at DESC`,
       [req.user.userId, markerId],
     );
@@ -571,6 +693,7 @@ router.post('/revisions/:revision_id/read', mutationLimiter, async (req, res) =>
           AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
           AND revision.availability='available'
           AND COALESCE(moderation.state,'available')='available'
+          AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
         LIMIT 1 FOR UPDATE`,
       [req.user.userId, revisionId],
     );
@@ -612,6 +735,7 @@ router.post('/revisions/:revision_id/thanks', mutationLimiter, async (req, res) 
           AND acquisition.opened_at IS NOT NULL
           AND revision.availability='available'
           AND COALESCE(moderation.state,'available')='available'
+          AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
           AND revision.owner_id<>?
         LIMIT 1 FOR UPDATE`,
       [req.user.userId, revisionId, req.user.userId],
@@ -691,6 +815,7 @@ router.get('/presentation/pending', async (req, res) => {
           AND acquisition.removed_at IS NULL AND collection.archived_at IS NULL
           AND collection.removed_at IS NULL AND revision.availability='available'
           AND COALESCE(moderation.state,'available')='available'
+          AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
         GROUP BY presentation.id,presentation.group_token,presentation.merge_started_at,
                  presentation.merge_until,presentation.haptic_eligible,presentation.sound_eligible
        HAVING SUM(CASE WHEN event.announced_at IS NULL THEN 1 ELSE 0 END)>0
@@ -709,6 +834,7 @@ router.get('/presentation/pending', async (req, res) => {
                  AND acquisition.removed_at IS NULL
                  AND revision.availability='available'
                  AND COALESCE(moderation.state,'available')='available'
+                 AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
             ) THEN collection.marker_id END) AS acquired_cairn_count,
               COUNT(DISTINCT CASE WHEN EXISTS (
               SELECT 1 FROM cairn_acquisitions acquisition
@@ -719,6 +845,7 @@ router.get('/presentation/pending', async (req, res) => {
                  AND acquisition.removed_at IS NULL AND acquisition.opened_at IS NULL
                  AND revision.availability='available'
                  AND COALESCE(moderation.state,'available')='available'
+                 AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
             ) THEN collection.marker_id END) AS unread_count
          FROM cairn_collections collection
         WHERE collection.viewer_id=? AND collection.relationship='found'
@@ -740,6 +867,7 @@ router.get('/presentation/pending', async (req, res) => {
                AND acquisition.removed_at IS NULL AND collection.archived_at IS NULL
                AND collection.removed_at IS NULL AND revision.availability='available'
                AND COALESCE(moderation.state,'available')='available'
+               AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
           )`,
       [req.user.userId, ...activeGroupIds],
     ) : [[]];
@@ -751,6 +879,65 @@ router.get('/presentation/pending', async (req, res) => {
     });
   } catch (error) {
     console.error('[cairn-memory/presentation:pending]', error.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Durable deep-link/group resolution is independent from the transient
+// pending queue. A rendered/acknowledged notification may be opened after a
+// restart, but it can resolve only the authenticated viewer's still-retained,
+// currently-authorized acquisitions and never marks them read.
+router.get('/presentation/:group_id/items', async (req, res) => {
+  const groupId = positiveId(req.params.group_id);
+  if (!groupId) return res.status(400).json({ error: 'Invalid group id' });
+  try {
+    const [groups] = await pool.execute(
+      'SELECT id FROM cairn_presentation_groups WHERE id=? AND viewer_id=? LIMIT 1',
+      [groupId, req.user.userId],
+    );
+    if (!groups[0]) return res.status(404).json({ error: 'Presentation group unavailable' });
+    const [items] = await pool.execute(
+      `SELECT DISTINCT acquisition.marker_id
+         FROM cairn_acquisition_events event
+         JOIN cairn_acquisitions acquisition
+           ON acquisition.id=event.acquisition_id AND acquisition.viewer_id=event.viewer_id
+         JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+         JOIN cairn_collections collection
+           ON collection.viewer_id=acquisition.viewer_id
+          AND collection.marker_id=acquisition.marker_id
+          AND collection.relationship='found'
+         JOIN users owner ON owner.id=revision.owner_id AND owner.deleted_at IS NULL
+         LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+        WHERE event.viewer_id=? AND event.presentation_group_id=?
+          AND acquisition.removed_at IS NULL
+          AND collection.archived_at IS NULL AND collection.removed_at IS NULL
+          AND revision.availability='available'
+          AND COALESCE(moderation.state,'available')='available'
+          AND ${qaFixtureEligibleSql('revision.marker_id', 'event.viewer_id')}
+          AND NOT EXISTS (
+            SELECT 1 FROM hidden_items hidden
+             WHERE hidden.user_id=event.viewer_id
+               AND hidden.item_type='mark' AND hidden.item_id=acquisition.marker_id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM blocked_users blocked
+             WHERE (blocked.blocker_id=event.viewer_id AND blocked.blocked_id=revision.owner_id)
+                OR (blocked.blocker_id=revision.owner_id AND blocked.blocked_id=event.viewer_id)
+          )
+        ORDER BY acquisition.marker_id ASC`,
+      [req.user.userId, groupId],
+    );
+    const markerIds = items.map(item => String(item.marker_id));
+    if (markerIds.length === 0) {
+      return res.status(410).json({ error: 'Presentation group no longer has available Cairns' });
+    }
+    return res.json({
+      presentation_group_id: String(groupId),
+      marker_ids: markerIds,
+      single_marker_id: markerIds.length === 1 ? markerIds[0] : null,
+    });
+  } catch (error) {
+    console.error('[cairn-memory/presentation:items]', error.message);
     return res.status(500).json({ error: 'Server error' });
   }
 });

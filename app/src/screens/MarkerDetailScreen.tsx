@@ -28,7 +28,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useMarkerStore, type MarkerPermission } from '../store/useMarkerStore';
+import { useMarkerStore, type Marker, type MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { MARKER_TYPES, type MarkerType } from '../config/markerTypes';
@@ -77,6 +77,7 @@ import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
 import { CairnPaper, CairnStoneMark } from '../features/cairns/components/CairnPaper';
+import { cairnPublicationTruth } from '../features/cairns/cairnExperience';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -139,7 +140,7 @@ export function MarkerDetailScreen() {
   const sessions = useSessionStore((s) => s.sessions);
   const publicEnabled = usePublicCairnStore((state) => state.enabled);
 
-  const marker = useMemo(
+  const liveMarker = useMemo(
     // v423 C1 fix: offline-first ack 后 marker.id 会从 localId 换成 server id.
     // Plant flow nav.replace 传的 markerId 是 localId, 若只按 m.id 匹配, ack
     // 一成功 find 立刻返回 undefined, 屏幕空白. 用 (id | localId) 双匹配保证
@@ -161,9 +162,17 @@ export function MarkerDetailScreen() {
   const [discardEditOpen, setDiscardEditOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletionSnapshot, setDeletionSnapshot] = useState<{ ownerId: string; marker: Marker } | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
   const [mapEpoch, setMapEpoch] = useState(0);
+  // Durable tombstoning removes the live projection before the network await.
+  // Keep the exact initiating owner's record visible until deleteMarker tells
+  // us whether the operation was accepted or queued; never show it to a new
+  // account after an auth switch.
+  const marker = liveMarker ?? (
+    deleting && deletionSnapshot?.ownerId === String(userId) ? deletionSnapshot.marker : undefined
+  );
 
   useEffect(() => {
     if (mapReady || !MapView) return undefined;
@@ -225,10 +234,14 @@ export function MarkerDetailScreen() {
 
   const handleDelete = useCallback(async () => {
     if (!marker || deleting) return;
+    const initiatingOwnerId = String(userId);
+    setDeletionSnapshot({ ownerId: initiatingOwnerId, marker });
     setDeleting(true);
+    let accepted = false;
     try {
       log('marker.delete', { id: marker.id });
       const result = await deleteMarker(marker.id);
+      accepted = true;
       setDeleteConfirmOpen(false);
       if (nav.canGoBack()) nav.goBack();
       else nav.replace('AllCairns');
@@ -239,11 +252,15 @@ export function MarkerDetailScreen() {
         );
       }
     } catch {
+      setDeletionSnapshot(null);
       Alert.alert('Could not delete', 'This Cairn is still here. Check your connection and try again.');
     } finally {
-      setDeleting(false);
+      // A successful durable delete is terminal for this screen. Keeping the
+      // busy snapshot through the navigation transition prevents a one-frame
+      // "Cairn not found" ghost after the store projection is removed.
+      if (!accepted) setDeleting(false);
     }
-  }, [deleteMarker, deleting, marker, nav]);
+  }, [deleteMarker, deleting, marker, nav, userId]);
 
   if (!marker) {
     return (
@@ -264,12 +281,8 @@ export function MarkerDetailScreen() {
   const meta = MARKER_TYPES[marker.type] ?? MARKER_TYPES.cairn;
   const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
   const displayTitle = cairnDisplayTitle(privateTitle, privateBody, marker.createdAt);
-  const publicStateLabel = marker.publicState === 'pending' ? 'Public · In review'
-    : marker.publicState === 'published' ? 'Public · Published'
-      : marker.publicState === 'rejected' ? 'Public · Not approved'
-        : marker.publicState === 'suspended' ? 'Public · Paused by review'
-          : marker.publicState === 'withdrawn' ? 'Public · Withdrawn'
-            : marker.permission === 'public' ? 'Public · Not submitted' : null;
+  const publicationTruth = cairnPublicationTruth(marker);
+  const publicStateLabel = publicationTruth?.label ?? null;
   const vis = marker.permission === 'public'
     ? { label: publicStateLabel ?? 'Public', iconName: 'Globe' as IconName }
     : VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
@@ -524,13 +537,7 @@ export function MarkerDetailScreen() {
               <Text style={[styles.snapshotHeader, { color: visualTheme.foregroundSecondary }]}>{publicStateLabel}</Text>
             </View>
             <Text style={[styles.snapshotBody, { color: visualTheme.foreground }]}>
-              {marker.publicSubmissionCode === 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED'
-                ? 'This Cairn is saved. When its eligible source Activity finishes, Public review can proceed automatically; you do not need to save it again.'
-                : marker.publicSubmissionCode === 'PUBLIC_TEXT_REQUIRED'
-                  ? 'This Cairn is saved, but Public discovery needs useful text.'
-                  : marker.publicState === 'published'
-                    ? 'People who qualify nearby can discover the exact currently approved version.'
-                    : 'Your personal Cairn remains saved independently of Public review.'}
+              {publicationTruth?.explanation ?? 'Public status is not available yet.'}
             </Text>
             <Text style={[styles.snapshotFootnote, { color: visualTheme.muted }]}>
               A material edit or changing audience removes the approved version from new Public delivery.

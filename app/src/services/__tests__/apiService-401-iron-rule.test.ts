@@ -5,11 +5,15 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} },
 }));
-const mockSecureToken = { current: 'fake-token' as string | null };
+const mockSecureValues = new Map<string, string>([['cairn_jwt', 'fake-token']]);
+const mockSecureToken = {
+  get current(): string | null { return mockSecureValues.get('cairn_jwt') ?? null; },
+  set current(value: string | null) { if (value == null) mockSecureValues.delete('cairn_jwt'); else mockSecureValues.set('cairn_jwt', value); },
+};
 jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => mockSecureToken.current),
-  setItemAsync: jest.fn(async (_key: string, value: string) => { mockSecureToken.current = value; }),
-  deleteItemAsync: jest.fn(async () => { mockSecureToken.current = null; }),
+  getItemAsync: jest.fn(async (key: string) => mockSecureValues.get(key) ?? null),
+  setItemAsync: jest.fn(async (key: string, value: string) => { mockSecureValues.set(key, value); }),
+  deleteItemAsync: jest.fn(async (key: string) => { mockSecureValues.delete(key); }),
 }));
 jest.mock('react-native', () => ({
   __esModule: true,
@@ -55,12 +59,15 @@ import * as SecureStore from 'expo-secure-store';
 const origFetch = global.fetch;
 beforeEach(async () => {
   mockCurrentUser.id = 'viewer-a';
-  mockSecureToken.current = null;
+  mockSecureValues.clear();
   const transitions = require('../accountTransitionAuthority');
   const tokens = require('../tokenStore');
   const transition = transitions.beginAccountTransition({ kind: 'login' }).authority;
   await tokens.installTokenForAccountTransition(transition, 'fake-token', 'viewer-a');
   transitions.finishAccountTransition(transition);
+  // The account-scoped token installation may remove a superseded owner key.
+  // These assertions cover only effects of the request under test, not setup.
+  jest.clearAllMocks();
 });
 afterEach(() => {
   global.fetch = origFetch;

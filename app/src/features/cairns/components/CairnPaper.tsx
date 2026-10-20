@@ -38,7 +38,7 @@ export function CairnStoneMark({ size = 34, tone = 'owner' }: {
 }) {
   const theme = useVisualTheme();
   const accent = tone === 'public'
-    ? '#B77743'
+    ? theme.cairnPublic
     : tone === 'friends'
       ? '#477C78'
       : tone === 'neutral' ? theme.iconInactive : theme.primary;
@@ -149,7 +149,7 @@ export function CairnStatusPill({ label, icon = 'Check', tone = 'primary' }: {
   tone?: 'primary' | 'muted' | 'public';
 }) {
   const theme = useVisualTheme();
-  const color = tone === 'public' ? '#B77743' : tone === 'muted' ? theme.foregroundSecondary : theme.primary;
+  const color = tone === 'public' ? theme.cairnPublic : tone === 'muted' ? theme.foregroundSecondary : theme.primary;
   return (
     <View style={[styles.pill, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}>
       <Icon name={icon} size={12} color={color} strokeWidth={2.2} />

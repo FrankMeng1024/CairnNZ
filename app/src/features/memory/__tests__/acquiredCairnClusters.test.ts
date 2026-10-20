@@ -1,4 +1,9 @@
-import { buildAcquiredCairnFeatureCollection, loadAllClusterLeaves, stableAcquiredGroupOrder } from '../components/acquiredCairnClusters';
+import {
+  buildAcquiredCairnFeatureCollection,
+  clusterLeavesShareLocation,
+  loadAllClusterLeaves,
+  stableAcquiredGroupOrder,
+} from '../components/acquiredCairnClusters';
 
 describe('acquired Cairn map source', () => {
   test('keeps one selectable feature per Cairn even at identical coordinates', () => {
@@ -43,4 +48,22 @@ describe('acquired Cairn map source', () => {
       expect(calls).toHaveLength(Math.ceil(count / 20));
     },
   );
+
+  test('exact-coordinate and sub-metre stacks open as one intentional group', () => {
+    expect(clusterLeavesShareLocation([
+      { geometry: { coordinates: [174.7762, -41.2865] } },
+      { geometry: { coordinates: [174.776204, -41.286499] } },
+    ])).toBe(true);
+  });
+
+  test('geographically distributed clusters expand instead of opening an arbitrary list', () => {
+    expect(clusterLeavesShareLocation([
+      { geometry: { coordinates: [174.7762, -41.2865] } },
+      { geometry: { coordinates: [174.7764, -41.2865] } },
+    ])).toBe(false);
+    expect(clusterLeavesShareLocation([
+      { geometry: { coordinates: [174.7762, -41.2865] } },
+      { geometry: { coordinates: ['bad', -41.2865] } },
+    ])).toBe(false);
+  });
 });

@@ -41,6 +41,7 @@ import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { queryWebShapeSourcePressFeatures } from './mapboxAdapterWebPress';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
@@ -787,6 +788,7 @@ interface ShapeSourceProps {
   id: string;
   shape: any;
   children?: React.ReactNode;
+  onPress?: (event: { features: any[]; coordinates?: [number, number]; point?: { x: number; y: number } }) => void;
   cluster?: boolean;
   clusterRadius?: number;
   clusterMaxZoomLevel?: number;
@@ -798,6 +800,7 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
   id,
   shape,
   children,
+  onPress,
   cluster,
   clusterRadius,
   clusterMaxZoomLevel,
@@ -805,6 +808,45 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
   lineMetrics,
 }: ShapeSourceProps, ref) {
   const mapCtx = React.useContext(MapInstanceContext);
+  const onPressRef = useRef(onPress);
+  useEffect(() => { onPressRef.current = onPress; }, [onPress]);
+  const interactiveLayerIds = useMemo(() => React.Children.toArray(children)
+    .filter(React.isValidElement)
+    .map(child => String((child as React.ReactElement<{ id?: string }>).props.id ?? ''))
+    .filter(Boolean), [children]);
+  const interactiveLayerKey = interactiveLayerIds.join('|');
+  useEffect(() => {
+    if (!onPressRef.current || !interactiveLayerKey) return undefined;
+    let disposed = false;
+    let frame: number | null = null;
+    let map: any = null;
+    const layerIds = interactiveLayerKey.split('|');
+    const handleClick = (event: any) => {
+      if (!onPressRef.current) return;
+      const features = queryWebShapeSourcePressFeatures(map, event.point, layerIds, id);
+      if (features.length === 0) return;
+      onPressRef.current({
+        features,
+        coordinates: event.lngLat ? [event.lngLat.lng, event.lngLat.lat] : undefined,
+        point: event.point ? { x: event.point.x, y: event.point.y } : undefined,
+      });
+    };
+    const attach = () => {
+      if (disposed) return;
+      map = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      if (!map) {
+        frame = requestAnimationFrame(attach);
+        return;
+      }
+      map.on?.('click', handleClick);
+    };
+    attach();
+    return () => {
+      disposed = true;
+      if (frame != null) cancelAnimationFrame(frame);
+      map?.off?.('click', handleClick);
+    };
+  }, [id, interactiveLayerKey, mapCtx]);
   React.useImperativeHandle(ref, () => ({
     setNativeProps: (props: { shape?: unknown }) => {
       if (props.shape == null) return;
@@ -817,6 +859,32 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
         // A malformed development payload must not tear down the map.
       }
     },
+    getClusterLeaves: (feature: any, limit: number, offset: number) => new Promise((resolve, reject) => {
+      const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      const source = inner?.getSource?.(id);
+      const clusterId = Number(feature?.properties?.cluster_id);
+      if (!source?.getClusterLeaves || !Number.isFinite(clusterId)) {
+        reject(new Error('cluster_leaves_unavailable'));
+        return;
+      }
+      source.getClusterLeaves(clusterId, limit, offset, (error: unknown, features: any[]) => {
+        if (error) reject(error);
+        else resolve(features ?? []);
+      });
+    }),
+    getClusterExpansionZoom: (feature: any) => new Promise((resolve, reject) => {
+      const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      const source = inner?.getSource?.(id);
+      const clusterId = Number(feature?.properties?.cluster_id);
+      if (!source?.getClusterExpansionZoom || !Number.isFinite(clusterId)) {
+        reject(new Error('cluster_expansion_unavailable'));
+        return;
+      }
+      source.getClusterExpansionZoom(clusterId, (error: unknown, zoom: number) => {
+        if (error) reject(error);
+        else resolve(zoom);
+      });
+    }),
   }), [id, mapCtx]);
   // react-map-gl handles `data` prop diffing internally and calls
   // mapbox-gl's source.setData when the prop changes. We do NOT manually

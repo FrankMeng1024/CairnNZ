@@ -27,6 +27,8 @@
  *   4. Flip the transport check below
  */
 const pool = require('../config/db');
+const { qaFixtureEligibleSql } = require('../services/qaFixtureEligibility');
+const { createHash } = require('node:crypto');
 
 // Sprint 6 review M12: Node 18+ has global fetch. Older runtimes would
 // need node-fetch — we don't declare that dep, so let's fail loudly
@@ -38,6 +40,48 @@ if (typeof fetch !== 'function') {
 }
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
+const MAX_DELIVERY_ATTEMPTS = 6;
+
+function expoHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    ...(process.env.EXPO_PUSH_ACCESS_TOKEN
+      ? { Authorization: `Bearer ${process.env.EXPO_PUSH_ACCESS_TOKEN}` }
+      : {}),
+  };
+}
+
+function tokenFingerprint(token) {
+  return createHash('sha256').update(String(token)).digest('hex');
+}
+
+function retryDelayMinutes(attemptCount) {
+  return [1, 2, 5, 15, 60, 180][Math.max(0, Math.min(5, attemptCount - 1))];
+}
+
+async function retryOrFail(row, errorMessage) {
+  const attemptCount = Math.max(1, Number(row.attempt_count) + 1 || 1);
+  const cleanError = String(errorMessage || 'push delivery failed').slice(0, 200);
+  if (attemptCount >= MAX_DELIVERY_ATTEMPTS) {
+    await pool.execute(
+      `UPDATE notification_log
+          SET status='failed',error_msg=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+        WHERE id=?`,
+      [cleanError, row.id],
+    );
+    return 'failed';
+  }
+  const delay = retryDelayMinutes(attemptCount);
+  await pool.execute(
+    `UPDATE notification_log
+        SET status='queued',error_msg=?,next_attempt_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ${delay} MINUTE),
+            sent_at=CURRENT_TIMESTAMP
+      WHERE id=?`,
+    [cleanError, row.id],
+  );
+  return 'queued';
+}
 
 async function registerToken(userId, token, platform) {
   if (!userId || !token || !platform) return;
@@ -177,7 +221,7 @@ function preferenceAllows(kind, rows) {
   return rows.length === 0 || rows[0].enabled !== 0;
 }
 
-async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = null, title, body }) {
+async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = null, title, body, connection = pool }) {
   if (!recipientUserId || !kind || !title) return null;
   // Sprint 6 round-17 R17F8: reject whitespace-only title/body. `if (!title)`
   // treats `' '` (single space) as truthy, so a caller passing a trimmed-
@@ -211,13 +255,13 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
   // retain their historical defaults; memory_hit requires an explicit row.
   const prefColumn = KIND_TO_PREF[cleanKind];
   if (prefColumn) {
-    const [prefsRows] = await pool.execute(
+    const [prefsRows] = await connection.execute(
       `SELECT ${prefColumn} AS enabled FROM user_push_prefs WHERE user_id = ? LIMIT 1`,
       [recipientUserId],
     );
     if (!preferenceAllows(cleanKind, prefsRows)) {
       // Record as dropped so the audit trail is intact.
-      await pool.execute(
+      await connection.execute(
         `INSERT IGNORE INTO notification_log
           (recipient_user_id, actor_user_id, kind, related_id, title, body, status, dedupe_key)
          VALUES (?, ?, ?, ?, ?, ?, 'dropped_by_pref', ?)`,
@@ -226,7 +270,7 @@ async function enqueue({ recipientUserId, actorUserId = null, kind, relatedId = 
       return null;
     }
   }
-  const [result] = await pool.execute(
+  const [result] = await connection.execute(
     `INSERT IGNORE INTO notification_log
       (recipient_user_id, actor_user_id, kind, related_id, title, body, status, dedupe_key)
      VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
@@ -276,7 +320,7 @@ async function sendPending({ batchSize = 100 } = {}) {
   // COALESCE with created_at for legacy rows). New rows will always
   // have sent_at populated at claim time.
   await pool.execute(
-    `UPDATE notification_log SET status='queued'
+    `UPDATE notification_log SET status='queued',next_attempt_at=UTC_TIMESTAMP(3)
      WHERE status='sending'
        AND COALESCE(sent_at, created_at) < DATE_SUB(NOW(), INTERVAL 5 MINUTE)`,
   ).catch((err) => console.warn('[push] stale-sending recovery failed:', err.message));
@@ -292,9 +336,9 @@ async function sendPending({ batchSize = 100 } = {}) {
   try {
     await conn.beginTransaction();
     [rows] = await conn.execute(
-      `SELECT id, recipient_user_id, kind, related_id, title, body
+      `SELECT id, recipient_user_id, kind, related_id, title, body, attempt_count
        FROM notification_log
-       WHERE status = 'queued'
+       WHERE status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at<=UTC_TIMESTAMP(3))
        ORDER BY id ASC
        LIMIT ${safeBatch}
        FOR UPDATE SKIP LOCKED`,
@@ -315,7 +359,10 @@ async function sendPending({ batchSize = 100 } = {}) {
       // rows carry the claim timestamp so recovery has a real clock to
       // compare against instead of the row's birth clock.
       await conn.execute(
-        `UPDATE notification_log SET status='sending', sent_at=CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+        `UPDATE notification_log
+            SET status='sending',sent_at=CURRENT_TIMESTAMP,last_attempt_at=UTC_TIMESTAMP(3),
+                attempt_count=attempt_count+1,next_attempt_at=NULL
+          WHERE id IN (${placeholders})`,
         ids,
       );
     }
@@ -333,6 +380,70 @@ async function sendPending({ batchSize = 100 } = {}) {
   let sent = 0, dropped = 0, failed = 0;
 
   for (const row of rows) {
+    // A memory-hit intent points to a presentation group, never directly to
+    // content. Re-resolve authority at dispatch so revoked/expired QA-only
+    // groups cannot emit a stale alert. Mixed groups remain deliverable when
+    // at least one ordinary/currently-authorized acquisition survives.
+    if (row.kind === 'memory_hit') {
+      const [available] = await pool.execute(
+        `SELECT 1
+           FROM cairn_acquisition_events event
+           JOIN cairn_acquisitions acquisition ON acquisition.id=event.acquisition_id
+           JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
+           JOIN cairn_collections collection
+             ON collection.viewer_id=acquisition.viewer_id
+            AND collection.marker_id=acquisition.marker_id
+           JOIN users owner ON owner.id=revision.owner_id AND owner.deleted_at IS NULL
+           LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+          WHERE event.viewer_id=? AND event.presentation_group_id=?
+            AND acquisition.removed_at IS NULL
+            AND collection.archived_at IS NULL AND collection.removed_at IS NULL
+            AND revision.availability='available'
+            AND COALESCE(moderation.state,'available')='available'
+            AND ${qaFixtureEligibleSql('revision.marker_id', 'event.viewer_id')}
+            AND NOT EXISTS (
+              SELECT 1 FROM hidden_items hidden
+               WHERE hidden.user_id=event.viewer_id
+                 AND hidden.item_type='mark' AND hidden.item_id=acquisition.marker_id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM blocked_users blocked
+               WHERE (blocked.blocker_id=event.viewer_id AND blocked.blocked_id=revision.owner_id)
+                  OR (blocked.blocker_id=revision.owner_id AND blocked.blocked_id=event.viewer_id)
+            )
+          LIMIT 1`,
+        [row.recipient_user_id, row.related_id],
+      );
+      if (!available[0]) {
+        await pool.execute(
+          `UPDATE notification_log
+              SET status='dropped_unavailable',next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+            WHERE id=?`,
+          [row.id],
+        );
+        dropped += 1;
+        continue;
+      }
+    }
+    // Preferences are re-evaluated at dispatch, not only at enqueue. Turning
+    // encounter alerts off while an intent is queued must suppress delivery.
+    const prefColumn = KIND_TO_PREF[row.kind];
+    if (prefColumn) {
+      const [prefsRows] = await pool.execute(
+        `SELECT ${prefColumn} AS enabled FROM user_push_prefs WHERE user_id=? LIMIT 1`,
+        [row.recipient_user_id],
+      );
+      if (!preferenceAllows(row.kind, prefsRows)) {
+        await pool.execute(
+          `UPDATE notification_log
+              SET status='dropped_by_pref',next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+            WHERE id=?`,
+          [row.id],
+        );
+        dropped += 1;
+        continue;
+      }
+    }
     // Fetch tokens for recipient
     const [tokens] = await pool.execute(
       'SELECT token, platform FROM device_tokens WHERE user_id = ?',
@@ -387,10 +498,7 @@ async function sendPending({ batchSize = 100 } = {}) {
       try {
         res = await fetch(EXPO_PUSH_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.EXPO_PUSH_ACCESS_TOKEN}`,
-          },
+          headers: expoHeaders(),
           body: JSON.stringify(messages),
           signal: abortCtrl.signal,
         });
@@ -399,10 +507,16 @@ async function sendPending({ batchSize = 100 } = {}) {
       }
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
-        await pool.execute(
-          `UPDATE notification_log SET status='failed', error_msg=?, sent_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [errBody.slice(0, 200), row.id],
-        );
+        const transient = res.status === 408 || res.status === 429 || res.status >= 500;
+        if (transient && await retryOrFail(row, `Expo HTTP ${res.status}: ${errBody}`) === 'queued') {
+          continue;
+        }
+        if (!transient) {
+          await pool.execute(
+            `UPDATE notification_log SET status='failed',error_msg=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP WHERE id=?`,
+            [`Expo HTTP ${res.status}: ${errBody}`.slice(0, 200), row.id],
+          );
+        }
         failed += 1;
         continue;
       }
@@ -423,8 +537,16 @@ async function sendPending({ batchSize = 100 } = {}) {
       // the web-filtered tokens that never entered the request.
       let expoBody = null;
       try { expoBody = await res.clone().json(); } catch (_) { /* non-JSON 200 — treat as sent */ }
+      let ticketSummary = null;
       if (expoBody && Array.isArray(expoBody.data)) {
         const requestedTokens = tokens.filter(t => t.platform !== 'web');
+        ticketSummary = expoBody.data.slice(0, requestedTokens.length).map((ticket, index) => ({
+          request_index: index,
+          token_fingerprint: tokenFingerprint(requestedTokens[index].token),
+          status: ticket?.status === 'ok' ? 'ok' : 'error',
+          id: typeof ticket?.id === 'string' ? ticket.id.slice(0, 160) : null,
+          error: typeof ticket?.details?.error === 'string' ? ticket.details.error.slice(0, 80) : null,
+        }));
         for (let i = 0; i < expoBody.data.length && i < requestedTokens.length; i++) {
           const ticket = expoBody.data[i];
           if (ticket && ticket.status === 'error' && ticket.details && ticket.details.error === 'DeviceNotRegistered') {
@@ -438,22 +560,144 @@ async function sendPending({ batchSize = 100 } = {}) {
             console.log(`[push] deleted DeviceNotRegistered token user=${row.recipient_user_id}`);
           }
         }
+        const accepted = ticketSummary.filter(ticket => ticket.status === 'ok').length;
+        const errors = ticketSummary.filter(ticket => ticket.status === 'error');
+        if (accepted === 0 && errors.length > 0) {
+          const allDead = errors.every(ticket => ticket.error === 'DeviceNotRegistered');
+          const retryable = errors.some(ticket => ['MessageRateExceeded', 'ExpoError', null].includes(ticket.error));
+          if (allDead) {
+            await pool.execute(
+              `UPDATE notification_log
+                  SET status='dropped_no_device',provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+                WHERE id=?`,
+              [JSON.stringify(ticketSummary), row.id],
+            );
+            dropped += 1;
+            continue;
+          }
+          if (retryable && await retryOrFail(row, `Expo ticket error: ${errors.map(ticket => ticket.error || 'unknown').join(',')}`) === 'queued') {
+            continue;
+          }
+          await pool.execute(
+            `UPDATE notification_log
+                SET status='failed',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+              WHERE id=?`,
+            [`Expo ticket error: ${errors.map(ticket => ticket.error || 'unknown').join(',')}`.slice(0, 200), JSON.stringify(ticketSummary), row.id],
+          );
+          failed += 1;
+          continue;
+        }
       }
       await pool.execute(
-        `UPDATE notification_log SET status='sent', sent_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [row.id],
+        `UPDATE notification_log
+            SET status='sent',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+          WHERE id=?`,
+        [ticketSummary?.some(ticket => ticket.status === 'error') ? 'Partial Expo ticket error; at least one device accepted.' : null,
+          ticketSummary ? JSON.stringify(ticketSummary) : null, row.id],
       );
       sent += 1;
     } catch (err) {
-      await pool.execute(
-        `UPDATE notification_log SET status='failed', error_msg=?, sent_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [String(err.message || err).slice(0, 200), row.id],
-      );
-      failed += 1;
+      if (await retryOrFail(row, err.message || err) !== 'queued') failed += 1;
     }
   }
 
   return { attempted: rows.length, sent, dropped, failed };
+}
+
+/**
+ * Expo tickets acknowledge queue acceptance, not final APNs/FCM delivery.
+ * Resolve mature ticket ids on later drain ticks and retain a bounded audit
+ * result. Raw device tokens are never written to notification_log; the
+ * fingerprint lets a DeviceNotRegistered receipt retire only the matching
+ * current token without leaking that credential into review artifacts.
+ */
+async function checkPendingReceipts({ batchSize = 500 } = {}) {
+  const transportReady = !!process.env.EXPO_PUSH_ACCESS_TOKEN || process.env.PUSH_TRANSPORT === 'expo';
+  if (!transportReady) return { checked: 0, deliveryFailed: 0, tokensRetired: 0 };
+  const safeBatch = Math.max(1, Math.min(Number(batchSize) || 500, 1000));
+  const [rows] = await pool.execute(
+    `SELECT id,recipient_user_id,provider_ticket_ids
+       FROM notification_log
+      WHERE status='sent' AND provider_ticket_ids IS NOT NULL
+        AND provider_receipt_checked_at IS NULL
+        AND sent_at<=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 15 SECOND)
+      ORDER BY id ASC LIMIT ${safeBatch}`,
+  );
+  const parsedRows = rows.flatMap(row => {
+    try {
+      const tickets = typeof row.provider_ticket_ids === 'string'
+        ? JSON.parse(row.provider_ticket_ids) : row.provider_ticket_ids;
+      const accepted = Array.isArray(tickets) ? tickets.filter(ticket => (
+        ticket?.status === 'ok' && typeof ticket?.id === 'string' && ticket.id
+      )) : [];
+      return accepted.length ? [{ ...row, accepted }] : [];
+    } catch { return []; }
+  });
+  const ids = [...new Set(parsedRows.flatMap(row => row.accepted.map(ticket => ticket.id)))];
+  if (ids.length === 0) return { checked: 0, deliveryFailed: 0, tokensRetired: 0 };
+
+  const abortCtrl = new AbortController();
+  const abortTimer = setTimeout(() => abortCtrl.abort(), 30_000);
+  let response;
+  try {
+    response = await fetch(EXPO_RECEIPTS_URL, {
+      method: 'POST',
+      headers: expoHeaders(),
+      body: JSON.stringify({ ids }),
+      signal: abortCtrl.signal,
+    });
+  } finally {
+    clearTimeout(abortTimer);
+  }
+  if (!response.ok) throw new Error(`Expo receipts HTTP ${response.status}`);
+  const body = await response.json();
+  const receipts = body && typeof body.data === 'object' && body.data ? body.data : {};
+  let checked = 0;
+  let deliveryFailed = 0;
+  let tokensRetired = 0;
+
+  for (const row of parsedRows) {
+    if (!row.accepted.every(ticket => receipts[ticket.id])) continue;
+    const failures = row.accepted.flatMap(ticket => {
+      const receipt = receipts[ticket.id];
+      if (receipt?.status === 'ok') return [];
+      return [{
+        code: typeof receipt?.details?.error === 'string' ? receipt.details.error : 'UnknownReceiptError',
+        message: typeof receipt?.message === 'string' ? receipt.message : '',
+        tokenFingerprint: typeof ticket.token_fingerprint === 'string' ? ticket.token_fingerprint : null,
+      }];
+    });
+    const deadFingerprints = new Set(failures
+      .filter(failure => failure.code === 'DeviceNotRegistered' && failure.tokenFingerprint)
+      .map(failure => failure.tokenFingerprint));
+    if (deadFingerprints.size > 0) {
+      const [tokens] = await pool.execute(
+        'SELECT token FROM device_tokens WHERE user_id=?',
+        [row.recipient_user_id],
+      );
+      for (const tokenRow of tokens) {
+        if (!deadFingerprints.has(tokenFingerprint(tokenRow.token))) continue;
+        const [deleted] = await pool.execute(
+          'DELETE FROM device_tokens WHERE user_id=? AND token=?',
+          [row.recipient_user_id, tokenRow.token],
+        );
+        tokensRetired += Number(deleted?.affectedRows) || 0;
+      }
+    }
+    const allFailed = failures.length === row.accepted.length;
+    const summary = failures.length
+      ? failures.map(failure => `${failure.code}${failure.message ? `: ${failure.message}` : ''}`).join('; ').slice(0, 200)
+      : null;
+    await pool.execute(
+      `UPDATE notification_log
+          SET status=?,provider_receipt_checked_at=UTC_TIMESTAMP(3),provider_receipt_error=?
+        WHERE id=? AND provider_receipt_checked_at IS NULL`,
+      [allFailed ? 'delivery_failed' : 'sent', summary, row.id],
+    );
+    checked += 1;
+    if (allFailed) deliveryFailed += 1;
+  }
+  return { checked, deliveryFailed, tokensRetired };
 }
 
 // Cron sweep — purge old device_tokens + notification_log rows.
@@ -483,6 +727,7 @@ module.exports = {
   enqueue,
   listRecent,
   sendPending,
+  checkPendingReceipts,
   purgeStale,
   preferenceAllows,
 };

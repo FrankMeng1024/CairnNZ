@@ -1,10 +1,14 @@
-const secure = { value: null as string | null };
+const mockSecureValues = new Map<string, string>();
+const secure = {
+  get value(): string | null { return mockSecureValues.get('cairn_jwt') ?? null; },
+  set value(value: string | null) { if (value == null) mockSecureValues.delete('cairn_jwt'); else mockSecureValues.set('cairn_jwt', value); },
+};
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => secure.value),
-  setItemAsync: jest.fn(async (_key: string, value: string) => { secure.value = value; }),
-  deleteItemAsync: jest.fn(async () => { secure.value = null; }),
+  getItemAsync: jest.fn(async (key: string) => mockSecureValues.get(key) ?? null),
+  setItemAsync: jest.fn(async (key: string, value: string) => { mockSecureValues.set(key, value); }),
+  deleteItemAsync: jest.fn(async (key: string) => { mockSecureValues.delete(key); }),
 }));
 
 function deferred() {
@@ -16,7 +20,7 @@ function deferred() {
 describe('AuthScreen session installation behavior', () => {
   beforeEach(() => {
     jest.resetModules();
-    secure.value = null;
+    mockSecureValues.clear();
   });
 
   test('AUTH/SCREEN-UNMOUNT-01 unmount during credential write cannot hydrate/publish A or leave A token authoritative', async () => {

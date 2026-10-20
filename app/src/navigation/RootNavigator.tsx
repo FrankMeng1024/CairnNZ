@@ -63,10 +63,13 @@ import { useCairnPresentationStore } from '../features/cairns/cairnPresentationS
 import networkMonitor from '../services/networkMonitor';
 import {
   configureCairnNotificationPresentation,
+  completeCairnNotificationResponse,
   consumeCairnNotificationResponse,
+  releaseCairnNotificationResponse,
   resumeEncounterNotifications,
   type CairnNotificationDestination,
 } from '../features/cairns/cairnEncounterNotifications';
+import { resolveCairnPresentationItems } from '../features/cairns/cairnPresentationNavigation';
 
 // v302: mark immediately after all transitive imports above resolved.
 // If app dies between `render_about_to_mount_root` (App.tsx) and
@@ -153,29 +156,32 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const { isLoggedIn, user } = useAppStore();
   const visualTheme = useVisualTheme();
-  const pendingNotificationOpen = React.useRef<CairnNotificationDestination | null>(null);
-  const pendingNotificationResponse = React.useRef<unknown | null>(null);
+  const pendingNotificationOpen = React.useRef<CairnNotificationDestination[]>([]);
+  const pendingNotificationResponse = React.useRef<unknown[]>([]);
+  const notificationOwnerRef = React.useRef('');
   const openCairnNotification = React.useCallback(async (destination: CairnNotificationDestination) => {
     const ownerId = String(useAppStore.getState().user?.id ?? '');
-    if (!useAppStore.getState().isLoggedIn || ownerId !== destination.viewerId) return;
-    const presentation = useCairnPresentationStore.getState();
-    if (presentation.viewerId !== ownerId) await presentation.initialize(ownerId);
-    else await presentation.refresh();
-    if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
+    if (!useAppStore.getState().isLoggedIn || ownerId !== destination.viewerId
+      || !destination.presentationGroupId) return false;
+    let markerIds: string[];
+    try {
+      markerIds = await resolveCairnPresentationItems(ownerId, [destination.presentationGroupId]);
+    } catch {
+      return false;
+    }
+    if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return false;
     if (!navigationRef.isReady()) {
-      pendingNotificationOpen.current = destination;
-      return;
+      if (!pendingNotificationOpen.current.some(item => item.notificationId === destination.notificationId)) {
+        pendingNotificationOpen.current = [...pendingNotificationOpen.current, destination].slice(-32);
+      }
+      return false;
     }
-    const state = useCairnPresentationStore.getState();
-    const candidates = [...state.pendingGroups, ...state.activeGroupMembers];
-    const group = destination.presentationGroupId
-      ? candidates.find(item => item.id === destination.presentationGroupId) ?? null
-      : null;
-    if (group?.singleMarkerId) {
-      navigationRef.navigate('AcquiredCairnDetail', { markerId: group.singleMarkerId });
+    if (markerIds.length === 1) {
+      navigationRef.navigate('AcquiredCairnDetail', { markerId: markerIds[0] });
     } else {
-      navigationRef.navigate('AllCairns', { initialSection: 'found' });
+      navigationRef.navigate('AllCairns', { initialSection: 'found', markerIds });
     }
+    return true;
   }, []);
   const receiveCairnNotification = React.useCallback(async (response: unknown) => {
     const app = useAppStore.getState();
@@ -184,28 +190,38 @@ export function RootNavigator() {
       // A cold-start response may arrive before persisted auth has hydrated.
       // Keep it only in memory, then re-authorize after the real account is
       // available; never infer an owner from notification data.
-      pendingNotificationResponse.current = response;
+      pendingNotificationResponse.current = [...pendingNotificationResponse.current, response].slice(-32);
       return;
     }
     const destination = await consumeCairnNotificationResponse(response, ownerId);
-    if (destination) await openCairnNotification(destination);
+    if (!destination) return;
+    const opened = await openCairnNotification(destination);
+    if (opened) await completeCairnNotificationResponse(destination);
+    else await releaseCairnNotificationResponse(destination);
   }, [openCairnNotification]);
   React.useEffect(() => {
     if (!isLoggedIn || !user?.id) {
+      notificationOwnerRef.current = '';
+      pendingNotificationOpen.current = [];
+      pendingNotificationResponse.current = [];
       usePublicCairnStore.getState().clearForAccountBoundary();
       useCairnPresentationStore.getState().clearForAccountBoundary();
       return;
     }
+    const currentOwner = String(user.id);
+    if (notificationOwnerRef.current && notificationOwnerRef.current !== currentOwner) {
+      pendingNotificationOpen.current = [];
+      pendingNotificationResponse.current = [];
+    }
+    notificationOwnerRef.current = currentOwner;
     void retryPendingFriendContentActions();
     void drainBorrowedRouteTerminalOutbox();
     void usePublicCairnStore.getState().initialize(String(user.id));
     void useCairnPresentationStore.getState().initialize(String(user.id));
     void resumeEncounterNotifications(String(user.id));
-    if (pendingNotificationResponse.current) {
-      const pending = pendingNotificationResponse.current;
-      pendingNotificationResponse.current = null;
-      void receiveCairnNotification(pending);
-    }
+    const pending = pendingNotificationResponse.current;
+    pendingNotificationResponse.current = [];
+    for (const response of pending) void receiveCairnNotification(response);
   }, [isLoggedIn, receiveCairnNotification, user?.id]);
   React.useEffect(() => {
     void configureCairnNotificationPresentation();
@@ -311,8 +327,14 @@ export function RootNavigator() {
       onReady={() => {
         markBootPhase('navigation_container_ready', { isLoggedIn: !!isLoggedIn });
         const pending = pendingNotificationOpen.current;
-        pendingNotificationOpen.current = null;
-        if (pending) void openCairnNotification(pending);
+        pendingNotificationOpen.current = [];
+        for (const destination of pending) {
+          void openCairnNotification(destination).then(opened => (
+            opened
+              ? completeCairnNotificationResponse(destination)
+              : releaseCairnNotificationResponse(destination)
+          ));
+        }
         // R113 restore: expose nav helpers + internal QA stores
         // to __cairnStores for Playwright web QA. Guarded on Platform.OS==='web'.
         try {

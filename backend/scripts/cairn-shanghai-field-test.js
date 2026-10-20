@@ -550,7 +550,14 @@ async function cleanup(args, context) {
       if (groupIds.length) {
         const groupPlaceholders = groupIds.map(() => '?').join(',');
         await conn.execute(
-          `DELETE FROM notification_log WHERE kind='memory_hit' AND related_id IN (${groupPlaceholders})`, groupIds,
+          `DELETE notification
+             FROM notification_log notification
+            WHERE notification.kind='memory_hit'
+              AND notification.related_id IN (${groupPlaceholders})
+              AND NOT EXISTS (
+                SELECT 1 FROM cairn_acquisition_events surviving
+                 WHERE surviving.presentation_group_id=notification.related_id
+              )`, groupIds,
         );
         await conn.execute(
           `DELETE FROM cairn_presentation_groups

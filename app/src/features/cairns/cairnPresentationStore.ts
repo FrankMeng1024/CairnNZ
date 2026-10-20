@@ -44,6 +44,9 @@ interface Snapshot {
   version: 1;
   viewerId: string;
   groups: CairnPresentationGroup[];
+  /** Stable group identity that has already received its principal visual/
+   * haptic attention. Event watermarks remain separate ACK authority. */
+  principalDisplayed: Record<string, true>;
   acknowledged: Record<string, string>;
   pendingAcks: Record<string, PendingAck>;
   unreadCount: number;
@@ -57,6 +60,7 @@ interface CairnPresentationState {
   activeGroup: CairnPresentationGroup | null;
   activeGroupMembers: CairnPresentationGroup[];
   activeSurface: string | null;
+  activePrincipalAttention: boolean;
   unreadCount: number;
   acquiredCount: number;
   acquiredMarkers: AcquiredCairnMapMarker[];
@@ -68,6 +72,7 @@ interface CairnPresentationState {
   refreshAcquiredMap: () => Promise<void>;
   setPresentationBlock: (key: string, blocked: boolean) => void;
   claim: (surface: string) => void;
+  markActiveDisplayed: (surface: string) => Promise<boolean>;
   acknowledgeActive: (surface: string) => Promise<boolean>;
   release: (surface: string) => void;
   clearForAccountBoundary: () => void;
@@ -83,7 +88,7 @@ let mapRefreshPromise: Promise<void> | null = null;
 const presentationBlockers = new Set<string>();
 
 function emptySnapshot(viewerId: string): Snapshot {
-  return { version: 1, viewerId, groups: [], acknowledged: {}, pendingAcks: {}, unreadCount: 0, acquiredCount: 0, acquiredMarkers: [] };
+  return { version: 1, viewerId, groups: [], principalDisplayed: {}, acknowledged: {}, pendingAcks: {}, unreadCount: 0, acquiredCount: 0, acquiredMarkers: [] };
 }
 
 function cacheKey(viewerId: string): string { return `${CACHE_PREFIX}${viewerId}`; }
@@ -148,6 +153,8 @@ async function loadSnapshot(viewerId: string): Promise<Snapshot> {
           ...emptySnapshot(viewerId),
           ...parsed,
           groups: Array.isArray(parsed.groups) ? parsed.groups.filter(validGroup) : [],
+          principalDisplayed: parsed.principalDisplayed && typeof parsed.principalDisplayed === 'object'
+            ? parsed.principalDisplayed : {},
           acknowledged: parsed.acknowledged && typeof parsed.acknowledged === 'object' ? parsed.acknowledged : {},
           pendingAcks: parsed.pendingAcks && typeof parsed.pendingAcks === 'object' ? parsed.pendingAcks : {},
           unreadCount: Math.max(0, Number(parsed.unreadCount) || 0),
@@ -219,7 +226,7 @@ function aggregateGroups(groups: CairnPresentationGroup[]): CairnPresentationGro
   if (groups.length === 1) return groups[0];
   return {
     id: `summary:${groups.map(group => group.id).join(',')}`,
-    token: `summary:${groups.map(group => `${group.token}@${group.eventThroughId}`).join(',')}`,
+    token: `summary:${groups.map(group => group.token).sort().join(',')}`,
     mergeStartedAt: Math.min(...groups.map(group => group.mergeStartedAt)),
     mergeUntil: Math.max(...groups.map(group => group.mergeUntil)),
     cairnCount: groups.reduce((total, group) => total + group.cairnCount, 0),
@@ -238,6 +245,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
   activeGroup: null,
   activeGroupMembers: [],
   activeSurface: null,
+  activePrincipalAttention: false,
   unreadCount: 0,
   acquiredCount: 0,
   acquiredMarkers: [],
@@ -263,6 +271,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         activeGroup: null,
         activeGroupMembers: [],
         activeSurface: null,
+        activePrincipalAttention: false,
         unreadCount: 0,
         acquiredCount: 0,
         acquiredMarkers: [],
@@ -279,6 +288,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
       activeGroup: null,
       activeGroupMembers: [],
       activeSurface: null,
+      activePrincipalAttention: false,
       unreadCount: 0,
       acquiredCount: 0,
       acquiredMarkers: [],
@@ -302,16 +312,33 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
     const work = (async () => {
       const snapshot = await loadSnapshot(viewerId);
       try {
-        const response = await authenticatedFetch('/api/cairn-memory/library?section=found&state=active', {
-          expectedUserId: viewerId,
-          skipLogoutOn401: true,
-        });
-        if (!current(viewerId, generation)) return;
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const body = await response.json();
-        if (!current(viewerId, generation)) return;
+        let cursor: string | null = null;
+        let hasMore = false;
+        let unreadCount = 0;
+        const rawCairns: any[] = [];
+        const seenCursors = new Set<string>();
+        do {
+          const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+          const response = await authenticatedFetch(`/api/cairn-memory/library?section=found&state=active&limit=200${suffix}`, {
+            expectedUserId: viewerId,
+            skipLogoutOn401: true,
+          });
+          if (!current(viewerId, generation)) return;
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const body = await response.json();
+          if (!current(viewerId, generation)) return;
+          rawCairns.push(...(Array.isArray(body?.cairns) ? body.cairns : []));
+          unreadCount = Math.max(unreadCount, Number(body?.unread_count) || 0);
+          hasMore = body?.has_more === true;
+          const next = typeof body?.next_cursor === 'string' && body.next_cursor ? body.next_cursor : null;
+          if (hasMore) {
+            if (!next || seenCursors.has(next)) throw new Error('INVALID_LIBRARY_CURSOR_CHAIN');
+            seenCursors.add(next);
+          }
+          cursor = next;
+        } while (hasMore);
         const seen = new Set<string>();
-        snapshot.acquiredMarkers = (Array.isArray(body?.cairns) ? body.cairns : []).flatMap((raw: any) => {
+        snapshot.acquiredMarkers = rawCairns.flatMap((raw: any) => {
           const markerId = String(raw?.marker_id ?? '');
           const lat = Number(raw?.lat);
           const lng = Number(raw?.lng);
@@ -336,8 +363,8 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
             revisionCount: Math.max(1, Number(raw?.revision_count) || 1),
           }];
         });
-        snapshot.unreadCount = Math.max(0, Number(body?.unread_count) || 0);
-        snapshot.acquiredCount = Math.max(snapshot.acquiredCount, snapshot.acquiredMarkers.length);
+        snapshot.unreadCount = Math.max(0, unreadCount);
+        snapshot.acquiredCount = snapshot.acquiredMarkers.length;
         await persist(snapshot, generation);
         if (current(viewerId, generation)) set({ acquiredMarkers: snapshot.acquiredMarkers, acquiredCount: snapshot.acquiredCount, unreadCount: snapshot.unreadCount });
       } catch {
@@ -413,6 +440,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
           activeGroup: activeUpdate,
           activeGroupMembers: activeUpdates,
           activeSurface: activeUpdate ? get().activeSurface : null,
+          activePrincipalAttention: activeUpdate ? get().activePrincipalAttention : false,
           unreadCount: snapshot.unreadCount,
           acquiredCount: snapshot.acquiredCount,
           loading: false,
@@ -420,7 +448,10 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         });
       } catch {
         if (!current(viewerId, generation)) return;
-        set({ pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null, unreadCount: 0, acquiredCount: 0, acquiredMarkers: [], loading: false, error: 'offline' });
+        // Transient transport loss cannot revoke already-authorized visible
+        // content or consume its destination. Keep presentation state and
+        // expose only the retryable offline signal.
+        set({ loading: false, error: 'offline' });
       }
     })();
     const finalPromise = work.finally(() => { if (refreshPromise === finalPromise) refreshPromise = null; });
@@ -443,7 +474,33 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
     const groups = state.pendingGroups;
     const group = aggregateGroups(groups);
     if (!group) return;
-    set({ activeGroup: group, activeGroupMembers: groups, activeSurface: surface, pendingGroups: [] });
+    const snapshot = state.viewerId ? snapshots.get(state.viewerId) : null;
+    const principal = groups.some(member => snapshot?.principalDisplayed[member.token] !== true);
+    set({ activeGroup: group, activeGroupMembers: groups, activeSurface: surface, activePrincipalAttention: principal, pendingGroups: [] });
+  },
+
+  markActiveDisplayed: async (surface) => {
+    const state = get();
+    const viewerId = state.viewerId;
+    const members = state.activeSurface === surface ? state.activeGroupMembers : [];
+    const activeToken = state.activeGroup?.token;
+    if (!viewerId || !activeToken || members.length === 0) return false;
+    const generation = bind(viewerId);
+    if (generation === null) return false;
+    const snapshot = await loadSnapshot(viewerId);
+    if (!current(viewerId, generation)
+      || get().activeSurface !== surface
+      || get().activeGroup?.token !== activeToken) return false;
+    const newlyDisplayed = members.filter(member => snapshot.principalDisplayed[member.token] !== true);
+    if (newlyDisplayed.length === 0) return true;
+    for (const member of newlyDisplayed) snapshot.principalDisplayed[member.token] = true;
+    try {
+      await persist(snapshot, generation);
+      return current(viewerId, generation);
+    } catch {
+      for (const member of newlyDisplayed) delete snapshot.principalDisplayed[member.token];
+      return false;
+    }
   },
 
   acknowledgeActive: async (surface) => {
@@ -497,6 +554,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
       activeGroup: null,
       activeGroupMembers: [],
       activeSurface: null,
+      activePrincipalAttention: false,
       pendingGroups: [...unacknowledgedMembers, ...state.pendingGroups],
     });
   },
@@ -507,7 +565,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
     refreshPromise = null;
     mapRefreshPromise = null;
     presentationBlockers.clear();
-    set({ viewerId: null, pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null, unreadCount: 0, acquiredCount: 0, acquiredMarkers: [], presentationBlocked: false, loading: false, error: null });
+    set({ viewerId: null, pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null, activePrincipalAttention: false, unreadCount: 0, acquiredCount: 0, acquiredMarkers: [], presentationBlocked: false, loading: false, error: null });
   },
 }));
 
@@ -518,6 +576,7 @@ export const __cairnPresentationTest = {
     observedViewerId = ''; accountGeneration += 1;
     useCairnPresentationStore.setState({
       viewerId: null, pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null,
+      activePrincipalAttention: false,
       unreadCount: 0, acquiredCount: 0, acquiredMarkers: [], presentationBlocked: false, loading: false, error: null,
     });
   },

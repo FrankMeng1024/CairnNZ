@@ -59,10 +59,11 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { Icon } from '../components/Icon';
 import { Spacing } from '../components/tokens';
 import { CairnStoneMark, useReduceMotion } from '../features/cairns/components/CairnPaper';
-import { CAIRN_MOTION } from '../features/cairns/cairnExperience';
+import { CAIRN_MOTION, cairnPublicationTruth } from '../features/cairns/cairnExperience';
 import { cairnMatchesIdentity } from '../features/cairns/cairnIdentity';
 
 type Step = 'gps' | 'pin' | 'content';
+const MAX_PLANT_LOCATION_AGE_MS = 2 * 60 * 1000;
 
 
 interface PlantDraft {
@@ -94,9 +95,20 @@ interface PlantDraft {
 // separate social/field-report decision and is not the moving default.
 const DEFAULT_TYPE = 'cairn';
 
-/** AsyncStorage key for a failed-plant draft, scoped by user. */
+/** AsyncStorage key for the one outstanding Plant draft, scoped by owner. */
 function draftKey(uid: string): string {
+  // Keep the deployed key so an O87/O88 failed draft is migrated in place.
   return `cairn:plant:draft:v3:${uid}`;
+}
+
+interface PersistedPlantDraft {
+  v: 4;
+  ownerUserId: string;
+  sessionId: string;
+  origin: PlantOrigin;
+  activityContext: CairnActivityContext | null;
+  savedAtMs: number;
+  draft: PlantDraft;
 }
 
 function defaultVisibility(): MarkerPermission {
@@ -231,6 +243,8 @@ export function PlantScreen() {
   ));
   const [step, setStep] = useState<Step>(initialContext.step);
   const [draft, setDraft] = useState<PlantDraft>(initialContext.draft);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const plantSessionId = useRef(`plant-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).current;
   const [submitting, setSubmitting] = useState(false);
   const [plantedResult, setPlantedResult] = useState<{
     markerId: string;
@@ -276,24 +290,20 @@ export function PlantScreen() {
     }
     const synced = plantedMarker?.synced === true || plantedMarker?.syncState === 'synced';
     if (!synced) {
-      return plantedResult.visibility === 'public'
-        ? {
-            title: 'Cairn saved for review',
-            body: `It is saved on this iPhone. Once it syncs, this exact version will be submitted for review.${activitySuffix}`,
-          }
-        : {
+      if (plantedResult.visibility === 'public' && plantedMarker) {
+        const truth = cairnPublicationTruth(plantedMarker);
+        if (truth) return { title: truth.successTitle, body: `${truth.explanation}${activitySuffix}` };
+      }
+      return {
             title: 'Cairn saved on this iPhone',
             body: `It is queued to sync. You can read it now, and retry from the Cairn if sync needs attention.${activitySuffix}`,
           };
     }
     if (plantedResult.visibility === 'public') {
-      if (plantedMarker?.publicState === 'published') {
-        return { title: 'Cairn published', body: `This exact version is now available for qualified encounters.${activitySuffix}` };
-      }
-      if (plantedMarker?.publicState === 'rejected' || plantedMarker?.publicState === 'suspended') {
-        return { title: 'Cairn not published', body: `It is saved privately. Open the Cairn to see its review status.${activitySuffix}` };
-      }
-      return { title: 'Submitted for review', body: `This exact version is saved and waiting for review.${activitySuffix}` };
+      const truth = plantedMarker ? cairnPublicationTruth(plantedMarker) : null;
+      return truth
+        ? { title: truth.successTitle, body: `${truth.explanation}${activitySuffix}` }
+        : { title: 'Cairn saved', body: `Public status is not available yet.${activitySuffix}` };
     }
     return {
       title: 'Cairn left here',
@@ -310,14 +320,24 @@ export function PlantScreen() {
    * the previous (intentional, simpler than a draft list).
    */
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setDraftHydrated(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         const raw = await storage.getItem(draftKey(userId));
-        if (cancelled || !raw) return;
-        const parsed = JSON.parse(raw) as PlantDraft;
+        if (cancelled) return;
+        if (!raw) {
+          setDraftHydrated(true);
+          return;
+        }
+        const envelope = JSON.parse(raw) as PersistedPlantDraft | PlantDraft;
+        const parsed = 'draft' in envelope ? envelope.draft : envelope;
+        const persistedOwner = 'ownerUserId' in envelope ? envelope.ownerUserId : userId;
         if (
+          persistedOwner === userId &&
           parsed && typeof parsed === 'object' &&
           typeof parsed.title === 'string' &&
           typeof parsed.text === 'string'
@@ -339,10 +359,32 @@ export function PlantScreen() {
         }
       } catch {
         // Ignore — corrupt draft is silently dropped.
+      } finally {
+        if (!cancelled) setDraftHydrated(true);
       }
     })();
     return () => { cancelled = true; };
   }, [initialContext, userId]);
+
+  // ContentStep is deliberately controlled by this single owner. Persist the
+  // complete record after hydration so Adjust/back/unmount/network failure can
+  // never split words/audience from pin provenance or Activity identity.
+  useEffect(() => {
+    if (!userId || !draftHydrated || plantedResult) return undefined;
+    const timeout = setTimeout(() => {
+      const envelope: PersistedPlantDraft = {
+        v: 4,
+        ownerUserId: userId,
+        sessionId: plantSessionId,
+        origin: route.params?.origin ?? { kind: 'standalone' },
+        activityContext: initialContext.activityContext,
+        savedAtMs: Date.now(),
+        draft,
+      };
+      void storage.setItem(draftKey(userId), JSON.stringify(envelope)).catch(() => undefined);
+    }, 120);
+    return () => clearTimeout(timeout);
+  }, [draft, draftHydrated, initialContext.activityContext, plantSessionId, plantedResult, route.params?.origin, userId]);
 
   const commit = useCallback(
     async (final: PlantDraft) => {
@@ -412,14 +454,16 @@ export function PlantScreen() {
           // The write was not accepted, so retain exactly one owner-scoped
           // draft. Account/activity changes suppress only stale UI feedback.
           try {
-            await storage.setItem(draftKey(initiatingOwnerId), JSON.stringify({
-              type: final.type,
-              title: final.title,
-              text: final.text,
-              voiceUri: final.voiceUri,
-              voiceMs: final.voiceMs,
-              visibility: final.visibility,
-            }));
+            const envelope: PersistedPlantDraft = {
+              v: 4,
+              ownerUserId: initiatingOwnerId,
+              sessionId: plantSessionId,
+              origin: route.params?.origin ?? { kind: 'standalone' },
+              activityContext,
+              savedAtMs: Date.now(),
+              draft: final,
+            };
+            await storage.setItem(draftKey(initiatingOwnerId), JSON.stringify(envelope));
           } catch { /* best-effort */ }
           if (!contextCurrent || !contextIsCurrent()) return;
           const raw = String((error as any)?.message ?? '').toLowerCase();
@@ -465,7 +509,7 @@ export function PlantScreen() {
         releaseOnCommittedCurrent: false,
       });
     },
-    [addMarker, userId, nav, initialContext]
+    [addMarker, userId, initialContext, plantSessionId, route.params?.origin]
   );
 
   const onContentSubmit = (payload: {
@@ -478,6 +522,18 @@ export function PlantScreen() {
   }) => {
     const final: PlantDraft = { ...draft, ...payload };
     setDraft(final);
+    const locationAgeMs = final.locationCapturedAtMs == null
+      ? Number.POSITIVE_INFINITY
+      : activityFreshnessNow(final.locationProvenance === 'simulator_test' ? 'simulator' : 'real')
+        - final.locationCapturedAtMs;
+    if (locationAgeMs < 0 || locationAgeMs > MAX_PLANT_LOCATION_AGE_MS) {
+      Alert.alert(
+        'Refresh this place',
+        'Your position is no longer fresh enough to leave this Cairn accurately. Your note and audience are saved while Cairn confirms the place again.',
+        [{ text: 'Confirm position', onPress: () => setStep('gps') }],
+      );
+      return;
+    }
     void commit(final);
   };
 
@@ -531,10 +587,11 @@ export function PlantScreen() {
         )}
         {step === 'content' && (
           <ContentStep
-            initialTitle={draft.title}
-            initialText={draft.text}
-            initialVisibility={draft.visibility}
-            initialType={draft.type}
+            title={draft.title}
+            text={draft.text}
+            visibility={draft.visibility}
+            type={draft.type}
+            onDraftChange={patch => setDraft(current => ({ ...current, ...patch }))}
             activityLocation={initialContext.fromActivity}
             accuracyM={draft.accuracyM}
             capturedAtMs={draft.locationCapturedAtMs}
@@ -543,7 +600,10 @@ export function PlantScreen() {
             publicEnabled={publicEnabled}
             onSubmit={onContentSubmit}
             onBack={() => initialContext.fromActivity ? nav.goBack() : setStep('pin')}
-            onAdjustLocation={() => setStep('pin')}
+            // A deliberate adjustment starts with a fresh physical fix. The
+            // parent-owned draft remains mounted in state/storage, including
+            // the Activity identity; only location evidence is replaced.
+            onAdjustLocation={() => setStep('gps')}
           />
         )}
       </View>

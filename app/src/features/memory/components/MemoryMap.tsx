@@ -106,6 +106,7 @@ interface Props {
   qaWorkspaceActive?: boolean;
   onOpenAcquiredCairn?: (markerId: string) => void;
   onOpenAcquiredGroup?: (markerIds: string[]) => void;
+  onAcquiredClusterError?: () => void;
   /** Parent owns the one stable entry veil for both map and Fog readiness. */
   presentationOwnedByParent?: boolean;
   onPresentationState?: (state: MapLoadState) => void;
@@ -128,7 +129,7 @@ export type MemoryMapHandle = {
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
-  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false, onOpenAcquiredCairn, onOpenAcquiredGroup, presentationOwnedByParent = false, onPresentationState },
+  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false, onOpenAcquiredCairn, onOpenAcquiredGroup, onAcquiredClusterError, presentationOwnedByParent = false, onPresentationState },
   ref,
 ) {
   const theme = useVisualTheme();
@@ -829,6 +830,15 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             <AcquiredCairnClusterLayer
               onOpenSingle={markerId => onOpenAcquiredCairn?.(markerId)}
               onOpenGroup={markerIds => onOpenAcquiredGroup?.(markerIds)}
+              onExpandCluster={(center, zoom) => {
+                suppressPanDetectUntilRef.current = Date.now() + 700;
+                cameraRef.current?.setCamera?.({
+                  centerCoordinate: center,
+                  zoomLevel: Math.min(22, Math.max(0, zoom)),
+                  animationDuration: 420,
+                });
+              }}
+              onClusterError={onAcquiredClusterError}
             />
             <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
           </>

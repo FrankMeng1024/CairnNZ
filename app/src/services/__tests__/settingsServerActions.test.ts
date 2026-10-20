@@ -1,4 +1,8 @@
-const mockToken = { value: null as string | null };
+const mockSecureValues = new Map<string, string>();
+const mockToken = {
+  get value(): string | null { return mockSecureValues.get('cairn_jwt') ?? null; },
+  set value(value: string | null) { if (value == null) mockSecureValues.delete('cairn_jwt'); else mockSecureValues.set('cairn_jwt', value); },
+};
 const mockAppState = {
   user: { id: 'settings-owner' } as null | { id: string },
   isLoggedIn: true,
@@ -11,9 +15,9 @@ const mockAppState = {
 };
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => mockToken.value),
-  setItemAsync: jest.fn(async (_key: string, value: string) => { mockToken.value = value; }),
-  deleteItemAsync: jest.fn(async () => { mockToken.value = null; }),
+  getItemAsync: jest.fn(async (key: string) => mockSecureValues.get(key) ?? null),
+  setItemAsync: jest.fn(async (key: string, value: string) => { mockSecureValues.set(key, value); }),
+  deleteItemAsync: jest.fn(async (key: string) => { mockSecureValues.delete(key); }),
   AFTER_FIRST_UNLOCK: 1,
 }));
 jest.mock('../crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
@@ -43,7 +47,7 @@ import * as SecureStore from 'expo-secure-store';
 const originalFetch = global.fetch;
 
 beforeEach(async () => {
-  mockToken.value = null;
+  mockSecureValues.clear();
   mockAppState.user = { id: 'settings-owner' };
   mockAppState.isLoggedIn = true;
   const transitions = require('../accountTransitionAuthority');

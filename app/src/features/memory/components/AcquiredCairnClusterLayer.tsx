@@ -1,7 +1,7 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import { buildAcquiredCairnFeatureCollection, loadAllClusterLeaves } from './acquiredCairnClusters';
+import { buildAcquiredCairnFeatureCollection, clusterLeavesShareLocation, loadAllClusterLeaves } from './acquiredCairnClusters';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 
 /**
@@ -12,13 +12,20 @@ import { useVisualTheme } from '../../../hooks/useVisualTheme';
 export function AcquiredCairnClusterLayer({
   onOpenSingle,
   onOpenGroup,
+  onExpandCluster,
+  onClusterError,
 }: {
   onOpenSingle: (markerId: string) => void;
   onOpenGroup: (markerIds: string[]) => void;
+  onExpandCluster: (center: [number, number], zoom: number) => void;
+  onClusterError?: () => void;
 }) {
   const theme = useVisualTheme();
   const markers = useCairnPresentationStore(state => state.acquiredMarkers);
+  const viewerId = useCairnPresentationStore(state => state.viewerId);
   const sourceRef = useRef<any>(null);
+  const requestGeneration = useRef(0);
+  useEffect(() => () => { requestGeneration.current += 1; }, []);
   const featureCollection = useMemo(() => buildAcquiredCairnFeatureCollection(markers), [markers]);
   const Mapbox = getMapbox() as any;
   if (!Mapbox.available || markers.length === 0) return null;
@@ -41,11 +48,28 @@ export function AcquiredCairnClusterLayer({
       await openFeatures([feature]);
       return;
     }
+    const request = ++requestGeneration.current;
+    const requestedViewer = viewerId;
     try {
       const leaves = await loadAllClusterLeaves(sourceRef.current, feature, clusterCount);
-      await openFeatures(leaves);
+      if (request !== requestGeneration.current
+        || useCairnPresentationStore.getState().viewerId !== requestedViewer) return;
+      if (leaves.length !== clusterCount) throw new Error('incomplete_cluster_membership');
+      if (clusterLeavesShareLocation(leaves)) {
+        await openFeatures(leaves);
+        return;
+      }
+      const zoom = Number(await sourceRef.current?.getClusterExpansionZoom?.(feature));
+      if (request !== requestGeneration.current
+        || useCairnPresentationStore.getState().viewerId !== requestedViewer) return;
+      const center = feature?.geometry?.coordinates;
+      if (!Array.isArray(center) || !Number.isFinite(center[0]) || !Number.isFinite(center[1]) || !Number.isFinite(zoom)) {
+        throw new Error('cluster_expansion_unavailable');
+      }
+      onExpandCluster([Number(center[0]), Number(center[1])], zoom);
     } catch {
-      onOpenGroup([]);
+      if (request === requestGeneration.current
+        && useCairnPresentationStore.getState().viewerId === requestedViewer) onClusterError?.();
     }
   };
 
@@ -73,7 +97,7 @@ export function AcquiredCairnClusterLayer({
             circleColor: [
               'case',
               ['==', ['get', 'friends_total'], ['get', 'point_count']], theme.primary,
-              ['==', ['get', 'public_total'], ['get', 'point_count']], '#B77743',
+              ['==', ['get', 'public_total'], ['get', 'point_count']], theme.cairnPublic,
               theme.accent,
             ],
             circleRadius: ['step', ['get', 'point_count'], 18, 10, 22, 50, 27],
@@ -107,7 +131,7 @@ export function AcquiredCairnClusterLayer({
           filter={['!', ['has', 'point_count']]}
           style={{
             circleRadius: 15,
-            circleColor: ['case', ['==', ['get', 'public'], 1], '#B77743', theme.primary],
+            circleColor: ['case', ['==', ['get', 'public'], 1], theme.cairnPublic, theme.primary],
             circleStrokeColor: theme.surfaceElevated,
             circleStrokeWidth: 2,
           }}

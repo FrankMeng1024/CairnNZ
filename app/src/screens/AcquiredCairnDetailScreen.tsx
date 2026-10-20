@@ -38,8 +38,11 @@ export function AcquiredCairnDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reviewMessage, setReviewMessage] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [collectionAction, setCollectionAction] = useState<'archive' | 'remove' | null>(null);
   const [showingOfflineCopy, setShowingOfflineCopy] = useState(false);
   const actionFlights = useRef(new Set<string>());
+  const collectionFlight = useRef(false);
   const loadGeneration = useRef(0);
 
   const load = useCallback(async () => {
@@ -138,9 +141,10 @@ export function AcquiredCairnDetailScreen() {
   }, [ownerId, pageIndex, revisions, route.params.markerId]);
 
   const updateCollection = async (action: 'archive' | 'remove') => {
-    const flightKey = `collection:${action}`;
-    if (actionFlights.current.has(flightKey)) return;
-    actionFlights.current.add(flightKey);
+    if (collectionFlight.current) return;
+    collectionFlight.current = true;
+    setCollectionAction(action);
+    setActionError('');
     try {
       const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/collection`, {
         method: 'PUT', body: JSON.stringify({ action }), expectedUserId: ownerId, skipLogoutOn401: true,
@@ -150,10 +154,19 @@ export function AcquiredCairnDetailScreen() {
         if (action === 'remove') await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
         void useCairnPresentationStore.getState().refreshAcquiredMap();
         nav.goBack();
-      } else setError('Could not update this Memory collection.');
+      } else if ([403, 404, 410].includes(response.status)) {
+        await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
+        setRevisions([]);
+        setError('This acquired Cairn is no longer available to this account.');
+      } else {
+        setActionError(`${action === 'archive' ? 'Archive' : 'Remove'} did not complete. The Cairn is still here; check your connection and try again.`);
+      }
     } catch {
-      setError('Could not update this Memory collection.');
-    } finally { actionFlights.current.delete(flightKey); }
+      setActionError(`${action === 'archive' ? 'Archive' : 'Remove'} did not complete. The Cairn is still here; check your connection and try again.`);
+    } finally {
+      collectionFlight.current = false;
+      if (String(useAppStore.getState().user?.id ?? '') === ownerId) setCollectionAction(null);
+    }
   };
 
   const confirmRemove = () => Alert.alert(
@@ -295,12 +308,29 @@ export function AcquiredCairnDetailScreen() {
             </View>
           ) : null}
           <View style={styles.collectionActions}>
-            <PrimaryButton label="Archive from default view" variant="secondary" onPress={() => void updateCollection('archive')} />
+            <PrimaryButton
+              label={collectionAction === 'archive' ? 'Archiving…' : 'Archive from default view'}
+              variant="secondary"
+              disabled={collectionAction !== null}
+              loading={collectionAction === 'archive'}
+              onPress={() => void updateCollection('archive')}
+            />
             <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Archive keeps every acquired version and can be restored here. Remove hides the collection and blocks future automatic encounters with this Cairn; there is no in-app restore after removal yet.</Text>
-            <TouchableOpacity onPress={confirmRemove} accessibilityRole="button" style={styles.removeAction}>
-              <Text style={[styles.removeText, { color: theme.destructive }]}>Remove from my Memory</Text>
+            <TouchableOpacity
+              onPress={confirmRemove}
+              disabled={collectionAction !== null}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'remove' }}
+              style={[styles.removeAction, collectionAction !== null && styles.disabled]}
+            >
+              <Text style={[styles.removeText, { color: theme.destructive }]}>{collectionAction === 'remove' ? 'Removing…' : 'Remove from my Memory'}</Text>
             </TouchableOpacity>
           </View>
+          {actionError ? (
+            <View style={[styles.actionError, { borderColor: theme.destructive }]}>
+              <Text accessibilityLiveRegion="polite" style={[styles.collectionHelp, { color: theme.destructive }]}>{actionError}</Text>
+            </View>
+          ) : null}
           {reviewMessage ? <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{reviewMessage}</Text> : null}
         </ScrollView>
       )}
@@ -337,4 +367,5 @@ const styles = StyleSheet.create({
   collectionHelp: { fontSize: FontSize.small, lineHeight: 17 },
   removeAction: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   removeText: { fontSize: FontSize.small, fontWeight: '700' },
+  actionError: { borderLeftWidth: 3, paddingLeft: Spacing.sm, paddingVertical: Spacing.xs },
 });

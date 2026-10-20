@@ -114,6 +114,36 @@ describe('Cairn presentation coordinator', () => {
     expect(useCairnPresentationStore.getState().pendingGroups).toEqual([]);
   });
 
+  test('one stable group receives principal attention once across 1 → 3 → 6 membership', async () => {
+    mockFetch.mockResolvedValueOnce(pending('11', 1)).mockResolvedValueOnce(response(200));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    expect(useCairnPresentationStore.getState().activePrincipalAttention).toBe(true);
+    await expect(useCairnPresentationStore.getState().markActiveDisplayed('home')).resolves.toBe(true);
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+    useCairnPresentationStore.getState().release('home');
+
+    mockFetch.mockResolvedValueOnce(pending('19', 3));
+    await useCairnPresentationStore.getState().refresh();
+    useCairnPresentationStore.getState().claim('home');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeGroup: { token: 'visit:alpha', cairnCount: 3 }, activePrincipalAttention: false,
+    });
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+    useCairnPresentationStore.getState().release('home');
+
+    // The previous acknowledgement is intentionally retryable after its
+    // dispatch failed; refresh drains that durable ACK before fetching the
+    // newly expanded group.
+    mockFetch.mockResolvedValueOnce(response(200)).mockResolvedValueOnce(pending('27', 6));
+    await useCairnPresentationStore.getState().refresh();
+    useCairnPresentationStore.getState().claim('home');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeGroup: { token: 'visit:alpha', cairnCount: 6 }, activePrincipalAttention: false,
+    });
+    expect(mockValues.get(`${__cairnPresentationTest.cachePrefix}viewer-a`)).toContain('"visit:alpha":true');
+  });
+
   test('acknowledgement does not erase the currently rendered summary on refresh', async () => {
     mockFetch.mockResolvedValueOnce(pending('11', 3)).mockResolvedValueOnce(response(200));
     await useCairnPresentationStore.getState().initialize('viewer-a');

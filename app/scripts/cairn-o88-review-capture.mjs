@@ -13,6 +13,7 @@ const ownerGeneration = 'o88-review-generation';
 const requests = [];
 const runtimeErrors = [];
 const captures = [];
+const mapboxNetwork = { requested: [], finished: [], failed: [] };
 let createdMarker = null;
 
 fs.mkdirSync(outputDir, { recursive: true });
@@ -89,6 +90,8 @@ const context = await browser.newContext({
   recordVideo: { dir: path.join(outputDir, 'video'), size: { width: 390, height: 844 } },
 });
 await context.addInitScript(() => {
+  globalThis.__cairnMapQaLocalStyle = false;
+  globalThis.__cairnMapQaTestMode = false;
   // Present before App bootstrap so the real hydrate path binds token
   // ownership to /auth/me instead of creating an ownerless token.
   localStorage.setItem('cairn_jwt', 'o88-isolated-review');
@@ -96,6 +99,23 @@ await context.addInitScript(() => {
   localStorage.setItem('cairn_onboarding_v1_done_100', 'true');
 });
 const page = await context.newPage();
+const mapboxResource = raw => {
+  try {
+    const value = new URL(raw);
+    return `${value.origin}${value.pathname}`;
+  } catch { return 'invalid-mapbox-url'; }
+};
+page.on('request', request => {
+  if (request.url().includes('mapbox.com')) mapboxNetwork.requested.push(mapboxResource(request.url()));
+});
+page.on('response', response => {
+  if (response.url().includes('mapbox.com') && response.ok()) mapboxNetwork.finished.push(mapboxResource(response.url()));
+});
+page.on('requestfailed', request => {
+  if (request.url().includes('mapbox.com')) {
+    mapboxNetwork.failed.push({ resource: mapboxResource(request.url()), error: request.failure()?.errorText ?? 'unknown' });
+  }
+});
 page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
 page.on('console', message => {
   const value = message.text();
@@ -183,6 +203,19 @@ await page.route('**/api/**', async route => {
   if (/^\/api\/cairn-memory\/revisions\/\d+\/cases$/.test(pathname)) return respond(route, { reported: true });
   if (pathname === '/api/cairn-memory/cairns/900/collection') return respond(route, { collection_state: requestBody?.action ?? 'active' });
   if (pathname === '/api/push/preferences') return respond(route, { memory_hits: false, friend_requests: true, general: true });
+  if (pathname === '/api/memory/coverage') return respond(route, {
+    coverage_version: 'o88-review-witness-v1',
+    coverage_rule_version: 4,
+    evidence_count: 1,
+    tile_count: 1,
+    rebuilt_tile_count: 0,
+    total_ms: 1,
+    stage_ms: {},
+    geometry: {
+      type: 'MultiPolygon',
+      coordinates: [[[[121.4307, 31.2337], [121.4317, 31.2337], [121.4317, 31.2347], [121.4307, 31.2347], [121.4307, 31.2337]]]],
+    },
+  });
   if (pathname === '/api/circle/markers') return respond(route, { markers: [] });
   if (pathname === '/api/memory/points' || pathname === '/api/memory/sync') return respond(route, { points: [], presence_witnesses: [] });
   if (pathname === '/api/friends' || pathname.includes('/friends/requests')) return respond(route, []);
@@ -337,6 +370,12 @@ if (await previous.isVisible().catch(() => false)) {
   await capture('11-day-found-detail-history', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA' });
 }
 
+await navigate('Memory');
+const gotIt = page.getByText('Got it', { exact: true }).last();
+if (await gotIt.isVisible().catch(() => false)) await gotIt.click();
+// Memory entry performs an authoritative presentation sync. Install the
+// deterministic group after that navigation boundary so hydration cannot
+// replace the fixture between injection and the visible assertion.
 await page.evaluate(() => {
   const stores = globalThis.__cairnStores;
   stores.useCairnPresentationStore.setState({
@@ -353,12 +392,34 @@ await page.evaluate(() => {
     presentationBlocked: false,
   });
 });
-await navigate('Memory');
-const gotIt = page.getByText('Got it', { exact: true }).last();
-if (await gotIt.isVisible().catch(() => false)) await gotIt.click();
 await page.getByTestId('walking-discovery-group-o88-encounter-token').waitFor({ state: 'visible', timeout: 20_000 });
+try {
+  await page.waitForFunction(() => {
+    const map = globalThis.__cairnMap;
+    if (!map?.loaded?.() || !map.getStyle?.()) return false;
+    const acquired = map.getSource?.('acquired-cairn-clusters');
+    const fog = map.getSource?.('memory-fog-src');
+    return Boolean(acquired && fog);
+  }, null, { timeout: 60_000 });
+} catch (error) {
+  const diagnostic = await page.evaluate(() => {
+    const map = globalThis.__cairnMap;
+    const style = map?.getStyle?.();
+    return {
+      hasMap: Boolean(map),
+      loaded: Boolean(map?.loaded?.()),
+      styleName: style?.name ?? null,
+      sourceIds: Object.keys(style?.sources ?? {}),
+      layerIds: (style?.layers ?? []).map(layer => layer.id),
+      acquiredMarkerCount: globalThis.__cairnStores?.useCairnPresentationStore?.getState?.().acquiredMarkers?.length ?? null,
+    };
+  });
+  fs.writeFileSync(path.join(outputDir, 'MAP_DIAGNOSTIC.json'), `${JSON.stringify(diagnostic, null, 2)}\n`);
+  await page.screenshot({ path: path.join(outputDir, 'MAP_DIAGNOSTIC.png') });
+  throw error;
+}
 await settle(850);
-await capture('12-day-memory-encounter', { route: 'Memory', theme: 'day', fixture: 'isolated QA', interaction: 'authoritative presentation group' });
+await capture('12-day-memory-encounter', { route: 'Memory', theme: 'day', fixture: 'isolated QA', interaction: 'authoritative presentation group + live Mapbox/Fog' });
 
 await page.setViewportSize({ width: 360, height: 780 });
 await primeActivityPlant();
@@ -383,6 +444,7 @@ const result = {
     viewports: ['360x780', '390x844', '430x932'],
     public_capability: true,
     activity_origin: 'Hike, active native-location-shaped fixture',
+    mapbox: 'live hosted Mapbox style/tiles; credential read from EAS production environment and never persisted',
   },
   assertions: [
     'Activity Plant exposes Only me, Friends and Public with audience truth.',
@@ -395,10 +457,25 @@ const result = {
   captures,
   request_count: requests.length,
   runtime_errors: runtimeErrors,
+  mapbox: {
+    requested: mapboxNetwork.requested.length,
+    finished: mapboxNetwork.finished.length,
+    failed: mapboxNetwork.failed,
+    distinct_resources: [...new Set(mapboxNetwork.finished)],
+  },
 };
 fs.writeFileSync(path.join(outputDir, 'RESULTS.json'), `${JSON.stringify(result, null, 2)}\n`);
 fs.writeFileSync(path.join(outputDir, 'REQUESTS.json'), `${JSON.stringify(requests, null, 2)}\n`);
+fs.writeFileSync(path.join(outputDir, 'MAPBOX_PROVENANCE.json'), `${JSON.stringify({
+  authority: 'EAS production environment EXPO_PUBLIC_MAPBOX_TOKEN (value excluded)',
+  renderer: 'production Expo Web MemoryScreen/mapboxAdapter.web.tsx',
+  style: 'hosted Mapbox Standard/outdoors resolved by production theme configuration',
+  ...result.mapbox,
+}, null, 2)}\n`);
 await context.close();
 await browser.close();
-if (runtimeErrors.length) throw new Error(runtimeErrors.join(' | '));
+if (runtimeErrors.length || mapboxNetwork.failed.length || mapboxNetwork.finished.length === 0) {
+  throw new Error([...runtimeErrors, ...mapboxNetwork.failed.map(item => item.error),
+    ...(mapboxNetwork.finished.length ? [] : ['no successful Mapbox resources'])].join(' | '));
+}
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

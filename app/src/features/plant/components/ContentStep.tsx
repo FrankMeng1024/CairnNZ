@@ -15,7 +15,7 @@
  *     props to MarkForm
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   KeyboardAvoidingView, Platform, Keyboard,
@@ -34,10 +34,16 @@ import { CairnPlaceAnchor } from '../../cairns/components/CairnPaper';
 import { CAIRN_TERMS, cairnAudienceCopy, publicCreationBlockReason } from '../../cairns/cairnExperience';
 
 interface Props {
-  initialTitle: string;
-  initialText: string;
-  initialVisibility: MarkerPermission;
-  initialType?: MarkerType;
+  title: string;
+  text: string;
+  visibility: MarkerPermission;
+  type?: MarkerType;
+  onDraftChange: (patch: Partial<{
+    type: MarkerType;
+    title: string;
+    text: string;
+    visibility: MarkerPermission;
+  }>) => void;
   submitting?: boolean;
   onSubmit: (payload: {
     type: MarkerType;
@@ -57,10 +63,11 @@ interface Props {
 }
 
 export function ContentStep({
-  initialTitle,
-  initialText,
-  initialVisibility,
-  initialType = 'cairn',
+  title,
+  text,
+  visibility,
+  type = 'cairn',
+  onDraftChange,
   submitting = false,
   onSubmit,
   onBack,
@@ -72,10 +79,6 @@ export function ContentStep({
   locationProvenance = null,
 }: Props) {
   const theme = useVisualTheme();
-  const [type, setType] = useState<MarkerType>(initialType);
-  const [title, setTitle] = useState(initialTitle);
-  const [text, setText] = useState(initialText);
-  const [visibility, setVisibility] = useState<MarkerPermission>(initialVisibility);
 
   const hasContent = title.trim().length > 0 || text.trim().length > 0;
   const publicBlock = publicCreationBlockReason({
@@ -146,10 +149,10 @@ export function ContentStep({
               title={title}
               note={text}
               visibility={visibility}
-              onTypeChange={setType}
-              onTitleChange={setTitle}
-              onNoteChange={setText}
-              onVisibilityChange={setVisibility}
+              onTypeChange={next => onDraftChange({ type: next })}
+              onTitleChange={next => onDraftChange({ title: next })}
+              onNoteChange={next => onDraftChange({ text: next })}
+              onVisibilityChange={next => onDraftChange({ visibility: next })}
               mode="create"
               disableVisibilityPublic={!publicEnabled}
               showLocationLockedNotice={false}

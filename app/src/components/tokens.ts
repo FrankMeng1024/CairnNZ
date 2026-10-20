@@ -80,6 +80,8 @@ export interface VisualThemeTokens {
   muted: string;
   primary: string;
   accent: string;
+  /** Warm stone authority for anonymous Public Cairns. */
+  cairnPublic: string;
   background: string;
   surface: string;
   surfaceElevated: string;
@@ -151,6 +153,7 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   muted: '#7A8982',
   primary: '#2F684F',
   accent: '#72A34B',
+  cairnPublic: '#B77743',
   background: '#F3F4EA',
   surface: 'rgba(246,244,236,0.94)',
   surfaceElevated: '#F8F6EF',
@@ -226,6 +229,7 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   muted: '#52605A',
   primary: '#5F755F',
   accent: '#8B7C58',
+  cairnPublic: '#8B6749',
   background: '#D8CEC5',
   surface: 'rgba(232,222,210,0.94)',
   surfaceElevated: '#EFE5D9',
@@ -299,6 +303,7 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   // CairnNZ action accent; it is not the color of every screen and panel.
   primary: '#8FA68B',
   accent: '#A9B792',
+  cairnPublic: '#C99468',
   background: '#151E29',
   surface: 'rgba(41,52,66,0.96)',
   surfaceElevated: '#334052',

@@ -18,6 +18,7 @@ import {
 } from './accountTransitionAuthority';
 
 const TOKEN_KEY = 'cairn_jwt';
+const TOKEN_OWNER_KEY = 'cairn_jwt_owner_v1';
 
 export interface TokenAuthority {
   token: string;
@@ -44,6 +45,21 @@ async function readRawToken(): Promise<string | null> {
 async function writeRawToken(token: string): Promise<void> {
   if (Platform.OS !== 'web') await SecureStore.setItemAsync(TOKEN_KEY, token);
   else if (typeof localStorage !== 'undefined') localStorage.setItem(TOKEN_KEY, token);
+}
+
+async function readRawOwner(): Promise<string | null> {
+  if (Platform.OS !== 'web') return SecureStore.getItemAsync(TOKEN_OWNER_KEY);
+  return typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_OWNER_KEY) : null;
+}
+
+async function writeRawOwner(ownerUserId: string): Promise<void> {
+  if (Platform.OS !== 'web') await SecureStore.setItemAsync(TOKEN_OWNER_KEY, ownerUserId);
+  else if (typeof localStorage !== 'undefined') localStorage.setItem(TOKEN_OWNER_KEY, ownerUserId);
+}
+
+async function deleteRawOwner(): Promise<void> {
+  if (Platform.OS !== 'web') await SecureStore.deleteItemAsync(TOKEN_OWNER_KEY);
+  else if (typeof localStorage !== 'undefined') localStorage.removeItem(TOKEN_OWNER_KEY);
 }
 
 async function deleteRawToken(): Promise<void> {
@@ -87,8 +103,22 @@ export async function installTokenForAccountTransition(
   return withMutationLock(async () => {
     if (!isAccountTransitionCurrent(transition)) return null;
     try {
+      // Owner is removed before credential replacement. A separate headless
+      // runtime therefore either sees an exact token+owner pair or fails
+      // closed; it can never attach Account-A location to Account B while a
+      // login/account switch is between secure writes.
+      await deleteRawOwner();
       await writeRawToken(token);
       if (!isAccountTransitionCurrent(transition)) {
+        if (await readRawToken() === token) await deleteRawToken();
+        observedToken = null;
+        observedOwnerUserId = null;
+        generation += 1;
+        return null;
+      }
+      if (ownerUserId) await writeRawOwner(String(ownerUserId));
+      if (!isAccountTransitionCurrent(transition)) {
+        await deleteRawOwner();
         if (await readRawToken() === token) await deleteRawToken();
         observedToken = null;
         observedOwnerUserId = null;
@@ -139,6 +169,7 @@ export async function bindTokenOwnerIfCurrent(
       if (!exactAuthorityMatches(authority, token)) return null;
       const owner = String(ownerUserId);
       if (observedOwnerUserId !== owner) {
+        await writeRawOwner(owner);
         observedOwnerUserId = owner;
         // Binding/rebinding is an authority mutation. A pre-bind owner-null
         // snapshot must never remain usable after the user identity is known.
@@ -163,12 +194,27 @@ export async function replaceTokenIfCurrent(
       const token = await observeToken();
       if (!exactAuthorityMatches(authority, token)) return null;
       const expectedGeneration = generation;
+      if (ownerUserId !== authority.ownerUserId) await deleteRawOwner();
       await writeRawToken(replacement);
       if (generation !== expectedGeneration
         || (transition && !isAccountTransitionCurrent(transition))) {
         // Transition loss can occur while SecureStore is awaiting its write.
         // Retire only the value this operation wrote, inside the same token
         // mutation lock, before another token consumer can observe authority.
+        if (await readRawToken() === replacement) await deleteRawToken();
+        observedToken = null;
+        observedOwnerUserId = null;
+        generation += 1;
+        return null;
+      }
+      if (ownerUserId) await writeRawOwner(String(ownerUserId));
+      else await deleteRawOwner();
+      if (generation !== expectedGeneration
+        || (transition && !isAccountTransitionCurrent(transition))) {
+        // The transition can be synchronously pre-empted while the owner
+        // companion write itself is awaiting Keychain. Remove both halves
+        // before publishing any replacement authority.
+        await deleteRawOwner();
         if (await readRawToken() === replacement) await deleteRawToken();
         observedToken = null;
         observedOwnerUserId = null;
@@ -192,6 +238,7 @@ export async function clearTokenIfCurrent(authority: TokenAuthority): Promise<bo
       const token = await observeToken();
       if (!exactAuthorityMatches(authority, token)) return false;
       const expectedGeneration = generation;
+      await deleteRawOwner();
       await deleteRawToken();
       if (generation !== expectedGeneration) {
         observedToken = null;
@@ -206,6 +253,24 @@ export async function clearTokenIfCurrent(authority: TokenAuthority): Promise<bo
     } catch (err) {
       console.warn('[tokenStore] clearTokenIfCurrent failed:', err);
       return false;
+    }
+  });
+}
+
+/**
+ * Credential access for a native TaskManager runtime that has no hydrated
+ * React account store. The durable owner companion is written only inside the
+ * token CAS lock and is cleared before account replacement/logout. Callers
+ * must still revalidate their own durable work lease around each request.
+ */
+export async function getHeadlessTokenForOwner(expectedOwnerUserId: string): Promise<string | null> {
+  if (!expectedOwnerUserId) return null;
+  return withMutationLock(async () => {
+    try {
+      const [token, owner] = await Promise.all([readRawToken(), readRawOwner()]);
+      return token && owner === String(expectedOwnerUserId) ? token : null;
+    } catch {
+      return null;
     }
   });
 }

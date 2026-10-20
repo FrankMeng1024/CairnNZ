@@ -84,9 +84,31 @@ describe('Fog exact boundary counterexamples', () => {
     expect(booleanPointInPolygon(eastSameSide, fog!)).toBe(false);
   });
 
+  test('nearest-point partition retains supported overlap on both sides of its evidence bisector', async () => {
+    const west = { lat: -41.2865, lng: 174.7762 };
+    const eastFeature = turfDestination(turfPoint([west.lng, west.lat]), 20, 90, { units: 'meters' });
+    const east = {
+      lng: eastFeature.geometry.coordinates[0],
+      lat: eastFeature.geometry.coordinates[1],
+    };
+    const built = await buildTiledMemoryDisplayEvidence([west, east], () => true);
+    expect(built?.evidence).not.toBeNull();
+    if (!built?.evidence) throw new Error('partitioned overlap unavailable');
+
+    // The ownership boundary has an intentional sub-millimetre gap. Probe
+    // 1 cm to each side at a location supported by both 30 m footprints.
+    const midpoint = turfDestination(turfPoint([west.lng, west.lat]), 10, 90, { units: 'meters' });
+    const north = turfDestination(midpoint, 20, 0, { units: 'meters' });
+    const westOfBisector = turfDestination(north, 0.01, 270, { units: 'meters' });
+    const eastOfBisector = turfDestination(north, 0.01, 90, { units: 'meters' });
+    expect(booleanPointInPolygon(westOfBisector, built.evidence)).toBe(true);
+    expect(booleanPointInPolygon(eastOfBisector, built.evidence)).toBe(true);
+    expect(booleanValid(composeFogShape(built.evidence)!)).toBe(true);
+  });
+
   test('A4/TILE-MAX-01 accepts an exact 8x8 half-open rectangle at the 64-tile cap', async () => {
     const exact64: Array<[number, number]> = [
-      [0, 0], [0.008, 0], [0.008, 0.008], [0, 0.008], [0, 0],
+      [0, 0], [0.0144, 0], [0.0144, 0.0144], [0, 0.0144], [0, 0],
     ];
     const combined = await buildTiledCombinedDisplayEvidence(emptySelfCache(), [exact64], () => true);
 

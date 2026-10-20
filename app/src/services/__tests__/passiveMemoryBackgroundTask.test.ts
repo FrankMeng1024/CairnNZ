@@ -23,6 +23,11 @@ jest.mock('expo-location', () => ({
 jest.mock('../../features/memory/services/recordMemoryEvidence', () => ({
   recordMemoryEvidence: jest.fn(async () => ({ committed: true, deduplicated: false })),
 }));
+jest.mock('../../features/memory/services/headlessMemoryDelivery', () => ({
+  deliverHeadlessPassiveMemory: jest.fn(async () => ({
+    status: 'acknowledged_and_discovered', pointCount: 1, presenceCount: 1, acquiredCount: 0,
+  })),
+}));
 jest.mock('../../features/activitySimulator/simulatorLog', () => ({
   appendSimulatorLog: jest.fn(),
   flushSimulatorLogs: jest.fn(async () => undefined),

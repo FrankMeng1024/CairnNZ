@@ -24,6 +24,22 @@ export async function loadAllClusterLeaves(
   return result;
 }
 
+export function clusterLeavesShareLocation(leaves: any[], toleranceM = 0.75): boolean {
+  if (leaves.length < 2) return true;
+  const origin = leaves[0]?.geometry?.coordinates;
+  if (!Array.isArray(origin) || !Number.isFinite(origin[0]) || !Number.isFinite(origin[1])) return false;
+  const metresPerDegreeLat = 111_320;
+  const metresPerDegreeLng = metresPerDegreeLat * Math.max(0.01, Math.cos(Number(origin[1]) * Math.PI / 180));
+  return leaves.every(leaf => {
+    const point = leaf?.geometry?.coordinates;
+    if (!Array.isArray(point) || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false;
+    return Math.hypot(
+      (Number(point[0]) - Number(origin[0])) * metresPerDegreeLng,
+      (Number(point[1]) - Number(origin[1])) * metresPerDegreeLat,
+    ) <= toleranceM;
+  });
+}
+
 export function buildAcquiredCairnFeatureCollection(markers: AcquiredCairnMapMarker[]) {
   return {
     type: 'FeatureCollection' as const,

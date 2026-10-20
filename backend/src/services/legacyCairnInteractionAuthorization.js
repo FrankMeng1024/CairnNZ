@@ -1,5 +1,7 @@
 'use strict';
 
+const { qaFixtureEligibleSql } = require('./qaFixtureEligibility');
+
 /**
  * The legacy marker vote surface predates retained Cairn revisions. A marker
  * id is never authority: a non-owner may use this compatibility path only
@@ -40,6 +42,7 @@ async function authorizedLegacyGroupInteraction(
         AND hidden.user_id IS NULL
         AND revision.availability='available'
         AND COALESCE(moderation.state,'available')='available'
+        AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users block
            WHERE (block.blocker_id=acquisition.viewer_id AND block.blocked_id=revision.owner_id)

@@ -15,11 +15,18 @@ function resourceRevision(kind, row) {
 }
 
 function sharedContentMetadata(kind, row, issuedAt = new Date()) {
+  const ordinaryExpiry = new Date(issuedAt.getTime() + SHARED_CACHE_TTL_MS);
+  const fixtureExpiry = row?.qa_expires_at == null ? null : new Date(row.qa_expires_at);
+  const expiresAt = fixtureExpiry && Number.isFinite(fixtureExpiry.getTime())
+    ? new Date(Math.min(ordinaryExpiry.getTime(), fixtureExpiry.getTime()))
+    : ordinaryExpiry;
+  const fixtureAuthority = row?.qa_batch_id
+    ? `:qa:${row.qa_batch_id}:${expiresAt.toISOString()}` : '';
   return {
     resource_revision: resourceRevision(kind, row),
-    authorization_revision: `friendship:${row.friendship_episode_id}:audience:${row.audience_epoch}`,
+    authorization_revision: `friendship:${row.friendship_episode_id}:audience:${row.audience_epoch}${fixtureAuthority}`,
     authorization_issued_at: issuedAt.toISOString(),
-    authorization_expires_at: new Date(issuedAt.getTime() + SHARED_CACHE_TTL_MS).toISOString(),
+    authorization_expires_at: expiresAt.toISOString(),
   };
 }
 

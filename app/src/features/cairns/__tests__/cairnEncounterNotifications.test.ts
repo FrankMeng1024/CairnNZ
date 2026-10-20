@@ -2,6 +2,7 @@ const mockValues = new Map<string, string>();
 const mockRegisterForPush = jest.fn();
 const mockUpdatePushPreferences = jest.fn();
 const mockGetPushPreferences = jest.fn();
+let mockOwnerId = 'viewer-a';
 
 jest.mock('../../../store/storage', () => ({
   storage: {
@@ -14,9 +15,17 @@ jest.mock('../../../services/pushService', () => ({
   updatePushPreferences: (...args: any[]) => mockUpdatePushPreferences(...args),
   getPushPreferences: (...args: any[]) => mockGetPushPreferences(...args),
 }));
+jest.mock('../../../store/useAppStore', () => ({
+  useAppStore: {
+    getState: () => ({ isLoggedIn: Boolean(mockOwnerId), user: mockOwnerId ? { id: mockOwnerId } : null }),
+  },
+}));
 import {
+  completeCairnNotificationResponse,
   consumeCairnNotificationResponse,
+  releaseCairnNotificationResponse,
   resumeEncounterNotifications,
+  setEncounterNotificationsEnabled,
   shouldShowCairnNotificationSurface,
   __encounterNotificationTest,
 } from '../cairnEncounterNotifications';
@@ -43,13 +52,20 @@ describe('Cairn encounter notification safety', () => {
     mockRegisterForPush.mockReset();
     mockUpdatePushPreferences.mockReset();
     mockGetPushPreferences.mockReset();
+    mockOwnerId = 'viewer-a';
+    __encounterNotificationTest.reset();
   });
 
-  test('accepts only the currently authenticated viewer and dedupes an open', async () => {
+  test('keeps a response retryable until navigation completes, then dedupes it', async () => {
     await expect(consumeCairnNotificationResponse(response('viewer-b'), 'viewer-a')).resolves.toBeNull();
-    await expect(consumeCairnNotificationResponse(response(), 'viewer-a')).resolves.toEqual({
+    const destination = await consumeCairnNotificationResponse(response(), 'viewer-a');
+    expect(destination).toEqual({
       viewerId: 'viewer-a', presentationGroupId: 'group-7', notificationId: 'n-1',
     });
+    await expect(consumeCairnNotificationResponse(response(), 'viewer-a')).resolves.toBeNull();
+    await releaseCairnNotificationResponse(destination!);
+    await expect(consumeCairnNotificationResponse(response(), 'viewer-a')).resolves.toEqual(destination);
+    await completeCairnNotificationResponse(destination!);
     await expect(consumeCairnNotificationResponse(response(), 'viewer-a')).resolves.toBeNull();
   });
 
@@ -70,8 +86,41 @@ describe('Cairn encounter notification safety', () => {
     mockRegisterForPush.mockResolvedValue('ExponentPushToken[test]');
     mockUpdatePushPreferences.mockResolvedValue({ memoryHits: true });
     await resumeEncounterNotifications('viewer-a');
-    expect(mockRegisterForPush).toHaveBeenCalledWith({ requestPermission: false });
-    expect(mockUpdatePushPreferences).toHaveBeenCalledWith({ memoryHits: true });
+    expect(mockRegisterForPush).toHaveBeenCalledWith(expect.objectContaining({
+      requestPermission: false, expectedUserId: 'viewer-a', isCurrent: expect.any(Function),
+    }));
+    expect(mockUpdatePushPreferences).toHaveBeenCalledWith({ memoryHits: true }, 'viewer-a');
+  });
+
+  test('latest disable wins while an earlier enable is awaiting native permission', async () => {
+    let releaseRegistration!: (value: string) => void;
+    mockRegisterForPush.mockReturnValueOnce(new Promise(resolve => { releaseRegistration = resolve; }));
+    mockUpdatePushPreferences.mockImplementation(async (update: any) => ({ memoryHits: update.memoryHits }));
+    mockGetPushPreferences.mockResolvedValue({ memoryHits: false });
+
+    const enabling = setEncounterNotificationsEnabled('viewer-a', true);
+    for (let turn = 0; turn < 20 && !releaseRegistration; turn += 1) await Promise.resolve();
+    const disabling = setEncounterNotificationsEnabled('viewer-a', false);
+    releaseRegistration('ExponentPushToken[test]');
+    await Promise.all([enabling, disabling]);
+
+    expect(mockUpdatePushPreferences.mock.calls).toEqual([
+      [{ memoryHits: false }, 'viewer-a'],
+    ]);
+    expect(mockValues.get(__encounterNotificationTest.enabledKey('viewer-a'))).toBe('0');
+  });
+
+  test('account switch during enable cannot register or persist under the new owner', async () => {
+    let releaseRegistration!: (value: string) => void;
+    mockRegisterForPush.mockReturnValueOnce(new Promise(resolve => { releaseRegistration = resolve; }));
+    mockGetPushPreferences.mockResolvedValue({ memoryHits: false });
+    const enabling = setEncounterNotificationsEnabled('viewer-a', true);
+    for (let turn = 0; turn < 20 && !releaseRegistration; turn += 1) await Promise.resolve();
+    mockOwnerId = 'viewer-b';
+    releaseRegistration('ExponentPushToken[A]');
+    await enabling;
+    expect(mockUpdatePushPreferences).not.toHaveBeenCalledWith({ memoryHits: true }, expect.anything());
+    expect(mockValues.get(__encounterNotificationTest.enabledKey('viewer-a'))).not.toBe('1');
   });
 
   test('foreground suppression applies only to encounter notifications', async () => {

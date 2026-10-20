@@ -174,6 +174,7 @@ apply_sql_file "$BACKEND_DIR/src/migrations/051_memory_coverage_read_model.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/052_cairn_placement_provenance.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/053_cairn_qa_fixture_cohorts.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/054_memory_hit_push_explicit_opt_in.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/055_notification_delivery_outbox.sql"
 
 MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
   DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \

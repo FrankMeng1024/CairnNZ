@@ -1,0 +1,9 @@
+ALTER TABLE notification_log
+  DROP INDEX idx_notification_delivery,
+  DROP INDEX idx_notification_receipts,
+  DROP COLUMN provider_receipt_error,
+  DROP COLUMN provider_receipt_checked_at,
+  DROP COLUMN provider_ticket_ids,
+  DROP COLUMN last_attempt_at,
+  DROP COLUMN next_attempt_at,
+  DROP COLUMN attempt_count;

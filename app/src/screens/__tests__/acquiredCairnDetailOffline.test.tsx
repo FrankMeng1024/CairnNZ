@@ -125,6 +125,37 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
     await waitFor(() => expect(screen.getByText('Thanks')).toBeTruthy());
   });
 
+  test('a transient Archive failure is serialized and keeps the readable page in place', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [acquired] }) });
+    let resolveArchive!: (value: any) => void;
+    mockFetch.mockReturnValueOnce(new Promise(resolve => { resolveArchive = resolve; }));
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await screen.findByText('Already found page');
+
+    fireEvent.press(screen.getByText('Archive from default view'));
+    fireEvent.press(screen.getByText('Archiving…'));
+    expect(mockFetch.mock.calls.filter(call => String(call[0]).includes('/collection'))).toHaveLength(1);
+    await act(async () => { resolveArchive({ ok: false, status: 503 }); });
+
+    expect(await screen.findByText('Archive did not complete. The Cairn is still here; check your connection and try again.')).toBeTruthy();
+    expect(screen.getByText('Already found page')).toBeTruthy();
+    expect(mockGoBack).not.toHaveBeenCalled();
+    expect(mockMarkUnavailable).not.toHaveBeenCalled();
+  });
+
+  test('an authoritative collection revocation invalidates the page instead of offering a false retry', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [acquired] }) })
+      .mockResolvedValueOnce({ ok: false, status: 410 });
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await screen.findByText('Already found page');
+    fireEvent.press(screen.getByText('Archive from default view'));
+
+    expect(await screen.findByText('This acquired Cairn is no longer available to this account.')).toBeTruthy();
+    expect(mockMarkUnavailable).toHaveBeenCalledWith('owner-a', 'marker-1');
+    expect(screen.queryByText('Already found page')).toBeNull();
+  });
+
   test('a delayed account-A history response cannot render or cache after switching to B', async () => {
     let resolveA!: (value: any) => void;
     mockFetch.mockReturnValueOnce(new Promise(resolve => { resolveA = resolve; }));

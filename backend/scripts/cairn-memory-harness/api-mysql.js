@@ -2,9 +2,11 @@
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const { performance } = require('node:perf_hooks');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 const { locationPolicyVersion } = require('../../src/services/publicLocationPolicy');
+const nonceUtil = require('../../src/utils/nonce');
 
 const baseUrl = process.env.HARNESS_API_URL;
 const jwtSecret = process.env.JWT_SECRET;
@@ -36,7 +38,9 @@ function tokenFor(id, label) {
   }, jwtSecret, { expiresIn: '2h' });
 }
 
-async function api(actor, path, { method = 'GET', body, expected = 200 } = {}) {
+async function api(actor, path, {
+  method = 'GET', body, expected = 200, includeResponse = false,
+} = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
@@ -47,7 +51,28 @@ async function api(actor, path, { method = 'GET', body, expected = 200 } = {}) {
   });
   const payload = await response.json().catch(() => null);
   assert.equal(response.status, expected, `${method} ${path}: ${JSON.stringify(payload)}`);
-  return payload;
+  return includeResponse ? { payload, response } : payload;
+}
+
+function serverTiming(response) {
+  const entries = {};
+  for (const part of String(response.headers.get('server-timing') || '').split(',')) {
+    const match = part.trim().match(/^([a-z]+);dur=([0-9.]+)$/i);
+    if (match) entries[match[1]] = Number(match[2]);
+  }
+  return entries;
+}
+
+function timingSummary(values) {
+  const sorted = values.slice().sort((a, b) => a - b);
+  assert.ok(sorted.length > 0);
+  return {
+    n: sorted.length,
+    min_ms: sorted[0],
+    p50_ms: sorted[Math.floor((sorted.length - 1) * 0.5)],
+    p95_ms: sorted[Math.ceil((sorted.length - 1) * 0.95)],
+    max_ms: sorted[sorted.length - 1],
+  };
 }
 
 async function waitForNotificationRows(db, viewerId, expectedCount) {
@@ -516,6 +541,61 @@ async function main() {
       assert.equal(loadLibrary.unread_count, total);
     }
     pass('DISC-PROD-02aa.friend-overflow-load', `20, 60, and 100 same-author Friend Cairns were all acquired into one presentation group; API timings ${JSON.stringify(overflowTimings)} ms`);
+
+    // Q18: repeat the representative 60-Cairn density with fresh viewers and
+    // places, then immediately replay the same real accepted visit. Server-
+    // Timing preserves critical-path stages without exposing content or
+    // coordinates. Seven trials make p50/p95 explicit rather than promoting
+    // one favourable run to a performance claim.
+    const densityTrials = { cold: [], warm: [] };
+    const densityStages = { cold: {}, warm: {} };
+    for (let trial = 0; trial < 7; trial += 1) {
+      const densityViewer = await actor(db, `Density60Trial${trial + 1}`);
+      await makeFriends(db, friendOwner, densityViewer);
+      const densityPlace = { lat: -38.6 - trial * 0.01, lng: 175.4 + trial * 0.001 };
+      for (let index = 0; index < 60; index += 1) {
+        await seedFriendCairn(db, friendOwner, {
+          ...densityPlace, text: `Density 60 trial ${trial + 1} / ${index + 1}`,
+        });
+      }
+      await acceptedPresence(
+        densityViewer,
+        densityPlace.lat,
+        densityPlace.lng,
+        Date.now() + 2_000 + trial * 100,
+      );
+      for (const phase of ['cold', 'warm']) {
+        const startedAt = performance.now();
+        const measured = await api(densityViewer, '/api/cairn-memory/discover', {
+          method: 'POST', body: {}, includeResponse: true,
+        });
+        const elapsed = Number((performance.now() - startedAt).toFixed(1));
+        densityTrials[phase].push(elapsed);
+        const stages = serverTiming(measured.response);
+        assert.ok(Number.isFinite(stages.total), `missing Server-Timing for ${phase}`);
+        for (const [name, value] of Object.entries(stages)) {
+          (densityStages[phase][name] ??= []).push(value);
+        }
+        if (phase === 'cold') assert.equal(measured.payload.acquired.length, 60);
+        else assert.equal(measured.payload.acquired.length, 0);
+      }
+    }
+    const densityPerformance = {
+      external: {
+        cold: timingSummary(densityTrials.cold),
+        warm: timingSummary(densityTrials.warm),
+      },
+      stages: Object.fromEntries(Object.entries(densityStages).map(([phase, stages]) => [
+        phase,
+        Object.fromEntries(Object.entries(stages).map(([name, values]) => [name, timingSummary(values)])),
+      ])),
+    };
+    assert.ok(densityPerformance.external.cold.p95_ms < 8_000,
+      `60-Cairn cold p95 regressed: ${densityPerformance.external.cold.p95_ms}ms`);
+    assert.ok(densityPerformance.external.warm.p95_ms < 2_000,
+      `60-Cairn warm p95 regressed: ${densityPerformance.external.warm.p95_ms}ms`);
+    result.performance = densityPerformance;
+    pass('DISC-PROD-02ab.density-performance', `seven real API/MySQL 60-Cairn trials produced cold/warm and pool/lock/evidence/visit/candidates/acquire/outbox/commit p50/p95: ${JSON.stringify(densityPerformance)}`);
 
     const publicFriendViewer = await actor(db, 'PublicFriendViewer');
     await makeFriends(db, friendOwner, publicFriendViewer);
@@ -1400,6 +1480,352 @@ async function main() {
     assert.ok(Number(auditState.audit_count) >= 2);
     pass('DISC-PROD-08.confirmed-removal', 'confirmed removal transaction purged revision/source/public snapshots and exact coordinates, hid linked collections, and retained metadata-only review audit rows');
 
+    // Q10: exercise the actual keyset endpoints beyond the historical hard
+    // cap. Direct fixture insertion is appropriate here: this is a retrieval
+    // completeness test, not a fabricated discovery/visit claim.
+    const pagingViewer = await actor(db, 'PagingViewer');
+    const pagingCount = 1005;
+    for (let offset = 0; offset < pagingCount; offset += 100) {
+      const count = Math.min(100, pagingCount - offset);
+      const values = [];
+      const placeholders = [];
+      for (let index = 0; index < count; index += 1) {
+        values.push(owner.id, `Pagination retained Cairn ${offset + index + 1}`,
+          -41.30 + ((offset + index) % 20) * 0.00001,
+          174.78 + Math.floor((offset + index) / 20) * 0.00001);
+        placeholders.push("(?,'cairn',?,?,?,'group',1,'healthy',DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY),DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY),1,DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY))");
+      }
+      await db.execute(
+        `INSERT INTO markers
+           (user_id,type,text,lat,lng,permission,approximate,status,created_at,updated_at,
+            content_revision,content_changed_at)
+         VALUES ${placeholders.join(',')}`,
+        values,
+      );
+    }
+    await db.execute(
+      `INSERT INTO cairn_revisions
+         (marker_id,owner_id,content_revision,content_type,content_text,lat,lng,
+          approximate,content_sha256,source_audience,audience_epoch,identity_policy,
+          friend_author_name_snapshot,availability,created_at)
+       SELECT marker.id,marker.user_id,1,'cairn',marker.text,marker.lat,marker.lng,
+              1,SHA2(CONCAT('pagination:',marker.id),256),'friends',1,
+              'friends_acquired',?,'available',
+              DATE_ADD('2026-01-01 00:00:00.000',INTERVAL marker.id MICROSECOND)
+         FROM markers marker
+        WHERE marker.user_id=? AND marker.text LIKE 'Pagination retained Cairn %'`,
+      [owner.label, owner.id],
+    );
+    await db.execute(
+      `INSERT INTO cairn_collections (viewer_id,marker_id,relationship,created_at)
+       SELECT ?,marker.id,'left',marker.created_at FROM markers marker
+        WHERE marker.user_id=? AND marker.text LIKE 'Pagination retained Cairn %'`,
+      [owner.id, owner.id],
+    );
+    await db.execute(
+      `INSERT INTO cairn_collections (viewer_id,marker_id,relationship,created_at)
+       SELECT ?,marker.id,'found',marker.created_at FROM markers marker
+        WHERE marker.user_id=? AND marker.text LIKE 'Pagination retained Cairn %'`,
+      [pagingViewer.id, owner.id],
+    );
+    await db.execute(
+      `INSERT INTO cairn_acquisitions
+         (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,
+          evidence_kind,evidence_id,evidence_observed_at,acquired_at)
+       SELECT ?,revision.marker_id,revision.id,1,'friends','presence_witness',revision.id,
+              revision.created_at,revision.created_at
+         FROM cairn_revisions revision
+         JOIN markers marker ON marker.id=revision.marker_id
+        WHERE marker.user_id=? AND marker.text LIKE 'Pagination retained Cairn %'`,
+      [pagingViewer.id, owner.id],
+    );
+
+    const pageAll = async (actorValue, section) => {
+      const ids = [];
+      let cursor = null;
+      do {
+        const payload = await api(actorValue,
+          `/api/cairn-memory/library?section=${section}&limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+        ids.push(...payload.cairns
+          .filter(item => String(item.text ?? '').includes('Pagination retained Cairn'))
+          .map(item => String(item.marker_id)));
+        cursor = payload.has_more ? payload.next_cursor : null;
+        if (payload.has_more) assert.ok(cursor);
+      } while (cursor);
+      return ids;
+    };
+    const allFoundIds = await pageAll(pagingViewer, 'found');
+    const allLeftIds = await pageAll(owner, 'left');
+    assert.equal(allFoundIds.length, pagingCount);
+    assert.equal(new Set(allFoundIds).size, pagingCount);
+    assert.equal(allLeftIds.length, pagingCount);
+    assert.equal(new Set(allLeftIds).size, pagingCount);
+    const firstFoundPage = await api(pagingViewer, '/api/cairn-memory/library?section=found&limit=200');
+    assert.equal(Number(firstFoundPage.unread_count), pagingCount);
+    pass('DISC-PROD-09.complete-pagination', 'real API/MySQL keyset traversal returned 1005 unique retained and owner Cairns with a global unread count and no historical LIMIT 1000 truncation');
+
+    // Q16: a fixture marker remains an ordinary authorized Cairn, with one
+    // additional fail-closed batch/cohort boundary. Establish the underlying
+    // retained authority for two real authenticated accounts so any denial
+    // below is specifically attributable to the QA boundary, not missing
+    // friendship, encounter or acquisition setup.
+    const qaCohortReader = await actor(db, 'QaCohortReader');
+    const qaNonCohortReader = await actor(db, 'QaNonCohortReader');
+    await makeFriends(db, owner, qaCohortReader);
+    await makeFriends(db, owner, qaNonCohortReader);
+    const fixtureBatchId = `o88-auth-${process.env.HARNESS_RUN_ID}`.slice(0, 80);
+    await db.execute(
+      `INSERT INTO cairn_qa_fixture_batches
+         (batch_id,target_environment,manifest_sha256,state,expires_at,approval_reference)
+       VALUES (?,'isolated_review',?,'active',DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 10 MINUTE),'disposable-harness-only')`,
+      [fixtureBatchId, crypto.createHash('sha256').update(fixtureBatchId).digest('hex')],
+    );
+    await db.execute(
+      'INSERT INTO cairn_qa_fixture_readers (batch_id,viewer_id) VALUES (?,?)',
+      [fixtureBatchId, qaCohortReader.id],
+    );
+
+    const qaFriend = await seedFriendCairn(db, owner, {
+      lat: -41.301, lng: 174.781, text: 'Cohort-scoped Friends fixture', revision: 1,
+    });
+    const [qaFriendRevision] = await db.execute(
+      `INSERT INTO cairn_revisions
+         (marker_id,owner_id,content_revision,content_type,content_text,lat,lng,
+          approximate,content_sha256,source_audience,audience_epoch,identity_policy,
+          friend_author_name_snapshot)
+       VALUES (?,?,1,'cairn',?,-41.301,174.781,1,?,'friends',1,
+               'friends_acquired',?)`,
+      [qaFriend.markerId, owner.id, 'Cohort-scoped Friends fixture',
+        snapshotHash({ text: 'Cohort-scoped Friends fixture', lat: -41.301, lng: 174.781 }),
+        owner.label],
+    );
+    await db.execute(
+      `INSERT INTO cairn_qa_fixtures
+         (fixture_key,batch_id,marker_id,author_id,audience,area_code,scenario,safety_state)
+       VALUES (?,?,?,?,'friends','harness','authorization_matrix','field_verified')`,
+      [`${fixtureBatchId}-friends`, fixtureBatchId, qaFriend.markerId, owner.id],
+    );
+    for (const reader of [qaCohortReader, qaNonCohortReader]) {
+      await db.execute(
+        `INSERT INTO cairn_collections (viewer_id,marker_id,relationship)
+         VALUES (?,?,'found')`,
+        [reader.id, qaFriend.markerId],
+      );
+      await db.execute(
+        `INSERT INTO cairn_acquisitions
+           (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,
+            evidence_kind,evidence_id,evidence_observed_at,acquired_at)
+         VALUES (?,?,?,1,'friends','legacy_coverage',?,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,
+        [reader.id, qaFriend.markerId, qaFriendRevision.insertId,
+          Number(qaFriend.markerId) * 10 + Number(reader.id)],
+      );
+    }
+
+    const cohortFound = await api(qaCohortReader, '/api/cairn-memory/library?section=found');
+    const nonCohortFound = await api(qaNonCohortReader, '/api/cairn-memory/library?section=found');
+    assert.equal(cohortFound.cairns.some(item => String(item.marker_id) === qaFriend.markerId), true);
+    assert.equal(nonCohortFound.cairns.some(item => String(item.marker_id) === qaFriend.markerId), false);
+    await api(qaCohortReader, `/api/cairn-memory/cairns/${qaFriend.markerId}/history`);
+    await api(qaNonCohortReader, `/api/cairn-memory/cairns/${qaFriend.markerId}/history`, { expected: 404 });
+    await api(qaCohortReader, `/api/friend-content/cairns/${qaFriend.markerId}`);
+    await api(qaNonCohortReader, `/api/friend-content/cairns/${qaFriend.markerId}`, { expected: 404 });
+    const cohortCircle = await api(qaCohortReader, '/api/circle/markers');
+    const nonCohortCircle = await api(qaNonCohortReader, '/api/circle/markers');
+    assert.equal(cohortCircle.markers.some(item => String(item.id) === qaFriend.markerId), true);
+    assert.equal(nonCohortCircle.markers.some(item => String(item.id) === qaFriend.markerId), false);
+    await api(qaCohortReader, `/api/markers/${qaFriend.markerId}/community-state`);
+    await api(qaCohortReader, `/api/markers/${qaFriend.markerId}/interact-nonce`);
+    await api(qaNonCohortReader, `/api/markers/${qaFriend.markerId}/community-state`, { expected: 404 });
+    await api(qaNonCohortReader, `/api/markers/${qaFriend.markerId}/interact-nonce`, { expected: 404 });
+
+    const qaPublic = await seedPublicCairn(db, owner, operator, {
+      lat: -41.302, lng: 174.782, text: 'Cohort-scoped Public fixture', revision: 1, epoch: 1,
+    });
+    await db.execute(
+      `INSERT INTO cairn_qa_fixtures
+         (fixture_key,batch_id,marker_id,author_id,audience,area_code,scenario,safety_state)
+       VALUES (?,?,?,?,'public','harness','authorization_matrix','field_verified')`,
+      [`${fixtureBatchId}-public`, fixtureBatchId, qaPublic.markerId, owner.id],
+    );
+    for (const reader of [qaCohortReader, qaNonCohortReader]) {
+      await db.execute(
+        `INSERT INTO public_cairn_encounters
+           (viewer_id,author_id,marker_id,publication_id,publication_epoch,content_revision,
+            evidence_witness_id,source_activity_client_id,observed_at)
+         VALUES (?,?,?,?,1,1,NULL,?,UTC_TIMESTAMP(3))`,
+        [reader.id, owner.id, qaPublic.markerId, qaPublic.publicationId, crypto.randomUUID()],
+      );
+    }
+    const cohortScene = await api(qaCohortReader, '/api/public-cairns/scene');
+    const nonCohortScene = await api(qaNonCohortReader, '/api/public-cairns/scene');
+    assert.equal(cohortScene.entries.some(item => String(item.id) === qaPublic.markerId), true);
+    assert.equal(nonCohortScene.entries.some(item => String(item.id) === qaPublic.markerId), false);
+    const cohortPublicDetail = await api(qaCohortReader, `/api/public-cairns/cairns/${qaPublic.markerId}`);
+    await api(qaNonCohortReader, `/api/public-cairns/cairns/${qaPublic.markerId}`, { expected: 404 });
+    const [[fixtureBatch]] = await db.execute(
+      'SELECT expires_at FROM cairn_qa_fixture_batches WHERE batch_id=?',
+      [fixtureBatchId],
+    );
+    assert.ok(cohortPublicDetail.cairn.authorization_revision.includes(`:qa:${fixtureBatchId}:`));
+    assert.ok(new Date(cohortPublicDetail.cairn.authorization_expires_at).getTime()
+      <= new Date(fixtureBatch.expires_at).getTime());
+    pass('DISC-PROD-10.qa-cohort-active', 'real authenticated cohort reader retained unified library/history, Friends direct/Circle, legacy interaction, Public scene/direct and batch-bounded cache authority while an equally entitled non-cohort reader received opaque absence');
+
+    await db.execute(
+      `UPDATE cairn_qa_fixture_batches
+          SET state='expired',expires_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 SECOND)
+        WHERE batch_id=?`,
+      [fixtureBatchId],
+    );
+    assert.equal(
+      (await api(qaCohortReader, '/api/cairn-memory/library?section=found')).cairns
+        .some(item => String(item.marker_id) === qaFriend.markerId),
+      false,
+    );
+    await api(qaCohortReader, `/api/cairn-memory/cairns/${qaFriend.markerId}/history`, { expected: 404 });
+    await api(qaCohortReader, `/api/friend-content/cairns/${qaFriend.markerId}`, { expected: 404 });
+    assert.equal(
+      (await api(qaCohortReader, '/api/circle/markers')).markers
+        .some(item => String(item.id) === qaFriend.markerId),
+      false,
+    );
+    await api(qaCohortReader, `/api/markers/${qaFriend.markerId}/community-state`, { expected: 404 });
+    await api(qaCohortReader, `/api/markers/${qaFriend.markerId}/interact-nonce`, { expected: 404 });
+    assert.equal(
+      (await api(qaCohortReader, '/api/public-cairns/scene')).entries
+        .some(item => String(item.id) === qaPublic.markerId),
+      false,
+    );
+    await api(qaCohortReader, `/api/public-cairns/cairns/${qaPublic.markerId}`, { expected: 404 });
+    pass('DISC-PROD-11.qa-cohort-expired', 'batch expiration immediately failed every mounted unified, Friends, Circle, legacy and Public read path closed without relying on cache age or deleting ordinary entitlement rows');
+
+    // Q15: drive the mounted legacy endpoints with real JWTs and MySQL state.
+    // Location is intentionally wrong on denied vote calls: authorization
+    // must fail opaquely before any distance can be disclosed.
+    const legacyRetained = await actor(db, 'LegacyRetained');
+    const legacyFriendUnacquired = await actor(db, 'LegacyFriendUnacquired');
+    const legacyStranger = await actor(db, 'LegacyStranger');
+    await makeFriends(db, owner, legacyRetained);
+    await makeFriends(db, owner, legacyFriendUnacquired);
+    const legacyCairn = await seedFriendCairn(db, owner, {
+      lat: -41.303, lng: 174.783, text: 'Legacy authorization matrix', revision: 1,
+    });
+    const [legacyRevision] = await db.execute(
+      `INSERT INTO cairn_revisions
+         (marker_id,owner_id,content_revision,content_type,content_text,lat,lng,
+          approximate,content_sha256,source_audience,audience_epoch,identity_policy,
+          friend_author_name_snapshot)
+       VALUES (?,?,1,'cairn',?,-41.303,174.783,1,?,'friends',1,
+               'friends_acquired',?)`,
+      [legacyCairn.markerId, owner.id, 'Legacy authorization matrix',
+        snapshotHash({ text: 'Legacy authorization matrix', lat: -41.303, lng: 174.783 }),
+        owner.label],
+    );
+    await db.execute(
+      `INSERT INTO cairn_collections (viewer_id,marker_id,relationship)
+       VALUES (?,?,'found')`,
+      [legacyRetained.id, legacyCairn.markerId],
+    );
+    const [legacyAcquisition] = await db.execute(
+      `INSERT INTO cairn_acquisitions
+         (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,
+          evidence_kind,evidence_id,evidence_observed_at,acquired_at)
+       VALUES (?,?,?,1,'friends','legacy_coverage',?,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,
+      [legacyRetained.id, legacyCairn.markerId, legacyRevision.insertId,
+        Number(legacyCairn.markerId) * 10 + Number(legacyRetained.id)],
+    );
+
+    const friendUnacquiredState = await api(
+      legacyFriendUnacquired,
+      `/api/markers/${legacyCairn.markerId}/community-state`,
+      { expected: 404 },
+    );
+    const strangerState = await api(
+      legacyStranger,
+      `/api/markers/${legacyCairn.markerId}/community-state`,
+      { expected: 404 },
+    );
+    assert.deepEqual(friendUnacquiredState, strangerState);
+    await api(legacyFriendUnacquired, `/api/markers/${legacyCairn.markerId}/interact-nonce`, { expected: 404 });
+    await api(legacyStranger, `/api/markers/${legacyCairn.markerId}/interact-nonce`, { expected: 404 });
+    for (const deniedActor of [legacyFriendUnacquired, legacyStranger]) {
+      const deniedVote = await api(deniedActor, `/api/markers/${legacyCairn.markerId}/vote`, {
+        method: 'POST', expected: 404,
+        body: {
+          type: 'like', lat: 0, lng: 0, accuracy: 5, client_ts: Date.now(),
+          nonce: nonceUtil.issue(deniedActor.id, legacyCairn.markerId).nonce,
+          client_op_id: crypto.randomUUID(),
+        },
+      });
+      assert.deepEqual(deniedVote, { error: 'Marker not found' });
+    }
+
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/community-state`);
+    const retainedNonce = await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/interact-nonce`);
+    const firstLegacyVote = await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/vote`, {
+      method: 'POST', expected: 201,
+      body: {
+        type: 'like', lat: -41.303, lng: 174.783, accuracy: 5,
+        client_ts: Date.now(), nonce: retainedNonce.nonce,
+        client_op_id: crypto.randomUUID(),
+      },
+    });
+    assert.equal(Number(firstLegacyVote.helpful_count), 1);
+    const reusedNonce = await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/vote`, {
+      method: 'POST', expected: 409,
+      body: {
+        type: 'like', lat: -41.303, lng: 174.783, accuracy: 5,
+        client_ts: Date.now(), nonce: retainedNonce.nonce,
+        client_op_id: crypto.randomUUID(),
+      },
+    });
+    assert.equal(Number(reusedNonce.helpful_count), 1);
+
+    await db.execute(
+      `UPDATE markers SET content_revision=2,text='Legacy authorization matrix v2'
+        WHERE id=?`,
+      [legacyCairn.markerId],
+    );
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/community-state`, { expected: 404 });
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/interact-nonce`, { expected: 404 });
+    await db.execute(
+      `UPDATE markers SET content_revision=1,text='Legacy authorization matrix'
+        WHERE id=?`,
+      [legacyCairn.markerId],
+    );
+
+    await db.execute(
+      'DELETE FROM friends WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)',
+      [owner.id, legacyRetained.id, legacyRetained.id, owner.id],
+    );
+    await db.execute(
+      `UPDATE friendship_episodes SET ended_at=UTC_TIMESTAMP(3),ended_reason='unfriended'
+        WHERE ended_at IS NULL AND user_low_id=LEAST(?,?) AND user_high_id=GREATEST(?,?)`,
+      [owner.id, legacyRetained.id, owner.id, legacyRetained.id],
+    );
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/community-state`);
+
+    await db.execute(
+      'INSERT INTO blocked_users (blocker_id,blocked_id) VALUES (?,?)',
+      [owner.id, legacyRetained.id],
+    );
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/community-state`, { expected: 404 });
+    await db.execute(
+      'DELETE FROM blocked_users WHERE blocker_id=? AND blocked_id=?',
+      [owner.id, legacyRetained.id],
+    );
+    await db.execute('UPDATE cairn_acquisitions SET removed_at=UTC_TIMESTAMP(3) WHERE id=?', [legacyAcquisition.insertId]);
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/community-state`, { expected: 404 });
+    await db.execute('UPDATE cairn_acquisitions SET removed_at=NULL WHERE id=?', [legacyAcquisition.insertId]);
+    await db.execute(
+      `INSERT INTO cairn_source_moderation (marker_id,owner_id,state,reason,changed_by)
+       VALUES (?,?,'under_review','disposable harness',?)`,
+      [legacyCairn.markerId, owner.id, operator.id],
+    );
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/community-state`, { expected: 404 });
+    await api(legacyRetained, `/api/markers/${legacyCairn.markerId}/interact-nonce`, { expected: 404 });
+    pass('DISC-PROD-12.legacy-mounted-matrix', 'mounted legacy state/nonce/vote routes used real auth and MySQL: strangers and unacquired friends were indistinguishable, exact retained former-friend authority survived, wrong revisions/block/removal/moderation failed closed before distance, and nonce reuse could not duplicate a vote');
+
     result.counts = {
       dense_candidates: dense.length,
       first_visit_acquisitions: first.acquired.length,
@@ -1408,6 +1834,11 @@ async function main() {
       version_history_pages: history.revisions.length,
       presentation_groups: Number(presentationState.groups_n),
       guaranteed_friend_overflow: friendOverflow.acquired.length,
+      paged_found_cairns: allFoundIds.length,
+      paged_left_cairns: allLeftIds.length,
+      qa_cohort_paths: 8,
+      qa_expired_paths: 8,
+      legacy_authorization_scenarios: 9,
     };
     result.finished_at = new Date().toISOString();
     result.summary = { passed: result.assertions.length, failed: 0 };

@@ -49,7 +49,8 @@ for migration in \
   047_friend_request_lifecycle.sql 048_friends_memory_history_repair.sql \
   049_retire_legacy_memory_sharing.sql 050_complete_legacy_memory_retirement.sql \
   051_memory_coverage_read_model.sql 052_cairn_placement_provenance.sql \
-  053_cairn_qa_fixture_cohorts.sql 054_memory_hit_push_explicit_opt_in.sql; do
+  053_cairn_qa_fixture_cohorts.sql 054_memory_hit_push_explicit_opt_in.sql \
+  055_notification_delivery_outbox.sql; do
   apply_sql "$BACKEND_DIR/src/migrations/$migration"
 done
 

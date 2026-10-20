@@ -162,7 +162,7 @@ function clearCombinedModuleScene(): void {
 export const CORRIDOR_WIDTH_M = UnlockConfig.radiusMeters;
 // Included in the content signature so corrected geometry cannot reuse an
 // older persistent/module cache for the same accepted evidence.
-export const MEMORY_FOG_GEOMETRY_REVISION = 'memory-fog-geodesic-v2';
+export const MEMORY_FOG_GEOMETRY_REVISION = 'memory-fog-geodesic-v3';
 
 export function memoryFogCombinedPreparationSettled(input: {
   scope: MemoryScope;
@@ -254,18 +254,15 @@ export function prepareMemoryFogContent(
   friendCells: Array<{ id: string; polygon: Array<[number, number]>; sourceFriendId?: string; authorizationVersion?: number; projectionVersion?: string }>,
 ): { contentSignature: string } {
   let hash = hashText(2166136261, `${MEMORY_FOG_GEOMETRY_REVISION}|${authority}`);
-  // This runs synchronously in render preparation. Keep the exact historic
-  // FNV order while avoiding iterator records and three helper calls per row;
-  // the 10k diagnostic must leave real headroom below the 150 ms JS slice.
+  // This runs synchronously in render preparation. The display geometry is a
+  // pure function of ordered coordinates; cid and timestamp do not change a
+  // rendered footprint. Hash only the geometry authority so metadata-only
+  // journal updates cannot invalidate a large cache or consume the render
+  // slice. Coordinate changes at any position still invalidate it.
   for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
     const point = points[pointIndex];
     const lat = Math.round(point.lat * 1e7);
     const lng = Math.round(point.lng * 1e7);
-    const cid = point.cid ?? '';
-    for (let charIndex = 0; charIndex < cid.length; charIndex += 1) {
-      hash ^= cid.charCodeAt(charIndex);
-      hash = Math.imul(hash, 16777619);
-    }
     hash ^= lat >>> 0;
     hash = Math.imul(hash, 16777619);
     hash ^= Math.floor(lat / 0x1_0000_0000) >>> 0;
@@ -273,11 +270,6 @@ export function prepareMemoryFogContent(
     hash ^= lng >>> 0;
     hash = Math.imul(hash, 16777619);
     hash ^= Math.floor(lng / 0x1_0000_0000) >>> 0;
-    hash = Math.imul(hash, 16777619) >>> 0;
-    const timestamp = Math.trunc(Number.isFinite(point.ts) ? Number(point.ts) : -1);
-    hash ^= timestamp >>> 0;
-    hash = Math.imul(hash, 16777619);
-    hash ^= Math.floor(timestamp / 0x1_0000_0000) >>> 0;
     hash = Math.imul(hash, 16777619) >>> 0;
   }
   for (const cell of friendCells) {
@@ -458,15 +450,20 @@ export function composePreparedCoverageFog(
   }
 }
 
-const DISPLAY_TILE_DEGREES = 0.001;
+// A roughly 200 m local work cell on latitude keeps a representative tile
+// below the foreground union budget while cutting the 10k history from 1,890
+// transient unions to about 612. The geometry revision above invalidates older
+// persisted tile layouts.
+const DISPLAY_TILE_DEGREES = 0.0018;
 // Bound each synchronous Turf union independently of total history size.
 // One output tile per group avoids a second Turf union altogether. The tile
 // clips are exclusive, so assembling them as MultiPolygon components retains
 // exactly the same supported area while bounding foreground work more tightly.
 const DISPLAY_GROUP_TILE_SPAN = 1;
-// Twenty chords under-reveal a 30 m circle by at most ~0.37 m at an
-// edge midpoint while materially shortening foreground polygon work.
-const DISPLAY_CIRCLE_STEPS = 20;
+// Sixteen chords under-reveal a 30 m circle by at most ~0.58 m at an edge
+// midpoint. That remains evidence-safe and visually sub-pixel at normal map
+// scales while reducing every retained/temporary ring by 20%.
+const DISPLAY_CIRCLE_STEPS = 16;
 const EARTH_RADIUS_M = 6_371_008.8;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 const RADIANS_TO_DEGREES = 180 / Math.PI;
@@ -475,15 +472,9 @@ const DISPLAY_CIRCLE_BEARINGS = Array.from({ length: DISPLAY_CIRCLE_STEPS }, (_,
   const bearing = index * -2 * Math.PI / DISPLAY_CIRCLE_STEPS;
   return { sin: Math.sin(bearing), cos: Math.cos(bearing) };
 });
-// Merge four adjacent footprints before touching the accumulated tile. A
-// one-footprint chunk repeatedly re-polygonized the growing tile boundary and
-// produced 150+ ms late-tile slices at 10k points. Four keeps the input small
-// while reducing both union count and short-lived allocation pressure.
-const DISPLAY_CIRCLE_CHUNK_SIZE = 4;
-// A live append is already confined to a previously validated tile and only
-// contains new suffix points. Small four-point groups avoid timer overhead
-// while retaining the one-footprint cold-history safety bound.
-const DISPLAY_APPEND_CIRCLE_CHUNK_SIZE = 4;
+// The partition path is linear/no-union, so it can yield every eight evidence
+// cells without paying repeated boundary reconstruction.
+const DISPLAY_CIRCLE_CHUNK_SIZE = 8;
 // Cache scans and simple array assembly are foreground work too. Yield on a
 // wall-time budget and record the complete interval between yields rather than
 // reporting each cheap item as if it were an independent synchronous slice.
@@ -531,6 +522,25 @@ function displayTilePolygon(x: number, y: number): Feature<Polygon> {
   return bboxPolygon([bounds.minLng, bounds.minLat, bounds.maxLng, bounds.maxLat]);
 }
 
+function clipDisplayRing(
+  input: Array<[number, number]>,
+  inside: (point: [number, number]) => boolean,
+  intersection: (from: [number, number], to: [number, number]) => [number, number],
+): Array<[number, number]> {
+  if (input.length === 0) return input;
+  const output: Array<[number, number]> = [];
+  let from = input[input.length - 1];
+  let fromInside = inside(from);
+  for (const to of input) {
+    const toInside = inside(to);
+    if (toInside !== fromInside) output.push(intersection(from, to));
+    if (toInside) output.push(to);
+    from = to;
+    fromInside = toInside;
+  }
+  return output;
+}
+
 function clipCoverageRingToDisplayTile(
   circleRing: Array<[number, number]>,
   bounds: ReturnType<typeof displayTileBounds>,
@@ -538,24 +548,6 @@ function clipCoverageRingToDisplayTile(
   const { minLng, maxLng, minLat, maxLat } = bounds;
   let ring = circleRing.slice(0, -1);
 
-  const clip = (
-    input: Array<[number, number]>,
-    inside: (point: [number, number]) => boolean,
-    intersection: (from: [number, number], to: [number, number]) => [number, number],
-  ): Array<[number, number]> => {
-    if (input.length === 0) return input;
-    const output: Array<[number, number]> = [];
-    let from = input[input.length - 1];
-    let fromInside = inside(from);
-    for (const to of input) {
-      const toInside = inside(to);
-      if (toInside !== fromInside) output.push(intersection(from, to));
-      if (toInside) output.push(to);
-      from = to;
-      fromInside = toInside;
-    }
-    return output;
-  };
   const verticalIntersection = (lng: number) => (
     from: [number, number],
     to: [number, number],
@@ -574,10 +566,10 @@ function clipCoverageRingToDisplayTile(
   // Sutherland-Hodgman is exact for this convex polygon/axis-aligned rectangle
   // case. New vertices stay on original circle chords, so clipping cannot
   // reveal outside the evidence-bounded footprint.
-  ring = clip(ring, ([lng]) => lng >= minLng, verticalIntersection(minLng));
-  ring = clip(ring, ([lng]) => lng <= maxLng, verticalIntersection(maxLng));
-  ring = clip(ring, ([, lat]) => lat >= minLat, horizontalIntersection(minLat));
-  ring = clip(ring, ([, lat]) => lat <= maxLat, horizontalIntersection(maxLat));
+  ring = clipDisplayRing(ring, ([lng]) => lng >= minLng, verticalIntersection(minLng));
+  ring = clipDisplayRing(ring, ([lng]) => lng <= maxLng, verticalIntersection(maxLng));
+  ring = clipDisplayRing(ring, ([, lat]) => lat >= minLat, horizontalIntersection(minLat));
+  ring = clipDisplayRing(ring, ([, lat]) => lat <= maxLat, horizontalIntersection(maxLat));
   const deduplicated = ring.filter((point, index) => {
     const prior = ring[index - 1];
     return !prior || prior[0] !== point[0] || prior[1] !== point[1];
@@ -589,6 +581,59 @@ function clipCoverageRingToDisplayTile(
     ? deduplicated
     : [...deduplicated, first];
   return polygon([closed]);
+}
+
+function partitionCoverageRingToNearestPoint(
+  clippedRing: Array<[number, number]>,
+  ownerIndex: number,
+  points: Array<{ lat: number; lng: number }>,
+  longitudeScale: number,
+): Polygon['coordinates'] | null {
+  const owner = points[ownerIndex];
+  let ring = clippedRing.slice(0, -1);
+  for (let neighborIndex = 0; neighborIndex < points.length; neighborIndex += 1) {
+    if (neighborIndex === ownerIndex) continue;
+    const neighbor = points[neighborIndex];
+    const dx = (neighbor.lng - owner.lng) * longitudeScale;
+    const dy = neighbor.lat - owner.lat;
+    const distanceSquared = dx * dx + dy * dy;
+    if (distanceSquared <= 1e-24) {
+      // Identical evidence has identical coverage. Give it to the first stable
+      // index so duplicate observations cannot create overlapping components.
+      if (neighborIndex < ownerIndex) return null;
+      continue;
+    }
+    const distance = Math.sqrt(distanceSquared);
+    // Pull both owners a sub-millimetre away from the shared bisector. The
+    // resulting gap is evidence-safe and prevents invalid shared MultiPolygon
+    // edges without becoming visible at any supported map scale.
+    const threshold = distanceSquared / 2 - distance * DISPLAY_TILE_CLIP_EPSILON_DEGREES;
+    const signed = ([lng, lat]: [number, number]) => (
+      (lng - owner.lng) * longitudeScale * dx
+      + (lat - owner.lat) * dy
+      - threshold
+    );
+    ring = clipDisplayRing(
+      ring,
+      point => signed(point) <= 0,
+      (from, to) => {
+        const fromSigned = signed(from);
+        const toSigned = signed(to);
+        const ratio = fromSigned / (fromSigned - toSigned);
+        return [
+          from[0] + (to[0] - from[0]) * ratio,
+          from[1] + (to[1] - from[1]) * ratio,
+        ];
+      },
+    );
+    if (ring.length < 3) return null;
+  }
+  const deduplicated = ring.filter((point, index) => {
+    const prior = ring[index - 1];
+    return !prior || point[0] !== prior[0] || point[1] !== prior[1];
+  });
+  if (deduplicated.length < 3) return null;
+  return [[...deduplicated, deduplicated[0]]];
 }
 
 export function serializeDisplayGeometryCache(
@@ -683,36 +728,35 @@ async function buildClippedTileEvidence(
   sliceDurationsMs: number[],
   sliceObserver: DisplayGeometrySliceObserver | undefined,
   tileKey: string,
-  initial: Feature<Polygon | MultiPolygon> | null = null,
+  _initial: Feature<Polygon | MultiPolygon> | null = null,
   chunkSize = DISPLAY_CIRCLE_CHUNK_SIZE,
 ): Promise<{ cancelled: boolean; evidence: Feature<Polygon | MultiPolygon> | null }> {
-  // Build an append suffix independently, then merge it into the validated
-  // prior tile once. Repeatedly unioning every new point into the full cached
-  // tile made a small live append pay the historical complexity each time.
-  const baseEvidence = initial;
-  let evidence: Feature<Polygon | MultiPolygon> | null = null;
+  // Partition every clipped footprint by the nearest evidence centre. These
+  // convex cells have disjoint interiors and collectively under-approximate
+  // the same circle union, so they can be assembled without a non-preemptible
+  // polygon union. Every cell remains inside its source's 30 m chord.
+  const polygons: Polygon['coordinates'][] = [];
+  const longitudeScale = Math.max(1e-6, Math.abs(Math.cos(
+    ((tileBounds.minLat + tileBounds.maxLat) / 2) * DEGREES_TO_RADIANS,
+  )));
   let sliceStartedAt = Date.now();
   for (let offset = 0; offset < points.length; offset += chunkSize) {
     if (!shouldContinue()) return { cancelled: true, evidence: null };
-    const circles: Array<Feature<Polygon>> = [];
     const chunkEnd = Math.min(points.length, offset + chunkSize);
     for (let pointIndex = offset; pointIndex < chunkEnd; pointIndex += 1) {
       const clipped = clipCoverageRingToDisplayTile(
         evidenceBoundedCoverageRing(points[pointIndex]),
         tileBounds,
       );
-      if (clipped) circles.push(clipped);
+      if (!clipped) continue;
+      const partitioned = partitionCoverageRingToNearestPoint(
+        clipped.geometry.coordinates[0] as Array<[number, number]>,
+        pointIndex,
+        points,
+        longitudeScale,
+      );
+      if (partitioned) polygons.push(partitioned);
     }
-    if (circles.length === 0) continue;
-    const addition = circles.length === 1
-      ? circles[0]
-      : unionTurf(featureCollection(circles)) as Feature<Polygon | MultiPolygon> | null;
-    if (!addition?.geometry) throw new Error('local_union_unavailable');
-    const merged = evidence
-      ? unionTurf(featureCollection([evidence, addition]))
-      : addition;
-    if (!merged?.geometry) throw new Error('local_merge_unavailable');
-    evidence = merged as Feature<Polygon | MultiPolygon>;
     // Several cheap local operations may share one foreground turn. The
     // complete interval between actual yields is the reported sync slice.
     if (Date.now() - sliceStartedAt >= DISPLAY_SCAN_SLICE_BUDGET_MS) {
@@ -729,19 +773,9 @@ async function buildClippedTileEvidence(
     itemCount: points.length,
   });
   await yieldToEventLoop();
-  if (baseEvidence) {
-    if (!evidence) return { cancelled: false, evidence: baseEvidence };
-    if (!shouldContinue()) return { cancelled: true, evidence: null };
-    const startedAt = Date.now();
-    const merged = unionTurf(featureCollection([baseEvidence, evidence]));
-    if (!merged?.geometry) throw new Error('append_merge_unavailable');
-    evidence = merged as Feature<Polygon | MultiPolygon>;
-    recordDisplayGeometrySlice(sliceDurationsMs, sliceObserver, 'append_merge', startedAt, {
-      tileKey,
-      itemCount: points.length,
-    });
-    await yieldToEventLoop();
-  }
+  const evidence = polygons.length === 0
+    ? null
+    : polygons.length === 1 ? polygon(polygons[0]) : multiPolygon(polygons);
   return { cancelled: false, evidence };
 }
 
@@ -848,24 +882,15 @@ export async function buildTiledMemoryDisplayEvidence(
     await yieldToEventLoop();
     const tilePolygons: Polygon['coordinates'][] = [];
     try {
-      const appendOnly = cached
-        && cached.pointCount < tilePoints.length
-        && signature.startsWith(`${cached.signature};`);
-      const initialEvidence = appendOnly && cached.polygons.length > 0
-        ? (cached.polygons.length === 1
-          ? polygon(cached.polygons[0])
-          : multiPolygon(cached.polygons))
-        : null;
-      const pointsToBuild = appendOnly ? tilePoints.slice(cached.pointCount) : tilePoints;
       const local = await buildClippedTileEvidence(
-        pointsToBuild,
+        tilePoints,
         tileBounds,
         shouldContinue,
         sliceDurationsMs,
         sliceObserver,
         key,
-        initialEvidence,
-        appendOnly ? DISPLAY_APPEND_CIRCLE_CHUNK_SIZE : DISPLAY_CIRCLE_CHUNK_SIZE,
+        null,
+        DISPLAY_CIRCLE_CHUNK_SIZE,
       );
       if (local.cancelled) return null;
       if (local.evidence?.geometry.type === 'Polygon') tilePolygons.push(local.evidence.geometry.coordinates);
@@ -949,22 +974,30 @@ export async function buildTiledMemoryDisplayEvidence(
     });
     await yieldToEventLoop();
     startedAt = Date.now();
-    const features = entries.flatMap(([, entry]) => entry.polygons.map(coordinates => polygon(coordinates)));
+    const featureCount = entries.reduce((total, [, entry]) => total + entry.polygons.length, 0);
     let groupPolygons: Polygon['coordinates'][] = [];
-    if (features.length === 1) {
-      groupPolygons = [features[0].geometry.coordinates];
-    } else if (features.length > 1) {
-      try {
-        const merged = unionTurf(featureCollection(features));
-        if (merged?.geometry.type === 'Polygon') groupPolygons = [merged.geometry.coordinates];
-        else if (merged?.geometry.type === 'MultiPolygon') groupPolygons = merged.geometry.coordinates;
-      } catch (error: any) {
-        log('fog.group_union_failed', {
-          group: groupKey,
-          polygons_n: features.length,
-          err: String(error?.message ?? error).slice(0, 100),
-        });
-        return null;
+    if (entries.length === 1) {
+      // DISPLAY_GROUP_TILE_SPAN is one: these components have already been
+      // unioned and clipped inside the same exclusive tile. Preserve them
+      // directly instead of repeating an equivalent Turf union.
+      groupPolygons = entries[0][1].polygons;
+    } else {
+      const features = entries.flatMap(([, entry]) => entry.polygons.map(coordinates => polygon(coordinates)));
+      if (features.length === 1) {
+        groupPolygons = [features[0].geometry.coordinates];
+      } else if (features.length > 1) {
+        try {
+          const merged = unionTurf(featureCollection(features));
+          if (merged?.geometry.type === 'Polygon') groupPolygons = [merged.geometry.coordinates];
+          else if (merged?.geometry.type === 'MultiPolygon') groupPolygons = merged.geometry.coordinates;
+        } catch (error: any) {
+          log('fog.group_union_failed', {
+            group: groupKey,
+            polygons_n: features.length,
+            err: String(error?.message ?? error).slice(0, 100),
+          });
+          return null;
+        }
       }
     }
     groupCache.set(groupKey, { signature, polygons: groupPolygons });
@@ -972,7 +1005,7 @@ export async function buildTiledMemoryDisplayEvidence(
     rebuiltGroupCount += 1;
     recordDisplayGeometrySlice(sliceDurationsMs, sliceObserver, 'union_group', startedAt, {
       tileKey: groupKey,
-      itemCount: features.length,
+      itemCount: featureCount,
     });
     await yieldToEventLoop();
     groupScanSliceStartedAt = Date.now();

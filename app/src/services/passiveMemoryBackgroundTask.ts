@@ -9,6 +9,7 @@ import {
 import { passiveBackgroundMemoryCapability } from '../features/memory/services/passiveMemoryCapability';
 import { recordMemoryEvidence } from '../features/memory/services/recordMemoryEvidence';
 import { passiveMemoryRevocationKey } from '../features/memory/services/passiveMemoryAuthority';
+import { deliverHeadlessPassiveMemory } from '../features/memory/services/headlessMemoryDelivery';
 import type { RealGpsContinuityState, RealGpsObservation } from '../features/activity/realGpsContinuity';
 
 export const PASSIVE_MEMORY_BACKGROUND_TASK = 'cairn-passive-memory-location-v1';
@@ -290,10 +291,28 @@ export async function handlePassiveMemoryBackgroundTask({ data, error }: { data:
       rawOrdinal,
       continuityState: continuity,
     }));
+    let deliveryStatus = 'not_attempted';
+    let deliveredAcquisitions = 0;
+    if (acceptedCount > 0) {
+      const delivery = await deliverHeadlessPassiveMemory({
+        ownerUserId: context.ownerUserId,
+        passiveEpoch: context.epoch,
+        authorityIsCurrent: async () => {
+          const authority = await currentContext();
+          return authority?.ownerUserId === context.ownerUserId
+            && authority?.epoch === context.epoch
+            && authority.source === 'real';
+        },
+      });
+      deliveryStatus = delivery.status;
+      deliveredAcquisitions = delivery.acquiredCount;
+    }
     appendSimulatorLog('MEMORY_EVIDENCE', 'passive_memory_background_batch_v1', {
       batchCount: locations.length,
       acceptedCount,
       rejectedCount,
+      deliveryStatus,
+      deliveredAcquisitions,
       epochSuffix: context.epoch.slice(-8),
     }, { userId: context.ownerUserId, coordinateSource: 'none', force: true });
     await flushSimulatorLogs(context.ownerUserId).catch(() => undefined);

@@ -199,6 +199,7 @@ export function MemoryScreen() {
   const acquiredMarkers = useCairnPresentationStore(state => state.acquiredMarkers);
   const acquiredUnreadCount = useCairnPresentationStore(state => state.unreadCount);
   const [acquiredGroupIds, setAcquiredGroupIds] = useState<string[] | null>(null);
+  const [acquiredClusterError, setAcquiredClusterError] = useState(false);
   const acquiredGroupRows = useMemo(() => {
     if (!acquiredGroupIds) return [];
     const byId = new Map(acquiredMarkers.map(marker => [marker.markerId, marker]));
@@ -1136,12 +1137,13 @@ export function MemoryScreen() {
           flyToTarget={flyToTarget}
           onOpenAcquiredCairn={markerId => nav.navigate('AcquiredCairnDetail', { markerId })}
           onOpenAcquiredGroup={markerIds => {
-            if (markerIds.length === 0) nav.navigate('AllCairns', { initialSection: 'found' });
-            else setAcquiredGroupIds(stableAcquiredGroupOrder(
+            setAcquiredClusterError(false);
+            setAcquiredGroupIds(stableAcquiredGroupOrder(
               markerIds,
               useCairnPresentationStore.getState().acquiredMarkers,
             ));
           }}
+          onAcquiredClusterError={() => setAcquiredClusterError(true)}
           onMapMoved={() => {
             if (mountKeyRef.current === mountKey) setMapMoved(true);
           }}
@@ -1411,10 +1413,24 @@ export function MemoryScreen() {
         safeBottom={insets.bottom}
         bottomOffset={176}
         blocked={Boolean(showHint || acquiredGroupIds || pickModalOpen || hierarchyOpen || !memoryEntryUsable)}
-        onOpen={(markerId) => markerId
+        onOpen={(markerId, markerIds) => markerId
           ? nav.navigate('AcquiredCairnDetail', { markerId })
-          : nav.navigate('AllCairns', { initialSection: 'found' })}
+          : nav.navigate('AllCairns', { initialSection: 'found', markerIds })}
       />
+
+      {acquiredClusterError ? (
+        <TouchableOpacity
+          style={[styles.slowBanner, { top: insets.top + 254, left: 80, right: 12, zIndex: 14 }]}
+          onPress={() => setAcquiredClusterError(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss cluster retry message"
+        >
+          <Icon name="RotateCcw" size={13} color={theme.iconInactive} strokeWidth={2.2} />
+          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={2}>
+            Could not resolve every Cairn · Dismiss, then tap the cluster to retry
+          </Text>
+        </TouchableOpacity>
+      ) : null}
 
       <ModalCard visible={showHint && isMemoryFocused} onDismiss={dismissHint} testID="memory-unlock-guidance">
           <View>

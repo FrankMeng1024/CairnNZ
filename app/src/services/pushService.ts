@@ -26,11 +26,19 @@ import { crashLogger } from './crashLogger';
 
 let cachedToken: string | null = null;
 
-export async function registerForPush(options: { requestPermission?: boolean } = {}): Promise<string | null> {
+export async function registerForPush(options: {
+  requestPermission?: boolean;
+  expectedUserId?: string;
+  isCurrent?: () => boolean;
+} = {}): Promise<string | null> {
   if (Platform.OS === 'web') return null;
+  const current = () => options.isCurrent?.() !== false;
   try {
+    if (!current()) return null;
     const Notifications = await import('expo-notifications');
+    if (!current()) return null;
     const Device = await import('expo-device');
+    if (!current()) return null;
 
     // Simulator / emulator returns no token — bail early.
     if (!Device.isDevice) {
@@ -40,10 +48,12 @@ export async function registerForPush(options: { requestPermission?: boolean } =
 
     // Ask permission. If already granted, existingStatus is 'granted'.
     const settings = await Notifications.getPermissionsAsync();
+    if (!current()) return null;
     let status = settings.status;
     if (status !== 'granted') {
       if (options.requestPermission === false) return null;
       const req = await Notifications.requestPermissionsAsync();
+      if (!current()) return null;
       status = req.status;
     }
     if (status !== 'granted') {
@@ -57,13 +67,16 @@ export async function registerForPush(options: { requestPermission?: boolean } =
         name: 'Cairn',
         importance: Notifications.AndroidImportance.DEFAULT,
       });
+      if (!current()) return null;
     }
 
     const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID
       || (await import('expo-constants')).default.expoConfig?.extra?.eas?.projectId;
+    if (!current()) return null;
     const tokenObj = await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined,
     );
+    if (!current()) return null;
     const token = tokenObj?.data;
     if (!token) {
       crashLogger.breadcrumb('push:no_token_returned');
@@ -75,11 +88,13 @@ export async function registerForPush(options: { requestPermission?: boolean } =
     try {
       const registered = await authenticatedFetch('/api/push/register', {
         method: 'POST',
+        expectedUserId: options.expectedUserId,
         body: JSON.stringify({
           token,
           platform: Platform.OS === 'ios' ? 'ios' : 'android',
         }),
       });
+      if (!current()) return null;
       if (!registered.ok) {
         crashLogger.breadcrumb(`push:register_failed status=${registered.status}`);
         return null;
@@ -139,14 +154,14 @@ export interface PushPreferences {
   announcements: boolean;
 }
 
-export async function getPushPreferences(): Promise<PushPreferences | null> {
+export async function getPushPreferences(expectedUserId?: string): Promise<PushPreferences | null> {
   // Sprint 6 round-43 R43B5: log preference fetch failures so a
   // 401 (auth expired) or 500 (server issue) is diagnosable instead
   // of silently rendering defaults + overwriting server state on
   // next PATCH. Return value stays null on any failure — no behavior
   // change, purely observability.
   try {
-    const res = await authenticatedFetch('/api/push/preferences');
+    const res = await authenticatedFetch('/api/push/preferences', { expectedUserId });
     if (!res.ok) {
       // eslint-disable-next-line no-console
       console.warn('[pushService] getPushPreferences non-OK:', res.status);
@@ -162,10 +177,12 @@ export async function getPushPreferences(): Promise<PushPreferences | null> {
 
 export async function updatePushPreferences(
   update: Partial<PushPreferences>,
+  expectedUserId?: string,
 ): Promise<PushPreferences | null> {
   try {
     const res = await authenticatedFetch('/api/push/preferences', {
       method: 'PATCH',
+      expectedUserId,
       body: JSON.stringify(update),
     });
     if (!res.ok) {
