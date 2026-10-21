@@ -476,7 +476,9 @@ await page.getByTestId('found-cairn-row-900').click();
 await routeName('AcquiredCairnDetail');
 await page.getByTestId('acquired-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
 const archiveStartedAt = Date.now();
-await page.getByLabel('Archive from default view').click();
+await page.getByLabel('Manage found Cairn').click();
+await page.getByTestId('acquired-cairn-manage-sheet').waitFor({ state: 'visible' });
+await page.getByLabel('Archive from Current').click();
 await routeName('AllCairns');
 motionEvidence.push({
   action: 'archive', start_ms: archiveStartedAt - runStartedAt, end_ms: Date.now() - runStartedAt,

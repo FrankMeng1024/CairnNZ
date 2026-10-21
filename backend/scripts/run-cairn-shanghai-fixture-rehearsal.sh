@@ -9,10 +9,16 @@ CONTAINER="cairn-shanghai-o88-${SAFE_RUN_ID}"
 DB_NAME="cairn_shanghai_${SAFE_RUN_ID}"
 DB_PASSWORD="shanghai-${SAFE_RUN_ID}-local-only"
 MYSQL_IMAGE="${HARNESS_MYSQL_IMAGE:-mysql:8.0.36}"
+CLEANUP_BATCH_MODE="${SHANGHAI_CLEANUP_BATCH_MODE:-explicit-expired}"
 OUTPUT_DIR="${EVIDENCE_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/cairn-shanghai-rehearsal.XXXXXX")}"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cairn-shanghai-runtime.XXXXXX")"
 MANIFEST="$SCRIPT_DIR/cairn-shanghai-fixtures/manifest.o88.json"
 TOOL="$SCRIPT_DIR/cairn-shanghai-field-test.js"
+
+case "$CLEANUP_BATCH_MODE" in
+  explicit-expired|active-elapsed|active-valid) ;;
+  *) echo "unsupported SHANGHAI_CLEANUP_BATCH_MODE: $CLEANUP_BATCH_MODE" >&2; exit 2 ;;
+esac
 
 cleanup() {
   # mysql:8 declares /var/lib/mysql as an anonymous volume. Remove that
@@ -123,16 +129,20 @@ run_tool approval-plan --manifest="$MANIFEST" --environment=isolated \
   > "$OUTPUT_DIR/03-approval-plan.json"
 OWNER_APPROVAL="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).owner_approval)" "$OUTPUT_DIR/03-approval-plan.json")"
 CLEANUP_AUTHORIZATION="$TEMP_DIR/cleanup-authorization.json"
-node - "$FIELD_REVIEW" "$CLEANUP_AUTHORIZATION" "$OWNER_APPROVAL" <<'NODE'
+node - "$FIELD_REVIEW" "$MANIFEST" "$CLEANUP_AUTHORIZATION" "$OWNER_APPROVAL" <<'NODE'
 const fs = require('fs');
-const [fieldReviewFile, output, expectedActivationApproval] = process.argv.slice(2);
+const [fieldReviewFile, manifestFile, output, expectedActivationApproval] = process.argv.slice(2);
 const review = JSON.parse(fs.readFileSync(fieldReviewFile));
 const now = Date.now();
+const manifest = JSON.parse(fs.readFileSync(manifestFile));
 fs.writeFileSync(output, JSON.stringify({
-  schema_version: 1, purpose: 'cleanup-only', batch_id: review.batch_id,
+  schema_version: 2, purpose: 'cleanup-only', batch_id: review.batch_id,
   manifest_sha256: review.manifest_sha256, target_fingerprint: review.target_fingerprint,
   target_realm: review.target_realm, target_allowlist_sha256: review.target_allowlist_sha256,
   expected_activation_approval: expectedActivationApproval,
+  fixture_keys: manifest.fixtures.map(item => item.key),
+  reader_ids: review.reader_ids, public_author_ids: review.public_author_ids,
+  friend_author_ids: review.friend_author_ids,
   cleanup_scope: review.cleanup_scope, authorized_by: 'disposable-mysql-rehearsal',
   authorized_at: new Date(now).toISOString(),
   cleanup_approval_expires_at: new Date(now + (2 * 86400000)).toISOString(),
@@ -225,24 +235,231 @@ MIXED_PROBE_JSON="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 
 printf '%s\n' "$MIXED_PROBE_JSON" > "$OUTPUT_DIR/08b-mixed-groups-created.json"
 FIXTURE_MARKER_IDS="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
   "SELECT GROUP_CONCAT(marker_id ORDER BY marker_id) FROM ${DB_NAME}.cairn_qa_fixtures WHERE batch_id='o88-shanghai-encounter-20261020'")"
-# Expiry must block all creation/update paths, but it must not strand a known
-# batch. The separate cleanup-only grant is deliberately renewed and remains
-# authoritative after the activation and batch lifetimes have ended.
+# Exercise each schema-valid cleanup starting state in an independent disposable
+# database. Expiry must block creation/update but must never strand the exact
+# batch from a current cleanup-only authorization.
+case "$CLEANUP_BATCH_MODE" in
+  explicit-expired)
+    BATCH_STATE_SQL="state='expired',expires_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY)"
+    EXPECTED_BATCH_STATE="expired"
+    EXPECTED_BATCH_EXPIRED="true"
+    ;;
+  active-elapsed)
+    BATCH_STATE_SQL="state='active',expires_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY)"
+    EXPECTED_BATCH_STATE="active"
+    EXPECTED_BATCH_EXPIRED="true"
+    ;;
+  active-valid)
+    BATCH_STATE_SQL="state='active',expires_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 DAY)"
+    EXPECTED_BATCH_STATE="active"
+    EXPECTED_BATCH_EXPIRED="false"
+    ;;
+esac
 docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e \
-  "UPDATE cairn_qa_fixture_batches SET expires_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY)
+  "UPDATE cairn_qa_fixture_batches SET ${BATCH_STATE_SQL}
     WHERE batch_id='o88-shanghai-encounter-20261020';" >/dev/null
 docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
   "SELECT JSON_OBJECT('batchExpired',expires_at<=UTC_TIMESTAMP(3),'state',state)
      FROM ${DB_NAME}.cairn_qa_fixture_batches WHERE batch_id='o88-shanghai-encounter-20261020'" \
   > "$OUTPUT_DIR/08c-expired-batch-before-cleanup.json"
-if run_tool apply --manifest="$MANIFEST" --environment=isolated \
-  --reader-ids=9101,9102 --public-author-ids=9201,9202 --friend-author-ids=9301,9302 \
-  --field-review="$FIELD_REVIEW" --confirm-batch=o88-shanghai-encounter-20261020 \
-  --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
-  --confirm-target="$TARGET" > "$OUTPUT_DIR/08d-expired-reapply-unexpected.json" 2> "$OUTPUT_DIR/08d-expired-reapply-rejected.txt"; then
-  echo 'expired batch was unexpectedly reactivated' >&2
+if [ "$CLEANUP_BATCH_MODE" != "active-valid" ]; then
+  if run_tool apply --manifest="$MANIFEST" --environment=isolated \
+    --reader-ids=9101,9102 --public-author-ids=9201,9202 --friend-author-ids=9301,9302 \
+    --field-review="$FIELD_REVIEW" --confirm-batch=o88-shanghai-encounter-20261020 \
+    --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
+    --confirm-target="$TARGET" > "$OUTPUT_DIR/08d-expired-reapply-unexpected.json" 2> "$OUTPUT_DIR/08d-expired-reapply-rejected.txt"; then
+    echo 'expired batch was unexpectedly reactivated' >&2
+    exit 1
+  fi
+else
+  printf '%s\n' 'active valid batch: creation/update expiry rejection is not applicable' \
+    > "$OUTPUT_DIR/08d-expired-reapply-rejected.txt"
+fi
+
+# Real connected negative matrix. Each command reaches the isolated MySQL
+# identity, then fails closed before a delete can commit.
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$CLEANUP_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 \
+  --confirm-target="mysql:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee:wrong" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08f-wrong-target-unexpected.json" 2> "$OUTPUT_DIR/08f-wrong-target-rejected.txt"; then
+  echo 'wrong cleanup target was unexpectedly accepted' >&2
   exit 1
 fi
+
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$CLEANUP_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-wrong-batch --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08f2-wrong-confirm-batch-unexpected.json" 2> "$OUTPUT_DIR/08f2-wrong-confirm-batch-rejected.txt"; then
+  echo 'wrong confirmed cleanup batch was unexpectedly accepted' >&2
+  exit 1
+fi
+
+if run_tool cleanup --manifest="$MANIFEST" --environment=production \
+  --cleanup-authorization="$CLEANUP_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08f3-wrong-environment-unexpected.json" 2> "$OUTPUT_DIR/08f3-wrong-environment-rejected.txt"; then
+  echo 'wrong cleanup environment was unexpectedly accepted' >&2
+  exit 1
+fi
+
+WRONG_REALM_AUTHORIZATION="$TEMP_DIR/wrong-realm-cleanup-authorization.json"
+node - "$CLEANUP_AUTHORIZATION" "$WRONG_REALM_AUTHORIZATION" <<'NODE'
+const fs = require('fs');
+const [input, output] = process.argv.slice(2);
+const value = JSON.parse(fs.readFileSync(input));
+value.target_realm = 'production';
+fs.writeFileSync(output, JSON.stringify(value, null, 2));
+NODE
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$WRONG_REALM_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08f4-wrong-realm-unexpected.json" 2> "$OUTPUT_DIR/08f4-wrong-realm-rejected.txt"; then
+  echo 'wrong cleanup realm was unexpectedly accepted' >&2
+  exit 1
+fi
+
+WRONG_BATCH_AUTHORIZATION="$TEMP_DIR/wrong-batch-cleanup-authorization.json"
+node - "$CLEANUP_AUTHORIZATION" "$WRONG_BATCH_AUTHORIZATION" <<'NODE'
+const fs = require('fs');
+const [input, output] = process.argv.slice(2);
+const value = JSON.parse(fs.readFileSync(input));
+value.batch_id = 'o88-wrong-batch';
+fs.writeFileSync(output, JSON.stringify(value, null, 2));
+NODE
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$WRONG_BATCH_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08f5-wrong-authorization-batch-unexpected.json" 2> "$OUTPUT_DIR/08f5-wrong-authorization-batch-rejected.txt"; then
+  echo 'wrong cleanup authorization batch was unexpectedly accepted' >&2
+  exit 1
+fi
+
+EXPIRED_CLEANUP_AUTHORIZATION="$TEMP_DIR/expired-cleanup-authorization.json"
+node - "$CLEANUP_AUTHORIZATION" "$EXPIRED_CLEANUP_AUTHORIZATION" <<'NODE'
+const fs = require('fs');
+const [input, output] = process.argv.slice(2);
+const value = JSON.parse(fs.readFileSync(input));
+value.cleanup_approval_expires_at = '2000-01-01T00:00:00.000Z';
+fs.writeFileSync(output, JSON.stringify(value, null, 2));
+NODE
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$EXPIRED_CLEANUP_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08g-expired-cleanup-grant-unexpected.json" 2> "$OUTPUT_DIR/08g-expired-cleanup-grant-rejected.txt"; then
+  echo 'expired cleanup grant was unexpectedly accepted' >&2
+  exit 1
+fi
+
+make_cleanup_variant() {
+  local input="$1" output="$2" field="$3" value="$4"
+  node - "$input" "$output" "$field" "$value" <<'NODE'
+const fs = require('fs');
+const [input, output, field, raw] = process.argv.slice(2);
+const value = JSON.parse(fs.readFileSync(input));
+value[field] = JSON.parse(raw);
+fs.writeFileSync(output, JSON.stringify(value, null, 2));
+NODE
+}
+
+WRONG_COHORT_AUTHORIZATION="$TEMP_DIR/wrong-cohort-cleanup-authorization.json"
+make_cleanup_variant "$CLEANUP_AUTHORIZATION" "$WRONG_COHORT_AUTHORIZATION" reader_ids '["9101","9103"]'
+run_tool cleanup-plan --manifest="$MANIFEST" --environment=isolated \
+  --target-allowlist="$TARGET_ALLOWLIST" --cleanup-authorization="$WRONG_COHORT_AUTHORIZATION" \
+  > "$TEMP_DIR/wrong-cohort-plan.json"
+WRONG_COHORT_APPROVAL="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).cleanup_owner_approval)" "$TEMP_DIR/wrong-cohort-plan.json")"
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$WRONG_COHORT_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$WRONG_COHORT_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08h-wrong-cohort-unexpected.json" 2> "$OUTPUT_DIR/08h-wrong-cohort-rejected.txt"; then
+  echo 'wrong cleanup cohort was unexpectedly accepted' >&2
+  exit 1
+fi
+
+WRONG_AUTHOR_AUTHORIZATION="$TEMP_DIR/wrong-author-cleanup-authorization.json"
+make_cleanup_variant "$CLEANUP_AUTHORIZATION" "$WRONG_AUTHOR_AUTHORIZATION" public_author_ids '["9201","9203"]'
+run_tool cleanup-plan --manifest="$MANIFEST" --environment=isolated \
+  --target-allowlist="$TARGET_ALLOWLIST" --cleanup-authorization="$WRONG_AUTHOR_AUTHORIZATION" \
+  > "$TEMP_DIR/wrong-author-plan.json"
+WRONG_AUTHOR_APPROVAL="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).cleanup_owner_approval)" "$TEMP_DIR/wrong-author-plan.json")"
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$WRONG_AUTHOR_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$WRONG_AUTHOR_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08h2-wrong-author-unexpected.json" 2> "$OUTPUT_DIR/08h2-wrong-author-rejected.txt"; then
+  echo 'wrong cleanup author cohort was unexpectedly accepted' >&2
+  exit 1
+fi
+
+WRONG_ACTIVATION_AUTHORIZATION="$TEMP_DIR/wrong-activation-cleanup-authorization.json"
+make_cleanup_variant "$CLEANUP_AUTHORIZATION" "$WRONG_ACTIVATION_AUTHORIZATION" \
+  expected_activation_approval '"o88-shanghai-encounter-20261020:0000000000000000000000000000000000000000000000000000000000000000"'
+run_tool cleanup-plan --manifest="$MANIFEST" --environment=isolated \
+  --target-allowlist="$TARGET_ALLOWLIST" --cleanup-authorization="$WRONG_ACTIVATION_AUTHORIZATION" \
+  > "$TEMP_DIR/wrong-activation-plan.json"
+WRONG_ACTIVATION_APPROVAL="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).cleanup_owner_approval)" "$TEMP_DIR/wrong-activation-plan.json")"
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$WRONG_ACTIVATION_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$WRONG_ACTIVATION_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08i-wrong-activation-unexpected.json" 2> "$OUTPUT_DIR/08i-wrong-activation-rejected.txt"; then
+  echo 'wrong original activation approval was unexpectedly accepted' >&2
+  exit 1
+fi
+
+WRONG_MANIFEST="$TEMP_DIR/wrong-manifest.json"
+cp "$MANIFEST" "$WRONG_MANIFEST"
+printf '\n' >> "$WRONG_MANIFEST"
+WRONG_MANIFEST_SHA="$(node -e "const fs=require('fs'),c=require('crypto');process.stdout.write(c.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex'))" "$WRONG_MANIFEST")"
+WRONG_MANIFEST_AUTHORIZATION="$TEMP_DIR/wrong-manifest-cleanup-authorization.json"
+make_cleanup_variant "$CLEANUP_AUTHORIZATION" "$WRONG_MANIFEST_AUTHORIZATION" manifest_sha256 "\"${WRONG_MANIFEST_SHA}\""
+run_tool cleanup-plan --manifest="$WRONG_MANIFEST" --environment=isolated \
+  --target-allowlist="$TARGET_ALLOWLIST" --cleanup-authorization="$WRONG_MANIFEST_AUTHORIZATION" \
+  > "$TEMP_DIR/wrong-manifest-plan.json"
+WRONG_MANIFEST_APPROVAL="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).cleanup_owner_approval)" "$TEMP_DIR/wrong-manifest-plan.json")"
+if run_tool cleanup --manifest="$WRONG_MANIFEST" --environment=isolated \
+  --cleanup-authorization="$WRONG_MANIFEST_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$WRONG_MANIFEST_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08j-wrong-manifest-unexpected.json" 2> "$OUTPUT_DIR/08j-wrong-manifest-rejected.txt"; then
+  echo 'wrong cleanup manifest was unexpectedly accepted' >&2
+  exit 1
+fi
+
+ORIGINAL_FIXTURE_AUDIENCE="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+  "SELECT audience FROM ${DB_NAME}.cairn_qa_fixtures WHERE fixture_key='O88-JK-P01'")"
+WRONG_FIXTURE_AUDIENCE="friends"
+if [ "$ORIGINAL_FIXTURE_AUDIENCE" = "friends" ]; then WRONG_FIXTURE_AUDIENCE="public"; fi
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e \
+  "UPDATE cairn_qa_fixtures SET audience='${WRONG_FIXTURE_AUDIENCE}' WHERE fixture_key='O88-JK-P01';" >/dev/null
+if run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$CLEANUP_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 \
+  > "$OUTPUT_DIR/08k-wrong-object-unexpected.json" 2> "$OUTPUT_DIR/08k-wrong-object-rejected.txt"; then
+  echo 'wrong cleanup object was unexpectedly accepted' >&2
+  exit 1
+fi
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e \
+  "UPDATE cairn_qa_fixtures SET audience='${ORIGINAL_FIXTURE_AUDIENCE}' WHERE fixture_key='O88-JK-P01';" >/dev/null
 # Model a partial prior cleanup without inventing a new fixture identity: remove
 # one exact fixture marker while retaining its batch row. The FK sets marker_id
 # to NULL, so the authorized cleanup must safely finish only the remaining rows.
@@ -289,10 +506,11 @@ run_tool verify --manifest="$MANIFEST" --environment=isolated \
   --target-allowlist="$TARGET_ALLOWLIST" \
   --confirm-target="$TARGET" > "$OUTPUT_DIR/10-verify-cleaned.json"
 
-node - "$OUTPUT_DIR" <<'NODE'
+node - "$OUTPUT_DIR" "$CLEANUP_BATCH_MODE" "$EXPECTED_BATCH_STATE" "$EXPECTED_BATCH_EXPIRED" <<'NODE'
 const fs = require('fs');
 const path = require('path');
-const dir = process.argv[2];
+const [dir, cleanupBatchMode, expectedBatchState, expectedBatchExpiredRaw] = process.argv.slice(2);
+const expectedBatchExpired = expectedBatchExpiredRaw === 'true';
 const read = name => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
 const plan = read('01-plan.json');
 const inspected = read('02-inspect-target.json');
@@ -324,11 +542,24 @@ const checks = {
   changed_cohort_rejected: fs.readFileSync(path.join(dir, '06-cohort-expansion-rejected.txt'), 'utf8').includes('do not match'),
   exact_partial_recovery: recovered.applied === true && recovered.rows === 60,
   advanced_exactly_2: advanced.advanced?.length === 2,
-  expired_batch_cannot_reactivate: expiredBatch.batchExpired === true
-    && fs.readFileSync(path.join(dir, '08d-expired-reapply-rejected.txt'), 'utf8').includes('exact active approval plan'),
+  expired_batch_cannot_reactivate: expectedBatchExpired
+    ? fs.readFileSync(path.join(dir, '08d-expired-reapply-rejected.txt'), 'utf8').includes('exact active approval plan')
+    : fs.readFileSync(path.join(dir, '08d-expired-reapply-rejected.txt'), 'utf8').includes('not applicable'),
+  wrong_target_rejected: fs.readFileSync(path.join(dir, '08f-wrong-target-rejected.txt'), 'utf8').includes('Exact --confirm-target'),
+  wrong_confirmed_batch_rejected: fs.readFileSync(path.join(dir, '08f2-wrong-confirm-batch-rejected.txt'), 'utf8').includes('exact batch id twice'),
+  wrong_environment_rejected: fs.readFileSync(path.join(dir, '08f3-wrong-environment-rejected.txt'), 'utf8').includes('does not match approved realm'),
+  wrong_realm_rejected: fs.readFileSync(path.join(dir, '08f4-wrong-realm-rejected.txt'), 'utf8').includes('does not bind the connected approved target'),
+  wrong_authorization_batch_rejected: fs.readFileSync(path.join(dir, '08f5-wrong-authorization-batch-rejected.txt'), 'utf8').includes('does not bind this exact batch'),
+  expired_cleanup_grant_rejected: fs.readFileSync(path.join(dir, '08g-expired-cleanup-grant-rejected.txt'), 'utf8').includes('has expired'),
+  wrong_cohort_rejected: fs.readFileSync(path.join(dir, '08h-wrong-cohort-rejected.txt'), 'utf8').includes('reader cohort'),
+  wrong_author_cohort_rejected: fs.readFileSync(path.join(dir, '08h2-wrong-author-rejected.txt'), 'utf8').includes('unrelated fixture'),
+  wrong_original_activation_rejected: fs.readFileSync(path.join(dir, '08i-wrong-activation-rejected.txt'), 'utf8').includes('cleanup-only authorization'),
+  wrong_manifest_rejected: fs.readFileSync(path.join(dir, '08j-wrong-manifest-rejected.txt'), 'utf8').includes('cleanup-only authorization'),
+  wrong_object_rejected: fs.readFileSync(path.join(dir, '08k-wrong-object-rejected.txt'), 'utf8').includes('unrelated fixture'),
   partial_cleanup_state_is_exact: partialCleanup.fixtureRows === 1
     && partialCleanup.nullMarkerReferences === 1 && partialCleanup.deletedMarkerRows === 0,
-  expired_batch_cleanup_authorized_separately: expiredBatch.batchExpired === true
+  requested_batch_state_cleanup_authorized_separately: expiredBatch.batchExpired === expectedBatchExpired
+    && expiredBatch.state === expectedBatchState
     && cleanup.deletedMarkers === 59 && cleanup.cleanedMarkerReferences === 59,
   cleanup_retry_is_idempotent: cleanupAgain.alreadyCleaned === true
     && cleanupAgain.deletedMarkers === 0 && cleanupAgain.cleanedMarkerReferences === 0,
@@ -339,7 +570,13 @@ const checks = {
     && cleanupIsolation.fixtureRevisions === 0,
   cleaned_has_no_live_markers: cleaned.batch?.state === 'cleaned' && cleanedLive === 0,
 };
-const summary = { schema: 'cairnnz.o88-shanghai-rehearsal.v1', checks, passed: Object.values(checks).every(Boolean) };
+const summary = {
+  schema: 'cairnnz.o88-shanghai-rehearsal.v2',
+  cleanupBatchMode,
+  observedBatchBeforeCleanup: expiredBatch,
+  checks,
+  passed: Object.values(checks).every(Boolean),
+};
 fs.writeFileSync(path.join(dir, 'SUMMARY.json'), JSON.stringify(summary, null, 2));
 if (!summary.passed) throw new Error(JSON.stringify(summary));
 process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

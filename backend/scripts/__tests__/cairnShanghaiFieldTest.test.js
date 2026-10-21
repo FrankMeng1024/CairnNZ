@@ -185,6 +185,10 @@ function cleanupAuthorityFixture(realm = 'isolated', expiresAt = '2099-01-01T00:
     expectedActivationApproval: fixture.plan.owner_approval,
     cleanupApprovalExpiresAt: expiresAt,
     cleanupScope: fixture.review.cleanupScope,
+    fixtureKeys: fixture.binding.fixtureKeys,
+    readers: fixture.review.readers,
+    publicAuthors: fixture.review.publicAuthors,
+    friendAuthors: fixture.review.friendAuthors,
   };
   const plan = cleanupPlan(fixture.binding, authorization);
   const args = {
@@ -227,6 +231,18 @@ test('expired cleanup grant fails closed and a renewed cleanup-only grant has a 
     ...expired.args,
     'cleanup-owner-approval': renewedPlan.cleanup_owner_approval,
   }, expired.binding, renewedAuthorization, renewedPlan).fingerprint, expired.binding.target.fingerprint);
+});
+
+test('cleanup approval identity changes with the exact reader and author cohorts', () => {
+  const cleanup = cleanupAuthorityFixture();
+  assert.notEqual(
+    cleanupPlan(cleanup.binding, { ...cleanup.authorization, readers: ['11', '12'] }).plan_sha256,
+    cleanup.plan.plan_sha256,
+  );
+  assert.notEqual(
+    cleanupPlan(cleanup.binding, { ...cleanup.authorization, publicAuthors: ['21', '22'] }).plan_sha256,
+    cleanup.plan.plan_sha256,
+  );
 });
 
 test('production cleanup uses its own gate and never inherits apply authorization', () => {

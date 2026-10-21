@@ -184,8 +184,8 @@ function readCleanupAuthorization(file, binding, now = new Date()) {
   const resolved = path.resolve(file);
   const raw = fs.readFileSync(resolved);
   const authorization = JSON.parse(raw.toString('utf8'));
-  if (authorization.schema_version !== 1 || authorization.purpose !== 'cleanup-only') {
-    throw new Error('Cleanup authorization must be schema version 1 and cleanup-only');
+  if (authorization.schema_version !== 2 || authorization.purpose !== 'cleanup-only') {
+    throw new Error('Cleanup authorization must be schema version 2 and cleanup-only');
   }
   if (authorization.batch_id !== binding.batchId
     || authorization.manifest_sha256 !== binding.manifestSha256) {
@@ -198,6 +198,11 @@ function readCleanupAuthorization(file, binding, now = new Date()) {
   }
   const cleanupScope = [...new Set(authorization.cleanup_scope || [])].sort();
   exactArray(cleanupScope, [...CLEANUP_SCOPE].sort(), 'Cleanup scope');
+  const fixtureKeys = [...new Set(authorization.fixture_keys || [])].sort();
+  exactArray(fixtureKeys, [...binding.fixtureKeys].sort(), 'Cleanup fixture keys');
+  const readers = normalizedIds(authorization.reader_ids, 'cleanup reader ids');
+  const publicAuthors = normalizedIds(authorization.public_author_ids, 'cleanup Public author ids');
+  const friendAuthors = normalizedIds(authorization.friend_author_ids, 'cleanup Friends author ids');
   const expectedPrefix = `${binding.batchId}:`;
   if (typeof authorization.expected_activation_approval !== 'string'
     || !authorization.expected_activation_approval.startsWith(expectedPrefix)
@@ -218,6 +223,10 @@ function readCleanupAuthorization(file, binding, now = new Date()) {
     resolved,
     sha256: sha256(raw),
     cleanupScope,
+    fixtureKeys,
+    readers,
+    publicAuthors,
+    friendAuthors,
     expectedActivationApproval: authorization.expected_activation_approval,
     cleanupApprovalExpiresAt,
   };
@@ -234,6 +243,10 @@ function cleanupPlan(binding, authorization) {
     target_realm: binding.target.realm,
     target_allowlist_sha256: binding.target.allowlistSha256,
     cleanup_scope: authorization.cleanupScope,
+    fixture_keys: authorization.fixtureKeys,
+    reader_ids: authorization.readers,
+    public_author_ids: authorization.publicAuthors,
+    friend_author_ids: authorization.friendAuthors,
     cleanup_approval_expires_at: authorization.cleanupApprovalExpiresAt,
   };
   const planSha256 = sha256(canonicalJson(value));

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -9,6 +9,7 @@ import { authenticatedFetch } from '../services/apiService';
 import { BackButton } from '../components/BackButton';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Icon } from '../components/Icon';
+import { BottomSheetContent, BottomSheetFrame, BottomSheetHeader } from '../components/BottomSheetFrame';
 import { FontSize, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import * as Crypto from 'expo-crypto';
@@ -45,9 +46,11 @@ export function AcquiredCairnDetailScreen() {
   const [reviewMessage, setReviewMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [collectionAction, setCollectionAction] = useState<'archive' | 'remove' | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [showingOfflineCopy, setShowingOfflineCopy] = useState(false);
   const actionFlights = useRef(new Set<string>());
-  const collectionFlight = useRef(false);
+  const collectionFlight = useRef<object | null>(null);
   const loadGeneration = useRef(0);
   const closing = useRef(false);
   const { style: paperExitStyle, run: runPaperExit } = useCairnPaperExit();
@@ -144,6 +147,17 @@ export function AcquiredCairnDetailScreen() {
   }, [load]);
 
   useEffect(() => {
+    // An action belongs to the account that opened the sheet. A replacement
+    // session must start with fresh controls, while a late response from the
+    // prior account remains unable to close or mutate the new account's view.
+    collectionFlight.current = null;
+    setCollectionAction(null);
+    setManageOpen(false);
+    setConfirmingRemove(false);
+    setActionError('');
+  }, [ownerId]);
+
+  useEffect(() => {
     const revision = revisions[pageIndex];
     if (!revision || revision.availability !== 'available' || revision.opened_at) return;
     const flightKey = `read:${revision.revision_id}`;
@@ -172,7 +186,8 @@ export function AcquiredCairnDetailScreen() {
 
   const updateCollection = async (action: 'archive' | 'remove') => {
     if (collectionFlight.current) return;
-    collectionFlight.current = true;
+    const flight = {};
+    collectionFlight.current = flight;
     setCollectionAction(action);
     setActionError('');
     let accepted = false;
@@ -185,9 +200,13 @@ export function AcquiredCairnDetailScreen() {
         if (action === 'remove') await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
         void useCairnPresentationStore.getState().refreshAcquiredMap();
         accepted = true;
+        setManageOpen(false);
+        setConfirmingRemove(false);
         closeWithPaper();
       } else if ([403, 404, 410].includes(response.status)) {
         await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
+        setManageOpen(false);
+        setConfirmingRemove(false);
         setRevisions([]);
         setError('This acquired Cairn is no longer available to this account.');
       } else {
@@ -196,19 +215,17 @@ export function AcquiredCairnDetailScreen() {
     } catch {
       setActionError(`${action === 'archive' ? 'Archive' : 'Remove'} did not complete. The Cairn is still here; check your connection and try again.`);
     } finally {
-      collectionFlight.current = false;
+      if (collectionFlight.current === flight) collectionFlight.current = null;
       if (!accepted && String(useAppStore.getState().user?.id ?? '') === ownerId) setCollectionAction(null);
     }
   };
 
-  const confirmRemove = () => Alert.alert(
-    'Remove from my Memory?',
-    'This hides your acquired pages and prevents future automatic encounters with this Cairn unless the collection is restored. It does not affect the author or your Fog. There is no in-app restore after removal yet.',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => void updateCollection('remove') },
-    ],
-  );
+  const dismissManage = () => {
+    if (collectionAction !== null) return;
+    setManageOpen(false);
+    setConfirmingRemove(false);
+    setActionError('');
+  };
 
   const thank = async (revisionId: number) => {
     const flightKey = `thanks:${revisionId}`;
@@ -341,50 +358,122 @@ export function AcquiredCairnDetailScreen() {
               </TouchableOpacity>
             </View>
           ) : null}
-          <View style={[styles.collectionActions, { borderTopColor: theme.borderSubtle }]}>
-            <Text style={[styles.collectionHeading, { color: theme.foreground }]}>Manage this collection</Text>
-            <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Archive hides the collection from your default view; every page stays and can be restored. Remove hides all pages and stops future encounters; there is no in-app restore yet.</Text>
-            <View style={styles.collectionActionRow}>
+          <TouchableOpacity
+            onPress={() => {
+              setActionError('');
+              setConfirmingRemove(false);
+              setManageOpen(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Manage found Cairn"
+            accessibilityHint="Opens archive and remove controls"
+            style={[styles.manageTrigger, { borderColor: theme.borderSubtle }]}
+          >
+            <Icon name="MoreHorizontal" size={18} color={theme.iconInactive} />
+            <Text style={[styles.manageTriggerText, { color: theme.foregroundSecondary }]}>Manage</Text>
+          </TouchableOpacity>
+          {reviewMessage ? <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{reviewMessage}</Text> : null}
+        </ScrollView>
+      )}
+      <BottomSheetFrame
+        visible={manageOpen}
+        onDismiss={dismissManage}
+        dismissible={collectionAction === null}
+        maxHeight="82%"
+        testID="acquired-cairn-manage-sheet"
+      >
+        <BottomSheetHeader
+          title={confirmingRemove ? 'Remove from my Memory?' : 'Manage found Cairn'}
+          subtitle={confirmingRemove
+            ? 'This affects only your acquired collection.'
+            : 'Choose how this Cairn appears in your Memory.'}
+          onClose={collectionAction === null ? dismissManage : undefined}
+        />
+        <BottomSheetContent scrollable contentContainerStyle={styles.manageContent}>
+          {confirmingRemove ? (
+            <>
+              <View style={[styles.consequenceCard, { backgroundColor: theme.destructiveSurface, borderColor: theme.destructive }]}>
+                <Icon name="Trash2" size={20} color={theme.destructive} />
+                <Text style={[styles.collectionHelp, { color: theme.foreground }]}>Remove hides every acquired page and blocks future automatic encounters. There is no in-app restore yet. It does not delete the author’s Cairn or change your Fog.</Text>
+              </View>
+              {actionError ? (
+                <View style={[styles.actionError, { borderColor: theme.destructive }]}>
+                  <Text accessibilityLiveRegion="polite" style={[styles.collectionHelp, { color: theme.destructive }]}>{actionError}</Text>
+                </View>
+              ) : null}
+              <View style={styles.confirmationRow}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setConfirmingRemove(false);
+                    setActionError('');
+                  }}
+                  disabled={collectionAction !== null}
+                  accessibilityRole="button"
+                  style={[styles.confirmationButton, { borderColor: theme.borderStrong }, collectionAction !== null && styles.disabled]}
+                >
+                  <Text style={[styles.collectionActionText, { color: theme.foreground }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => void updateCollection('remove')}
+                  disabled={collectionAction !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm remove from my Memory"
+                  accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'remove' }}
+                  style={[styles.confirmationButton, { backgroundColor: theme.destructive, borderColor: theme.destructive }, collectionAction !== null && styles.disabled]}
+                >
+                  {collectionAction === 'remove' ? <ActivityIndicator size="small" color={theme.onPrimary} /> : <Icon name="Trash2" size={16} color={theme.onPrimary} />}
+                  <Text style={[styles.collectionActionText, { color: theme.onPrimary }]}>{collectionAction === 'remove' ? 'Removing…' : 'Remove'}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
               <TouchableOpacity
                 onPress={() => void updateCollection('archive')}
                 disabled={collectionAction !== null}
                 accessibilityRole="button"
-                accessibilityLabel="Archive from default view"
+                accessibilityLabel="Archive from Current"
+                accessibilityHint="Keeps all acquired pages in Archived where they can be restored"
                 accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'archive' }}
-                style={[
-                  styles.collectionActionButton,
-                  { backgroundColor: theme.secondaryAction, borderColor: theme.borderStrong },
-                  collectionAction !== null && styles.disabled,
-                ]}
+                style={[styles.managementOption, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }, collectionAction !== null && styles.disabled]}
               >
-                {collectionAction === 'archive' ? <ActivityIndicator size="small" color={theme.primary} /> : <Icon name="Layers" size={16} color={theme.icon} />}
-                <Text style={[styles.collectionActionText, { color: theme.foreground }]}>{collectionAction === 'archive' ? 'Archiving…' : 'Archive'}</Text>
+                <View style={[styles.managementIcon, { backgroundColor: theme.surfaceElevated }]}>
+                  {collectionAction === 'archive' ? <ActivityIndicator size="small" color={theme.primary} /> : <Icon name="Layers" size={20} color={theme.icon} />}
+                </View>
+                <View style={styles.managementCopy}>
+                  <Text style={[styles.managementTitle, { color: theme.foreground }]}>{collectionAction === 'archive' ? 'Archiving…' : 'Archive'}</Text>
+                  <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Hide from Current. Every acquired page stays in Archived and can be restored.</Text>
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={confirmRemove}
+                onPress={() => {
+                  setActionError('');
+                  setConfirmingRemove(true);
+                }}
                 disabled={collectionAction !== null}
                 accessibilityRole="button"
                 accessibilityLabel="Remove from my Memory"
-                accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'remove' }}
-                style={[
-                  styles.collectionActionButton,
-                  { backgroundColor: theme.destructiveSurface, borderColor: theme.destructive },
-                  collectionAction !== null && styles.disabled,
-                ]}
+                accessibilityHint="Opens a confirmation before removing acquired pages"
+                style={[styles.managementOption, { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle }, collectionAction !== null && styles.disabled]}
               >
-                {collectionAction === 'remove' ? <ActivityIndicator size="small" color={theme.destructive} /> : <Icon name="Trash2" size={16} color={theme.destructive} />}
-                <Text style={[styles.collectionActionText, { color: theme.destructive }]}>{collectionAction === 'remove' ? 'Removing…' : 'Remove'}</Text>
+                <View style={[styles.managementIcon, { backgroundColor: theme.surfaceElevated }]}>
+                  <Icon name="Trash2" size={20} color={theme.destructive} />
+                </View>
+                <View style={styles.managementCopy}>
+                  <Text style={[styles.managementTitle, { color: theme.destructive }]}>Remove</Text>
+                  <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Hide all acquired pages and stop future automatic encounters. Confirmation required.</Text>
+                </View>
               </TouchableOpacity>
-            </View>
-          </View>
-          {actionError ? (
-            <View style={[styles.actionError, { borderColor: theme.destructive }]}>
-              <Text accessibilityLiveRegion="polite" style={[styles.collectionHelp, { color: theme.destructive }]}>{actionError}</Text>
-            </View>
-          ) : null}
-          {reviewMessage ? <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{reviewMessage}</Text> : null}
-        </ScrollView>
-      )}
+              {actionError ? (
+                <View style={[styles.actionError, { borderColor: theme.destructive }]}>
+                  <Text accessibilityLiveRegion="polite" style={[styles.collectionHelp, { color: theme.destructive }]}>{actionError}</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.collectionFootnote, { color: theme.muted }]}>Neither action changes the author’s Cairn or your Fog.</Text>
+            </>
+          )}
+        </BottomSheetContent>
+      </BottomSheetFrame>
     </SafeAreaView>
   );
 }
@@ -414,11 +503,18 @@ const styles = StyleSheet.create({
   pageButton: { minHeight: 44, minWidth: 72, alignItems: 'center', justifyContent: 'center' },
   pageButtonText: { fontSize: FontSize.small, fontWeight: '700' },
   disabled: { opacity: 0.35 },
-  collectionActions: { gap: Spacing.sm, marginTop: Spacing.lg, paddingTop: Spacing.lg, borderTopWidth: StyleSheet.hairlineWidth },
-  collectionHeading: { fontSize: FontSize.caption, lineHeight: 18, fontWeight: '700' },
+  manageTrigger: { minHeight: 44, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: Spacing.xs, paddingHorizontal: Spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12 },
+  manageTriggerText: { fontSize: FontSize.small, fontWeight: '700' },
+  manageContent: { gap: Spacing.md, paddingBottom: Spacing.sm },
   collectionHelp: { fontSize: FontSize.small, lineHeight: 17 },
-  collectionActionRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
-  collectionActionButton: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, borderWidth: 1, borderRadius: 12 },
+  managementOption: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderWidth: 1, borderRadius: 14 },
+  managementIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  managementCopy: { flex: 1, gap: 3 },
+  managementTitle: { fontSize: FontSize.body, lineHeight: 21, fontWeight: '700' },
   collectionActionText: { fontSize: FontSize.small, fontWeight: '700' },
+  collectionFootnote: { fontSize: FontSize.small, lineHeight: 17, paddingHorizontal: Spacing.xs },
+  consequenceCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, padding: Spacing.md, borderWidth: 1, borderRadius: 14 },
+  confirmationRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
+  confirmationButton: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, borderWidth: 1, borderRadius: 12 },
   actionError: { borderLeftWidth: 3, paddingLeft: Spacing.sm, paddingVertical: Spacing.xs },
 });

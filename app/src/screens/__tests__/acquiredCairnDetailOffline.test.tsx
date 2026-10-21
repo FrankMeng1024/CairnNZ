@@ -29,7 +29,10 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-native-safe-area-context', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  return { SafeAreaView: ({ children, ...props }: any) => ReactModule.createElement(View, props, children) };
+  return {
+    SafeAreaView: ({ children, ...props }: any) => ReactModule.createElement(View, props, children),
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
 });
 jest.mock('../../components/BackButton', () => {
   const ReactModule = require('react');
@@ -132,7 +135,10 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
     const screen = render(<AcquiredCairnDetailScreen />);
     await screen.findByText('Already found page');
 
-    fireEvent.press(screen.getByText('Archive'));
+    expect(screen.queryByText(/Hide from Current/)).toBeNull();
+    fireEvent.press(screen.getByLabelText('Manage found Cairn'));
+    expect(screen.getByText(/Hide from Current/)).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Archive from Current'));
     fireEvent.press(screen.getByText('Archiving…'));
     expect(mockFetch.mock.calls.filter(call => String(call[0]).includes('/collection'))).toHaveLength(1);
     await act(async () => { resolveArchive({ ok: false, status: 503 }); });
@@ -149,11 +155,69 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
       .mockResolvedValueOnce({ ok: false, status: 410 });
     const screen = render(<AcquiredCairnDetailScreen />);
     await screen.findByText('Already found page');
-    fireEvent.press(screen.getByText('Archive'));
+    fireEvent.press(screen.getByLabelText('Manage found Cairn'));
+    fireEvent.press(screen.getByLabelText('Archive from Current'));
 
     expect(await screen.findByText('This acquired Cairn is no longer available to this account.')).toBeTruthy();
     expect(mockMarkUnavailable).toHaveBeenCalledWith('owner-a', 'marker-1');
     expect(screen.queryByText('Already found page')).toBeNull();
+  });
+
+  test('Remove uses a deliberate in-sheet confirmation and Cancel returns to management', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [acquired] }) });
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await screen.findByText('Already found page');
+
+    fireEvent.press(screen.getByLabelText('Manage found Cairn'));
+    fireEvent.press(screen.getByLabelText('Remove from my Memory'));
+    expect(screen.getByText('Remove from my Memory?')).toBeTruthy();
+    expect(screen.getByText(/There is no in-app restore yet/)).toBeTruthy();
+    expect(mockFetch.mock.calls.filter(call => String(call[0]).includes('/collection'))).toHaveLength(0);
+
+    fireEvent.press(screen.getByText('Cancel'));
+    expect(screen.getByText('Manage found Cairn')).toBeTruthy();
+    expect(screen.queryByText('Remove from my Memory?')).toBeNull();
+    expect(screen.getByText('Already found page')).toBeTruthy();
+  });
+
+  test('closing Manage preserves the selected page and does not issue an action', async () => {
+    const earlier = { ...acquired, revision_id: 4, content_revision: 4, text: 'Earlier found page' };
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [acquired, earlier] }) });
+    mockCacheHistory.mockResolvedValueOnce([acquired, earlier]);
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await screen.findByText('Already found page');
+    fireEvent.press(screen.getByText('Earlier'));
+    expect(screen.getByText('Earlier found page')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Manage found Cairn'));
+    fireEvent.press(screen.getByLabelText('Close sheet'));
+    expect(screen.getByText('Earlier found page')).toBeTruthy();
+    expect(screen.queryByTestId('acquired-cairn-manage-sheet')).toBeNull();
+    expect(mockFetch.mock.calls.filter(call => String(call[0]).includes('/collection'))).toHaveLength(0);
+  });
+
+  test('Remove is single-flight, preserves content on failure, and succeeds only after retry acceptance', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [acquired] }) });
+    let resolveRemove!: (value: any) => void;
+    mockFetch.mockReturnValueOnce(new Promise(resolve => { resolveRemove = resolve; }));
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await screen.findByText('Already found page');
+
+    fireEvent.press(screen.getByLabelText('Manage found Cairn'));
+    fireEvent.press(screen.getByLabelText('Remove from my Memory'));
+    fireEvent.press(screen.getByLabelText('Confirm remove from my Memory'));
+    fireEvent.press(screen.getByText('Removing…'));
+    expect(mockFetch.mock.calls.filter(call => String(call[0]).includes('/collection'))).toHaveLength(1);
+    await act(async () => { resolveRemove({ ok: false, status: 503 }); });
+
+    expect(await screen.findByText('Remove did not complete. The Cairn is still here; check your connection and try again.')).toBeTruthy();
+    expect(screen.getByText('Already found page')).toBeTruthy();
+    expect(mockGoBack).not.toHaveBeenCalled();
+    expect(mockMarkUnavailable).not.toHaveBeenCalled();
+
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+    fireEvent.press(screen.getByLabelText('Confirm remove from my Memory'));
+    await waitFor(() => expect(mockMarkUnavailable).toHaveBeenCalledWith('owner-a', 'marker-1'));
   });
 
   test('a delayed account-A history response cannot render or cache after switching to B', async () => {
@@ -174,6 +238,33 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
 
     expect(mockCacheHistory).not.toHaveBeenCalled();
     expect(screen.queryByText('Already found page')).toBeNull();
+  });
+
+  test('a delayed account-A Archive response cannot close account B or strand its management state', async () => {
+    let resolveArchive!: (value: any) => void;
+    const accountB = { ...acquired, revision_id: 8, content_revision: 8, text: 'Account B found page' };
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [acquired] }) })
+      .mockReturnValueOnce(new Promise(resolve => { resolveArchive = resolve; }))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ revisions: [accountB] }) });
+    mockCacheHistory
+      .mockResolvedValueOnce([acquired])
+      .mockResolvedValueOnce([accountB]);
+    const screen = render(<AcquiredCairnDetailScreen />);
+    await screen.findByText('Already found page');
+    fireEvent.press(screen.getByLabelText('Manage found Cairn'));
+    fireEvent.press(screen.getByLabelText('Archive from Current'));
+
+    mockOwnerId = 'owner-b';
+    screen.rerender(<AcquiredCairnDetailScreen />);
+    expect(await screen.findByText('Account B found page')).toBeTruthy();
+    expect(screen.queryByTestId('acquired-cairn-manage-sheet')).toBeNull();
+    await act(async () => { resolveArchive({ ok: true, status: 200 }); });
+
+    expect(screen.getByText('Account B found page')).toBeTruthy();
+    expect(mockGoBack).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByLabelText('Manage found Cairn'));
+    expect(screen.getByLabelText('Archive from Current')).toBeTruthy();
   });
 
   test('N03 a marker invalidated after cache persistence never reaches the mounted detail', async () => {

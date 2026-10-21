@@ -273,8 +273,17 @@ async function assertStoredCleanupPlan(conn, context, target, authorization, opt
   if (!batch) throw new Error('Cleanup target batch has not been applied');
   if (batch.target_environment !== target.realm || batch.manifest_sha256 !== context.sha256
     || batch.approval_reference !== authorization.expectedActivationApproval
-    || !['active', 'cleaned'].includes(batch.state)) {
+    || !['active', 'expired', 'cleaned'].includes(batch.state)) {
     throw new Error('Stored batch does not match the cleanup-only authorization');
+  }
+
+  const [storedReaders] = await conn.execute(
+    'SELECT viewer_id FROM cairn_qa_fixture_readers WHERE batch_id=? ORDER BY viewer_id',
+    [context.manifest.batch_id],
+  );
+  const readerIds = storedReaders.map(row => String(row.viewer_id));
+  if (!sameIds(readerIds, authorization.readers)) {
+    throw new Error('Stored reader cohort does not match the cleanup-only authorization');
   }
 
   const [fixtures] = await conn.execute(
@@ -287,12 +296,19 @@ async function assertStoredCleanupPlan(conn, context, target, authorization, opt
     [context.manifest.batch_id],
   );
   const manifestByKey = new Map(context.manifest.fixtures.map(item => [item.key, item]));
-  if (fixtures.length > context.manifest.fixtures.length) {
-    throw new Error('Cleanup target contains more fixtures than the exact manifest');
+  if (fixtures.length !== context.manifest.fixtures.length) {
+    throw new Error('Cleanup target object set does not match the exact manifest');
   }
+  const expectedAuthors = expectedFixtureAuthors(
+    context.manifest,
+    authorization.publicAuthors,
+    authorization.friendAuthors,
+  );
   for (const fixture of fixtures) {
     const approved = manifestByKey.get(fixture.fixture_key);
-    if (!approved || approved.audience !== fixture.audience) {
+    const expectedCreator = expectedAuthors.get(fixture.fixture_key);
+    if (!approved || approved.audience !== fixture.audience
+      || !expectedCreator || expectedCreator.authorId !== String(fixture.author_id)) {
       throw new Error(`Cleanup target contains an unrelated fixture: ${fixture.fixture_key}`);
     }
     if (fixture.existing_marker_id == null) continue;
