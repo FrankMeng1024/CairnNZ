@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -57,28 +57,38 @@ export function CairnPaper({
   animated = true,
   testID,
   accessibilityLabel,
+  motionKey,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   animated?: boolean;
   testID?: string;
   accessibilityLabel?: string;
+  /** A changed key is a truthful new-page/update reveal without remounting. */
+  motionKey?: string | number;
 }) {
   const theme = useVisualTheme();
   const reduced = useReduceMotion();
   const progress = useRef(new Animated.Value(animated && !reduced ? 0 : 1)).current;
+  const hasRevealed = useRef(false);
   useEffect(() => {
     if (!animated || reduced) {
       progress.setValue(1);
+      hasRevealed.current = true;
       return;
     }
+    progress.stopAnimation();
+    progress.setValue(0);
+    const duration = hasRevealed.current ? CAIRN_MOTION.updateMs : CAIRN_MOTION.openMs;
+    hasRevealed.current = true;
     Animated.timing(progress, {
       toValue: 1,
-      duration: CAIRN_MOTION.openMs,
+      duration,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [animated, progress, reduced]);
+    return () => progress.stopAnimation();
+  }, [animated, motionKey, progress, reduced]);
   const transform = useMemo(() => ({
     opacity: progress,
     transform: [
@@ -107,6 +117,59 @@ export function CairnPaper({
       {children}
     </Animated.View>
   );
+}
+
+/**
+ * Finite, success-owned paper exit used by Close, Archive/Remove and Withdraw.
+ * Callers start it only after a confirmed user action (or an explicit Close),
+ * so failures never make content appear to disappear optimistically.
+ */
+export function useCairnPaperExit() {
+  const reduced = useReduceMotion();
+  const progress = useRef(new Animated.Value(1)).current;
+  const completionRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => {
+    completionRef.current = null;
+    progress.stopAnimation();
+  }, [progress]);
+
+  const reset = useCallback(() => {
+    completionRef.current = null;
+    progress.stopAnimation();
+    progress.setValue(1);
+  }, [progress]);
+
+  const run = useCallback((onFinished: () => void) => {
+    completionRef.current = onFinished;
+    progress.stopAnimation();
+    if (reduced) {
+      progress.setValue(0);
+      completionRef.current = null;
+      onFinished();
+      return;
+    }
+    Animated.timing(progress, {
+      toValue: 0,
+      duration: CAIRN_MOTION.closeMs,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      const completion = completionRef.current;
+      completionRef.current = null;
+      if (finished) completion?.();
+    });
+  }, [progress, reduced]);
+
+  const style = useMemo(() => ({
+    opacity: progress,
+    transform: [
+      { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+      { scaleY: progress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }) },
+    ],
+  }), [progress]);
+
+  return { style, run, reset };
 }
 
 export function CairnPlaceAnchor({

@@ -16,7 +16,7 @@ export const CAIRN_MOTION = {
   leaveMs: 620,
   encounterMs: 760,
   openMs: 360,
-  updateMs: 320,
+  updateMs: 360,
   closeMs: 380,
   reducedMs: 120,
 } as const;

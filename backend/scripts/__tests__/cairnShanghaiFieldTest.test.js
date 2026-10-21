@@ -12,7 +12,9 @@ const {
 } = require('../cairn-shanghai-field-test');
 const {
   approvalPlan,
+  assertCleanupAuthority,
   assertMutationAuthority,
+  cleanupPlan,
   resolveApprovedTarget,
   targetFingerprint,
 } = require('../cairn-shanghai-authority');
@@ -100,24 +102,49 @@ test('caller environment label cannot forge the independently allowlisted target
     sha256: '1'.repeat(64),
     entries: [{
       fingerprint: fixture.binding.target.fingerprint,
-      realm: 'production', mutation_allowed: true,
+      realm: 'production', apply_allowed: true, cleanup_allowed: true,
     }],
   };
   assert.throws(() => resolveApprovedTarget({
     serverUuid: fixture.serverUuid, database: fixture.database, serverHost: 'db', serverPort: 3306,
-  }, allowlist, 'isolated', true), /does not match approved realm production/);
+  }, allowlist, 'isolated', 'apply'), /does not match approved realm production/);
 });
 
 test('target allowlist rejects a different actual server identity', () => {
   const fixture = authorityFixture();
   const allowlist = {
     sha256: '1'.repeat(64),
-    entries: [{ fingerprint: fixture.binding.target.fingerprint, realm: 'isolated', mutation_allowed: true }],
+    entries: [{
+      fingerprint: fixture.binding.target.fingerprint, realm: 'isolated',
+      apply_allowed: true, cleanup_allowed: true,
+    }],
   };
   assert.throws(() => resolveApprovedTarget({
     serverUuid: 'ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee',
     database: fixture.database, serverHost: 'db', serverPort: 3306,
-  }, allowlist, 'isolated', true), /not uniquely approved/);
+  }, allowlist, 'isolated', 'apply'), /not uniquely approved/);
+});
+
+test('target permissions separate fixture activation from cleanup', () => {
+  const fixture = authorityFixture();
+  const observed = {
+    serverUuid: fixture.serverUuid, database: fixture.database, serverHost: 'db', serverPort: 3306,
+  };
+  const allowlist = {
+    sha256: '1'.repeat(64),
+    entries: [{
+      fingerprint: fixture.binding.target.fingerprint, realm: 'isolated',
+      apply_allowed: false, cleanup_allowed: true,
+    }],
+  };
+  assert.throws(
+    () => resolveApprovedTarget(observed, allowlist, 'isolated', 'apply'),
+    /creation\/update is disabled/,
+  );
+  assert.equal(
+    resolveApprovedTarget(observed, allowlist, 'isolated', 'cleanup').fingerprint,
+    fixture.binding.target.fingerprint,
+  );
 });
 
 test('exact approval plan is stable but reader or creator expansion changes its identity', () => {
@@ -148,5 +175,67 @@ test('actual production realm requires the independent environment gate', () => 
   withEnvironment({ CAIRN_ENABLE_PRODUCTION_FIXTURE_APPLY: null }, () => assert.throws(
     () => assertMutationAuthority('apply', fixture.args, fixture.binding, fixture.review, fixture.plan),
     /disabled/,
+  ));
+});
+
+function cleanupAuthorityFixture(realm = 'isolated', expiresAt = '2099-01-01T00:00:00.000Z') {
+  const fixture = authorityFixture(realm);
+  const authorization = {
+    sha256: '4'.repeat(64),
+    expectedActivationApproval: fixture.plan.owner_approval,
+    cleanupApprovalExpiresAt: expiresAt,
+    cleanupScope: fixture.review.cleanupScope,
+  };
+  const plan = cleanupPlan(fixture.binding, authorization);
+  const args = {
+    'confirm-batch': fixture.binding.batchId,
+    'confirm-cleanup': fixture.binding.batchId,
+    'confirm-target': fixture.binding.target.fingerprint,
+    'cleanup-owner-approval': plan.cleanup_owner_approval,
+  };
+  return { ...fixture, authorization, plan, args };
+}
+
+test('expired activation approval cannot mutate but an independent cleanup-only grant can clean', () => {
+  const cleanup = cleanupAuthorityFixture();
+  const activation = authorityFixture();
+  assert.throws(() => assertMutationAuthority(
+    'apply', activation.args, activation.binding,
+    { ...activation.review, approvalExpiresAt: '2000-01-01T00:00:00.000Z' },
+    activation.plan,
+  ), /expired/);
+  assert.equal(
+    assertCleanupAuthority(cleanup.args, cleanup.binding, cleanup.authorization, cleanup.plan).fingerprint,
+    cleanup.binding.target.fingerprint,
+  );
+});
+
+test('expired cleanup grant fails closed and a renewed cleanup-only grant has a new identity', () => {
+  const expired = cleanupAuthorityFixture('isolated', '2000-01-01T00:00:00.000Z');
+  assert.throws(
+    () => assertCleanupAuthority(expired.args, expired.binding, expired.authorization, expired.plan),
+    /expired/,
+  );
+  const renewedAuthorization = {
+    ...expired.authorization,
+    sha256: '5'.repeat(64),
+    cleanupApprovalExpiresAt: '2099-02-01T00:00:00.000Z',
+  };
+  const renewedPlan = cleanupPlan(expired.binding, renewedAuthorization);
+  assert.notEqual(renewedPlan.cleanup_owner_approval, expired.plan.cleanup_owner_approval);
+  assert.equal(assertCleanupAuthority({
+    ...expired.args,
+    'cleanup-owner-approval': renewedPlan.cleanup_owner_approval,
+  }, expired.binding, renewedAuthorization, renewedPlan).fingerprint, expired.binding.target.fingerprint);
+});
+
+test('production cleanup uses its own gate and never inherits apply authorization', () => {
+  const cleanup = cleanupAuthorityFixture('production');
+  withEnvironment({
+    CAIRN_ENABLE_PRODUCTION_FIXTURE_APPLY: '1',
+    CAIRN_ENABLE_PRODUCTION_FIXTURE_CLEANUP: null,
+  }, () => assert.throws(
+    () => assertCleanupAuthority(cleanup.args, cleanup.binding, cleanup.authorization, cleanup.plan),
+    /cleanup is disabled/,
   ));
 });

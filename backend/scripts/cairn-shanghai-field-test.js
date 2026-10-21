@@ -13,8 +13,11 @@ const {
 const { publicPilotAuthorized } = require('../src/services/publicPublication');
 const {
   approvalPlan,
+  assertCleanupAuthority,
   assertMutationAuthority,
+  cleanupPlan,
   normalizedIds,
+  readCleanupAuthorization,
   readFieldReview,
   readTargetAllowlist,
   resolveApprovedTarget,
@@ -42,11 +45,14 @@ function usage(message) {
     '       --confirm-target=FINGERPRINT --owner-approval=BATCH:PLAN_SHA256',
     '  node scripts/cairn-shanghai-field-test.js verify --environment=... --confirm-target=...',
     '  node scripts/cairn-shanghai-field-test.js advance-revision --keys=KEY[,KEY] [apply confirmations]',
-    '  node scripts/cairn-shanghai-field-test.js cleanup [apply confirmations] --confirm-cleanup=BATCH',
+    '  node scripts/cairn-shanghai-field-test.js cleanup-plan --environment=... --cleanup-authorization=FILE',
+    '  node scripts/cairn-shanghai-field-test.js cleanup --environment=... --target-allowlist=FILE',
+    '       --cleanup-authorization=FILE --confirm-batch=BATCH --confirm-cleanup=BATCH',
+    '       --confirm-target=FINGERPRINT --cleanup-owner-approval=BATCH:cleanup:PLAN_SHA256',
     '',
     'Target fingerprint: mysql:<server-uuid>:<database>, resolved through an approved allowlist.',
-    'Every mutation requires the exact expiring approval plan. Production additionally requires',
-    'CAIRN_ENABLE_PRODUCTION_FIXTURE_APPLY=1. No command fabricates reader GPS.',
+    'Create/update and cleanup use separate target permissions, documents, approvals, and',
+    'production gates. No command fabricates reader GPS.',
   ].join('\n') + '\n');
   process.exitCode = 2;
 }
@@ -160,12 +166,12 @@ async function connection(target) {
   };
 }
 
-async function approvedConnection(args, mutation) {
+async function approvedConnection(args, operation = 'read') {
   const configured = targetConfig(args.environment);
   const opened = await connection(configured);
   try {
     const allowlist = readTargetAllowlist(args['target-allowlist']);
-    const target = resolveApprovedTarget(opened.observed, allowlist, args.environment, mutation);
+    const target = resolveApprovedTarget(opened.observed, allowlist, args.environment, operation);
     return { ...opened, target, allowlist };
   } catch (error) {
     await opened.conn.end();
@@ -188,6 +194,13 @@ function exactApprovedReview(args, context, target) {
   const review = readFieldReview(args['field-review'], binding);
   const plan = approvalPlan(binding, review);
   return { binding, review, plan };
+}
+
+function exactCleanupAuthorization(args, context, target) {
+  const binding = approvalBinding(context, target);
+  const authorization = readCleanupAuthorization(args['cleanup-authorization'], binding);
+  const plan = cleanupPlan(binding, authorization);
+  return { binding, authorization, plan };
 }
 
 function sameIds(left, right) {
@@ -248,6 +261,49 @@ async function assertStoredPlan(conn, context, target, review, plan, options = {
     throw new Error('Stored fixture cohort is incomplete');
   }
   return batch;
+}
+
+async function assertStoredCleanupPlan(conn, context, target, authorization, options = {}) {
+  const [rows] = await conn.execute(
+    `SELECT target_environment,manifest_sha256,state,expires_at,approval_reference
+       FROM cairn_qa_fixture_batches WHERE batch_id=?${options.lock ? ' FOR UPDATE' : ''}`,
+    [context.manifest.batch_id],
+  );
+  const batch = rows[0];
+  if (!batch) throw new Error('Cleanup target batch has not been applied');
+  if (batch.target_environment !== target.realm || batch.manifest_sha256 !== context.sha256
+    || batch.approval_reference !== authorization.expectedActivationApproval
+    || !['active', 'cleaned'].includes(batch.state)) {
+    throw new Error('Stored batch does not match the cleanup-only authorization');
+  }
+
+  const [fixtures] = await conn.execute(
+    `SELECT fixture.fixture_key,fixture.marker_id,fixture.author_id,fixture.audience,
+            marker.id AS existing_marker_id,marker.client_cairn_id,marker.user_id,
+            marker.type,marker.permission
+       FROM cairn_qa_fixtures fixture
+       LEFT JOIN markers marker ON marker.id=fixture.marker_id
+      WHERE fixture.batch_id=? ORDER BY fixture.fixture_key${options.lock ? ' FOR UPDATE' : ''}`,
+    [context.manifest.batch_id],
+  );
+  const manifestByKey = new Map(context.manifest.fixtures.map(item => [item.key, item]));
+  if (fixtures.length > context.manifest.fixtures.length) {
+    throw new Error('Cleanup target contains more fixtures than the exact manifest');
+  }
+  for (const fixture of fixtures) {
+    const approved = manifestByKey.get(fixture.fixture_key);
+    if (!approved || approved.audience !== fixture.audience) {
+      throw new Error(`Cleanup target contains an unrelated fixture: ${fixture.fixture_key}`);
+    }
+    if (fixture.existing_marker_id == null) continue;
+    const expectedPermission = fixture.audience === 'public' ? 'public' : 'group';
+    if (fixture.client_cairn_id !== deterministicUuid(context.manifest.batch_id, fixture.fixture_key)
+      || String(fixture.user_id) !== String(fixture.author_id)
+      || fixture.type !== 'cairn' || fixture.permission !== expectedPermission) {
+      throw new Error(`Cleanup target marker identity mismatch: ${fixture.fixture_key}`);
+    }
+  }
+  return { batch, fixtures };
 }
 
 function deterministicUuid(batchId, fixtureKey) {
@@ -409,7 +465,7 @@ async function apply(command, args, context) {
   const readers = ids(args['reader-ids'], 'reader ids');
   const publicAuthors = ids(args['public-author-ids'], 'public author ids');
   const friendAuthors = ids(args['friend-author-ids'], 'friend author ids');
-  const opened = await approvedConnection(args, true);
+  const opened = await approvedConnection(args, 'apply');
   const { conn, target } = opened;
   try {
     const { binding, review, plan } = exactApprovedReview(args, context, target);
@@ -462,7 +518,7 @@ async function apply(command, args, context) {
 }
 
 async function verify(args, context) {
-  const { conn, target } = await approvedConnection(args, false);
+  const { conn, target } = await approvedConnection(args, 'read');
   if (args['confirm-target'] !== target.fingerprint) {
     await conn.end();
     throw new Error(`Exact --confirm-target is required: ${target.fingerprint}`);
@@ -505,7 +561,7 @@ async function advanceRevision(args, context) {
   if (fixtures.length !== requested.size || fixtures.some(item => !item.revision_2_text)) {
     throw new Error('Every requested key must exist and define revision_2_text');
   }
-  const { conn, target } = await approvedConnection(args, true);
+  const { conn, target } = await approvedConnection(args, 'apply');
   try {
     const { binding, review, plan } = exactApprovedReview(args, context, target);
     assertMutationAuthority('advance-revision', args, binding, review, plan);
@@ -599,17 +655,18 @@ async function advanceRevision(args, context) {
 }
 
 async function cleanup(args, context) {
-  const { conn, target } = await approvedConnection(args, true);
+  const { conn, target } = await approvedConnection(args, 'cleanup');
   try {
-    const { binding, review, plan } = exactApprovedReview(args, context, target);
-    assertMutationAuthority('cleanup', args, binding, review, plan);
+    const { binding, authorization, plan } = exactCleanupAuthorization(args, context, target);
+    assertCleanupAuthority(args, binding, authorization, plan);
     await conn.beginTransaction();
-    await assertStoredPlan(conn, context, target, review, plan, { lock: true, requireBatch: true });
-    const [markers] = await conn.execute(
-      `SELECT marker_id FROM cairn_qa_fixtures
-        WHERE batch_id=? AND marker_id IS NOT NULL FOR UPDATE`, [context.manifest.batch_id],
+    const stored = await assertStoredCleanupPlan(
+      conn, context, target, authorization, { lock: true },
     );
-    const markerIds = markers.map(row => Number(row.marker_id));
+    const markerIds = stored.fixtures
+      .filter(row => row.marker_id != null)
+      .map(row => Number(row.marker_id));
+    const existingMarkerCount = stored.fixtures.filter(row => row.existing_marker_id != null).length;
     if (markerIds.length) {
       const placeholders = markerIds.map(() => '?').join(',');
       const [groups] = await conn.execute(
@@ -658,7 +715,12 @@ async function cleanup(args, context) {
       `UPDATE cairn_qa_fixture_batches SET state='cleaned' WHERE batch_id=?`, [context.manifest.batch_id],
     );
     await conn.commit();
-    return { command: 'cleanup', target: target.fingerprint, batchId: context.manifest.batch_id, deletedMarkers: markerIds.length };
+    return {
+      command: 'cleanup', target: target.fingerprint, batchId: context.manifest.batch_id,
+      deletedMarkers: existingMarkerCount, cleanedMarkerReferences: markerIds.length,
+      alreadyCleaned: stored.batch.state === 'cleaned' && markerIds.length === 0,
+      cleanupPlanSha256: plan.plan_sha256,
+    };
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
     throw error;
@@ -702,10 +764,20 @@ async function inspectTarget(args) {
 }
 
 async function showApprovalPlan(args, context) {
-  const { conn, target } = await approvedConnection(args, false);
+  const { conn, target } = await approvedConnection(args, 'apply');
   try {
     const { plan: approvedPlan } = exactApprovedReview(args, context, target);
     return { command: 'approval-plan', writePerformed: false, ...approvedPlan };
+  } finally {
+    await conn.end();
+  }
+}
+
+async function showCleanupPlan(args, context) {
+  const { conn, target } = await approvedConnection(args, 'cleanup');
+  try {
+    const { plan: approvedPlan } = exactCleanupAuthorization(args, context, target);
+    return { command: 'cleanup-plan', writePerformed: false, ...approvedPlan };
   } finally {
     await conn.end();
   }
@@ -721,6 +793,7 @@ async function main() {
   if (command === 'plan') result = plan(context);
   else if (command === 'inspect-target') result = await inspectTarget(args);
   else if (command === 'approval-plan') result = await showApprovalPlan(args, context);
+  else if (command === 'cleanup-plan') result = await showCleanupPlan(args, context);
   else if (command === 'apply') result = await apply(command, args, context);
   else if (command === 'verify') result = await verify(args, context);
   else if (command === 'advance-revision') result = await advanceRevision(args, context);

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -24,7 +24,12 @@ import {
 } from '../features/cairns/acquiredCairnHistoryCache';
 import { useAppStore } from '../store/useAppStore';
 import { splitTitleBody } from '../features/plant/services/noteEncoding';
-import { CairnPaper, CairnStatusPill, CairnStoneMark } from '../features/cairns/components/CairnPaper';
+import {
+  CairnPaper,
+  CairnStatusPill,
+  CairnStoneMark,
+  useCairnPaperExit,
+} from '../features/cairns/components/CairnPaper';
 
 type DetailRoute = RouteProp<RootStackParamList, 'AcquiredCairnDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -44,6 +49,18 @@ export function AcquiredCairnDetailScreen() {
   const actionFlights = useRef(new Set<string>());
   const collectionFlight = useRef(false);
   const loadGeneration = useRef(0);
+  const closing = useRef(false);
+  const { style: paperExitStyle, run: runPaperExit } = useCairnPaperExit();
+
+  const closeWithPaper = useCallback(() => {
+    if (closing.current) return;
+    closing.current = true;
+    if (!revisions[pageIndex]) {
+      nav.goBack();
+      return;
+    }
+    runPaperExit(() => nav.goBack());
+  }, [nav, pageIndex, revisions, runPaperExit]);
 
   const load = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -158,6 +175,7 @@ export function AcquiredCairnDetailScreen() {
     collectionFlight.current = true;
     setCollectionAction(action);
     setActionError('');
+    let accepted = false;
     try {
       const response = await authenticatedFetch(`/api/cairn-memory/cairns/${encodeURIComponent(route.params.markerId)}/collection`, {
         method: 'PUT', body: JSON.stringify({ action }), expectedUserId: ownerId, skipLogoutOn401: true,
@@ -166,7 +184,8 @@ export function AcquiredCairnDetailScreen() {
       if (response.ok) {
         if (action === 'remove') await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
         void useCairnPresentationStore.getState().refreshAcquiredMap();
-        nav.goBack();
+        accepted = true;
+        closeWithPaper();
       } else if ([403, 404, 410].includes(response.status)) {
         await markAcquiredCairnKnownUnavailable(ownerId, route.params.markerId);
         setRevisions([]);
@@ -178,7 +197,7 @@ export function AcquiredCairnDetailScreen() {
       setActionError(`${action === 'archive' ? 'Archive' : 'Remove'} did not complete. The Cairn is still here; check your connection and try again.`);
     } finally {
       collectionFlight.current = false;
-      if (String(useAppStore.getState().user?.id ?? '') === ownerId) setCollectionAction(null);
+      if (!accepted && String(useAppStore.getState().user?.id ?? '') === ownerId) setCollectionAction(null);
     }
   };
 
@@ -233,7 +252,7 @@ export function AcquiredCairnDetailScreen() {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <BackButton variant="inline" />
+        <BackButton variant="inline" onPress={closeWithPaper} testID="acquired-cairn-close" />
         <Text style={[styles.title, { color: theme.foreground }]}>Found Cairn</Text>
         <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>Versions you acquired during genuine visits remain in your Memory.</Text>
       </View>
@@ -254,7 +273,8 @@ export function AcquiredCairnDetailScreen() {
             const revision = revisions[pageIndex];
             const words = splitTitleBody(revision.text ?? '');
             return (
-            <CairnPaper key={revision.revision_id} style={styles.card} testID="acquired-cairn-paper">
+            <Animated.View key={revision.revision_id} style={paperExitStyle}>
+            <CairnPaper style={styles.card} testID="acquired-cairn-paper">
               <View style={styles.revisionHeader}>
                 <View style={styles.revisionIdentity}>
                   <CairnStoneMark size={34} tone={revision.source_audience === 'friends' ? 'friends' : 'public'} />
@@ -297,6 +317,7 @@ export function AcquiredCairnDetailScreen() {
                 </View>
               ) : null}
             </CairnPaper>
+            </Animated.View>
             );
           })() : null}
           {revisions.length > 1 ? (

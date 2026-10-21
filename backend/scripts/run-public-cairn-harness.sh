@@ -83,7 +83,10 @@ TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cairn-public-harness.XXXXXX")"
 cleanup() {
   if [ -n "$API_PID" ]; then kill "$API_PID" >/dev/null 2>&1 || true; fi
   if [ "${HARNESS_KEEP_CONTAINER:-0}" != "1" ]; then
-    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    # mysql:8 declares /var/lib/mysql as a volume. Removing only the
+    # container strands an anonymous, ~220 MB disposable QA database after
+    # every run and eventually exhausts Docker Desktop's VM filesystem.
+    docker rm -fv "$CONTAINER" >/dev/null 2>&1 || true
   else
     echo "retained debug container: $CONTAINER" >&2
   fi

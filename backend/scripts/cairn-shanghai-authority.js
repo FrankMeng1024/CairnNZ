@@ -62,11 +62,12 @@ function readTargetAllowlist(file) {
   const resolved = path.resolve(file);
   const raw = fs.readFileSync(resolved);
   const value = JSON.parse(raw.toString('utf8'));
-  if (value.schema_version !== 1 || !Array.isArray(value.approved_targets) || !value.approved_targets.length) {
-    throw new Error('Target allowlist must be schema version 1 with approved targets');
+  if (value.schema_version !== 2 || !Array.isArray(value.approved_targets) || !value.approved_targets.length) {
+    throw new Error('Target allowlist must be schema version 2 with approved targets');
   }
   const entries = value.approved_targets.map((entry, index) => {
-    if (!REALMS.has(entry.realm) || typeof entry.mutation_allowed !== 'boolean') {
+    if (!REALMS.has(entry.realm) || typeof entry.apply_allowed !== 'boolean'
+      || typeof entry.cleanup_allowed !== 'boolean') {
       throw new Error(`Invalid target allowlist entry ${index}`);
     }
     const fingerprint = targetFingerprint(entry.server_uuid, entry.database);
@@ -78,7 +79,7 @@ function readTargetAllowlist(file) {
   return { entries, resolved, sha256: sha256(raw) };
 }
 
-function resolveApprovedTarget(observed, allowlist, claimedRealm, mutation = false) {
+function resolveApprovedTarget(observed, allowlist, claimedRealm, operation = 'read') {
   const fingerprint = targetFingerprint(observed.serverUuid, observed.database);
   const matches = allowlist.entries.filter(entry => entry.fingerprint === fingerprint);
   if (matches.length !== 1) throw new Error('Connected database identity is not uniquely approved by the target allowlist');
@@ -86,7 +87,13 @@ function resolveApprovedTarget(observed, allowlist, claimedRealm, mutation = fal
   if (claimedRealm !== approved.realm) {
     throw new Error(`Claimed environment ${claimedRealm || '(missing)'} does not match approved realm ${approved.realm}`);
   }
-  if (mutation && !approved.mutation_allowed) throw new Error('Mutation is disabled for this approved target');
+  if (!['read', 'apply', 'cleanup'].includes(operation)) throw new Error(`Unknown target operation: ${operation}`);
+  if (operation === 'apply' && !approved.apply_allowed) {
+    throw new Error('Fixture creation/update is disabled for this approved target');
+  }
+  if (operation === 'cleanup' && !approved.cleanup_allowed) {
+    throw new Error('Fixture cleanup is disabled for this approved target');
+  }
   return {
     fingerprint,
     realm: approved.realm,
@@ -172,6 +179,71 @@ function approvalPlan(binding, review) {
   return { ...value, plan_sha256: planSha256, owner_approval: `${binding.batchId}:${planSha256}` };
 }
 
+function readCleanupAuthorization(file, binding, now = new Date()) {
+  if (!file) throw new Error('--cleanup-authorization is required before cleanup');
+  const resolved = path.resolve(file);
+  const raw = fs.readFileSync(resolved);
+  const authorization = JSON.parse(raw.toString('utf8'));
+  if (authorization.schema_version !== 1 || authorization.purpose !== 'cleanup-only') {
+    throw new Error('Cleanup authorization must be schema version 1 and cleanup-only');
+  }
+  if (authorization.batch_id !== binding.batchId
+    || authorization.manifest_sha256 !== binding.manifestSha256) {
+    throw new Error('Cleanup authorization does not bind this exact batch and manifest');
+  }
+  if (authorization.target_fingerprint !== binding.target.fingerprint
+    || authorization.target_realm !== binding.target.realm
+    || authorization.target_allowlist_sha256 !== binding.target.allowlistSha256) {
+    throw new Error('Cleanup authorization does not bind the connected approved target and allowlist');
+  }
+  const cleanupScope = [...new Set(authorization.cleanup_scope || [])].sort();
+  exactArray(cleanupScope, [...CLEANUP_SCOPE].sort(), 'Cleanup scope');
+  const expectedPrefix = `${binding.batchId}:`;
+  if (typeof authorization.expected_activation_approval !== 'string'
+    || !authorization.expected_activation_approval.startsWith(expectedPrefix)
+    || !/^[a-f0-9]{64}$/.test(authorization.expected_activation_approval.slice(expectedPrefix.length))) {
+    throw new Error('Cleanup authorization requires the exact original activation approval');
+  }
+  if (!authorization.authorized_by || !authorization.reason
+    || !Number.isFinite(Date.parse(authorization.authorized_at))) {
+    throw new Error('Cleanup authorization requires author, reason, and valid authorized_at');
+  }
+  const cleanupApprovalExpiresAt = validIso(
+    authorization.cleanup_approval_expires_at,
+    'Cleanup approval',
+    now.getTime(),
+  );
+  return {
+    value: authorization,
+    resolved,
+    sha256: sha256(raw),
+    cleanupScope,
+    expectedActivationApproval: authorization.expected_activation_approval,
+    cleanupApprovalExpiresAt,
+  };
+}
+
+function cleanupPlan(binding, authorization) {
+  const value = {
+    schema: 'cairnnz.o88-shanghai-cleanup.v1',
+    batch_id: binding.batchId,
+    manifest_sha256: binding.manifestSha256,
+    cleanup_authorization_sha256: authorization.sha256,
+    expected_activation_approval: authorization.expectedActivationApproval,
+    target_fingerprint: binding.target.fingerprint,
+    target_realm: binding.target.realm,
+    target_allowlist_sha256: binding.target.allowlistSha256,
+    cleanup_scope: authorization.cleanupScope,
+    cleanup_approval_expires_at: authorization.cleanupApprovalExpiresAt,
+  };
+  const planSha256 = sha256(canonicalJson(value));
+  return {
+    ...value,
+    plan_sha256: planSha256,
+    cleanup_owner_approval: `${binding.batchId}:cleanup:${planSha256}`,
+  };
+}
+
 function assertMutationAuthority(command, args, binding, review, plan) {
   if (args['confirm-batch'] !== binding.batchId) throw new Error('Exact --confirm-batch is required');
   if (args['confirm-target'] !== binding.target.fingerprint) {
@@ -185,8 +257,25 @@ function assertMutationAuthority(command, args, binding, review, plan) {
     && process.env.CAIRN_ENABLE_PRODUCTION_FIXTURE_APPLY !== '1') {
     throw new Error('Production fixture mutation is disabled by environment');
   }
-  if (command === 'cleanup' && args['confirm-cleanup'] !== binding.batchId) {
-    throw new Error('Cleanup requires the exact batch id');
+  return binding.target;
+}
+
+function assertCleanupAuthority(args, binding, authorization, plan) {
+  if (args['confirm-batch'] !== binding.batchId || args['confirm-cleanup'] !== binding.batchId) {
+    throw new Error('Cleanup requires the exact batch id twice');
+  }
+  if (args['confirm-target'] !== binding.target.fingerprint) {
+    throw new Error(`Exact --confirm-target is required: ${binding.target.fingerprint}`);
+  }
+  if (args['cleanup-owner-approval'] !== plan.cleanup_owner_approval) {
+    throw new Error(`Exact cleanup Owner approval is required: ${plan.cleanup_owner_approval}`);
+  }
+  if (Date.parse(authorization.cleanupApprovalExpiresAt) <= Date.now()) {
+    throw new Error('Cleanup Owner approval has expired');
+  }
+  if (binding.target.realm === 'production'
+    && process.env.CAIRN_ENABLE_PRODUCTION_FIXTURE_CLEANUP !== '1') {
+    throw new Error('Production fixture cleanup is disabled by environment');
   }
   return binding.target;
 }
@@ -194,9 +283,12 @@ function assertMutationAuthority(command, args, binding, review, plan) {
 module.exports = {
   CLEANUP_SCOPE,
   approvalPlan,
+  assertCleanupAuthority,
   assertMutationAuthority,
   canonicalJson,
+  cleanupPlan,
   normalizedIds,
+  readCleanupAuthorization,
   readFieldReview,
   readTargetAllowlist,
   resolveApprovedTarget,

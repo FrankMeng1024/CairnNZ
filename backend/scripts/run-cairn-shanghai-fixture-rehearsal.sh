@@ -15,7 +15,9 @@ MANIFEST="$SCRIPT_DIR/cairn-shanghai-fixtures/manifest.o88.json"
 TOOL="$SCRIPT_DIR/cairn-shanghai-field-test.js"
 
 cleanup() {
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  # mysql:8 declares /var/lib/mysql as an anonymous volume. Remove that
+  # disposable volume with the isolated rehearsal container on every exit.
+  docker rm -fv "$CONTAINER" >/dev/null 2>&1 || true
   rm -rf "$TEMP_DIR"
 }
 trap cleanup EXIT INT TERM
@@ -84,7 +86,7 @@ MANIFEST_SHA="$(node -e "const fs=require('fs'),c=require('crypto');const b=fs.r
 SERVER_UUID="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).serverUuid)" "$OUTPUT_DIR/02-inspect-target.json")"
 TARGET="mysql:${SERVER_UUID}:${DB_NAME}"
 TARGET_ALLOWLIST="$TEMP_DIR/target-allowlist.json"
-node -e "require('fs').writeFileSync(process.argv[1],JSON.stringify({schema_version:1,approved_targets:[{server_uuid:process.argv[2],database:process.argv[3],realm:'isolated',mutation_allowed:true,approval_note:'Disposable local rehearsal only'}]},null,2))" \
+node -e "require('fs').writeFileSync(process.argv[1],JSON.stringify({schema_version:2,approved_targets:[{server_uuid:process.argv[2],database:process.argv[3],realm:'isolated',apply_allowed:true,cleanup_allowed:true,approval_note:'Disposable local rehearsal only'}]},null,2))" \
   "$TARGET_ALLOWLIST" "$SERVER_UUID" "$DB_NAME"
 ALLOWLIST_SHA="$(node -e "const fs=require('fs'),c=require('crypto');const b=fs.readFileSync(process.argv[1]);process.stdout.write(c.createHash('sha256').update(b).digest('hex'))" "$TARGET_ALLOWLIST")"
 FIELD_REVIEW="$TEMP_DIR/field-review.json"
@@ -120,6 +122,27 @@ run_tool approval-plan --manifest="$MANIFEST" --environment=isolated \
   --target-allowlist="$TARGET_ALLOWLIST" --field-review="$FIELD_REVIEW" \
   > "$OUTPUT_DIR/03-approval-plan.json"
 OWNER_APPROVAL="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).owner_approval)" "$OUTPUT_DIR/03-approval-plan.json")"
+CLEANUP_AUTHORIZATION="$TEMP_DIR/cleanup-authorization.json"
+node - "$FIELD_REVIEW" "$CLEANUP_AUTHORIZATION" "$OWNER_APPROVAL" <<'NODE'
+const fs = require('fs');
+const [fieldReviewFile, output, expectedActivationApproval] = process.argv.slice(2);
+const review = JSON.parse(fs.readFileSync(fieldReviewFile));
+const now = Date.now();
+fs.writeFileSync(output, JSON.stringify({
+  schema_version: 1, purpose: 'cleanup-only', batch_id: review.batch_id,
+  manifest_sha256: review.manifest_sha256, target_fingerprint: review.target_fingerprint,
+  target_realm: review.target_realm, target_allowlist_sha256: review.target_allowlist_sha256,
+  expected_activation_approval: expectedActivationApproval,
+  cleanup_scope: review.cleanup_scope, authorized_by: 'disposable-mysql-rehearsal',
+  authorized_at: new Date(now).toISOString(),
+  cleanup_approval_expires_at: new Date(now + (2 * 86400000)).toISOString(),
+  reason: 'Remove only this isolated disposable fixture batch, including after activation expiry.',
+}, null, 2));
+NODE
+run_tool cleanup-plan --manifest="$MANIFEST" --environment=isolated \
+  --target-allowlist="$TARGET_ALLOWLIST" --cleanup-authorization="$CLEANUP_AUTHORIZATION" \
+  > "$OUTPUT_DIR/03b-cleanup-plan.json"
+CLEANUP_OWNER_APPROVAL="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1])).cleanup_owner_approval)" "$OUTPUT_DIR/03b-cleanup-plan.json")"
 run_tool apply --manifest="$MANIFEST" --environment=isolated \
   --reader-ids=9101,9102 --public-author-ids=9201,9202 --friend-author-ids=9301,9302 \
   --field-review="$FIELD_REVIEW" --confirm-batch=o88-shanghai-encounter-20261020 \
@@ -202,10 +225,55 @@ MIXED_PROBE_JSON="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 
 printf '%s\n' "$MIXED_PROBE_JSON" > "$OUTPUT_DIR/08b-mixed-groups-created.json"
 FIXTURE_MARKER_IDS="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
   "SELECT GROUP_CONCAT(marker_id ORDER BY marker_id) FROM ${DB_NAME}.cairn_qa_fixtures WHERE batch_id='o88-shanghai-encounter-20261020'")"
+# Expiry must block all creation/update paths, but it must not strand a known
+# batch. The separate cleanup-only grant is deliberately renewed and remains
+# authoritative after the activation and batch lifetimes have ended.
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e \
+  "UPDATE cairn_qa_fixture_batches SET expires_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY)
+    WHERE batch_id='o88-shanghai-encounter-20261020';" >/dev/null
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+  "SELECT JSON_OBJECT('batchExpired',expires_at<=UTC_TIMESTAMP(3),'state',state)
+     FROM ${DB_NAME}.cairn_qa_fixture_batches WHERE batch_id='o88-shanghai-encounter-20261020'" \
+  > "$OUTPUT_DIR/08c-expired-batch-before-cleanup.json"
+if run_tool apply --manifest="$MANIFEST" --environment=isolated \
+  --reader-ids=9101,9102 --public-author-ids=9201,9202 --friend-author-ids=9301,9302 \
+  --field-review="$FIELD_REVIEW" --confirm-batch=o88-shanghai-encounter-20261020 \
+  --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
+  --confirm-target="$TARGET" > "$OUTPUT_DIR/08d-expired-reapply-unexpected.json" 2> "$OUTPUT_DIR/08d-expired-reapply-rejected.txt"; then
+  echo 'expired batch was unexpectedly reactivated' >&2
+  exit 1
+fi
+# Model a partial prior cleanup without inventing a new fixture identity: remove
+# one exact fixture marker while retaining its batch row. The FK sets marker_id
+# to NULL, so the authorized cleanup must safely finish only the remaining rows.
+PARTIAL_CLEANUP_MARKER_ID="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+  "SELECT marker_id FROM ${DB_NAME}.cairn_qa_fixtures WHERE fixture_key='O88-WD-F01'")"
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e \
+  "DELETE event FROM cairn_acquisition_events event
+     JOIN cairn_acquisitions acquisition ON acquisition.id=event.acquisition_id
+    WHERE acquisition.marker_id=${PARTIAL_CLEANUP_MARKER_ID};
+   DELETE FROM cairn_acquisitions WHERE marker_id=${PARTIAL_CLEANUP_MARKER_ID};
+   DELETE FROM cairn_revisions WHERE marker_id=${PARTIAL_CLEANUP_MARKER_ID};
+   DELETE FROM cairn_review_cases WHERE marker_id=${PARTIAL_CLEANUP_MARKER_ID};
+   DELETE FROM cairn_collections WHERE marker_id=${PARTIAL_CLEANUP_MARKER_ID};
+   DELETE FROM marker_audience_epochs WHERE marker_id=${PARTIAL_CLEANUP_MARKER_ID};
+   DELETE FROM markers WHERE id=${PARTIAL_CLEANUP_MARKER_ID};" >/dev/null
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+  "SELECT JSON_OBJECT(
+     'fixtureRows',(SELECT COUNT(*) FROM ${DB_NAME}.cairn_qa_fixtures WHERE fixture_key='O88-WD-F01'),
+     'nullMarkerReferences',(SELECT COUNT(*) FROM ${DB_NAME}.cairn_qa_fixtures WHERE fixture_key='O88-WD-F01' AND marker_id IS NULL),
+     'deletedMarkerRows',(SELECT COUNT(*) FROM ${DB_NAME}.markers WHERE id=${PARTIAL_CLEANUP_MARKER_ID}))" \
+  > "$OUTPUT_DIR/08e-partial-cleanup-state.json"
 run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
-  --field-review="$FIELD_REVIEW" --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
+  --cleanup-authorization="$CLEANUP_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
   --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
   --confirm-cleanup=o88-shanghai-encounter-20261020 > "$OUTPUT_DIR/09-cleanup.json"
+run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
+  --cleanup-authorization="$CLEANUP_AUTHORIZATION" --target-allowlist="$TARGET_ALLOWLIST" \
+  --cleanup-owner-approval="$CLEANUP_OWNER_APPROVAL" \
+  --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
+  --confirm-cleanup=o88-shanghai-encounter-20261020 > "$OUTPUT_DIR/09a-cleanup-idempotent.json"
 docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
   "USE ${DB_NAME}; SELECT JSON_OBJECT(
     'mixedGroup', (SELECT COUNT(*) FROM cairn_presentation_groups WHERE group_token='88888888-8888-4888-8888-888888888881'),
@@ -229,12 +297,16 @@ const read = name => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
 const plan = read('01-plan.json');
 const inspected = read('02-inspect-target.json');
 const approval = read('03-approval-plan.json');
+const cleanupPlan = read('03b-cleanup-plan.json');
 const applied = read('04-apply.json');
 const reapplied = read('04b-exact-reapply.json');
 const active = read('05-verify-active.json');
 const recovered = read('07-partial-recovery.json');
 const advanced = read('08-advance-revision.json');
 const cleanup = read('09-cleanup.json');
+const cleanupAgain = read('09a-cleanup-idempotent.json');
+const expiredBatch = read('08c-expired-batch-before-cleanup.json');
+const partialCleanup = read('08e-partial-cleanup-state.json');
 const cleanupIsolation = read('09b-cleanup-isolation.json');
 const cleaned = read('10-verify-cleaned.json');
 const activeLive = active.counts.reduce((sum, row) => sum + Number(row.live_markers || 0), 0);
@@ -243,13 +315,23 @@ const checks = {
   plan_is_read_only: plan.writePerformed === false && plan.totals.fixtures === 60,
   actual_target_inspected_read_only: inspected.writePerformed === false && Boolean(inspected.serverUuid),
   approval_plan_read_only: approval.writePerformed === false && Boolean(approval.owner_approval),
+  cleanup_plan_is_separate_and_read_only: cleanupPlan.writePerformed === false
+    && Boolean(cleanupPlan.cleanup_owner_approval)
+    && !('owner_approval' in cleanupPlan),
   applied_exactly_60: applied.applied === true && applied.rows === 60,
   exact_reapply_is_idempotent: reapplied.applied === true && reapplied.rows === 60,
   active_manifest_and_rows: active.exactManifest === true && active.batch?.state === 'active' && activeLive === 60,
   changed_cohort_rejected: fs.readFileSync(path.join(dir, '06-cohort-expansion-rejected.txt'), 'utf8').includes('do not match'),
   exact_partial_recovery: recovered.applied === true && recovered.rows === 60,
   advanced_exactly_2: advanced.advanced?.length === 2,
-  cleanup_exactly_60: cleanup.deletedMarkers === 60,
+  expired_batch_cannot_reactivate: expiredBatch.batchExpired === true
+    && fs.readFileSync(path.join(dir, '08d-expired-reapply-rejected.txt'), 'utf8').includes('exact active approval plan'),
+  partial_cleanup_state_is_exact: partialCleanup.fixtureRows === 1
+    && partialCleanup.nullMarkerReferences === 1 && partialCleanup.deletedMarkerRows === 0,
+  expired_batch_cleanup_authorized_separately: expiredBatch.batchExpired === true
+    && cleanup.deletedMarkers === 59 && cleanup.cleanedMarkerReferences === 59,
+  cleanup_retry_is_idempotent: cleanupAgain.alreadyCleaned === true
+    && cleanupAgain.deletedMarkers === 0 && cleanupAgain.cleanedMarkerReferences === 0,
   mixed_group_cleanup_isolated: cleanupIsolation.mixedGroup === 1
     && cleanupIsolation.mixedEvents === 1 && cleanupIsolation.mixedNotification === 1
     && cleanupIsolation.fixtureOnlyGroup === 0 && cleanupIsolation.fixtureOnlyNotification === 0

@@ -8,6 +8,7 @@ const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8118';
 const outputDir = path.resolve(process.env.CAIRN_O88_REVIEW_DIR || '_review/o88-cairn-core');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const now = Date.now();
+const runStartedAt = Date.now();
 const activityId = '88888888-8888-4888-8888-888888888888';
 const ownerGeneration = 'o88-review-generation';
 const requests = [];
@@ -15,6 +16,8 @@ const runtimeErrors = [];
 const captures = [];
 const mapboxNetwork = { requested: [], finished: [], failed: [], abortedOnReload: [] };
 let createdMarker = null;
+let failNextMarkerUpdate = false;
+const motionEvidence = [];
 
 fs.mkdirSync(outputDir, { recursive: true });
 fs.mkdirSync(path.join(outputDir, 'video'), { recursive: true });
@@ -190,6 +193,10 @@ await page.route('**/api/**', async route => {
     return respond(route, { markers: createdMarker ? [createdMarker] : [], next_cursor: null, has_more: false });
   }
   if (/^\/api\/markers\/\d+$/.test(pathname) && method === 'PUT') {
+    if (failNextMarkerUpdate) {
+      failNextMarkerUpdate = false;
+      return respond(route, { error: 'isolated update failure' }, 503);
+    }
     if (createdMarker) {
       createdMarker = { ...createdMarker, ...requestBody, content_revision: 2, updated_at: new Date().toISOString() };
     }
@@ -368,8 +375,13 @@ await capture('03b-night-plant-adjust-pin-back', {
 });
 
 await setTheme('day');
+const saveStartedAt = Date.now();
 await page.getByTestId('plant-submit').click();
 await page.getByTestId('plant-success-modal').waitFor({ state: 'visible', timeout: 20_000 });
+motionEvidence.push({
+  action: 'save', start_ms: saveStartedAt - runStartedAt, end_ms: Date.now() - runStartedAt,
+  wall_ms: Date.now() - saveStartedAt, result: 'durable-success-then-leave-reveal',
+});
 await capture('04-day-plant-public-success', { route: 'Plant', theme: 'day', fixture: 'isolated QA', interaction: 'real client outbox and handler' });
 await settle(900);
 await page.getByTestId('plant-success-view').click();
@@ -381,14 +393,47 @@ await page.getByTestId('cairn-edit-sheet').waitFor({ state: 'visible' });
 await settle(550);
 await capture('06-day-owned-edit-new-version', { route: 'MarkerDetail edit sheet', theme: 'day', fixture: 'isolated QA' });
 await page.getByRole('textbox', { name: 'Cairn note' }).fill('The rain has passed; this quieter version stays with the same place.');
+failNextMarkerUpdate = true;
+const failedUpdateStartedAt = Date.now();
+await page.getByTestId('cairn-edit-save').click();
+await page.getByTestId('cairn-edit-error').waitFor({ state: 'visible', timeout: 20_000 });
+if (await page.getByRole('textbox', { name: 'Cairn note' }).inputValue()
+  !== 'The rain has passed; this quieter version stays with the same place.') {
+  throw new Error('failed update discarded the edited note');
+}
+await capture('06a-day-owned-edit-failure-retained', {
+  route: 'MarkerDetail edit sheet', theme: 'day', fixture: 'isolated QA',
+  interaction: 'failed Update keeps exact edits and sheet open',
+});
+motionEvidence.push({
+  action: 'update-failure', start_ms: failedUpdateStartedAt - runStartedAt,
+  end_ms: Date.now() - runStartedAt, wall_ms: Date.now() - failedUpdateStartedAt,
+  result: 'exact-edit-retained-no-paper-exit',
+});
+const updateStartedAt = Date.now();
 await page.getByTestId('cairn-edit-save').click();
 await page.getByTestId('cairn-edit-sheet').waitFor({ state: 'hidden', timeout: 20_000 });
 await page.getByText('The rain has passed; this quieter version stays with the same place.', { exact: true }).waitFor({ state: 'visible' });
 await capture('06b-day-owned-edit-saved', { route: 'MarkerDetail', theme: 'day', fixture: 'isolated QA', interaction: 'saved new Public revision' });
+motionEvidence.push({
+  action: 'update', start_ms: updateStartedAt - runStartedAt, end_ms: Date.now() - runStartedAt,
+  wall_ms: Date.now() - updateStartedAt, result: 'accepted-new-version-then-paper-reveal',
+});
 await page.getByTestId('cairn-delete-open').click();
 await page.getByTestId('cairn-delete-confirmation').waitFor({ state: 'visible' });
 await settle(550);
 await capture('07-day-owned-withdraw-delete', { route: 'MarkerDetail delete dialog', theme: 'day', fixture: 'isolated QA' });
+const withdrawStartedAt = Date.now();
+await page.getByTestId('cairn-delete-confirm').click();
+await routeName('AllCairns');
+motionEvidence.push({
+  action: 'withdraw', start_ms: withdrawStartedAt - runStartedAt, end_ms: Date.now() - runStartedAt,
+  wall_ms: Date.now() - withdrawStartedAt, result: 'confirmed-then-paper-closed-and-navigated',
+});
+await capture('07b-day-owned-withdraw-complete', {
+  route: 'AllCairns', theme: 'day', fixture: 'isolated QA',
+  interaction: 'confirmed Withdraw folds the exact paper only after durable acceptance',
+});
 
 await navigate('AllCairns', { initialSection: 'left' });
 await page.getByTestId('all-cairns-list').waitFor({ state: 'visible' });
@@ -416,8 +461,27 @@ if (await previous.isVisible().catch(() => false)) {
   await settle();
   await capture('11-day-found-detail-history', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA' });
 }
+const closeStartedAt = Date.now();
+await page.getByTestId('acquired-cairn-close').click();
+await routeName('AllCairns');
+motionEvidence.push({
+  action: 'close', reduce_motion: false, start_ms: closeStartedAt - runStartedAt,
+  end_ms: Date.now() - runStartedAt, wall_ms: Date.now() - closeStartedAt,
+  result: 'paper-closed-then-returned',
+});
+await capture('11a-day-found-close-complete', {
+  route: 'AllCairns', theme: 'day', fixture: 'isolated QA', interaction: 'Close completed its finite paper transition',
+});
+await page.getByTestId('found-cairn-row-900').click();
+await routeName('AcquiredCairnDetail');
+await page.getByTestId('acquired-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
+const archiveStartedAt = Date.now();
 await page.getByLabel('Archive from default view').click();
 await routeName('AllCairns');
+motionEvidence.push({
+  action: 'archive', start_ms: archiveStartedAt - runStartedAt, end_ms: Date.now() - runStartedAt,
+  wall_ms: Date.now() - archiveStartedAt, result: 'server-accepted-then-paper-closed',
+});
 await capture('11b-day-found-archive-complete', { route: 'AllCairns', theme: 'day', fixture: 'isolated QA', interaction: 'Archive returned to Library' });
 
 await navigate('Memory');
@@ -488,6 +552,7 @@ await page.evaluate(() => {
   });
 });
 await page.getByTestId('walking-discovery-group-o88-encounter-token-open').waitFor({ state: 'visible', timeout: 20_000 });
+const openStartedAt = Date.now();
 await page.getByLabel('Open found Cairn').click();
 await routeName('AcquiredCairnDetail');
 try {
@@ -504,6 +569,26 @@ try {
   throw error;
 }
 await capture('12c-day-memory-encounter-open-exact-revision', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA', interaction: 'Open resolved group 31 to revision 902' });
+motionEvidence.push({
+  action: 'open', start_ms: openStartedAt - runStartedAt, end_ms: Date.now() - runStartedAt,
+  wall_ms: Date.now() - openStartedAt, result: 'exact-retained-revision-opened-and-paper-revealed',
+});
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await settle(250);
+const reducedCloseStartedAt = Date.now();
+await page.getByTestId('acquired-cairn-close').click();
+await routeName('Memory');
+const reducedCloseWallMs = Date.now() - reducedCloseStartedAt;
+if (reducedCloseWallMs > 700) throw new Error(`Reduced Motion Close was delayed ${reducedCloseWallMs}ms`);
+motionEvidence.push({
+  action: 'close', reduce_motion: true, start_ms: reducedCloseStartedAt - runStartedAt,
+  end_ms: Date.now() - runStartedAt, wall_ms: reducedCloseWallMs, result: 'immediate-final-state',
+});
+await capture('12d-day-found-close-reduced-motion', {
+  route: 'Memory', theme: 'day', fixture: 'isolated QA',
+  interaction: 'Reduced Motion Close returns without decorative transition delay',
+});
+await page.emulateMedia({ reducedMotion: 'no-preference' });
 
 await page.setViewportSize({ width: 360, height: 780 });
 await primeActivityPlant();
@@ -602,12 +687,15 @@ const result = {
     'Activity Plant exposes Only me, Friends and Public with audience truth.',
     'Public save uses the production client outbox/marker handler and shows truthful review state.',
     'Owner detail, edit-new-version and withdraw/delete consequences render in production UI.',
+    'Failed Update keeps exact edits; retry reveals the accepted new page.',
     'Library separates I left and I found; public acquired identity is anonymous.',
     'Found Detail separates encoded title/body and presents retained version history.',
     'Memory encounter uses one authoritative presentation group with Open/Later actions.',
     'Adjust GPS Cancel and pin Back preserve the real editor; first-entry Cancel leaves no empty resume.',
     'A standalone editor interrupted by reload offers an explicit place-bound resume and restores its words.',
+    'Save, Open, Update, Close, Archive and Withdraw are tied to real state transitions; Reduce Motion skips Close decoration.',
   ],
+  motion_evidence: motionEvidence,
   captures,
   request_count: requests.length,
   runtime_errors: runtimeErrors,

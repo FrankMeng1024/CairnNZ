@@ -13,7 +13,10 @@ export interface PlantDraftStorage {
   removeItem(key: string): Promise<void>;
 }
 
-const activeSessionByKey = new Map<string, string>();
+// This is intentionally an authority fence, not merely a mounted-screen map.
+// Releasing the newest editor must not let a delayed failure from an older
+// editor regain write authority after the newest editor has closed.
+const latestSessionByKey = new Map<string, string>();
 const operationByKey = new Map<string, Promise<unknown>>();
 
 function encoded(value: string): string {
@@ -39,11 +42,16 @@ export function legacyPlantDraftStorageKey(ownerUserId: string): string {
 }
 
 export function claimPlantDraftSession(key: string, sessionId: string): void {
-  activeSessionByKey.set(key, sessionId);
+  latestSessionByKey.set(key, sessionId);
 }
 
 export function releasePlantDraftSession(key: string, sessionId: string): void {
-  if (activeSessionByKey.get(key) === sessionId) activeSessionByKey.delete(key);
+  // Keep the latest session as a monotonic in-process fence. Its final
+  // unmount/background flush is still allowed, while any superseded session
+  // remains unable to overwrite or remove the newer envelope. A genuine app
+  // restart clears this map and the next editor explicitly adopts a stored
+  // draft under a fresh session id.
+  if (latestSessionByKey.get(key) !== sessionId) return;
 }
 
 function enqueue<T>(key: string, operation: () => Promise<T>): Promise<T> {
@@ -67,8 +75,7 @@ export async function persistPlantDraft(
   serializedEnvelope: string,
 ): Promise<boolean> {
   return enqueue(key, async () => {
-    const active = activeSessionByKey.get(key);
-    if (active != null && active !== sessionId) return false;
+    if (latestSessionByKey.get(key) !== sessionId) return false;
     await storage.setItem(key, serializedEnvelope);
     return true;
   });
@@ -81,8 +88,7 @@ export async function removePlantDraftIfSessionMatches(
   actingSessionId: string,
 ): Promise<boolean> {
   return enqueue(key, async () => {
-    const active = activeSessionByKey.get(key);
-    if (active != null && active !== actingSessionId) return false;
+    if (latestSessionByKey.get(key) !== actingSessionId) return false;
     const raw = await storage.getItem(key);
     if (!raw) return true;
     try {
@@ -110,6 +116,6 @@ export async function removeLegacyDraftIfUnchanged(
 }
 
 export function resetPlantDraftLifecycleForTests(): void {
-  activeSessionByKey.clear();
+  latestSessionByKey.clear();
   operationByKey.clear();
 }

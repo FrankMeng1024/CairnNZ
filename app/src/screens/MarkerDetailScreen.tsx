@@ -21,7 +21,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions, Platform, Alert,
-  TouchableOpacity,
+  Animated, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -76,7 +76,11 @@ import { CairnIdentityLine } from '../features/cairns/CairnIdentityLine';
 import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
-import { CairnPaper, CairnStoneMark } from '../features/cairns/components/CairnPaper';
+import {
+  CairnPaper,
+  CairnStoneMark,
+  useCairnPaperExit,
+} from '../features/cairns/components/CairnPaper';
 import { cairnPublicationTruth } from '../features/cairns/cairnExperience';
 
 let MapView: any = null;
@@ -163,6 +167,7 @@ export function MarkerDetailScreen() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletionSnapshot, setDeletionSnapshot] = useState<{ ownerId: string; marker: Marker } | null>(null);
+  const { style: paperExitStyle, run: runPaperExit, reset: resetPaperExit } = useCairnPaperExit();
   const [mapReady, setMapReady] = useState(false);
   const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
   const [mapEpoch, setMapEpoch] = useState(0);
@@ -248,15 +253,18 @@ export function MarkerDetailScreen() {
       const result = await deleteMarker(marker.id);
       accepted = true;
       setDeleteConfirmOpen(false);
-      if (nav.canGoBack()) nav.goBack();
-      else nav.replace('AllCairns');
-      if (result.remoteState === 'queued') {
-        Alert.alert(
-          'Delete queued',
-          'This Cairn is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
-        );
-      }
+      runPaperExit(() => {
+        if (nav.canGoBack()) nav.goBack();
+        else nav.replace('AllCairns');
+        if (result.remoteState === 'queued') {
+          Alert.alert(
+            'Delete queued',
+            'This Cairn is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
+          );
+        }
+      });
     } catch {
+      resetPaperExit();
       setDeletionSnapshot(null);
       Alert.alert('Could not delete', 'This Cairn is still here. Check your connection and try again.');
     } finally {
@@ -265,7 +273,7 @@ export function MarkerDetailScreen() {
       // "Cairn not found" ghost after the store projection is removed.
       if (!accepted) setDeleting(false);
     }
-  }, [deleteMarker, deleting, marker, nav, userId]);
+  }, [deleteMarker, deleting, marker, nav, resetPaperExit, runPaperExit, userId]);
 
   if (!marker) {
     return (
@@ -440,8 +448,9 @@ export function MarkerDetailScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <Animated.View style={paperExitStyle}>
         <CairnPaper
-          key={`owned-cairn-paper:${marker.contentRevision ?? 1}:${marker.note}`}
+          motionKey={`owned-cairn-paper:${marker.contentRevision ?? 1}:${marker.note}`}
           style={styles.notePaper}
           testID="owned-cairn-paper"
         >
@@ -464,6 +473,7 @@ export function MarkerDetailScreen() {
             qa={marker.qaProvenance === 'simulator_test'}
           />
         </CairnPaper>
+        </Animated.View>
 
         {isOwner && Number(marker.thanksCount ?? 0) > 0 ? (
           <View
@@ -632,6 +642,16 @@ export function MarkerDetailScreen() {
               {publicEditBlock}
             </Text>
           ) : null}
+          {saveError ? (
+            <ContentSurface level="record" style={styles.editError} testID="cairn-edit-error">
+              <Text
+                accessibilityLiveRegion="assertive"
+                style={[styles.editErrorText, { color: visualTheme.destructive }]}
+              >
+                {saveError}
+              </Text>
+            </ContentSurface>
+          ) : null}
           <MarkForm
             type={editType}
             title={editTitle}
@@ -654,11 +674,6 @@ export function MarkerDetailScreen() {
             <Text style={[styles.editBoundaryCopy, { color: visualTheme.foregroundSecondary }]}>
               This synced Cairn needs a connection to save. Your draft stays here if saving fails.
             </Text>
-          ) : null}
-          {saveError ? (
-            <ContentSurface level="record" style={styles.editError} testID="cairn-edit-error">
-              <Text style={[styles.editErrorText, { color: visualTheme.destructive }]}>{saveError}</Text>
-            </ContentSurface>
           ) : null}
         </BottomSheetContent>
         <View style={[styles.editFooter, { backgroundColor: visualTheme.sheetSurface, borderTopColor: visualTheme.borderSubtle }]}>

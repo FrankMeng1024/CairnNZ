@@ -16,7 +16,9 @@ API_PID=""
 cleanup() {
   if [ -n "$API_PID" ]; then kill "$API_PID" >/dev/null 2>&1 || true; fi
   if [ "${HARNESS_KEEP_CONTAINER:-0}" != "1" ]; then
-    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    # Remove the image-declared anonymous MySQL volume together with this
+    # disposable harness container. Named or shared volumes are never used.
+    docker rm -fv "$CONTAINER" >/dev/null 2>&1 || true
   else
     echo "retained debug container: $CONTAINER" >&2
   fi
