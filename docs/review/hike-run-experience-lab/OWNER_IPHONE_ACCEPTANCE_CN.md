@@ -1,6 +1,6 @@
 # Owner iPhone 定向验收清单
 
-状态：源码/集成门已通过；本清单尚未执行。不要把此文件当作“手机已收到代码”或 TestFlight 已批准。
+状态：源码/集成门已通过；本清单尚未执行。`main` 的实际合并/远端状态以本轮最终交付报告为准。不要把源码合并当作“手机已收到代码”或 TestFlight 已批准。
 
 ## 前置记录
 
@@ -44,6 +44,7 @@
 - 离线 Finish 后确认本地 Activity、pending 与 WAL 存在；杀掉 App，离线重开；再联网。
 - 只允许一个服务端 Activity/Memory 身份；lost ACK 重试不得产生发散 payload。
 - ACK 前不得清理 WAL/intent；ACK 与下游责任完成后才清理。干净客户端仍可打开服务端 Activity，手机不应发送服务端 DELETE。
+- 另用一条已同步的非唯一测试 Activity 验证 Activity Detail 删除、杀进程和重开：目标卡片不得复活，其他 Activity/Memory 不变。磁盘删除失败后的确定性重试由自动化故障注入覆盖，不要求 Owner 人为破坏手机存储。
 
 ### 6. 真实手指修复困难 Activity 与长时观察
 
@@ -64,4 +65,4 @@
 - 六案都没有新的高严重度缺陷，且后台、GPS 恢复、ACK 清理、真实触控和长时负载都有可核对证据，才可把“Owner iPhone”门从 READY 改为 PASS。
 - 在实际证据生成前，iOS 锁屏/后台 delivery、GPS 丢失/恢复、冷进程恢复、网络离线/ACK、原生电量/热状态/FPS、Preparing 后地图稳定和真手指编辑全部仍是 **未测试**；不能制造 OS 未投递的 raw GPS。
 - 任何原生缺陷只做最小复现和定向修复；不要重新开启整套算法调参。
-- 在 Owner 接受并明确授权之前，外部 TestFlight 门保持 HOLD；不要合并 main、发布 OTA、部署后端、改版本/runtime 或运行 EAS Build。
+- 源码合并并不发布客户端。在 Owner 接受并另行明确授权之前，外部 TestFlight 门保持 HOLD；不要发布 OTA、部署后端、改版本/runtime 或运行 EAS Build。

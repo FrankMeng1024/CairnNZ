@@ -15,6 +15,7 @@ import {
   getActivityRegistry,
   getUnfinishedActivity,
   isActivityTombstoned,
+  markActivityLocalArtifactsCleaned,
   mapActivityServerId,
   reconcileStartConflict,
   registerUnfinishedActivity,
@@ -262,6 +263,33 @@ describe('bounded durable Activity registry', () => {
     expect(await getUnfinishedActivity('user-discard')).toBeNull();
     expect(await isActivityTombstoned('user-discard', id)).toBe(true);
     await expect(registerUnfinishedActivity(unfinished('user-discard', id))).rejects.toThrow('activity_tombstoned');
+  });
+
+  test('retains exact local cleanup identity after artifacts are confirmed removed', async () => {
+    const id = '78787878-7878-4787-8787-787878787878';
+    await tombstoneActivity({
+      userId: 'user-cleanup',
+      clientActivityId: id,
+      serverActivityId: 42,
+      localSessionId: 'local-track-key',
+    });
+    expect((await getActivityRegistry('user-cleanup')).tombstones[0]).toMatchObject({
+      clientActivityId: id,
+      serverActivityId: 42,
+      localSessionId: 'local-track-key',
+    });
+    expect((await getActivityRegistry('user-cleanup')).tombstones[0].localArtifactsCleanedAt).toBeUndefined();
+
+    await expect(markActivityLocalArtifactsCleaned(
+      'user-cleanup', id, 'local-track-key',
+    )).resolves.toBe(true);
+    expect((await getActivityRegistry('user-cleanup')).tombstones[0]).toMatchObject({
+      clientActivityId: id,
+      localSessionId: 'local-track-key',
+      localArtifactsCleanedAt: expect.any(Number),
+      lifecycle: 'discarded',
+    });
+    expect(await isActivityTombstoned('user-cleanup', id)).toBe(true);
   });
 
   test('logout/account switching cannot expose another user registry', async () => {

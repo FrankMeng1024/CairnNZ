@@ -17,6 +17,7 @@ import { deleteRemoteSession, deleteRemoteSessionByClientId, renameRemoteSession
 import {
   getActivityRegistry,
   isActivityTombstoned,
+  markActivityLocalArtifactsCleaned,
   tombstoneActivity,
 } from '../features/activity/activityRegistry';
 import { crashLogger } from '../services/crashLogger';
@@ -313,6 +314,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       ))
       : undefined;
     const targetSessionId = validSessionIdentity(session?.id) ? session.id : undefined;
+    let cleanupLocalSessionId = targetSessionId;
+    let localArtifactsCleaned = false;
+    let retainedDelete = false;
     let clientActivityId = validSessionIdentity(session?.clientActivityId)
       ? session.clientActivityId
       : targetSessionId;
@@ -325,24 +329,31 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!session && requestedId && userId && userId !== 'guest') {
       try {
         const registry = await getActivityRegistry(userId);
-        const numericRequestedId = /^\d+$/.test(requestedId) ? Number(requestedId) : null;
-        const retainedDelete = registry.tombstones.find((item) => (
+        const tombstone = registry.tombstones.find((item) => (
           item.clientActivityId === requestedId
-          || (numericRequestedId != null && item.serverActivityId === numericRequestedId)
+          || item.localSessionId === requestedId
         ));
-        if (retainedDelete && validSessionIdentity(retainedDelete.clientActivityId)) {
-          clientActivityId = retainedDelete.clientActivityId;
-          remoteSessionId = retainedDelete.serverActivityId;
+        if (tombstone && validSessionIdentity(tombstone.clientActivityId)) {
+          retainedDelete = true;
+          clientActivityId = tombstone.clientActivityId;
+          remoteSessionId = tombstone.serverActivityId;
+          cleanupLocalSessionId = validSessionIdentity(tombstone.localSessionId)
+            ? tombstone.localSessionId
+            : undefined;
+          localArtifactsCleaned = tombstone.localArtifactsCleanedAt != null;
         }
-      } catch { /* local exact-id cleanup remains safe without registry recovery */ }
+      } catch { /* a retry without durable exact-ID authority remains fail-closed */ }
     }
     crashLogger.breadcrumb(`session:delete:start id=${id} hasRemoteId=${!!session?.remoteId}`);
     if (userId !== 'guest' && clientActivityId) {
-      await tombstoneActivity({
-        userId,
-        clientActivityId,
-        serverActivityId: remoteSessionId,
-      });
+      if (!retainedDelete) {
+        await tombstoneActivity({
+          userId,
+          clientActivityId,
+          serverActivityId: remoteSessionId,
+          localSessionId: cleanupLocalSessionId,
+        });
+      }
       try {
         const { cancelActivityFinalRefinement } = require('../features/activity/activityFinalRefinementQueue');
         await cancelActivityFinalRefinement(userId, clientActivityId);
@@ -372,15 +383,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     });
     sessionWriteTail = removeRun.catch(() => {});
     await removeRun;
-    const trackSessionIds = [...new Set([requestedId, targetSessionId].filter(validSessionIdentity))];
-    for (const sessionId of trackSessionIds) {
-      await storage.removeItem(trackPointsKey(userId, sessionId), { strict: true });
-    }
-    try {
+    if (!localArtifactsCleaned && cleanupLocalSessionId) {
+      await storage.removeItem(trackPointsKey(userId, cleanupLocalSessionId), { strict: true });
       const { deleteActivityFinalArtifact } = require('../features/activity/activityFinalArtifact');
-      const artifactIdentity = clientActivityId ?? targetSessionId ?? requestedId;
-      if (artifactIdentity) await deleteActivityFinalArtifact(userId, artifactIdentity);
-    } catch { /* legacy sessions may not have a Final artifact */ }
+      if (clientActivityId) {
+        await deleteActivityFinalArtifact(userId, clientActivityId, { strict: true });
+      }
+      if (userId !== 'guest' && clientActivityId) {
+        const marked = await markActivityLocalArtifactsCleaned(
+          userId,
+          clientActivityId,
+          cleanupLocalSessionId,
+        );
+        if (!marked) throw new Error('activity_cleanup_tombstone_missing');
+      }
+    }
     // Mirror deletion to backend.
     //
     // Sessions can be in two shapes:

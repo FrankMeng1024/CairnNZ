@@ -52,6 +52,11 @@ export interface ActivityTombstone {
   userId: string;
   lifecycle: 'discarded';
   discardedAt: number;
+  /** Exact summary/track identity captured before local deletion. This is not
+   * interchangeable with either the immutable client ID or a server row ID. */
+  localSessionId?: string;
+  /** Set only after strict track and Final-artifact removal both complete. */
+  localArtifactsCleanedAt?: number;
 }
 
 export interface ActivityRegistrySnapshot {
@@ -113,6 +118,12 @@ async function read(
     item?.lifecycle === 'discarded'
     && typeof item.clientActivityId === 'string'
     && item.userId === userId
+    && (item.localSessionId == null || (
+      typeof item.localSessionId === 'string' && item.localSessionId.trim().length > 0
+    ))
+    && (item.localArtifactsCleanedAt == null || (
+      Number.isFinite(item.localArtifactsCleanedAt) && item.localArtifactsCleanedAt >= 0
+    ))
   ));
   const recoveryQueue = parsed?.recoveryQueue ?? [];
   const validRecoveryQueue = Array.isArray(recoveryQueue) && recoveryQueue.every((item: any) => (
@@ -413,17 +424,34 @@ export async function tombstoneActivity(args: {
   userId: string;
   clientActivityId: string;
   serverActivityId?: number | null;
+  localSessionId?: string;
 }, options: { shouldCommit?: () => boolean } = {}): Promise<void> {
+  const localSessionId = typeof args.localSessionId === 'string'
+    && args.localSessionId.trim().length > 0
+    ? args.localSessionId
+    : undefined;
+  if (args.localSessionId !== undefined && !localSessionId) {
+    throw new Error('activity_tombstone_local_identity_required');
+  }
   await mutate(args.userId, (snapshot) => {
     if (options.shouldCommit && !options.shouldCommit()) throw new Error('activity_owner_changed');
     const existing = snapshot.tombstones.find((item) => item.clientActivityId === args.clientActivityId);
-    const tombstone: ActivityTombstone = existing ?? {
-      userId: args.userId,
-      clientActivityId: args.clientActivityId,
-      serverActivityId: args.serverActivityId ?? null,
-      lifecycle: 'discarded',
-      discardedAt: Date.now(),
-    };
+    if (existing?.localSessionId && localSessionId && existing.localSessionId !== localSessionId) {
+      throw new Error('activity_tombstone_local_identity_conflict');
+    }
+    const tombstone: ActivityTombstone = existing
+      ? {
+          ...existing,
+          ...(!existing.localSessionId && localSessionId ? { localSessionId } : {}),
+        }
+      : {
+          userId: args.userId,
+          clientActivityId: args.clientActivityId,
+          serverActivityId: args.serverActivityId ?? null,
+          lifecycle: 'discarded',
+          discardedAt: Date.now(),
+          ...(localSessionId ? { localSessionId } : {}),
+        };
     return {
       ...snapshot,
       unfinished: snapshot.unfinished?.clientActivityId === args.clientActivityId
@@ -436,6 +464,32 @@ export async function tombstoneActivity(args: {
       tombstones: [tombstone, ...snapshot.tombstones.filter((item) => item.clientActivityId !== args.clientActivityId)],
     };
   }, realmForClientActivityId(args.clientActivityId));
+}
+
+/** Retain the tombstone for late-ACK suppression while recording that the
+ * exact owner-scoped local artifacts no longer need retry cleanup. */
+export async function markActivityLocalArtifactsCleaned(
+  userId: string,
+  clientActivityId: string,
+  localSessionId: string,
+): Promise<boolean> {
+  let marked = false;
+  await mutate(userId, (snapshot) => {
+    const existing = snapshot.tombstones.find(item => item.clientActivityId === clientActivityId);
+    if (!existing) return snapshot;
+    if (existing.localSessionId !== localSessionId) {
+      throw new Error('activity_tombstone_local_identity_conflict');
+    }
+    marked = true;
+    if (existing.localArtifactsCleanedAt != null) return snapshot;
+    return {
+      ...snapshot,
+      tombstones: snapshot.tombstones.map(item => item.clientActivityId === clientActivityId
+        ? { ...item, localArtifactsCleanedAt: Date.now() }
+        : item),
+    };
+  }, realmForClientActivityId(clientActivityId));
+  return marked;
 }
 
 export async function isActivityTombstoned(userId: string, clientActivityId: string): Promise<boolean> {

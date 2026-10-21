@@ -450,6 +450,207 @@ describe('useSessionStore — per-user isolation', () => {
     warn.mockRestore();
   });
 
+  it.each([
+    ['42', false],
+    ['42', true],
+    ['local-track-nonnumeric', false],
+    ['local-track-nonnumeric', true],
+  ])(
+    'retries alias cleanup for exact local track id %s after restart=%s',
+    async (localSessionId, restartBeforeRetry) => {
+      const targetTrackKey = `cairn_trackpoints_userA_${localSessionId}`;
+      const targetArtifactKey = '@cairn:activity_final:v1:userA:target-client';
+      const registryKey = '@cairn:activity_registry:v1:userA';
+      const storage = setupAsyncStorageMock({ failRemoveOnceForKey: targetTrackKey });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      let { useSessionStore } = require('../src/store/useSessionStore');
+      const AsyncStorage = require('@react-native-async-storage/async-storage');
+
+      await useSessionStore.getState().hydrate('userA');
+      await useSessionStore.getState().addSession({
+        id: 'survivor', clientActivityId: 'survivor-client', remoteId: 88, syncState: 'synced',
+        activityMode: 'running', regionCode: 'nz', startedAt: 1, endedAt: 2,
+        durationS: 1, distanceM: 10, elevationGainM: 0,
+        trackPoints: [{ lat: -42, lng: 173, t: 1 }], markerIds: [],
+      });
+      await useSessionStore.getState().addSession({
+        id: localSessionId, clientActivityId: 'target-client', remoteId: 42, syncState: 'synced',
+        activityMode: 'hiking', regionCode: 'nz', startedAt: 3, endedAt: 4,
+        durationS: 1, distanceM: 30, elevationGainM: 0,
+        trackPoints: [{ lat: -41, lng: 174, t: 3 }], markerIds: [],
+      });
+      await AsyncStorage.setItem(targetArtifactKey, 'target-final-artifact');
+      await AsyncStorage.setItem('cairn_memory_hydrate_state_v2:userA', 'memory-authority');
+
+      await expect(useSessionStore.getState().deleteSession('target-client')).rejects.toThrow(
+        'injected_track_cleanup_failure',
+      );
+      expect(storage[targetTrackKey]).toBeDefined();
+      expect(storage[targetArtifactKey]).toBe('target-final-artifact');
+      expect(JSON.parse(storage[registryKey]).tombstones[0]).toMatchObject({
+        clientActivityId: 'target-client',
+        serverActivityId: 42,
+        localSessionId,
+      });
+      expect(JSON.parse(storage[registryKey]).tombstones[0].localArtifactsCleanedAt).toBeUndefined();
+      const survivorSummaryBytes = storage.cairn_sessions_userA;
+      const survivorTrackBytes = storage.cairn_trackpoints_userA_survivor;
+
+      if (restartBeforeRetry) {
+        jest.resetModules();
+        ({ useSessionStore } = require('../src/store/useSessionStore'));
+        await useSessionStore.getState().hydrate('userA');
+      }
+      const service = require('../src/services/sessionService');
+      service.deleteRemoteSessionByClientId.mockClear();
+      service.deleteRemoteSession.mockClear();
+
+      await expect(useSessionStore.getState().deleteSession('target-client')).resolves.toEqual({
+        remoteState: 'deleted',
+      });
+      expect(storage[targetTrackKey]).toBeUndefined();
+      expect(storage[targetArtifactKey]).toBeUndefined();
+      expect(storage.cairn_sessions_userA).toBe(survivorSummaryBytes);
+      expect(storage.cairn_trackpoints_userA_survivor).toBe(survivorTrackBytes);
+      expect(storage['cairn_memory_hydrate_state_v2:userA']).toBe('memory-authority');
+      expect(JSON.parse(storage[registryKey]).tombstones[0]).toMatchObject({
+        clientActivityId: 'target-client',
+        serverActivityId: 42,
+        localSessionId,
+        localArtifactsCleanedAt: expect.any(Number),
+      });
+      expect(service.deleteRemoteSessionByClientId).toHaveBeenCalledTimes(1);
+      expect(service.deleteRemoteSessionByClientId).toHaveBeenCalledWith('target-client');
+      expect(service.deleteRemoteSession).not.toHaveBeenCalled();
+
+      await expect(useSessionStore.getState().markSynced('target-client', 42, {
+        activityMode: 'hiking', startedAt: 3, endedAt: 4, distanceM: 30,
+      }, 'userA')).resolves.toBe(false);
+      expect(storage.cairn_sessions_userA).toBe(survivorSummaryBytes);
+      warn.mockRestore();
+    },
+  );
+
+  it('retains alias authority when actual-local-id cleanup fails before a restart', async () => {
+    const localSessionId = 'actual-local-nonnumeric';
+    const targetTrackKey = `cairn_trackpoints_userA_${localSessionId}`;
+    const storage = setupAsyncStorageMock({ failRemoveOnceForKey: targetTrackKey });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let { useSessionStore } = require('../src/store/useSessionStore');
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: localSessionId, clientActivityId: 'actual-client', remoteId: 77, syncState: 'synced',
+      activityMode: 'hiking', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 30, elevationGainM: 0,
+      trackPoints: [{ lat: -41, lng: 174, t: 1 }], markerIds: [],
+    });
+
+    await expect(useSessionStore.getState().deleteSession(localSessionId)).rejects.toThrow(
+      'injected_track_cleanup_failure',
+    );
+    jest.resetModules();
+    ({ useSessionStore } = require('../src/store/useSessionStore'));
+    await useSessionStore.getState().hydrate('userA');
+    const service = require('../src/services/sessionService');
+    service.deleteRemoteSessionByClientId.mockClear();
+    service.deleteRemoteSession.mockClear();
+
+    await expect(useSessionStore.getState().deleteSession(localSessionId)).resolves.toEqual({
+      remoteState: 'deleted',
+    });
+    expect(storage[targetTrackKey]).toBeUndefined();
+    expect(service.deleteRemoteSessionByClientId).toHaveBeenCalledWith('actual-client');
+    expect(service.deleteRemoteSession).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('does not complete durable cleanup state until strict Final-artifact removal succeeds', async () => {
+    const localSessionId = 'artifact-cleanup-local';
+    const targetTrackKey = `cairn_trackpoints_userA_${localSessionId}`;
+    const targetArtifactKey = '@cairn:activity_final:v1:userA:artifact-cleanup-client';
+    const registryKey = '@cairn:activity_registry:v1:userA';
+    const storage = setupAsyncStorageMock({ failRemoveOnceForKey: targetArtifactKey });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { useSessionStore } = require('../src/store/useSessionStore');
+    const AsyncStorage = require('@react-native-async-storage/async-storage');
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: localSessionId, clientActivityId: 'artifact-cleanup-client', remoteId: 73, syncState: 'synced',
+      activityMode: 'hiking', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 30, elevationGainM: 0,
+      trackPoints: [{ lat: -41, lng: 174, t: 1 }], markerIds: [],
+    });
+    await AsyncStorage.setItem(targetArtifactKey, 'target-final-artifact');
+
+    await expect(useSessionStore.getState().deleteSession('artifact-cleanup-client')).rejects.toThrow(
+      'injected_track_cleanup_failure',
+    );
+    expect(storage[targetTrackKey]).toBeUndefined();
+    expect(storage[targetArtifactKey]).toBe('target-final-artifact');
+    expect(JSON.parse(storage[registryKey]).tombstones[0]).toMatchObject({
+      clientActivityId: 'artifact-cleanup-client',
+      localSessionId,
+    });
+    expect(JSON.parse(storage[registryKey]).tombstones[0].localArtifactsCleanedAt).toBeUndefined();
+
+    await expect(useSessionStore.getState().deleteSession('artifact-cleanup-client')).resolves.toEqual({
+      remoteState: 'deleted',
+    });
+    expect(storage[targetArtifactKey]).toBeUndefined();
+    expect(JSON.parse(storage[registryKey]).tombstones[0].localArtifactsCleanedAt).toEqual(expect.any(Number));
+    warn.mockRestore();
+  });
+
+  it('serializes a concurrent successful Save ACK behind the durable delete tombstone', async () => {
+    const storage = setupAsyncStorageMock();
+    const { useSessionStore } = require('../src/store/useSessionStore');
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: 'concurrent-local', clientActivityId: 'concurrent-client', syncState: 'pending',
+      activityMode: 'hiking', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 30, elevationGainM: 0,
+      trackPoints: [{ lat: -41, lng: 174, t: 1 }], markerIds: [],
+    });
+
+    const deletion = useSessionStore.getState().deleteSession('concurrent-client');
+    const acknowledgement = useSessionStore.getState().markSynced('concurrent-client', 91, {
+      activityMode: 'hiking', startedAt: 1, endedAt: 2, distanceM: 30,
+    }, 'userA');
+    await expect(Promise.all([deletion, acknowledgement])).resolves.toEqual([
+      { remoteState: 'deleted' },
+      false,
+    ]);
+    expect(useSessionStore.getState().sessions).toEqual([]);
+    expect(JSON.parse(storage.cairn_sessions_userA)).toEqual([]);
+    expect(storage['cairn_trackpoints_userA_concurrent-local']).toBeUndefined();
+  });
+
+  it.each([undefined, null, '', '   '])(
+    'treats invalid deletion identity %p as a byte-preserving no-op',
+    async (invalidId) => {
+      const storage = setupAsyncStorageMock();
+      const { useSessionStore } = require('../src/store/useSessionStore');
+      const service = require('../src/services/sessionService');
+      await useSessionStore.getState().hydrate('userA');
+      await useSessionStore.getState().addSession({
+        id: 'survivor', clientActivityId: 'survivor-client', remoteId: 88, syncState: 'synced',
+        activityMode: 'running', regionCode: 'nz', startedAt: 1, endedAt: 2,
+        durationS: 1, distanceM: 10, elevationGainM: 0,
+        trackPoints: [{ lat: -42, lng: 173, t: 1 }], markerIds: [],
+      });
+      const summaryBytes = storage.cairn_sessions_userA;
+      const trackBytes = storage.cairn_trackpoints_userA_survivor;
+
+      await expect(useSessionStore.getState().deleteSession(
+        invalidId as unknown as string,
+      )).resolves.toEqual({ remoteState: 'deleted' });
+      expect(storage.cairn_sessions_userA).toBe(summaryBytes);
+      expect(storage.cairn_trackpoints_userA_survivor).toBe(trackBytes);
+      expect(service.deleteRemoteSessionByClientId).not.toHaveBeenCalled();
+      expect(service.deleteRemoteSession).not.toHaveBeenCalled();
+    },
+  );
+
   it('refuses a late save acknowledgement after the Activity tombstone is durable', async () => {
     const storage = setupAsyncStorageMock();
     const { useSessionStore } = require('../src/store/useSessionStore');

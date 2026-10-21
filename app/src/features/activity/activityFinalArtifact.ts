@@ -203,8 +203,15 @@ export async function commitActivityFinalArtifact(input: {
   return result;
 }
 
-export async function deleteActivityFinalArtifact(ownerUserId: string, clientActivityId: string): Promise<void> {
-  const run = artifactWriteTail.then(() => storage.removeItem(keyFor(ownerUserId, clientActivityId)));
+export async function deleteActivityFinalArtifact(
+  ownerUserId: string,
+  clientActivityId: string,
+  options: { strict?: boolean } = {},
+): Promise<void> {
+  const run = artifactWriteTail.then(() => storage.removeItem(
+    keyFor(ownerUserId, clientActivityId),
+    options,
+  ));
   artifactWriteTail = run.then(() => undefined, () => undefined);
   await run;
 }
