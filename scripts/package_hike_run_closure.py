@@ -117,7 +117,7 @@ def validate_zip(archive_path: Path) -> dict[str, object]:
             if not target.is_file() or sha256(target) != expected:
                 raise RuntimeError(f"Manifest mismatch: {relative}")
             checked += 1
-        opened = {"json": 0, "jsonl": 0, "text": 0, "png": 0, "jpeg": 0}
+        opened = {"json": 0, "jsonl": 0, "text": 0, "png": 0, "jpeg": 0, "webp": 0}
         for path in root.rglob("*"):
             if not path.is_file():
                 continue
@@ -142,6 +142,11 @@ def validate_zip(archive_path: Path) -> dict[str, object]:
                 if not (data.startswith(b"\xff\xd8") and data.endswith(b"\xff\xd9")):
                     raise RuntimeError(f"Invalid JPEG: {path}")
                 opened["jpeg"] += 1
+            elif suffix == ".webp":
+                data = path.read_bytes()[:12]
+                if not (data.startswith(b"RIFF") and data[8:12] == b"WEBP"):
+                    raise RuntimeError(f"Invalid WebP: {path}")
+                opened["webp"] += 1
         return {
             "archive": str(archive_path),
             "bytes": archive_path.stat().st_size,
