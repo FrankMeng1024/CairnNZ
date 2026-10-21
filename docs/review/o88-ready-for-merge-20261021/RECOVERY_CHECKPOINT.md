@@ -14,9 +14,11 @@ Recorded: 2026-10-21, Asia/Shanghai
 
 ## Closure ledger
 
-| Gate | Recovered state | Required closure | Status |
+| Gate | Recovered state | Closure evidence | Status |
 | --- | --- | --- | --- |
-| E01 Cleanup | Cleanup-only authority exists, but stored-batch validation rejects the schema-valid explicit `expired` state; the current rehearsal expires only the timestamp. | Admit exact `expired` batches for cleanup only and prove target/permission/idempotency/isolation with disposable real MySQL. | IN PROGRESS |
-| E02 Found Detail | The retained note and motion exist, but persistent management prose and two actions compete with short content. | Replace them with an accessible secondary Manage entry and truthful compact sheet while preserving action/failure/session authority. | PENDING |
-| E03 Dependencies & operational compatibility | Backend audit is clean; app has non-critical transitive advisories and a Mapbox peer mismatch; node-cron v4 lacks an explicit scheduler smoke receipt. | Classify reachability, prove clean-install behavior, Mapbox native/Web strategy, node-cron registration/execution/shutdown, and TypeScript delta. | PENDING |
-| E04 Exact-final verification and integration handoff | Prior receipts bind source fingerprint `da3bf29e…`, not the source produced by this closure. | Run exact-final focused/full/connected gates, real rendered evidence, read-only Hike comparison, clean commits and a reviewer-safe handoff. | PENDING |
+| E01 Cleanup | Cleanup-only authority existed, but stored-batch validation rejected schema-valid explicit `expired`. | Three final isolated MySQL modes (`expired`, active+elapsed, active+valid) passed 27/27 each, including identity/permission negatives, partial retry, mixed-group preservation and zero live fixture markers. | COMPLETE |
+| E02 Found Detail | Persistent management prose/actions competed with short content. | Compact Manage entry and shared sheet delivered; 24-state matrix, focused video, 12 interaction tests and exact-final hosted-Mapbox journey completed. | COMPLETE (Web); native accessibility/device checks pending |
+| E03 Dependencies & operational compatibility | App audit and Mapbox peer split required a defensible decision. | Runtime reachability classified; Web moved to the official GL2 legacy entry; clean installs, exact tree/audits, 159-diagnostic baseline and node-cron scheduling smoke recorded. Native dependency/build decision remains explicit. | COMPLETE for merge review; Owner/native gate remains |
+| E04 Exact-final verification and integration handoff | Historical receipts did not bind the closure source. | Executable SHA `c3b765e0c8bc5f1b16c1e72f0eefdcd9a954434d`, fingerprint `eb55a87b4a846259be65d91fb9622501a643af5d794104174330d29012eed362`; full/focused/connected gates pass. | COMPLETE |
+
+Final read-only Hike observation advanced to `db731e8ca3c744f4f6da620f4a09727a71cd4e6b` and was clean. During execution it briefly contained concurrent changes only under `app/_review/settings-product-dna/`; those changes resolved independently and were never touched. Integration was not attempted.
