@@ -39,8 +39,8 @@
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { Image as ReactNativeImage } from 'react-native';
-import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox';
-import type { MapRef } from 'react-map-gl/mapbox';
+import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox-legacy';
+import type { MapRef } from 'react-map-gl/mapbox-legacy';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { queryWebShapeSourcePressFeatures } from './mapboxAdapterWebPress';
 
@@ -575,7 +575,6 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
         >
           {attributionEnabled ? (
             <AttributionControl
-              compact
               position={webControlPosition(attributionPosition, 'bottom-right')}
               style={controlOffsetStyle(attributionPosition)}
             />

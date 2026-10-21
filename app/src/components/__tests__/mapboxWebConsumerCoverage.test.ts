@@ -27,6 +27,8 @@ describe('real Mapbox Web consumer coverage', () => {
   });
 
   test('Web MarkerView maps Cairn view annotations to a real Mapbox marker', () => {
+    expect(adapter).toContain("from 'react-map-gl/mapbox-legacy'");
+    expect(adapter).not.toContain("from 'react-map-gl/mapbox'");
     expect(adapter).toContain('export function MarkerView');
     expect(adapter).toContain('<Marker longitude={coordinate[0]} latitude={coordinate[1]} anchor="center">');
     expect(adapter).toContain('MarkerView,');
