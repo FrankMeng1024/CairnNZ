@@ -134,5 +134,59 @@ describe('Activity diagnostic durable lifecycle', () => {
     expect(exported.records.at(-1)).toMatchObject({
       kind: 'application-event', data: { stage: 'sync-state' },
     });
+    expect(exported.completeness).toMatchObject({
+      replayScope: 'tracking-replay-inputs-only',
+      syncTerminalState: 'not-recorded',
+      fullLifecycleComplete: false,
+    });
+  });
+
+  test('does not equate recording replay completeness with upload ACK and cleanup', async () => {
+    const diagnostic = freshDiagnosticModule();
+    await diagnostic.beginActivityDiagnosticReplay({
+      ownerUserId: 'owner-sync', clientActivityId: 'activity-sync', mode: 'hiking', source: 'real',
+    });
+    await diagnostic.finishActivityDiagnosticReplay('owner-sync', 'activity-sync', {
+      finalArtifact: { artifactFingerprint: 'sync-final' },
+    });
+    const stageLedger = { schema: 'cairn-activity-stage-ledger-export' } as never;
+    let exported = await diagnostic.exportActivityDiagnosticReplay({
+      ownerUserId: 'owner-sync', clientActivityId: 'activity-sync', stageLedger,
+    });
+    expect(exported.completeness).toMatchObject({
+      selfContainedReplayComplete: true,
+      syncTerminalState: 'not-recorded',
+      fullLifecycleComplete: false,
+      fullLifecycleReason: 'completed-activity-sync:not-recorded',
+    });
+
+    for (const phase of ['attempt', 'ack'] as const) {
+      await diagnostic.recordActivityDiagnosticReplayEvent({
+        ownerUserId: 'owner-sync', clientActivityId: 'activity-sync', kind: 'application-event',
+        data: { event: 'completed-activity-sync', phase },
+      });
+    }
+    exported = await diagnostic.exportActivityDiagnosticReplay({
+      ownerUserId: 'owner-sync', clientActivityId: 'activity-sync', stageLedger,
+    });
+    expect(exported.completeness).toMatchObject({
+      selfContainedReplayComplete: true,
+      syncTerminalState: 'acknowledged-cleanup-pending',
+      fullLifecycleComplete: false,
+    });
+
+    await diagnostic.recordActivityDiagnosticReplayEvent({
+      ownerUserId: 'owner-sync', clientActivityId: 'activity-sync', kind: 'application-event',
+      data: { event: 'completed-activity-sync', phase: 'phone-cleanup-complete' },
+    });
+    exported = await diagnostic.exportActivityDiagnosticReplay({
+      ownerUserId: 'owner-sync', clientActivityId: 'activity-sync', stageLedger,
+    });
+    expect(exported.completeness).toMatchObject({
+      selfContainedReplayComplete: true,
+      syncTerminalState: 'acknowledged-cleanup-complete',
+      fullLifecycleComplete: true,
+      fullLifecycleReason: null,
+    });
   });
 });

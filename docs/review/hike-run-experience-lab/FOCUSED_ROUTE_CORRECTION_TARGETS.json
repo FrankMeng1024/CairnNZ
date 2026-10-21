@@ -1,0 +1,57 @@
+{
+  "schema": "cairn.hike-run.focused-route-correction-targets.v1",
+  "frozenBeforeProductClassifier": true,
+  "purpose": "Predeclared visible difficult-Activity subsections for the focused closure. Traveller-diary coordinates are independent comparison/user-intent context and were never supplied to Activity tracking.",
+  "targets": [
+    {
+      "caseId": "Q05",
+      "profileId": "degraded",
+      "sourceActivitySha256": "8ca5e71618b0a961208aa2835516305bae4dd4888a8eadb74b136cd594e437bd",
+      "independentTravellerDiarySha256": "403a87b53d8aa803cd42032f30930eb4afe45ab4d698b44bd99b09c44e4cd6a4",
+      "independentContext": "Public Hampstead Heath footpaths; preserve off-road fork order and avoid road snap.",
+      "target": {
+        "startIndex": 70,
+        "endIndex": 78,
+        "chordM": 50.38,
+        "startTimeMs": 1792804528000,
+        "endTimeMs": 1792804584000,
+        "predeclaredStroke": [
+          { "lat": 51.565840721541825, "lng": -0.17011953546811087 },
+          { "lat": 51.56567084972137, "lng": -0.1697374180699737 },
+          { "lat": 51.56564532401637, "lng": -0.16963857385063322 },
+          { "lat": 51.56562616227096, "lng": -0.16953802612267843 },
+          { "lat": 51.56563893793384, "lng": -0.16943182842497814 },
+          { "lat": 51.565695397575894, "lng": -0.16937906399153038 },
+          { "lat": 51.5657599097347, "lng": -0.16934844680339073 },
+          { "lat": 51.56582441277418, "lng": -0.16931869755673806 },
+          { "lat": 51.56615992893631, "lng": -0.16960008760243606 }
+        ]
+      }
+    },
+    {
+      "caseId": "Q08",
+      "profileId": "degraded",
+      "sourceActivitySha256": "ebeb732b6ca285b1e0f2421f540e7dfdc23a3033717aee9827f6c0e200035145",
+      "independentTravellerDiarySha256": "7ac1b90d843142f2775f4a2aad6459a7ea72104ddec85f23af871dbf9e01f7bb",
+      "independentContext": "Public Wellington Botanic Garden paths; preserve ordered switchbacks, garden exit, and avoid slope chord.",
+      "target": {
+        "startIndex": 80,
+        "endIndex": 90,
+        "chordM": 99.59,
+        "startTimeMs": 1793063768000,
+        "endTimeMs": 1793063861148,
+        "predeclaredStroke": [
+          { "lat": -41.28550088982974, "lng": 174.76776554675286 },
+          { "lat": -41.285459475676156, "lng": 174.76804551058316 },
+          { "lat": -41.28535544300644, "lng": 174.7680571749431 },
+          { "lat": -41.2852434675129, "lng": 174.76806975645923 },
+          { "lat": -41.285133240091554, "lng": 174.76808214156276 },
+          { "lat": -41.28503366409585, "lng": 174.76809392621158 },
+          { "lat": -41.28502186757295, "lng": 174.7682025086605 },
+          { "lat": -41.2850539277676, "lng": 174.7683367476577 },
+          { "lat": -41.284786670050856, "lng": 174.76849079047736 }
+        ]
+      }
+    }
+  ]
+}

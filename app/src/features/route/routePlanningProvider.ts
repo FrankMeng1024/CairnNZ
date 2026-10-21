@@ -4,6 +4,7 @@ import { matchSegment } from '../../services/routing/mapmatch/MapMatchingClient'
 import type { MatchResult, MatchSegment } from '../../services/routing/mapmatch/types';
 import { douglasPeucker } from '../../utils/strokeSimplify';
 import {
+  ROUTE_ATTACHMENT_TOLERANCE_M,
   normalizeOrderedPoints,
   routePointDistanceM,
   validRoutePoint,
@@ -14,6 +15,11 @@ export const ROUTE_MATCH_CHUNK_COORDINATES = 90;
 export const ROUTE_MATCH_MAX_CHUNKS = 8;
 export const ROUTE_DRAW_TOTAL_DEADLINE_MS = 18_000;
 export const ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M = 25;
+/** A matched Draw is committed by the ordered-draft boundary, whose seam
+ * authority is deliberately tighter than the general provider review band.
+ * A successful provider response outside this band remains a truthful manual
+ * section instead of becoming a post-provider DISCONNECTED no-op. */
+export const ROUTE_DRAW_COMMIT_ENDPOINT_TOLERANCE_M = ROUTE_ATTACHMENT_TOLERANCE_M;
 export const ROUTE_MATCH_REVIEW_DEVIATION_M = 45;
 export const ROUTE_MATCH_REJECT_DEVIATION_M = 90;
 export const ROUTE_FREE_TERMINAL_MAX_LATERAL_M = 10;
@@ -410,8 +416,8 @@ function partsForMatchResult(
     const ambiguityIsFaithful = (segment.alternativesCount ?? 0) === 0
       || deviationM <= ROUTE_MATCH_REVIEW_DEVIATION_M;
     const supported = matched.length >= 2
-      && startShiftM <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
-      && endShiftM <= ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
+      && startShiftM <= ROUTE_DRAW_COMMIT_ENDPOINT_TOLERANCE_M
+      && endShiftM <= ROUTE_DRAW_COMMIT_ENDPOINT_TOLERANCE_M
       && orderedLengthRatioIsPlausible(rawRun, matched)
       && deviationM <= ROUTE_MATCH_REJECT_DEVIATION_M
       && ambiguityIsFaithful
@@ -431,7 +437,8 @@ function partsForMatchResult(
     } else {
       fallbackReason = matched.length < 2
         ? 'no-match'
-        : startShiftM > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M || endShiftM > ROUTE_PROVIDER_ENDPOINT_TOLERANCE_M
+        : startShiftM > ROUTE_DRAW_COMMIT_ENDPOINT_TOLERANCE_M
+          || endShiftM > ROUTE_DRAW_COMMIT_ENDPOINT_TOLERANCE_M
           ? 'endpoint-shift'
           : 'shape-deviation';
       const manual = rawPart(chunk, start, end);

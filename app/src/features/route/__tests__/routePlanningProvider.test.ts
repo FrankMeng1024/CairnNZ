@@ -103,6 +103,19 @@ describe('Route planning provider boundaries', () => {
     });
   });
 
+  test('successful matching outside the draft seam band keeps the predeclared Draw as manual', async () => {
+    const raw = [p(0, 0), p(40, 0), p(80, 0)];
+    const provider = [p(22, 0), p(45, 0), p(80, 0)];
+    // The provider response is usable evidence but cannot pass the ordered
+    // draft's 20 m attachment boundary. Before this guard the planner called
+    // it matched, then the commit rejected it as DISCONNECTED and silently
+    // left the user's Route unchanged.
+    await expect(resolveDrawPlan(raw, { matcher: async () => ok(provider) })).resolves.toMatchObject({
+      outcome: 'accepted', points: raw, fallbackReason: 'endpoint-shift', callCount: 1,
+      parts: [{ resolution: 'draw-manual' }],
+    });
+  });
+
   test('an ambiguous parallel-road detour outside the review corridor stays manual', async () => {
     const raw = [p(0, 0), p(100, 0), p(200, 0), p(300, 0), p(400, 0)];
     // Long shallow ramps deliberately avoid looking like a sharp user turn.

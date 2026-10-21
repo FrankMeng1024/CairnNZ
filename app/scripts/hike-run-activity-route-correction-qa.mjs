@@ -17,6 +17,12 @@ const args = Object.fromEntries(process.argv.slice(2).map((value, index, all) =>
 const activityPath = path.resolve(args.activity ?? '');
 const outputDir = path.resolve(args.output ?? '/tmp/cairn-hike-run-route-correction');
 const baseUrl = args.url ?? process.env.CAIRN_QA_URL ?? 'http://127.0.0.1:8098';
+const providerMode = args.provider === 'outage' ? 'outage' : 'live';
+const targetsPath = path.resolve(args.targets ?? path.join(
+  process.cwd(), '..', 'docs', 'review', 'hike-run-experience-lab', 'FOCUSED_ROUTE_CORRECTION_TARGETS.json',
+));
+const sourceHead = args.head ?? 'dirty-development-worktree';
+const sourceTree = args.tree ?? 'dirty-development-worktree';
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 if (!activityPath || !fs.existsSync(activityPath)) throw new Error('--activity QA_ACTIVITY.json is required');
 fs.mkdirSync(outputDir, { recursive: true });
@@ -27,6 +33,7 @@ if (qa?.format !== 'cairn-snap-lab-activity' || !Array.isArray(qa.selectedFinal)
 }
 
 const sha = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const fileSha = value => crypto.createHash('sha256').update(value).digest('hex');
 const redactMapboxUrl = raw => {
   const parsed = new URL(raw);
   parsed.searchParams.delete('access_token');
@@ -58,52 +65,22 @@ const sourceSession = {
   trackPoints: selectedFinal,
 };
 delete sourceSession.qaProvenance;
-
-function distanceM(a, b) {
-  const latitude = (a.lat + b.lat) * Math.PI / 360;
-  return Math.hypot((a.lng - b.lng) * 111_320 * Math.cos(latitude), (a.lat - b.lat) * 110_574);
+if (!fs.existsSync(targetsPath)) throw new Error('--targets predeclared target JSON is required');
+const targetsBytes = fs.readFileSync(targetsPath);
+const targets = JSON.parse(targetsBytes);
+const frozenTarget = targets.targets?.find(item => (
+  item.caseId === qa.context?.caseId && item.profileId === qa.context?.profileId
+));
+if (!frozenTarget) throw new Error('no predeclared target for Activity case/profile');
+if (frozenTarget.sourceActivitySha256 !== fileSha(fs.readFileSync(activityPath))) {
+  throw new Error('predeclared target source Activity hash mismatch');
 }
-
-// Pick a short, non-repeating interior interval so the product transaction
-// classifier has one unambiguous local replacement. The stroke follows the
-// app-produced Activity corridor and remains useful if the walking provider
-// is unavailable and the production manual-section fallback is selected.
-function chooseCorrections(points) {
-  const candidates = [];
-  for (const span of [7, 10, 14, 18]) {
-    for (let startIndex = Math.floor(points.length * 0.18); startIndex < Math.floor(points.length * 0.72); startIndex += 3) {
-      const endIndex = Math.min(points.length - 2, startIndex + span);
-      const start = points[startIndex];
-      const end = points[endIndex];
-      const chordM = distanceM(start, end);
-      if (chordM < 45 || chordM > 180) continue;
-      const nearStart = points.filter((point, index) => Math.abs(index - startIndex) > span + 4 && distanceM(point, start) < 18).length;
-      const nearEnd = points.filter((point, index) => Math.abs(index - endIndex) > span + 4 && distanceM(point, end) < 18).length;
-      if (nearStart || nearEnd) continue;
-      const mid = points[Math.floor((startIndex + endIndex) / 2)];
-      const latitude = mid.lat * Math.PI / 180;
-      const dx = (end.lng - start.lng) * 111_320 * Math.cos(latitude);
-      const dy = (end.lat - start.lat) * 110_574;
-      const length = Math.max(1, Math.hypot(dx, dy));
-      const offsetM = 14;
-      const control = {
-        lat: mid.lat + (dx / length) * offsetM / 110_574,
-        lng: mid.lng - (dy / length) * offsetM / (111_320 * Math.cos(latitude)),
-      };
-      candidates.push({
-        startIndex,
-        endIndex,
-        chordM,
-        stroke: [start, control, end].map(({ lat, lng }) => ({ lat, lng })),
-      });
-    }
-  }
-  if (candidates.length === 0) throw new Error('no local correction interval candidates');
-  return candidates;
-}
-
-const correctionCandidates = chooseCorrections(selectedFinal);
-let correction = correctionCandidates[0];
+const correction = {
+  startIndex: frozenTarget.target.startIndex,
+  endIndex: frozenTarget.target.endIndex,
+  chordM: frozenTarget.target.chordM,
+  stroke: frozenTarget.target.predeclaredStroke,
+};
 const browser = await chromium.launch({
   headless: true,
   ...(fs.existsSync(chromePath) ? { executablePath: chromePath } : {}),
@@ -119,6 +96,8 @@ const context = await browser.newContext({
 const page = await context.newPage();
 const runtimeErrors = [];
 const providerRequests = [];
+const providerResponseTasks = [];
+let tokenFingerprint = null;
 page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
 page.on('console', message => {
   if (message.type() === 'error' && !message.text().includes('Failed to load resource')) {
@@ -128,16 +107,39 @@ page.on('console', message => {
 page.on('response', response => {
   const url = response.url();
   if (!url.includes('api.mapbox.com') || !/\/(matching|directions)\/v5\//.test(url)) return;
-  providerRequests.push({ url: redactMapboxUrl(url), status: response.status(), at: Date.now() });
+  const task = (async () => {
+    const parsed = new URL(url);
+    const token = parsed.searchParams.get('access_token');
+    if (token && !tokenFingerprint) tokenFingerprint = fileSha(token).slice(0, 16);
+    let body = null;
+    try { body = await response.json(); } catch {}
+    providerRequests.push({
+      ordinal: providerRequests.length,
+      requestSignatureSha256: fileSha(`${response.request().method()} ${redactMapboxUrl(url)}`),
+      method: response.request().method(),
+      url: redactMapboxUrl(url),
+      status: response.status(),
+      responseCode: body?.code ?? null,
+      matchingCount: Array.isArray(body?.matchings) ? body.matchings.length : null,
+      routeCount: Array.isArray(body?.routes) ? body.routes.length : null,
+      responseBodySha256: body == null ? null : sha(body),
+      at: Date.now(),
+    });
+  })();
+  providerResponseTasks.push(task);
 });
-// The paid campaign ledger is frozen at its predeclared cap. Exercise the
-// production provider boundary without an unaccounted network fallthrough;
-// Draw must retain the bounded correction as an explicit manual section.
-await page.route('**/matching/v5/mapbox/walking/**', route => route.fulfill({
-  status: 503,
-  contentType: 'application/json',
-  body: JSON.stringify({ message: 'isolated review provider outage' }),
-}));
+if (providerMode === 'outage') {
+  await page.route('**/matching/v5/mapbox/walking/**', route => route.fulfill({
+    status: 503,
+    contentType: 'application/json',
+    body: JSON.stringify({ message: 'isolated review provider outage' }),
+  }));
+  await page.route('**/directions/v5/mapbox/walking/**', route => route.fulfill({
+    status: 503,
+    contentType: 'application/json',
+    body: JSON.stringify({ message: 'isolated review provider outage' }),
+  }));
+}
 await page.addInitScript(({ userId }) => {
   localStorage.setItem('cairn_jwt', 'quality-route-correction-local-review');
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
@@ -238,33 +240,29 @@ try {
   const initialDraft = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCurrentDraft());
   await page.screenshot({ path: path.join(outputDir, '02-route-imported-before-correction.png') });
 
-  // A human local correction is made while zoomed into that section, not at
-  // a city-scale overview where the editor intentionally permits a 60 m
-  // finger attachment tolerance. Use a read-only QA probe to choose a frozen
-  // stroke the production classifier itself calls one local replacement.
-  // Submission below still crosses the actual provider/fallback state machine.
-  let correctionClassification = null;
-  for (const candidate of correctionCandidates.slice(0, 36)) {
-    await page.evaluate(stroke => {
-      const lngs = stroke.map(point => point.lng);
-      const lats = stroke.map(point => point.lat);
-      globalThis.__cairnMap.fitBounds(
-        [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-        { padding: { top: 180, right: 75, bottom: 300, left: 75 }, duration: 0, maxZoom: 17.5 },
-      );
-    }, candidate.stroke);
-    await page.waitForTimeout(180);
-    const verdict = await page.evaluate(
-      stroke => globalThis.__cairnRouteEditorQa.classifyStroke(stroke),
-      candidate.stroke,
-    );
-    if (verdict?.intent?.kind === 'replace') {
-      correction = candidate;
-      correctionClassification = verdict;
-      break;
-    }
+  // The target and intended path were frozen from independent traveller/map
+  // context before this process consulted the product classifier. Probe this
+  // one target once; a rejection is retained rather than searching for an
+  // easier subsection.
+  await page.evaluate(stroke => {
+    const lngs = stroke.map(point => point.lng);
+    const lats = stroke.map(point => point.lat);
+    globalThis.__cairnMap.jumpTo({
+      center: [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2],
+      zoom: 19.5,
+      bearing: 0,
+      pitch: 0,
+    });
+  }, correction.stroke);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: path.join(outputDir, '02b-defect-closeup-before.png') });
+  const correctionClassification = await page.evaluate(
+    stroke => globalThis.__cairnRouteEditorQa.classifyStroke(stroke),
+    correction.stroke,
+  );
+  if (correctionClassification?.intent?.kind !== 'replace') {
+    throw new Error(`predeclared correction rejected:${JSON.stringify(correctionClassification)}`);
   }
-  if (!correctionClassification) throw new Error('no production-classified local replacement interval');
 
   await page.getByTestId('route-tool-draw').click();
   await page.evaluate(stroke => globalThis.__cairnRouteEditorQa.submitStroke(stroke), correction.stroke);
@@ -275,8 +273,22 @@ try {
   );
   await page.waitForFunction(() => !globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot?.(), null, { timeout: 25_000 });
   const correctedDraft = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCurrentDraft());
+  const correctedResolutionCounts = correctedDraft.parts.reduce((counts, part) => {
+    counts[part.resolution] = (counts[part.resolution] ?? 0) + 1;
+    return counts;
+  }, {});
   await page.getByLabel('Route name').fill('Activity — local correction');
-  await page.screenshot({ path: path.join(outputDir, '03-route-local-correction.png') });
+  await page.screenshot({ path: path.join(outputDir, '03-route-local-correction-closeup.png') });
+  await page.evaluate(points => {
+    const lngs = points.map(point => point.lng);
+    const lats = points.map(point => point.lat);
+    globalThis.__cairnMap.fitBounds(
+      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      { padding: { top: 125, right: 45, bottom: 255, left: 45 }, duration: 0 },
+    );
+  }, selectedFinal);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: path.join(outputDir, '03b-route-local-correction-overview.png') });
   await page.getByTestId('ordered-route-save').click();
   await waitForRoute('MapHistory');
   await page.getByTestId('route-use-action').waitFor({ state: 'visible', timeout: 30_000 });
@@ -336,8 +348,13 @@ try {
   const afterSaveHashes = hashes(afterSave);
   const afterReopenHashes = hashes(afterReopen);
   const finalHashes = hashes(finalState);
+  await Promise.allSettled(providerResponseTasks);
   const providerBoundaryExercised = providerRequests.length > 0;
   const successfulProvider = providerRequests.some(item => item.status >= 200 && item.status < 300);
+  const providerReturnedUsableRoute = providerRequests.some(item => (
+    item.status >= 200 && item.status < 300
+    && (item.responseCode === 'Ok' || item.matchingCount > 0 || item.routeCount > 0)
+  ));
   result = {
     schema: 'cairn-hike-run-route-correction-qa-v1',
     generatedAt: new Date().toISOString(),
@@ -351,8 +368,19 @@ try {
       evaluatorGroundTruthInstalled: false,
       adapter: 'selected Final copied into an isolated disposable normal Activity record',
     },
+    sourceIdentity: { head: sourceHead, tree: sourceTree },
+    frozenTarget: {
+      manifestPath: targetsPath,
+      manifestSha256: fileSha(targetsBytes),
+      frozenBeforeProductClassifier: targets.frozenBeforeProductClassifier === true,
+      independentTravellerDiarySha256: frozenTarget.independentTravellerDiarySha256,
+      independentContext: frozenTarget.independentContext,
+    },
     correction: {
-      method: 'Draw replacement through production transaction classifier; isolated provider outage; explicit manual-section fallback',
+      method: providerMode === 'outage'
+        ? 'Predeclared Draw replacement through production classifier; deliberate provider outage; manual-section fallback'
+        : 'Predeclared Draw replacement through production classifier and live walking provider',
+      interactionBoundary: 'Web QA submitStroke handler; visible production editor and save/reopen flow; does not prove native physical touch ergonomics',
       startIndex: correction.startIndex,
       endIndex: correction.endIndex,
       chordM: Number(correction.chordM.toFixed(2)),
@@ -362,19 +390,25 @@ try {
       initialGeometryHash: sha(initialDraft),
       correctedGeometryHash: sha(correctedDraft),
       geometryChanged: sha(initialDraft) !== sha(correctedDraft),
+      resolutionCounts: correctedResolutionCounts,
+      providerGeometryCommitted: (correctedResolutionCounts['draw-matched'] ?? 0) > 0,
     },
     providerBoundary: {
-      mode: 'isolated-no-fallthrough-outage',
-      paidNavigationRequests: 0,
-      expectedSuccessfulResponse: false,
+      mode: providerMode,
+      tokenAuthority: tokenFingerprint ? `eas-public-development:${tokenFingerprint}` : 'not-observed',
+      tokenValueRetained: false,
+      expectedSuccessfulResponse: providerMode === 'live',
       successfulProviderResponse: successfulProvider,
+      usableProviderGeometry: providerReturnedUsableRoute,
     },
     providerRequests,
     assertions: {
       actualActivityDetailEntry: true,
       realMapboxMapLoaded: true,
       providerBoundaryExercised,
-      providerOutageDidNotFallThrough: providerRequests.every(item => item.status === 503),
+      providerModeSatisfied: providerMode === 'live'
+        ? providerReturnedUsableRoute
+        : providerRequests.every(item => item.status === 503),
       localCorrectionCommitted: correctedDraft.revision > initialDraft.revision,
       routeSaved: Boolean(afterSave.route?.id),
       freshJavascriptRealm: freshRealm,

@@ -103,8 +103,14 @@ export class RealLocationSupervisor<TObservation, TOptions> {
   constructor(dependencies: SupervisorDependencies<TObservation, TOptions>) {
     this.startStream = dependencies.startStream;
     this.now = dependencies.now ?? Date.now;
-    this.setTimer = dependencies.setTimer ?? setTimeout;
-    this.clearTimer = dependencies.clearTimer ?? clearTimeout;
+    // Browser timer functions are Web IDL methods and may reject a class
+    // instance as their implicit receiver (`Illegal invocation`). Keep the
+    // injected test clocks unchanged, but call platform defaults through the
+    // real global object rather than storing an unbound method reference.
+    this.setTimer = dependencies.setTimer
+      ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
+    this.clearTimer = dependencies.clearTimer
+      ?? (timer => globalThis.clearTimeout(timer));
     this.retryDelaysMs = dependencies.retryDelaysMs ?? [1_000, 5_000, 15_000, 60_000];
     // Deliberately generous relative to the native 10–15 s Activity options.
     // These bounds detect a dead stream, not slow/stationary movement.

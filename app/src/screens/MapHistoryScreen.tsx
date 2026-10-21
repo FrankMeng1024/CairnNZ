@@ -48,7 +48,15 @@ import {
   commitActivityFinalArtifact,
   loadActivityFinalArtifact,
 } from '../features/activity/activityFinalArtifact';
-import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
+import {
+  exportActivityStageLedger,
+  recordActivityStageEvent,
+} from '../features/activity/activityStageLedger';
+import { exportActivityDiagnosticReplayIfPresent } from '../features/activity/activityDiagnosticReplay';
+import {
+  buildActivityNativeCrossLedgerReport,
+  exportNativeGpsEvidence,
+} from '../features/activity/nativeGpsEvidence';
 import { ContentSurface } from '../components/ContentSurface';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SyncBadge } from '../components/SyncBadge';
@@ -944,6 +952,7 @@ function MapHistoryObjectScreen() {
   // O12: settings-aware distance format for detail modal + stat displays.
   const dist = useDistance();
   const debugMode = useSettingsStore(s => s.debugMode);
+  const [activityDiagnosticsCopying, setActivityDiagnosticsCopying] = useState(false);
   const [qaReviewClone, setQaReviewClone] = useState<AlmostDoneCloneV1 | null>(null);
   const [qaReviewError, setQaReviewError] = useState<string | null>(null);
   const [snapLabRecord, setSnapLabRecord] = useState<SnapLabActivityRecord | null>(null);
@@ -1628,6 +1637,53 @@ function MapHistoryObjectScreen() {
     setTimeout(() => setRouteDraftOpening(false), 0);
   }, [nav, routeDraftOpening, selectedSession]);
 
+  const copySelectedActivityDiagnostics = useCallback(async () => {
+    if (!debugMode || !selectedSession || activityDiagnosticsCopying) return;
+    const ownerUserId = useSessionStore.getState().currentUserId;
+    if (!ownerUserId) return;
+    const clientActivityId = selectedSession.clientActivityId ?? selectedSession.id;
+    const selectedSnapshotId = selectedSession.id;
+    setActivityDiagnosticsCopying(true);
+    try {
+      const realm = selectedSession.qaProvenance === 'snap_lab' ? 'snap-lab' : 'production';
+      const ledger = await exportActivityStageLedger(ownerUserId, clientActivityId, realm);
+      const nativeGpsEvidence = await exportNativeGpsEvidence(ownerUserId, clientActivityId);
+      const nativeCrossLedgerReport = buildActivityNativeCrossLedgerReport(ledger, nativeGpsEvidence);
+      const diagnosticReplay = await exportActivityDiagnosticReplayIfPresent({
+        ownerUserId,
+        clientActivityId,
+        stageLedger: ledger,
+      });
+      if (useSessionStore.getState().currentUserId !== ownerUserId
+        || selectedSessionId !== selectedSnapshotId) return;
+      const Clipboard = await import('expo-clipboard');
+      await Clipboard.setStringAsync(JSON.stringify({
+        schema: 'cairn-selected-activity-forensic-export',
+        version: 1,
+        selectedSessionId: selectedSnapshotId,
+        selectedClientActivityId: clientActivityId,
+        stageLedger: ledger,
+        nativeGpsEvidence,
+        nativeCrossLedgerReport,
+        diagnosticReplay,
+      }, null, 2));
+      Alert.alert(
+        'Activity diagnostics copied',
+        diagnosticReplay
+          ? 'This selected Activity’s opted-in replay and exact-ID ledgers are on your clipboard. Precise coordinates are included.'
+          : 'This selected Activity’s exact-ID timing ledgers are on your clipboard. Coordinate replay was not enabled for it.',
+      );
+    } catch {
+      if (useSessionStore.getState().currentUserId === ownerUserId) {
+        Alert.alert('Could not copy diagnostics', 'Try again after reopening this Activity.');
+      }
+    } finally {
+      if (useSessionStore.getState().currentUserId === ownerUserId) {
+        setActivityDiagnosticsCopying(false);
+      }
+    }
+  }, [activityDiagnosticsCopying, debugMode, selectedSession, selectedSessionId]);
+
   // Show real markers on map. Activity Detail requires explicit Activity
   // provenance or recorded marker membership; spatial proximity alone never
   // claims that an arbitrary Cairn came from this Activity.
@@ -2282,6 +2338,16 @@ function MapHistoryObjectScreen() {
                     testID="activity-create-route"
                   />
                   <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Creates a separate editable copy. This Activity and its Memory stay unchanged.</Text>
+                  {debugMode ? (
+                    <PrimaryButton
+                      label="Copy diagnostics"
+                      variant="secondary"
+                      onPress={() => { void copySelectedActivityDiagnostics(); }}
+                      loading={activityDiagnosticsCopying}
+                      renderIcon={color => <Icon name="FileText" size={IconSize.sm} color={color} strokeWidth={2} />}
+                      testID="activity-copy-diagnostics"
+                    />
+                  ) : null}
                   <TouchableOpacity
                     style={styles.activityDeleteAction}
                     onPress={() => setDeleteConfirm(true)}

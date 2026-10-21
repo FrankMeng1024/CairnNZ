@@ -36,6 +36,12 @@ import {
   activityStageMonotonicNow,
   recordActivityStageEvent,
 } from '../features/activity/activityStageLedger';
+import {
+  flushActivityDiagnosticReplay,
+  recordActivityDiagnosticCanonicalPromotion,
+  recordActivityDiagnosticDecision,
+  recordActivityDiagnosticObservation,
+} from '../features/activity/activityDiagnosticReplay';
 
 export const BACKGROUND_LOCATION_TASK = 'cairn-background-location';
 
@@ -177,6 +183,10 @@ export type LocationCoords = {
   nativeBatchSequence?: number;
   nativeBatchIndex?: number;
   appStateAtReceipt?: string;
+  /** The TaskManager receipt/decision already entered the opted-in replay.
+   * Foreground handoff must not record the same native evidence twice. */
+  diagnosticObservationRecorded?: boolean;
+  diagnosticDecisionRecorded?: boolean;
 };
 
 const pendingBackgroundLocations: LocationCoords[] = [];
@@ -392,6 +402,17 @@ async function appendDirectlyToHikeTrack(
       const receiptEvidenceId = event.receiptEvidenceId
         ?? `background:${Number.isFinite(event.t) ? Math.floor(event.t) : 'invalid'}:${nativeBatchSequence}:${event.nativeBatchIndex ?? 'unknown'}`;
       const recordPrefilterRejection = (reason: string, ordinalSemantics: string) => {
+        if (Number.isFinite(event.t)) {
+          void recordActivityDiagnosticDecision({
+            ownerUserId: context.userId,
+            clientActivityId: context.clientActivityId,
+            observationTimeMs: Math.floor(event.t),
+            accepted: false,
+            reason,
+            segmentId: activeSegmentId,
+            receiptEvidenceId,
+          });
+        }
         void recordActivityStageEvent({
           ownerUserId: context.userId,
           clientActivityId: context.clientActivityId,
@@ -486,6 +507,15 @@ async function appendDirectlyToHikeTrack(
       const decision = evaluateRealGpsObservation(continuity, observation, context.activityMode, Date.now());
       continuity = decision.state;
       emitHeadlessMotionDecision(context, observation, decision, rawOrdinal, activeSegmentId);
+      void recordActivityDiagnosticDecision({
+        ownerUserId: context.userId,
+        clientActivityId: context.clientActivityId,
+        observationTimeMs: observation.t,
+        accepted: decision.kind === 'ACCEPT',
+        reason: decision.reason,
+        segmentId: activeSegmentId,
+        receiptEvidenceId,
+      });
       void recordActivityStageEvent({
         ownerUserId: context.userId,
         clientActivityId: context.clientActivityId,
@@ -513,17 +543,26 @@ async function appendDirectlyToHikeTrack(
           decisionReason: decision.reason,
           continuityPreclassified: true,
           continuityStateAfter: continuity,
+          diagnosticObservationRecorded: true,
+          diagnosticDecisionRecorded: true,
         });
         continue;
       }
       const promotedCandidates = decision.confirmedCandidates
         ?? (decision.confirmedCandidate ? [decision.confirmedCandidate] : []);
       const canonicalObservations = [...promotedCandidates, observation];
+      const promotedSourceEvents = new Map<string, any>();
       for (const promotedCandidate of promotedCandidates) {
         const existingPending = classified.findIndex(
           item => item.observationId === promotedCandidate.observationId,
         );
-        if (existingPending >= 0) classified.splice(existingPending, 1);
+        if (existingPending >= 0) {
+          promotedSourceEvents.set(
+            promotedCandidate.observationId,
+            classified[existingPending],
+          );
+          classified.splice(existingPending, 1);
+        }
       }
       for (const canonicalObservation of canonicalObservations) {
         const promoted = canonicalObservation !== observation;
@@ -546,7 +585,7 @@ async function appendDirectlyToHikeTrack(
         });
         const sourceEvent = canonicalObservation === observation
           ? event
-          : {
+          : promotedSourceEvents.get(canonicalObservation.observationId) ?? {
               t: canonicalObservation.t,
               lat: canonicalObservation.lat,
               lng: canonicalObservation.lng,
@@ -606,7 +645,20 @@ async function appendDirectlyToHikeTrack(
           ownerGeneration: context.ownerGeneration,
           segmentId: activeSegmentId,
           ...(startsGap ? { segmentStartReason: 'gps-reacquired' as const } : {}),
+          diagnosticObservationRecorded: true,
+          diagnosticDecisionRecorded: true,
         };
+        if (promoted) {
+          void recordActivityDiagnosticCanonicalPromotion({
+            ownerUserId: context.userId,
+            clientActivityId: context.clientActivityId,
+            observationTimeMs: canonicalObservation.t,
+            promotedByObservationTimeMs: observation.t,
+            reason: 'candidate-confirmed',
+            segmentId: activeSegmentId,
+            receiptEvidenceId: sourceEvent.receiptEvidenceId ?? null,
+          });
+        }
         const acceptedContinuity = acceptRealGpsObservation(
           continuity,
           canonicalObservation,
@@ -807,7 +859,10 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   const batchReceiptWallTimeMs = Date.now();
   const batchReceiptMonotonicTimeMs = activityStageMonotonicNow();
   const nativeBatchSequence = ++backgroundNativeBatchSequence;
-  return withOwnershipBoundary(async () => {
+  const diagnosticTarget: {
+    current: { ownerUserId: string; clientActivityId: string } | null;
+  } = { current: null };
+  const result = await withOwnershipBoundary(async () => {
   crashLogger.breadcrumb(
     `k10:task_fire loc_count=${data?.locations?.length ?? 0} err=${error ? String(error).slice(0, 40) : 'none'} elapsed_ms=${Date.now() - moduleLoadTs}`
   );
@@ -855,6 +910,10 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   // authority after Finish or Logout has disabled the live lease.
   if (!hikeActive) return;
   if (activeSid !== context.clientActivityId) return;
+  diagnosticTarget.current = {
+    ownerUserId: context.userId,
+    clientActivityId: context.clientActivityId,
+  };
   const events: any[] = [];
   for (const [nativeBatchIndex, loc] of locations.entries()) {
     const sampleTimestamp = loc.timestamp || Date.now();
@@ -882,7 +941,45 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
         visibleRenderTime: 'NOT_MEASURED',
       },
     });
+    if (Number.isFinite(sampleTimestamp)
+      && Number.isFinite(loc.coords.latitude)
+      && Number.isFinite(loc.coords.longitude)) {
+      void recordActivityDiagnosticObservation({
+        ownerUserId: context.userId,
+        clientActivityId: context.clientActivityId,
+        observationTimeMs: Math.floor(sampleTimestamp),
+        coordinate: {
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          alt: loc.coords.altitude ?? null,
+          accuracy: loc.coords.accuracy ?? null,
+          verticalAccuracy: loc.coords.altitudeAccuracy ?? null,
+          speed: loc.coords.speed ?? null,
+          speedAccuracy: loc.coords.speedAccuracy ?? null,
+          course: loc.coords.heading ?? null,
+          courseAccuracy: loc.coords.courseAccuracy ?? null,
+          source: 'background',
+          callbackIdentity: 'task-manager-batch',
+          nativeBatchSequence,
+          nativeBatchIndex,
+          appStateAtReceipt: (AppState as any)?.currentState ?? 'unknown',
+          receiptWallTimeMs: batchReceiptWallTimeMs,
+          receiptMonotonicTimeMs: batchReceiptMonotonicTimeMs,
+          receiptEvidenceId,
+          ownerGeneration: context.ownerGeneration,
+        },
+      });
+    }
     if (sampleTimestamp < (context.acceptAfterMs || 0)) {
+      void recordActivityDiagnosticDecision({
+        ownerUserId: context.userId,
+        clientActivityId: context.clientActivityId,
+        observationTimeMs: Math.floor(sampleTimestamp),
+        accepted: false,
+        reason: 'before-owner-generation',
+        segmentId: context.segmentId,
+        receiptEvidenceId,
+      });
       void recordActivityStageEvent({
         ownerUserId: context.userId,
         clientActivityId: context.clientActivityId,
@@ -1004,6 +1101,8 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
         nativeBatchSequence,
         nativeBatchIndex: point.nativeBatchIndex,
         appStateAtReceipt: 'background',
+        diagnosticObservationRecorded: point.diagnosticObservationRecorded === true,
+        diagnosticDecisionRecorded: point.diagnosticDecisionRecorded === true,
       });
     }
     crashLogger.breadcrumb(`k10:path_b_write n=${accepted.length}`);
@@ -1015,6 +1114,17 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
     crashLogger.breadcrumb(`k10:path_b_err ${String(e?.message || e).slice(0, 60)}`);
   }
   });
+  // The native ownership/WAL transaction has already completed. Persist one
+  // partial diagnostic chunk per delivered native batch outside that mutex so
+  // a headless runtime can terminate without losing the opted-in raw suffix,
+  // while Finish and the next callback never wait behind diagnostic I/O.
+  if (diagnosticTarget.current) {
+    await flushActivityDiagnosticReplay(
+      diagnosticTarget.current.ownerUserId,
+      diagnosticTarget.current.clientActivityId,
+    ).catch(() => undefined);
+  }
+  return result;
 };
 
 // Synchronous top-level registration. Guarded by Platform + try/catch so

@@ -73,6 +73,8 @@ const context = await chromium.launchPersistentContext(path.join(outputRoot, '_b
   timezoneId: 'Pacific/Auckland',
   args: ['--disable-web-security'],
 });
+await context.grantPermissions(['geolocation'], { origin: baseUrl });
+await context.setGeolocation({ latitude: -41.2865, longitude: 174.7762, accuracy: 5 });
 const page = context.pages()[0] ?? await context.newPage();
 page.on('pageerror', error => browserErrors.push(error.message));
 page.on('console', message => {
@@ -169,6 +171,8 @@ async function installOwner() {
     && globalThis.__cairnStores?.sessionService
     && globalThis.__cairnStores?.activityRegistry
     && globalThis.__cairnStores?.activityDiagnosticReplay
+    && globalThis.__cairnStores?.hikeTrackWriter
+    && globalThis.__cairnStores?.activityMemoryProjector
     && globalThis.__cairnStores?.tokenStore), null, { timeout: 120_000 });
   await page.evaluate(async ({ ownerId, owner, jwt }) => {
     localStorage.setItem('cairn_jwt', jwt);
@@ -310,6 +314,37 @@ async function clientState(clientActivityId) {
   }, { ownerId: ownerUserId, id: clientActivityId });
 }
 
+async function recorderArtifactState(clientActivityId) {
+  return page.evaluate(async ({ ownerId, id }) => {
+    const stores = globalThis.__cairnStores;
+    let wal;
+    try {
+      const points = await stores.hikeTrackWriter.readHikeTrackForProjection(id);
+      wal = { available: true, pointCount: points.length, points };
+    } catch (error) {
+      wal = { available: false, pointCount: 0, error: String(error) };
+    }
+    const intentKey = Object.keys(localStorage).find(key => (
+      key.startsWith('cairn:activity-memory-projection:v2:')
+      && key.endsWith(`:${encodeURIComponent(id)}`)
+    ));
+    let memoryIntent = null;
+    try { memoryIntent = intentKey ? JSON.parse(localStorage.getItem(intentKey)) : null; } catch {}
+    const pending = (await stores.pendingSyncStore.listPending()).filter(item => item.localId === id);
+    const registry = await stores.activityRegistry.getActivityRegistry(ownerId);
+    return {
+      wal,
+      memoryIntent,
+      pending,
+      registry: registry.completed.filter(item => item.clientActivityId === id),
+      tracking: {
+        status: stores.useTrackingStore.getState().status,
+        sessionId: stores.useTrackingStore.getState().sessionId,
+      },
+    };
+  }, { ownerId: ownerUserId, id: clientActivityId });
+}
+
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await installOwner();
 const cases = [];
@@ -397,6 +432,109 @@ const cases = [];
     mapboxPolicy: { response: 401, requestsObserved: mapboxBlockedRequests - mapboxBefore,
       interpretation: 'Local/base Final upload does not call Mapbox; all Mapbox requests would fail closed.' },
     passed: drain.succeeded === 1 && after.pending.length === 0 && after.session?.syncState === 'synced' });
+}
+
+// 5. Recorder-produced journey: real-source Start/observations/Finish creates
+// the WAL, Memory intent and pending outbox. A cold reopen keeps all recovery
+// material; only durable ACK + downstream retirement removes the large WAL.
+{
+  const input = activityInput(5);
+  const mapboxBefore = mapboxBlockedRequests;
+  const started = await page.evaluate(async ({ id, ownerId }) => {
+    const stores = globalThis.__cairnStores;
+    const registryBeforeStart = await stores.activityRegistry.getActivityRegistry(ownerId);
+    stores.useSettingsStore.setState({ debugMode: true });
+    stores.useTrackingStore.getState().setActivityMode('hiking');
+    const ok = await stores.useTrackingStore.getState().startTracking(id);
+    const state = stores.useTrackingStore.getState();
+    return {
+      ok,
+      sessionId: state.sessionId,
+      status: state.status,
+      provider: state.locationProviderSource,
+      startedAt: state.startedAt,
+      ownerGeneration: state.liveOwnerGeneration,
+      startError: state.startError,
+      startFailureDetail: globalThis.__cairnActivityStartFailure ?? null,
+      unfinishedBeforeStart: registryBeforeStart.unfinished ?? null,
+    };
+  }, { id: input.clientActivityId, ownerId: ownerUserId });
+  if (!started.ok || started.provider !== 'real') throw new Error(`recorder_start_failed:${JSON.stringify(started)}`);
+
+  clientOnline = false;
+  const observations = [];
+  // These are OS/browser-delivered geolocation callbacks through the
+  // installed Expo adapter and production foreground supervisor. Do not call
+  // addTrackPoint directly or label fixture samples as native-real evidence.
+  for (let index = 0; index < 6; index += 1) {
+    await page.waitForTimeout(4_000);
+    await context.setGeolocation({
+      latitude: -41.2865 + (index + 1) * 0.0001,
+      longitude: 174.7762 + (index + 1) * 0.00013,
+      accuracy: 5 + index % 2,
+    });
+    await page.waitForFunction(expected => (
+      globalThis.__cairnStores.useTrackingStore.getState().trackPointsRaw.length >= expected
+    ), index + 1, { timeout: 15_000 });
+    observations.push(await page.evaluate(() => {
+      const next = globalThis.__cairnStores.useTrackingStore.getState();
+      return { deliveredBy: 'playwright-browser-geolocation', rawPointCount: next.trackPointsRaw.length,
+        trackPointCount: next.trackPoints.length, distanceM: next.distanceM };
+    }));
+  }
+  // The isolated backend becomes reachable before Finish, then the phone is
+  // deliberately offline again at the Save boundary.
+  clientOnline = true;
+  await page.waitForTimeout(1_000);
+  clientOnline = false;
+  const finish = await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.getState()
+    .stopTracking('Recorder lifecycle closure'));
+  const beforeReload = await recorderArtifactState(input.clientActivityId);
+  const beforeReloadManifest = await localManifest();
+
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await installOwner();
+  await page.evaluate(ownerId => globalThis.__cairnStores.useSessionStore.getState().hydrate(ownerId), ownerUserId);
+  const afterColdReopen = await recorderArtifactState(input.clientActivityId);
+
+  clientOnline = true;
+  const drain = await page.evaluate(() => globalThis.__cairnStores.syncDaemon.drainPending({
+    wakeReason: 'network_online', force: true,
+  }));
+  const afterAck = await clientState(input.clientActivityId);
+  const afterCleanup = await recorderArtifactState(input.clientActivityId);
+  const afterCleanupManifest = await localManifest();
+  const cleanClientReopen = await page.evaluate(async id => {
+    const session = globalThis.__cairnStores.useSessionStore.getState().sessions.find(item => (
+      item.clientActivityId === id || item.id === id
+    ));
+    const remoteId = session?.serverActivityId ?? session?.remoteId ?? null;
+    const remote = remoteId == null
+      ? null
+      : await globalThis.__cairnStores.sessionService.fetchSessionDetail(Number(remoteId));
+    return { remoteId, reopened: remote != null, clientActivityId: remote?.client_activity_id ?? null };
+  }, input.clientActivityId);
+  const diagnosticPhases = (afterAck.diagnostic?.records ?? [])
+    .filter(record => record.kind === 'application-event' && record.data?.event === 'completed-activity-sync')
+    .map(record => record.data.phase);
+  const mapboxRequestsObserved = mapboxBlockedRequests - mapboxBefore;
+  cases.push({
+    id: 'recorder-wal-cold-reopen-ack-cleanup', input, started, observations, finish,
+    beforeReload, beforeReloadManifest, afterColdReopen, drain, afterAck,
+    afterCleanup, afterCleanupManifest, cleanClientReopen, diagnosticPhases,
+    mapboxOutage: { response: 401, requestsObserved: mapboxRequestsObserved },
+    passed: observations.at(-1)?.trackPointCount >= 2
+      && beforeReload.pending.length === 1 && beforeReload.wal.available
+      && beforeReload.wal.pointCount >= 2 && beforeReload.memoryIntent?.state === 'complete'
+      && afterColdReopen.pending.length === 1 && afterColdReopen.wal.available
+      && drain.succeeded === 1 && afterAck.pending.length === 0
+      && afterAck.session?.syncState === 'synced'
+      && afterCleanup.wal.available === false
+      && afterCleanup.memoryIntent?.state === 'retired'
+      && diagnosticPhases.includes('ack') && diagnosticPhases.includes('phone-cleanup-complete')
+      && cleanClientReopen.reopened === true
+      && mapboxRequestsObserved >= 1,
+  });
 }
 
 const serverList = await api('/api/sessions', { headers: { Authorization: `Bearer ${token}` } });

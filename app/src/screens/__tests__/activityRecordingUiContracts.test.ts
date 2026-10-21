@@ -10,6 +10,7 @@ describe('shared Hike and Run recording UI contracts', () => {
   const run = read('src/screens/RunningScreen.tsx');
   const hikeFinish = read('src/screens/StopSummarySheet.tsx');
   const settings = read('src/screens/SettingsScreen.tsx');
+  const activityDetail = read('src/screens/MapHistoryScreen.tsx');
 
   test.each([
     ['Hike', hike, 'hike'],
@@ -142,5 +143,13 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(settings).toContain('currentOwnerId() !== ownerId');
     expect(settings).toContain('includes precise coordinates and redacted provider evidence');
     expect(settings).toContain('contains no Mapbox token');
+  });
+
+  test('debug Activity Detail exports the explicitly selected historical Activity', () => {
+    expect(activityDetail).toContain('testID="activity-copy-diagnostics"');
+    expect(activityDetail).toContain('exportActivityStageLedger(ownerUserId, clientActivityId, realm)');
+    expect(activityDetail).toContain('selectedClientActivityId: clientActivityId');
+    expect(activityDetail).toContain("schema: 'cairn-selected-activity-forensic-export'");
+    expect(activityDetail).toContain('{debugMode ? (');
   });
 });

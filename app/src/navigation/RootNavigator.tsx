@@ -299,6 +299,14 @@ export function RootNavigator() {
               stores.activityRegistry = require('../features/activity/activityRegistry');
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.activityDiagnosticReplay = require('../features/activity/activityDiagnosticReplay');
+              // Focused closure evidence needs to inspect the real recorder
+              // WAL and downstream Memory intent before/after ACK. These are
+              // read/drive handles in the existing Web-only QA bridge, never
+              // production UI capabilities.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.hikeTrackWriter = require('../services/hikeTrackWriter');
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.activityMemoryProjector = require('../features/activity/activityMemoryProjector');
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.tokenStore = require('../services/tokenStore');
               // Route-following: exposed so Playwright can drive turn-by-turn

@@ -5,6 +5,134 @@ import {
 import type { SnapLabPublicFixture } from './snapLabLogicalRunner';
 import type { SnapLabCassetteEntry } from './snapLabTransport';
 
+export interface DiagnosticEventTimelineReplay {
+  events: Array<{
+    ordinal: number;
+    kind: string;
+    wallTimeMs: number;
+    inputAuthority: boolean;
+    data: Record<string, unknown>;
+  }>;
+  finalState: {
+    paused: boolean;
+    appState: string;
+    plantOpen: boolean;
+    recordingFinished: boolean;
+    deletedOrCancelled: boolean;
+    online: boolean | null;
+    syncPhase: string | null;
+    phoneCleanupComplete: boolean;
+  };
+  observations: {
+    total: number;
+    whilePaused: number;
+    background: number;
+    staleDecisionComparisons: number;
+    decisionsAfterDeletedOrCancelled: number;
+  };
+  provider: { completionsAfterFinish: number };
+  offlineAtFinish: boolean;
+  syncAckAfterFinish: boolean;
+}
+
+const inputKinds = new Set(['diagnostic-start', 'raw-observation', 'provider-exchange', 'application-event', 'diagnostic-finish']);
+
+/** Replays only the recorded event/log state machine. Stored tracking
+ * decisions and geometry are retained as comparison outputs, never input
+ * authority. This deliberately does not invent events missing from an older
+ * diagnostic export. */
+export function replayDiagnosticEventTimeline(
+  diagnostic: ActivityDiagnosticReplayExport,
+): DiagnosticEventTimelineReplay {
+  const events = [...diagnostic.records]
+    .sort((left, right) => left.ordinal - right.ordinal)
+    .map(record => ({
+      ordinal: record.ordinal,
+      kind: record.kind,
+      wallTimeMs: record.wallTimeMs,
+      inputAuthority: inputKinds.has(record.kind),
+      data: record.data,
+    }));
+  const state = {
+    paused: false,
+    appState: 'unknown',
+    plantOpen: false,
+    recordingFinished: false,
+    deletedOrCancelled: false,
+    online: null as boolean | null,
+    syncPhase: null as string | null,
+    phoneCleanupComplete: false,
+  };
+  let total = 0;
+  let whilePaused = 0;
+  let background = 0;
+  let staleDecisionComparisons = 0;
+  let decisionsAfterDeletedOrCancelled = 0;
+  let completionsAfterFinish = 0;
+  let offlineAtFinish = false;
+  let syncAckAfterFinish = false;
+
+  for (const event of events) {
+    if (event.kind === 'raw-observation') {
+      total += 1;
+      if (state.paused) whilePaused += 1;
+      if (event.data.appStateAtReceipt === 'background'
+        || event.data.source === 'background') background += 1;
+      continue;
+    }
+    if (event.kind === 'observation-decision') {
+      if (String(event.data.reason ?? '').includes('stale')) staleDecisionComparisons += 1;
+      if (state.deletedOrCancelled) decisionsAfterDeletedOrCancelled += 1;
+      continue;
+    }
+    if (event.kind === 'diagnostic-finish') {
+      state.recordingFinished = true;
+      offlineAtFinish = state.online === false;
+      continue;
+    }
+    if (event.kind === 'provider-exchange') {
+      if (state.recordingFinished && event.data.phase === 'response') completionsAfterFinish += 1;
+      continue;
+    }
+    if (event.kind !== 'application-event') continue;
+    const details = (event.data.details ?? {}) as Record<string, unknown>;
+    const name = String(details.event ?? event.data.event ?? details.action ?? '');
+    if (event.data.stage === 'lifecycle') {
+      if (name === 'recording-paused') state.paused = true;
+      if (name === 'recording-resumed') state.paused = false;
+      const nextAppState = details.appState ?? details.state ?? event.data.state;
+      if (typeof nextAppState === 'string') state.appState = nextAppState;
+    }
+    if (name === 'plant-opened' || name === 'plant-entered') state.plantOpen = true;
+    if (name === 'plant-closed' || name === 'plant-returned') state.plantOpen = false;
+    if (name === 'network-offline' || details.online === false) state.online = false;
+    if (name === 'network-online' || details.online === true) state.online = true;
+    if (['activity-deleted', 'activity-cancelled', 'recording-discarded'].includes(name)) {
+      state.deletedOrCancelled = true;
+    }
+    if (event.data.event === 'completed-activity-sync') {
+      const phase = String(event.data.phase ?? '');
+      state.syncPhase = phase || null;
+      if (phase === 'ack' && state.recordingFinished) syncAckAfterFinish = true;
+      if (phase === 'phone-cleanup-complete') state.phoneCleanupComplete = true;
+    }
+  }
+  return {
+    events,
+    finalState: state,
+    observations: {
+      total,
+      whilePaused,
+      background,
+      staleDecisionComparisons,
+      decisionsAfterDeletedOrCancelled,
+    },
+    provider: { completionsAfterFinish },
+    offlineAtFinish,
+    syncAckAfterFinish,
+  };
+}
+
 /**
  * Converts a copied owner diagnostic into the public provider boundary used by
  * Snap Lab. Only raw observation records and captured provider responses are
@@ -70,6 +198,7 @@ export function diagnosticReplayFixture(
         : Number(coordinate.receiptMonotonicTimeMs),
     };
   });
+  const eventReplay = replayDiagnosticEventTimeline(diagnostic);
   return {
     schema: 'cairn.activity-diagnostic-raw-replay.v1',
     fixtureSha256: diagnostic.recordsChecksum,
@@ -90,10 +219,11 @@ export function diagnosticReplayFixture(
       deliveryMode: 'diagnostic-recorded-receipt-order',
     },
     rawEvents,
+    recordedTimeline: eventReplay.events,
     lifecycle: {
       trueBlackout: false,
-      offlineAtFinish: false,
-      restoreOnlineAfterColdOpen: false,
+      offlineAtFinish: eventReplay.offlineAtFinish,
+      restoreOnlineAfterColdOpen: eventReplay.offlineAtFinish && eventReplay.syncAckAfterFinish,
       slowDiagnosticWriteMs: 0,
       walReadFaultOnce: false,
       yieldedFinish: false,

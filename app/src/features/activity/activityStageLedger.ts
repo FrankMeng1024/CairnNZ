@@ -1049,6 +1049,7 @@ export async function flushActivityStageLedger(ownerUserId?: string): Promise<vo
 export async function exportLatestActivityStageLedger(
   ownerUserId: string,
   realm: ActivityStageLedgerRealm = 'production',
+  requestedClientActivityId?: string,
 ): Promise<ActivityStageLedgerExport> {
   const state = writerState(ownerUserId, realm);
   const waitStartedAt = Date.now();
@@ -1088,10 +1089,11 @@ export async function exportLatestActivityStageLedger(
   const summaries = state.metaLoaded ? state.summaries : persistedMeta?.summaries ?? [];
   const latestEvent = allEvents[allEvents.length - 1] ?? null;
   const latestSummary = summaries[summaries.length - 1] ?? null;
-  const latestActivityId = latestSummary
-    && (!latestEvent || latestSummary.lastWallTimeMs >= latestEvent.wallTimeMs)
-    ? latestSummary.clientActivityId
-    : latestEvent?.clientActivityId ?? null;
+  const latestActivityId = requestedClientActivityId ?? (
+    latestSummary && (!latestEvent || latestSummary.lastWallTimeMs >= latestEvent.wallTimeMs)
+      ? latestSummary.clientActivityId
+      : latestEvent?.clientActivityId ?? null
+  );
   const selected = latestActivityId
     ? allEvents.filter(event => event.clientActivityId === latestActivityId)
     : [];
@@ -1154,6 +1156,18 @@ export async function exportLatestActivityStageLedger(
     observability: summarizeActivityObservability(events, { retentionTruncated }),
     events: events.map(event => ({ ...event, ownerUserId: 'current-owner' })),
   };
+}
+
+/** Export the bounded ledger for an Activity the Owner explicitly selected.
+ * Unlike Settings' latest-only shortcut, this never silently pairs a replay
+ * with a different Activity's stage ledger. */
+export function exportActivityStageLedger(
+  ownerUserId: string,
+  clientActivityId: string,
+  realm: ActivityStageLedgerRealm = 'production',
+): Promise<ActivityStageLedgerExport> {
+  if (!clientActivityId) throw new Error('activity_stage_ledger_identity_required');
+  return exportLatestActivityStageLedger(ownerUserId, realm, clientActivityId);
 }
 
 export async function purgeActivityStageLedgerRealmForOwner(

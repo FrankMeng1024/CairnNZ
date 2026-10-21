@@ -40,6 +40,7 @@ describe('RealLocationSupervisor', () => {
     expect(startStream).toHaveBeenCalledTimes(1);
     jest.runOnlyPendingTimers();
     expect(startStream).toHaveBeenCalledTimes(2);
+    await supervisor.clear();
     jest.useRealTimers();
   });
 
@@ -72,6 +73,7 @@ describe('RealLocationSupervisor', () => {
     streams[2].observation({ id: 'p2' }, 4);
     expect(supervisor.snapshot().effectiveConsumer).toBe('passive-memory');
     expect(passive.onObservation).toHaveBeenCalledTimes(2);
+    await supervisor.clear();
   });
 
   test('OFF during an in-flight start removes the late handle and cannot revive the consumer', async () => {
@@ -107,6 +109,7 @@ describe('RealLocationSupervisor', () => {
       lastObservationTimestampMs: 90,
       lastFreshObservationReceiptMs: 100,
     });
+    await supervisor.clear();
   });
 
   test('terminal failure fences every delayed callback and backoff resets only after fresh recovery evidence', async () => {
@@ -160,5 +163,43 @@ describe('RealLocationSupervisor', () => {
     expect(startStream).toHaveBeenCalledTimes(2);
     await supervisor.clear();
     jest.useRealTimers();
+  });
+
+  test('platform timers retain their required global receiver', async () => {
+    const timers = globalThis as typeof globalThis & {
+      setTimeout: typeof setTimeout;
+      clearTimeout: typeof clearTimeout;
+    };
+    const originalSetTimeout = timers.setTimeout;
+    const originalClearTimeout = timers.clearTimeout;
+    const scheduled: Array<() => void> = [];
+    const cleared: unknown[] = [];
+    try {
+      timers.setTimeout = function receiverSensitiveSetTimeout(
+        this: typeof globalThis,
+        callback: TimerHandler,
+      ) {
+        if (this !== globalThis) throw new TypeError('Illegal invocation');
+        scheduled.push(callback as () => void);
+        return 71 as unknown as ReturnType<typeof setTimeout>;
+      } as unknown as typeof setTimeout;
+      timers.clearTimeout = function receiverSensitiveClearTimeout(
+        this: typeof globalThis,
+        timer: unknown,
+      ) {
+        if (this !== globalThis) throw new TypeError('Illegal invocation');
+        cleared.push(timer);
+      } as unknown as typeof clearTimeout;
+      const supervisor = new RealLocationSupervisor<Observation, Options>({
+        startStream: jest.fn(async () => ({ remove: jest.fn() })),
+      });
+      await expect(supervisor.setConsumer(consumer())).resolves.toBe(true);
+      expect(scheduled).toHaveLength(1);
+      await supervisor.clear();
+      expect(cleared).toContain(71);
+    } finally {
+      timers.setTimeout = originalSetTimeout;
+      timers.clearTimeout = originalClearTimeout;
+    }
   });
 });

@@ -9,6 +9,9 @@ describe('backgroundLocationTask durable ownership fencing', () => {
   let flushRecordedMemoryEvidence: jest.Mock;
   let scheduleActivityMemoryProjection: jest.Mock;
   let recordActivityStageEvent: jest.Mock;
+  let recordActivityDiagnosticObservation: jest.Mock;
+  let recordActivityDiagnosticDecision: jest.Mock;
+  let recordActivityDiagnosticCanonicalPromotion: jest.Mock;
   let breadcrumb: jest.Mock;
 
   beforeEach(() => {
@@ -21,6 +24,9 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     flushRecordedMemoryEvidence = jest.fn(async () => undefined);
     scheduleActivityMemoryProjection = jest.fn(async () => undefined);
     recordActivityStageEvent = jest.fn(async () => undefined);
+    recordActivityDiagnosticObservation = jest.fn(async () => undefined);
+    recordActivityDiagnosticDecision = jest.fn(async () => undefined);
+    recordActivityDiagnosticCanonicalPromotion = jest.fn(async () => undefined);
     breadcrumb = jest.fn();
 
     jest.doMock('react-native', () => ({ Platform: { OS: 'ios' } }));
@@ -63,6 +69,12 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       activityStageMonotonicNow: jest.fn(() => 42.5),
       recordActivityStageEvent,
       flushActivityStageLedger: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../../features/activity/activityDiagnosticReplay', () => ({
+      recordActivityDiagnosticObservation,
+      recordActivityDiagnosticDecision,
+      recordActivityDiagnosticCanonicalPromotion,
+      flushActivityDiagnosticReplay: jest.fn(async () => undefined),
     }));
   });
 

@@ -15,6 +15,7 @@ jest.mock('expo-updates', () => ({
 
 import {
   activityStageLedgerOwnerPrefix,
+  exportActivityStageLedger,
   exportLatestActivityStageLedger,
   flushActivityStageLedger,
   purgeActivityStageLedgerForOwner,
@@ -135,6 +136,12 @@ describe('local owner-exportable Activity stage ledger', () => {
     });
     expect((await exportLatestActivityStageLedger('owner-a')).clientActivityId).toBe('a-new');
     expect((await exportLatestActivityStageLedger('owner-b')).clientActivityId).toBe('other');
+    const explicitlySelected = await exportActivityStageLedger('owner-a', 'z-old');
+    expect(explicitlySelected.clientActivityId).toBe('z-old');
+    expect(explicitlySelected.events).toEqual([
+      expect.objectContaining({ clientActivityId: 'z-old', stage: 'activity-start' }),
+    ]);
+    expect(explicitlySelected.phaseSummary).toMatchObject({ clientActivityId: 'z-old' });
   });
 
   test('Snap Lab diagnostics have a separate owner realm and cannot become the production latest export', async () => {

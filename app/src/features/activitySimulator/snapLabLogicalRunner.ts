@@ -88,6 +88,16 @@ export interface SnapLabPublicFixture {
     barriers?: SnapLabSyntheticBarrier[];
   };
   rawEvents: SnapLabPublicRawEvent[];
+  /** Original append order for logs-only lifecycle replay. Decision,
+   * canonical and display records are marked comparison-only and never fed
+   * back into the tracking algorithm. */
+  recordedTimeline?: Array<{
+    ordinal: number;
+    kind: string;
+    wallTimeMs: number;
+    inputAuthority: boolean;
+    data: Record<string, unknown>;
+  }>;
   lifecycle: {
     trueBlackout: boolean;
     offlineAtFinish: boolean;

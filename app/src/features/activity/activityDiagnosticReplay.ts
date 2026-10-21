@@ -71,7 +71,19 @@ export interface ActivityDiagnosticReplayExport {
     pendingWriteCount: number;
     durableRecordsComplete: boolean;
     recordingFinished: boolean;
+    /** This means the bounded tracking-replay inputs are internally usable.
+     * It does not imply upload acknowledgement or phone-side cleanup. */
     selfContainedReplayComplete: boolean;
+    replayScope: 'tracking-replay-inputs-only';
+    syncTerminalState:
+      | 'not-recorded'
+      | 'attempting-or-pending'
+      | 'failed-retryable-or-terminal'
+      | 'acknowledged-cleanup-pending'
+      | 'acknowledged-cleanup-complete'
+      | 'not-applicable-local-qa';
+    fullLifecycleComplete: boolean;
+    fullLifecycleReason: string | null;
     recoveryCount: number;
     volatileTailMayBeMissing: boolean;
     postFinishRecordCount: number;
@@ -487,6 +499,7 @@ export function recordActivityDiagnosticObservation(input: {
     course?: number | null; courseAccuracy?: number | null; source?: string;
     callbackIdentity?: string; nativeBatchSequence?: number; nativeBatchIndex?: number;
     appStateAtReceipt?: string; receiptWallTimeMs?: number; receiptMonotonicTimeMs?: number | null;
+    receiptEvidenceId?: string; ownerGeneration?: string;
   };
   observationTimeMs: number;
 }): Promise<void> {
@@ -514,6 +527,8 @@ export function recordActivityDiagnosticObservation(input: {
       nativeBatchSequence: value.nativeBatchSequence ?? null,
       nativeBatchIndex: value.nativeBatchIndex ?? null,
       appStateAtReceipt: value.appStateAtReceipt ?? null,
+      receiptEvidenceId: value.receiptEvidenceId ?? null,
+      ownerGeneration: value.ownerGeneration ?? null,
     },
   });
 }
@@ -525,6 +540,7 @@ export function recordActivityDiagnosticDecision(input: {
   accepted: boolean;
   reason: string;
   segmentId: string | null;
+  receiptEvidenceId?: string | null;
 }): Promise<void> {
   return recordActivityDiagnosticReplayEvent({
     ownerUserId: input.ownerUserId,
@@ -547,6 +563,7 @@ export function recordActivityDiagnosticCanonicalPromotion(input: {
   promotedByObservationTimeMs: number;
   reason: string;
   segmentId: string | null;
+  receiptEvidenceId?: string | null;
 }): Promise<void> {
   return recordActivityDiagnosticReplayEvent({
     ownerUserId: input.ownerUserId,
@@ -670,6 +687,36 @@ export async function exportActivityDiagnosticReplay(input: {
     && pendingWriteCount === 0;
   const complete = durableRecordsComplete && recordingFinished && !volatileTailMayBeMissing;
   const selfContainedReplayComplete = complete && declaredMissing.length === 0;
+  const startedAsLocalQa = records.find(record => record.kind === 'diagnostic-start')?.data.source === 'simulator';
+  const syncEvents = records.filter(record => record.kind === 'application-event').map(record => record.data);
+  const completedSyncPhases = syncEvents
+    .filter(data => data.event === 'completed-activity-sync')
+    .map(data => String(data.phase ?? ''));
+  const completedUploadStagePhases = syncEvents.flatMap(data => {
+    if (data.stage !== 'sync-state') return [];
+    const details = data.details as Record<string, unknown> | null | undefined;
+    return details?.operation === 'completed-activity-upload' ? [String(details.phase ?? '')] : [];
+  });
+  const syncTerminalState = startedAsLocalQa
+    ? 'not-applicable-local-qa' as const
+    : completedSyncPhases.includes('phone-cleanup-complete')
+      ? 'acknowledged-cleanup-complete' as const
+      : completedSyncPhases.includes('ack') || completedUploadStagePhases.includes('ack')
+        ? 'acknowledged-cleanup-pending' as const
+        : completedUploadStagePhases.some(phase => ['failed', 'unavailable', 'conflict'].includes(phase))
+          ? 'failed-retryable-or-terminal' as const
+          : completedSyncPhases.includes('attempt') || completedUploadStagePhases.includes('attempt')
+            ? 'attempting-or-pending' as const
+            : 'not-recorded' as const;
+  const fullLifecycleComplete = selfContainedReplayComplete
+    && syncTerminalState === 'acknowledged-cleanup-complete';
+  const fullLifecycleReason = fullLifecycleComplete
+    ? null
+    : !selfContainedReplayComplete
+      ? 'tracking-replay-inputs-incomplete'
+      : syncTerminalState === 'not-applicable-local-qa'
+        ? 'local-qa-recording-has-no-production-sync-lifecycle'
+        : `completed-activity-sync:${syncTerminalState}`;
   const reason = !durableRecordsComplete
     ? meta?.incompleteReason ?? 'missing-or-inconsistent-durable-records'
     : !recordingFinished
@@ -695,6 +742,10 @@ export async function exportActivityDiagnosticReplay(input: {
       durableRecordsComplete,
       recordingFinished,
       selfContainedReplayComplete,
+      replayScope: 'tracking-replay-inputs-only',
+      syncTerminalState,
+      fullLifecycleComplete,
+      fullLifecycleReason,
       recoveryCount,
       volatileTailMayBeMissing,
       postFinishRecordCount,
@@ -777,6 +828,8 @@ export function replayObservationsFromDiagnosticExport(value: ActivityDiagnostic
       nativeBatchSequence: record.data.nativeBatchSequence,
       nativeBatchIndex: record.data.nativeBatchIndex,
       appStateAtReceipt: record.data.appStateAtReceipt,
+      receiptEvidenceId: record.data.receiptEvidenceId,
+      ownerGeneration: record.data.ownerGeneration,
       receiptWallTimeMs: record.data.receiptWallTimeMs,
       receiptMonotonicTimeMs: record.monotonicTimeMs,
     },

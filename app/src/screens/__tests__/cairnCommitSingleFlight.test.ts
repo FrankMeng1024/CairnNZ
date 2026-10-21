@@ -19,22 +19,22 @@ describe('normal Personal Cairn commit single-flight boundary', () => {
     expect(source.slice(transaction, durableCommit)).toContain('isContextCurrent: contextIsCurrent');
   });
 
-  test('Run Quick Cairn uses the shared gate, exact late link, and visible busy state', () => {
+  test('Run Cairn delegates to full Plant with the exact Activity owner and no direct blank commit', () => {
     const source = read('RunningScreen.tsx');
-    const handler = source.indexOf('async function handlePlantCairn()');
-    const transaction = source.indexOf('await executeCairnCommit({', handler);
-    const gate = source.indexOf('gate: quickCairnGateRef.current,', transaction);
-    const durableCommit = source.indexOf('return addMarker({', gate);
-    const exactLink = source.indexOf('linkMarker(result.marker.id, activityContext)', durableCommit);
-    const release = source.indexOf('releaseOnCommittedCurrent: true,', exactLink);
+    const handoff = source.indexOf("nav.navigate('Plant', {");
+    const origin = source.indexOf("kind: 'activity',", handoff);
+    const activityId = source.indexOf('clientActivityId: sessionId,', origin);
+    const generation = source.indexOf('ownerGeneration: liveOwnerGeneration,', activityId);
+    const mode = source.indexOf("activityMode: 'running',", generation);
 
-    expect(handler).toBeGreaterThan(-1);
-    expect(transaction).toBeGreaterThan(handler);
-    expect(gate).toBeGreaterThan(transaction);
-    expect(durableCommit).toBeGreaterThan(gate);
-    expect(exactLink).toBeGreaterThan(durableCommit);
-    expect(release).toBeGreaterThan(exactLink);
-    expect(source.slice(durableCommit, exactLink)).toContain('activityContext,');
-    expect(source).toContain('cairnDisabled={!locationAvailable || quickCairnInFlight}');
+    expect(handoff).toBeGreaterThan(-1);
+    expect(origin).toBeGreaterThan(handoff);
+    expect(activityId).toBeGreaterThan(origin);
+    expect(generation).toBeGreaterThan(activityId);
+    expect(mode).toBeGreaterThan(generation);
+    expect(source).not.toContain('handlePlantCairn');
+    expect(source).not.toContain('quickCairnGateRef');
+    expect(source).not.toContain('executeCairnCommit');
+    expect(source).not.toContain('addMarker({');
   });
 });

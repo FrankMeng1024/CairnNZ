@@ -950,6 +950,10 @@ export interface ActivityCoordinate extends Coordinate {
   nativeBatchSequence?: number;
   nativeBatchIndex?: number;
   appStateAtReceipt?: string;
+  /** Headless TaskManager already wrote the opted-in raw/decision records.
+   * The foreground projection must not duplicate that native evidence. */
+  diagnosticObservationRecorded?: boolean;
+  diagnosticDecisionRecorded?: boolean;
 }
 
 interface TrackingState {
@@ -4832,7 +4836,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     const receiptActivityId = coord.clientActivityId ?? receiptSnapshot.sessionId;
     const receiptOwnerId = receiptSnapshot.ownerUserId;
     const receiptEvidenceId = `${coord.source ?? 'foreground'}:${Math.floor(timestamp ?? receiptWallTimeMs)}`;
-    if (receiptOwnerId && receiptActivityId) {
+    if (receiptOwnerId && receiptActivityId
+      && !(coord as ActivityCoordinate).diagnosticObservationRecorded) {
       void recordActivityDiagnosticObservation({
         ownerUserId: receiptOwnerId,
         clientActivityId: receiptActivityId,
@@ -4901,7 +4906,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         candidateRawOrdinal?: number | null;
         promotedByRawOrdinal?: number | null;
       }): ActivityLocationAcceptance => {
-        if (before.ownerUserId && before.sessionId) {
+        if (before.ownerUserId && before.sessionId && !owned.diagnosticDecisionRecorded) {
           void recordActivityDiagnosticDecision({
             ownerUserId: before.ownerUserId,
             clientActivityId: before.sessionId,
@@ -6034,24 +6039,26 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           coordinateSource,
         });
         if (!isSimulatorSample) latestRealCanonicalDecisionReason = acceptance.reason ?? 'accepted';
-        for (const promoted of acceptedPoints.slice(0, -1)) {
-          void recordActivityDiagnosticCanonicalPromotion({
+        if (!owned.diagnosticDecisionRecorded) {
+          for (const promoted of acceptedPoints.slice(0, -1)) {
+            void recordActivityDiagnosticCanonicalPromotion({
+              ownerUserId: before.ownerUserId,
+              clientActivityId: before.sessionId!,
+              observationTimeMs: promoted.t,
+              promotedByObservationTimeMs: accepted.t,
+              reason: 'candidate-confirmed',
+              segmentId: promoted.segmentId ?? null,
+            });
+          }
+          void recordActivityDiagnosticDecision({
             ownerUserId: before.ownerUserId,
             clientActivityId: before.sessionId!,
-            observationTimeMs: promoted.t,
-            promotedByObservationTimeMs: accepted.t,
-            reason: 'candidate-confirmed',
-            segmentId: promoted.segmentId ?? null,
+            observationTimeMs: accepted.t,
+            accepted: true,
+            reason: acceptance.reason ?? 'accepted',
+            segmentId: accepted.segmentId ?? null,
           });
         }
-        void recordActivityDiagnosticDecision({
-          ownerUserId: before.ownerUserId,
-          clientActivityId: before.sessionId!,
-          observationTimeMs: accepted.t,
-          accepted: true,
-          reason: acceptance.reason ?? 'accepted',
-          segmentId: accepted.segmentId ?? null,
-        });
         return {
           accepted: true,
           reason: acceptance.reason ?? 'accepted',

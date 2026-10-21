@@ -158,10 +158,17 @@ node -e '
     memoryRows:memory.map(row=>({clientActivityId:row[0],rowCount:Number(row[1]),distinctFacts:Number(row[2])})),
     idempotency:{rowCount:Number(idempotency[0]??0),distinctOperationIds:Number(idempotency[1]??0),distinctStatuses:Number(idempotency[2]??0)},
   };
-  result.passed=result.activityRows.length===4
-    && result.activityRows.every(row=>row.rowCount===1&&row.finalizedRows===1&&row.routePoints===6&&row.rawPoints===6&&row.canonicalPoints===6)
-    && result.memoryRows.length===4
-    && result.memoryRows.every(row=>row.rowCount===6&&row.distinctFacts===6);
+  const seeded=result.activityRows.filter(row=>!row.clientActivityId.endsWith("000000000005"));
+  const recorder=result.activityRows.find(row=>row.clientActivityId.endsWith("000000000005"));
+  const recorderMemory=result.memoryRows.find(row=>row.clientActivityId.endsWith("000000000005"));
+  result.passed=result.activityRows.length===5
+    && seeded.length===4
+    && seeded.every(row=>row.rowCount===1&&row.finalizedRows===1&&row.routePoints===6&&row.rawPoints===6&&row.canonicalPoints===6)
+    && !!recorder&&recorder.rowCount===1&&recorder.finalizedRows===1
+    && recorder.routePoints>=2&&recorder.rawPoints>=2&&recorder.canonicalPoints>=2
+    && result.memoryRows.length===5
+    && result.memoryRows.filter(row=>!row.clientActivityId.endsWith("000000000005")).every(row=>row.rowCount===6&&row.distinctFacts===6)
+    && !!recorderMemory&&recorderMemory.rowCount>=2&&recorderMemory.rowCount===recorderMemory.distinctFacts;
   fs.writeFileSync(path.join(out,"DB_ASSERTIONS.json"),JSON.stringify(result,null,2)+"\n");
   if(!result.passed)process.exitCode=1;
 ' "$OUTPUT_DIR"
