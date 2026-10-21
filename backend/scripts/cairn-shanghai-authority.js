@@ -13,6 +13,9 @@ const CLEANUP_SCOPE = Object.freeze([
   'cairn_review_cases:approved_fixture_marker_ids',
   'cairn_collections:approved_fixture_marker_ids',
   'marker_audience_epochs:approved_fixture_marker_ids',
+  'cairn_acquisition_events:approved_fixture_marker_ids',
+  'cairn_acquisitions:approved_fixture_marker_ids',
+  'cairn_revisions:approved_fixture_marker_ids',
   'notification_log:orphaned_fixture_only_presentation_groups',
   'cairn_presentation_groups:orphaned_fixture_only_groups',
 ]);

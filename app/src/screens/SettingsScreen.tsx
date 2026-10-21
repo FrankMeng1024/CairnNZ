@@ -13,6 +13,7 @@ import {
   AppState,
   Image,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -158,7 +159,18 @@ function Row({
       </View>
       <View style={styles.rowCopy}>
         <Text style={[styles.rowTitle, { color: destructive ? theme.destructive : theme.textPrimary }]}>{title}</Text>
-        {detail ? <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>{detail}</Text> : null}
+        {detail ? (
+          <Text
+            accessibilityLabel={detail}
+            style={[
+              styles.rowDetail,
+              { color: theme.textSecondary },
+              Platform.OS === 'web' ? ({ wordBreak: 'break-all', overflowWrap: 'anywhere' } as any) : null,
+            ]}
+          >
+            {detail}
+          </Text>
+        ) : null}
       </View>
       {value ? <Text style={[styles.rowValue, { color: theme.textSecondary }]} numberOfLines={1}>{value}</Text> : null}
       {onPress ? (
@@ -1629,9 +1641,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowCopy: { flex: 1 },
+  rowCopy: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: FontSize.body, fontWeight: '700', lineHeight: 20 },
-  rowDetail: { fontSize: FontSize.caption, lineHeight: 18, marginTop: 2 },
+  rowDetail: { flexShrink: 1, fontSize: FontSize.caption, lineHeight: 18, marginTop: 2 },
   rowValue: { maxWidth: 92, fontSize: FontSize.caption, fontWeight: '600' },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 62 },
   disabled: { opacity: 0.58 },

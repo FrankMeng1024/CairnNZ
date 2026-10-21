@@ -38,6 +38,7 @@
  */
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
+import { Image as ReactNativeImage } from 'react-native';
 import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -50,6 +51,7 @@ const POINT_MOTION_RASTER_LAYER_ID = 'cairn-point-motion-basemap-layer';
 // Its session request is intercepted by the visual harness; it is never used
 // to access Mapbox tiles or emitted by production builds.
 const LOCAL_QA_MAPBOX_TOKEN = 'pk.cairn-local-qa-no-network';
+const WEB_SUNSET_STYLE = require('../../../../assets/map-styles/sunset-2d.json');
 const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
   && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
 const LOCAL_QA_STYLE = {
@@ -364,13 +366,25 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
     if (!styleJSON) return null;
     try { return JSON.parse(styleJSON); } catch { return null; }
   }, [styleJSON]);
-  // R21-v3 v2 (2026-08-30): mapbox-gl-js v2.15.0 does NOT support Mapbox
-  // Standard style (v3+ feature). Substitute outdoors-v12 on web so the
-  // Playwright smoke test surface still renders. Real theme (day/dusk/night)
-  // will not show on web — this is a documented compromise until we upgrade
-  // mapbox-gl to v3.x.
+  const standardLightPreset = React.Children.toArray(children).reduce<string | null>((preset, child) => {
+    if (preset || !React.isValidElement(child)) return preset;
+    const candidate = (child.props as any)?.config?.lightPreset;
+    return candidate === 'day' || candidate === 'dusk' || candidate === 'night'
+      ? candidate
+      : null;
+  }, null);
+  // GL JS v2 cannot consume Standard imports. Keep Web on genuine supported
+  // Mapbox/vector styles while preserving the app's actual three-state
+  // contract: outdoors for Day, the packaged Mapbox-vector Sunset style for
+  // Dusk, and Mapbox Navigation Night for Night. Native continues to receive
+  // Standard plus its real lightPreset unchanged.
+  const webStandardFallback = standardLightPreset === 'night'
+    ? 'mapbox://styles/mapbox/navigation-night-v1'
+    : standardLightPreset === 'dusk'
+      ? WEB_SUNSET_STYLE
+      : 'mapbox://styles/mapbox/outdoors-v12';
   const rewrittenStyleURL = (styleURL === 'mapbox://styles/mapbox/standard')
-    ? 'mapbox://styles/mapbox/outdoors-v12'
+    ? webStandardFallback
     : styleURL;
   const styleUrl = rewrittenStyleURL ?? 'mapbox://styles/mapbox/outdoors-v12';
   const localQaStyleEnabled = process.env.NODE_ENV !== 'production'
@@ -986,8 +1000,15 @@ export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ 
 });
 
 export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
+  const supportedStyle: Record<string, any> = {};
+  for (const [key, value] of Object.entries(style ?? {})) {
+    // Native Standard uses this valid v11 paint property. GL JS v2 rejects
+    // it, so omit it only at the Web adapter boundary.
+    if (key === 'circleEmissiveStrength') continue;
+    supportedStyle[key] = value;
+  }
   const filterProps = filter ? { filter: filter as any } : {};
-  return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(style) as any} />;
+  return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(supportedStyle) as any} />;
 }
 
 export function SymbolLayer({ id, style, __sourceId, filter }: LayerProps) {
@@ -1106,6 +1127,46 @@ export function MarkerView({ coordinate, children }: MarkerViewProps) {
 // mapboxAdapter.ts 里的 sprite/circle 是否 web-supported。
 const NoopComponent = () => null;
 
+function resolveWebImageUri(source: unknown): string | null {
+  if (typeof source === 'string') return source;
+  if (source && typeof source === 'object' && typeof (source as any).uri === 'string') {
+    return (source as any).uri;
+  }
+  return ReactNativeImage.resolveAssetSource(source as any)?.uri ?? null;
+}
+
+function WebImages({ images = {} }: { images?: Record<string, unknown>; children?: React.ReactNode }) {
+  const mapCtx = React.useContext(MapInstanceContext);
+  const entries = Object.entries(images)
+    .map(([name, source]) => [name, resolveWebImageUri(source)] as const)
+    .filter((entry): entry is readonly [string, string] => Boolean(entry[1]));
+  const signature = entries.map(([name, uri]) => `${name}:${uri}`).join('|');
+  useEffect(() => {
+    const map = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+    if (!map || entries.length === 0) return undefined;
+    let disposed = false;
+    const register = () => {
+      for (const [name, uri] of entries) {
+        if (map.hasImage?.(name)) continue;
+        map.loadImage?.(uri, (error: unknown, image: unknown) => {
+          if (disposed || error || !image || map.hasImage?.(name)) return;
+          try { map.addImage(name, image); } catch { /* style replaced mid-load */ }
+        });
+      }
+    };
+    map.on?.('style.load', register);
+    if (map.isStyleLoaded?.()) register();
+    return () => {
+      disposed = true;
+      map.off?.('style.load', register);
+    };
+    // The normalized signature is the image authority; callers commonly
+    // create a new object literal every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapCtx, signature]);
+  return null;
+}
+
 interface WebStyleImportProps {
   config?: Record<string, string | boolean>;
 }
@@ -1209,7 +1270,7 @@ export function makeWebMapboxAdapter() {
     ShapeSource,
     CircleLayer,
     SymbolLayer,
-    Images: NoopComponent,
+    Images: WebImages,
     Image: NoopComponent,
     MarkerView,
     // Native Mapbox v11 owns real imports. The v2 Web fallback applies the

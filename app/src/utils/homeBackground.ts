@@ -557,6 +557,18 @@ export function getHomeBackground(
         : LEGACY_SUNSET_COMPAT_UI_PALETTE
     : variant === 'sunny-night'
       ? SUNNY_NIGHT_UI_PALETTE
+    : variant === 'cloudy-day'
+      ? CLOUDY_REVIEW_DAY_UI_PALETTE
+    : variant === 'cloudy-sunset'
+      ? CLOUDY_REVIEW_SUNSET_UI_PALETTE
+    : variant === 'rain-day'
+      ? RAIN_REVIEW_DAY_UI_PALETTE
+    : variant === 'rain-sunset'
+      ? RAIN_REVIEW_SUNSET_UI_PALETTE
+    : variant === 'snow-day'
+      ? SNOW_REVIEW_DAY_UI_PALETTE
+    : variant === 'snow-sunset'
+      ? SNOW_REVIEW_SUNSET_UI_PALETTE
     : variant.endsWith('-night')
       ? NIGHT_UI_PALETTE
       : DAY_UI_PALETTE;

@@ -61,7 +61,7 @@ const foundRevisions = [
 ];
 
 const group = {
-  id: 'o88-encounter-group',
+  id: '31',
   group_token: 'o88-encounter-token',
   merge_started_at: new Date(now - 2_000).toISOString(),
   merge_until: new Date(now + 60_000).toISOString(),
@@ -72,6 +72,8 @@ const group = {
   unannounced_updated_event_count: 0,
   event_count: 1,
   updated_event_count: 0,
+  friends_cairn_count: 0,
+  public_cairn_count: 1,
 };
 
 const browser = await chromium.launch({
@@ -197,7 +199,11 @@ await page.route('**/api/**', async route => {
   if (pathname === '/api/cairn-memory/presentation/pending') {
     return respond(route, { groups: [group], unread_count: 1, acquired_cairn_count: 1, withdrawn_group_ids: [] });
   }
-  if (pathname === '/api/cairn-memory/presentation/o88-encounter-group/announced') return respond(route, { announced: true });
+  if (pathname === '/api/cairn-memory/presentation/31/items') return respond(route, {
+    presentation_group_id: '31', marker_ids: ['900'],
+    items: [{ marker_id: '900', revision_id: '902', event_id: '77' }], single_marker_id: '900',
+  });
+  if (pathname === '/api/cairn-memory/presentation/31/announced') return respond(route, { announced: true });
   if (/^\/api\/cairn-memory\/revisions\/\d+\/read$/.test(pathname)) return respond(route, { read: true });
   if (/^\/api\/cairn-memory\/revisions\/\d+\/thanks$/.test(pathname)) return respond(route, { thanked: true });
   if (/^\/api\/cairn-memory\/revisions\/\d+\/cases$/.test(pathname)) return respond(route, { reported: true });
@@ -336,8 +342,11 @@ await page.getByTestId('cairn-edit-open').click();
 await page.getByTestId('cairn-edit-sheet').waitFor({ state: 'visible' });
 await settle(550);
 await capture('06-day-owned-edit-new-version', { route: 'MarkerDetail edit sheet', theme: 'day', fixture: 'isolated QA' });
-await page.getByLabel('Close').last().click();
-await settle();
+await page.getByRole('textbox', { name: 'Cairn note' }).fill('The rain has passed; this quieter version stays with the same place.');
+await page.getByTestId('cairn-edit-save').click();
+await page.getByTestId('cairn-edit-sheet').waitFor({ state: 'hidden', timeout: 20_000 });
+await page.getByText('The rain has passed; this quieter version stays with the same place.', { exact: true }).waitFor({ state: 'visible' });
+await capture('06b-day-owned-edit-saved', { route: 'MarkerDetail', theme: 'day', fixture: 'isolated QA', interaction: 'saved new Public revision' });
 await page.getByTestId('cairn-delete-open').click();
 await page.getByTestId('cairn-delete-confirmation').waitFor({ state: 'visible' });
 await settle(550);
@@ -363,12 +372,15 @@ await page.getByTestId('found-cairn-row-900').click();
 await routeName('AcquiredCairnDetail');
 await page.getByTestId('acquired-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
 await capture('10-day-found-detail-latest', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA' });
-const previous = page.getByText('Previous version', { exact: true });
+const previous = page.getByText('Earlier', { exact: true });
 if (await previous.isVisible().catch(() => false)) {
   await previous.click();
   await settle();
   await capture('11-day-found-detail-history', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA' });
 }
+await page.getByLabel('Archive from default view').click();
+await routeName('AllCairns');
+await capture('11b-day-found-archive-complete', { route: 'AllCairns', theme: 'day', fixture: 'isolated QA', interaction: 'Archive returned to Library' });
 
 await navigate('Memory');
 const gotIt = page.getByText('Got it', { exact: true }).last();
@@ -381,10 +393,11 @@ await page.evaluate(() => {
   stores.useCairnPresentationStore.setState({
     viewerId: '100',
     pendingGroups: [{
-      id: 'o88-encounter-group', token: 'o88-encounter-token',
+      id: '31', token: 'o88-encounter-token',
       mergeStartedAt: Date.now() - 2_000, mergeUntil: Date.now() + 60_000,
       cairnCount: 1, singleMarkerId: '900', eventThroughId: 'o88-event-1',
       unannouncedEventCount: 1, unannouncedUpdatedEventCount: 0, eventCount: 1, updatedEventCount: 0,
+      sourceAudience: 'public',
     }],
     activeGroup: null,
     activeGroupMembers: [],
@@ -420,6 +433,39 @@ try {
 }
 await settle(850);
 await capture('12-day-memory-encounter', { route: 'Memory', theme: 'day', fixture: 'isolated QA', interaction: 'authoritative presentation group + live Mapbox/Fog' });
+await page.getByText('Later', { exact: true }).click();
+await page.getByTestId('walking-discovery-group-o88-encounter-token').waitFor({ state: 'hidden' });
+await capture('12b-day-memory-encounter-later', { route: 'Memory', theme: 'day', fixture: 'isolated QA', interaction: 'Later releases without reading' });
+await page.evaluate(() => {
+  const stores = globalThis.__cairnStores;
+  const groupFixture = {
+    id: '31', token: 'o88-encounter-token-open',
+    mergeStartedAt: Date.now() - 2_000, mergeUntil: Date.now() + 60_000,
+    cairnCount: 1, singleMarkerId: '900', eventThroughId: 'o88-event-2',
+    unannouncedEventCount: 1, unannouncedUpdatedEventCount: 0,
+    eventCount: 1, updatedEventCount: 0, sourceAudience: 'public',
+  };
+  stores.useCairnPresentationStore.setState({
+    pendingGroups: [groupFixture], activeGroup: null, activeGroupMembers: [], activeSurface: null,
+  });
+});
+await page.getByTestId('walking-discovery-group-o88-encounter-token-open').waitFor({ state: 'visible', timeout: 20_000 });
+await page.getByLabel('Open found Cairn').click();
+await routeName('AcquiredCairnDetail');
+try {
+  await page.waitForFunction(() => {
+  const route = globalThis.__cairnStores.navigationRef.getCurrentRoute();
+    return route?.name === 'AcquiredCairnDetail'
+      && String(route?.params?.markerId ?? '') === '900'
+      && String(route?.params?.revisionId ?? '') === '902';
+  }, null, { timeout: 20_000 });
+} catch (error) {
+  const route = await page.evaluate(() => globalThis.__cairnStores.navigationRef.getCurrentRoute());
+  fs.writeFileSync(path.join(outputDir, 'ENCOUNTER_OPEN_DIAGNOSTIC.json'), `${JSON.stringify({ route, requests }, null, 2)}\n`);
+  await page.screenshot({ path: path.join(outputDir, 'ENCOUNTER_OPEN_DIAGNOSTIC.png') });
+  throw error;
+}
+await capture('12c-day-memory-encounter-open-exact-revision', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA', interaction: 'Open resolved group 31 to revision 902' });
 
 await page.setViewportSize({ width: 360, height: 780 });
 await primeActivityPlant();

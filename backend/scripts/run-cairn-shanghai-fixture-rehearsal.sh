@@ -97,6 +97,8 @@ const cleanupScope = [
   'cairn_qa_fixtures:batch_id', 'markers:approved_fixture_marker_ids',
   'cairn_review_cases:approved_fixture_marker_ids', 'cairn_collections:approved_fixture_marker_ids',
   'marker_audience_epochs:approved_fixture_marker_ids',
+  'cairn_acquisition_events:approved_fixture_marker_ids',
+  'cairn_acquisitions:approved_fixture_marker_ids', 'cairn_revisions:approved_fixture_marker_ids',
   'notification_log:orphaned_fixture_only_presentation_groups',
   'cairn_presentation_groups:orphaned_fixture_only_groups',
 ];
@@ -123,6 +125,11 @@ run_tool apply --manifest="$MANIFEST" --environment=isolated \
   --field-review="$FIELD_REVIEW" --confirm-batch=o88-shanghai-encounter-20261020 \
   --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
   --confirm-target="$TARGET" > "$OUTPUT_DIR/04-apply.json"
+run_tool apply --manifest="$MANIFEST" --environment=isolated \
+  --reader-ids=9101,9102 --public-author-ids=9201,9202 --friend-author-ids=9301,9302 \
+  --field-review="$FIELD_REVIEW" --confirm-batch=o88-shanghai-encounter-20261020 \
+  --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
+  --confirm-target="$TARGET" > "$OUTPUT_DIR/04b-exact-reapply.json"
 run_tool verify --manifest="$MANIFEST" --environment=isolated \
   --target-allowlist="$TARGET_ALLOWLIST" \
   --confirm-target="$TARGET" > "$OUTPUT_DIR/05-verify-active.json"
@@ -147,10 +154,69 @@ run_tool advance-revision --manifest="$MANIFEST" --environment=isolated \
   --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
   --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
   > "$OUTPUT_DIR/08-advance-revision.json"
+MIXED_PROBE_JSON="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+  "USE ${DB_NAME};
+   INSERT INTO markers (user_id,type,text,lat,lng,permission,created_at,updated_at)
+     VALUES (9301,'free','Ordinary non-fixture Cairn',31.2148,121.4992,'group',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3));
+   SET @ordinary_marker=LAST_INSERT_ID();
+   INSERT INTO cairn_revisions
+     (marker_id,owner_id,content_revision,content_type,content_text,lat,lng,approximate,content_sha256,
+      source_audience,audience_epoch,identity_policy,friend_author_name_snapshot)
+     VALUES (@ordinary_marker,9301,1,'free','Ordinary non-fixture Cairn',31.2148,121.4992,0,
+       SHA2('ordinary-non-fixture-cairn',256),'friends',1,'friends_acquired','O88 Friend Author A');
+   SET @ordinary_revision=LAST_INSERT_ID();
+   SET @fixture_mixed_marker=(SELECT marker_id FROM cairn_qa_fixtures WHERE fixture_key='O88-JK-P01');
+   SET @fixture_only_marker=(SELECT marker_id FROM cairn_qa_fixtures WHERE fixture_key='O88-JK-P02');
+   SET @fixture_mixed_revision=(SELECT id FROM cairn_revisions WHERE marker_id=@fixture_mixed_marker ORDER BY content_revision DESC,id DESC LIMIT 1);
+   SET @fixture_only_revision=(SELECT id FROM cairn_revisions WHERE marker_id=@fixture_only_marker ORDER BY content_revision DESC,id DESC LIMIT 1);
+   INSERT INTO cairn_acquisitions
+     (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,evidence_kind,evidence_id,evidence_observed_at)
+     VALUES (9101,@ordinary_marker,@ordinary_revision,1,'friends','presence_witness',880001,UTC_TIMESTAMP(3));
+   SET @ordinary_acquisition=LAST_INSERT_ID();
+   INSERT INTO cairn_acquisitions
+     (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,evidence_kind,evidence_id,evidence_observed_at)
+     VALUES (9101,@fixture_mixed_marker,@fixture_mixed_revision,2,'public','presence_witness',880002,UTC_TIMESTAMP(3));
+   SET @fixture_mixed_acquisition=LAST_INSERT_ID();
+   INSERT INTO cairn_acquisitions
+     (viewer_id,marker_id,cairn_revision_id,content_revision,acquired_via,evidence_kind,evidence_id,evidence_observed_at)
+     VALUES (9101,@fixture_only_marker,@fixture_only_revision,1,'public','presence_witness',880003,UTC_TIMESTAMP(3));
+   SET @fixture_only_acquisition=LAST_INSERT_ID();
+   INSERT INTO cairn_presentation_groups
+     (viewer_id,group_token,merge_started_at,merge_until,announced_at)
+     VALUES (9101,'88888888-8888-4888-8888-888888888881',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3));
+   SET @mixed_group=LAST_INSERT_ID();
+   INSERT INTO cairn_acquisition_events (viewer_id,acquisition_id,presentation_group_id,announced_at)
+     VALUES (9101,@ordinary_acquisition,@mixed_group,UTC_TIMESTAMP(3)),
+            (9101,@fixture_mixed_acquisition,@mixed_group,UTC_TIMESTAMP(3));
+   INSERT INTO notification_log (recipient_user_id,actor_user_id,kind,related_id,title,body,status,dedupe_key)
+     VALUES (9101,9301,'memory_hit',@mixed_group,'Mixed probe','Disposable rehearsal','queued','o88-mixed-probe');
+   INSERT INTO cairn_presentation_groups
+     (viewer_id,group_token,merge_started_at,merge_until,announced_at)
+     VALUES (9101,'88888888-8888-4888-8888-888888888882',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3));
+   SET @fixture_group=LAST_INSERT_ID();
+   INSERT INTO cairn_acquisition_events (viewer_id,acquisition_id,presentation_group_id,announced_at)
+     VALUES (9101,@fixture_only_acquisition,@fixture_group,UTC_TIMESTAMP(3));
+   INSERT INTO notification_log (recipient_user_id,actor_user_id,kind,related_id,title,body,status,dedupe_key)
+     VALUES (9101,9301,'memory_hit',@fixture_group,'Fixture probe','Disposable rehearsal','queued','o88-fixture-probe');
+   SELECT JSON_OBJECT('ordinaryMarkerId',@ordinary_marker,'mixedGroupId',@mixed_group,'fixtureOnlyGroupId',@fixture_group);" 2>/dev/null)"
+printf '%s\n' "$MIXED_PROBE_JSON" > "$OUTPUT_DIR/08b-mixed-groups-created.json"
+FIXTURE_MARKER_IDS="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+  "SELECT GROUP_CONCAT(marker_id ORDER BY marker_id) FROM ${DB_NAME}.cairn_qa_fixtures WHERE batch_id='o88-shanghai-encounter-20261020'")"
 run_tool cleanup --manifest="$MANIFEST" --environment=isolated \
   --field-review="$FIELD_REVIEW" --target-allowlist="$TARGET_ALLOWLIST" --owner-approval="$OWNER_APPROVAL" \
   --confirm-batch=o88-shanghai-encounter-20261020 --confirm-target="$TARGET" \
   --confirm-cleanup=o88-shanghai-encounter-20261020 > "$OUTPUT_DIR/09-cleanup.json"
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse \
+  "USE ${DB_NAME}; SELECT JSON_OBJECT(
+    'mixedGroup', (SELECT COUNT(*) FROM cairn_presentation_groups WHERE group_token='88888888-8888-4888-8888-888888888881'),
+    'mixedEvents', (SELECT COUNT(*) FROM cairn_acquisition_events event JOIN cairn_presentation_groups presentation ON presentation.id=event.presentation_group_id WHERE presentation.group_token='88888888-8888-4888-8888-888888888881'),
+    'mixedNotification', (SELECT COUNT(*) FROM notification_log WHERE dedupe_key='o88-mixed-probe'),
+    'fixtureOnlyGroup', (SELECT COUNT(*) FROM cairn_presentation_groups WHERE group_token='88888888-8888-4888-8888-888888888882'),
+    'fixtureOnlyNotification', (SELECT COUNT(*) FROM notification_log WHERE dedupe_key='o88-fixture-probe'),
+    'ordinaryMarkers', (SELECT COUNT(*) FROM markers WHERE text='Ordinary non-fixture Cairn'),
+    'fixtureAcquisitions', (SELECT COUNT(*) FROM cairn_acquisitions WHERE marker_id IN (${FIXTURE_MARKER_IDS})),
+    'fixtureRevisions', (SELECT COUNT(*) FROM cairn_revisions WHERE marker_id IN (${FIXTURE_MARKER_IDS}))
+  );" 2>/dev/null > "$OUTPUT_DIR/09b-cleanup-isolation.json"
 run_tool verify --manifest="$MANIFEST" --environment=isolated \
   --target-allowlist="$TARGET_ALLOWLIST" \
   --confirm-target="$TARGET" > "$OUTPUT_DIR/10-verify-cleaned.json"
@@ -164,10 +230,12 @@ const plan = read('01-plan.json');
 const inspected = read('02-inspect-target.json');
 const approval = read('03-approval-plan.json');
 const applied = read('04-apply.json');
+const reapplied = read('04b-exact-reapply.json');
 const active = read('05-verify-active.json');
 const recovered = read('07-partial-recovery.json');
 const advanced = read('08-advance-revision.json');
 const cleanup = read('09-cleanup.json');
+const cleanupIsolation = read('09b-cleanup-isolation.json');
 const cleaned = read('10-verify-cleaned.json');
 const activeLive = active.counts.reduce((sum, row) => sum + Number(row.live_markers || 0), 0);
 const cleanedLive = cleaned.counts.reduce((sum, row) => sum + Number(row.live_markers || 0), 0);
@@ -176,11 +244,17 @@ const checks = {
   actual_target_inspected_read_only: inspected.writePerformed === false && Boolean(inspected.serverUuid),
   approval_plan_read_only: approval.writePerformed === false && Boolean(approval.owner_approval),
   applied_exactly_60: applied.applied === true && applied.rows === 60,
+  exact_reapply_is_idempotent: reapplied.applied === true && reapplied.rows === 60,
   active_manifest_and_rows: active.exactManifest === true && active.batch?.state === 'active' && activeLive === 60,
   changed_cohort_rejected: fs.readFileSync(path.join(dir, '06-cohort-expansion-rejected.txt'), 'utf8').includes('do not match'),
   exact_partial_recovery: recovered.applied === true && recovered.rows === 60,
   advanced_exactly_2: advanced.advanced?.length === 2,
   cleanup_exactly_60: cleanup.deletedMarkers === 60,
+  mixed_group_cleanup_isolated: cleanupIsolation.mixedGroup === 1
+    && cleanupIsolation.mixedEvents === 1 && cleanupIsolation.mixedNotification === 1
+    && cleanupIsolation.fixtureOnlyGroup === 0 && cleanupIsolation.fixtureOnlyNotification === 0
+    && cleanupIsolation.ordinaryMarkers === 1 && cleanupIsolation.fixtureAcquisitions === 0
+    && cleanupIsolation.fixtureRevisions === 0,
   cleaned_has_no_live_markers: cleaned.batch?.state === 'cleaned' && cleanedLive === 0,
 };
 const summary = { schema: 'cairnnz.o88-shanghai-rehearsal.v1', checks, passed: Object.values(checks).every(Boolean) };

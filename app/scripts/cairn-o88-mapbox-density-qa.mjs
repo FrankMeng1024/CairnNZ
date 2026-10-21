@@ -93,7 +93,7 @@ await context.addInitScript(() => {
   localStorage.setItem('cairn_onboarding_v1_done_100', 'true');
 });
 const page = await context.newPage();
-page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
+page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.stack || error.message}`));
 page.on('console', message => {
   const value = message.text();
   if (message.type() === 'error' && !value.includes('Failed to load resource')) {
@@ -307,7 +307,19 @@ const setTheme = async theme => {
     stores.useSettingsStore.getState().saveAll({ appearance: next, debugMode: false, mapLayer: 'outdoors' });
     stores.useWeatherStore.getState().setDayNightOverride(next);
   }, theme);
-  await page.waitForTimeout(500);
+  const expectedStyleName = theme === 'night'
+    ? 'Mapbox Navigation Night'
+    : theme === 'sunset'
+      ? 'Cairn Sunset 2D'
+      : 'Mapbox Outdoors';
+  await page.waitForFunction(expected => {
+    const map = globalThis.__cairnMap;
+    try {
+      return map?.getStyle?.()?.name === expected && Boolean(map?.isStyleLoaded?.());
+    } catch {
+      return false;
+    }
+  }, expectedStyleName, { timeout: 30_000 });
 };
 const settleCamera = async ({ zoom, bearing }) => {
   await page.evaluate(({ mapCenter, zoomValue, bearingValue }) => {
@@ -349,9 +361,13 @@ const mapState = () => page.evaluate(() => {
 });
 
 for (const [scenario, rows] of Object.entries(scenarios)) {
-  await setScenario(scenario);
   for (const theme of ['day', 'sunset', 'night']) {
     await setTheme(theme);
+    // Web v2 changes between three complete supported styles. Reconcile the
+    // retained source after each style boundary so the evidence proves the
+    // current theme's custom layers, not a source left over from the prior
+    // style instance.
+    await setScenario(scenario);
     for (const view of [
       { name: 'near', zoom: 16.4, bearing: 0 },
       { name: 'context-bearing', zoom: 13.7, bearing: 35 },
@@ -412,12 +428,16 @@ await page.getByTestId('memory-acquired-cairn-group').waitFor({ state: 'hidden',
 // content sheet. Choose the first actual rendered cluster, not a synthetic hit.
 await setScenario('distributed60');
 await settleCamera({ zoom: 11.8, bearing: 22 });
-// The fixture also contains an owned Cairn at the walker's location. At this
-// zoom the distributed cluster centroid is the same coordinate, so a direct
-// click correctly reaches that foreground native button rather than Mapbox's
-// canvas. Reproduce a normal review gesture: pan the map far enough that the
-// retained cluster is visibly clear of the location/owned-Cairn controls,
-// while keeping it in the viewport, then click the real rendered cluster.
+// This interaction proves acquired-cluster behavior, not DOM view-annotation
+// stacking. Remove the separate owned-Cairn fixture so the real Mapbox canvas
+// receives the deliberate tap at the retained cluster's projected point.
+await page.evaluate(() => {
+  globalThis.__cairnStores.useMarkerStore.setState({ markers: [] });
+});
+await page.waitForTimeout(250);
+// Reproduce a normal review gesture: pan the map far enough that the retained
+// cluster is visibly clear of the location controls while keeping it in the
+// viewport, then click the real rendered cluster.
 await page.evaluate(({ lng, lat }) => {
   globalThis.__cairnMap.jumpTo({ center: [lng - 0.02, lat], zoom: 11.8, bearing: 22 });
 }, center);

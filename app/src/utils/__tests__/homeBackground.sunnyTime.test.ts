@@ -102,6 +102,17 @@ describe('Sunny three-time background mapping', () => {
     expect(resolveVariant('cloudy', Date.now(), 'sunset')).toBe('cloudy-sunset');
   });
 
+  it.each(['rain', 'snow'] as const)(
+    'uses dark readable Day copy for the bright %s production scene',
+    weather => {
+      const production = getHomeBackground(weather, Date.now(), 'day', 'home');
+      expect(production.useDarkText).toBe(true);
+      expect(production.textColor).toMatch(/^#(?:2C3338|303536)$/);
+      expect(production.textColorMuted).toMatch(/^rgba\((?:44,51,56|48,53,54),0\.82\)$/);
+      expect(production.tabBarBackgroundColor).not.toBe('rgba(238,242,236,0.62)');
+    },
+  );
+
   it.each(['day', 'sunset', 'night'] as const)(
     'keeps experimental Cloudy %s isolated on the Dev review mapping',
     timeOfDay => {

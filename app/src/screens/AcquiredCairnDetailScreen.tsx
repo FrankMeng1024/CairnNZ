@@ -320,24 +320,41 @@ export function AcquiredCairnDetailScreen() {
               </TouchableOpacity>
             </View>
           ) : null}
-          <View style={styles.collectionActions}>
-            <PrimaryButton
-              label={collectionAction === 'archive' ? 'Archiving…' : 'Archive from default view'}
-              variant="secondary"
-              disabled={collectionAction !== null}
-              loading={collectionAction === 'archive'}
-              onPress={() => void updateCollection('archive')}
-            />
-            <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Archive keeps every acquired version and can be restored here. Remove hides the collection and blocks future automatic encounters with this Cairn; there is no in-app restore after removal yet.</Text>
-            <TouchableOpacity
-              onPress={confirmRemove}
-              disabled={collectionAction !== null}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'remove' }}
-              style={[styles.removeAction, collectionAction !== null && styles.disabled]}
-            >
-              <Text style={[styles.removeText, { color: theme.destructive }]}>{collectionAction === 'remove' ? 'Removing…' : 'Remove from my Memory'}</Text>
-            </TouchableOpacity>
+          <View style={[styles.collectionActions, { borderTopColor: theme.borderSubtle }]}>
+            <Text style={[styles.collectionHeading, { color: theme.foreground }]}>Manage this collection</Text>
+            <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Archive hides the collection from your default view; every page stays and can be restored. Remove hides all pages and stops future encounters; there is no in-app restore yet.</Text>
+            <View style={styles.collectionActionRow}>
+              <TouchableOpacity
+                onPress={() => void updateCollection('archive')}
+                disabled={collectionAction !== null}
+                accessibilityRole="button"
+                accessibilityLabel="Archive from default view"
+                accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'archive' }}
+                style={[
+                  styles.collectionActionButton,
+                  { backgroundColor: theme.secondaryAction, borderColor: theme.borderStrong },
+                  collectionAction !== null && styles.disabled,
+                ]}
+              >
+                {collectionAction === 'archive' ? <ActivityIndicator size="small" color={theme.primary} /> : <Icon name="Layers" size={16} color={theme.icon} />}
+                <Text style={[styles.collectionActionText, { color: theme.foreground }]}>{collectionAction === 'archive' ? 'Archiving…' : 'Archive'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmRemove}
+                disabled={collectionAction !== null}
+                accessibilityRole="button"
+                accessibilityLabel="Remove from my Memory"
+                accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'remove' }}
+                style={[
+                  styles.collectionActionButton,
+                  { backgroundColor: theme.destructiveSurface, borderColor: theme.destructive },
+                  collectionAction !== null && styles.disabled,
+                ]}
+              >
+                {collectionAction === 'remove' ? <ActivityIndicator size="small" color={theme.destructive} /> : <Icon name="Trash2" size={16} color={theme.destructive} />}
+                <Text style={[styles.collectionActionText, { color: theme.destructive }]}>{collectionAction === 'remove' ? 'Removing…' : 'Remove'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           {actionError ? (
             <View style={[styles.actionError, { borderColor: theme.destructive }]}>
@@ -376,9 +393,11 @@ const styles = StyleSheet.create({
   pageButton: { minHeight: 44, minWidth: 72, alignItems: 'center', justifyContent: 'center' },
   pageButtonText: { fontSize: FontSize.small, fontWeight: '700' },
   disabled: { opacity: 0.35 },
-  collectionActions: { gap: Spacing.md, marginTop: Spacing.md },
+  collectionActions: { gap: Spacing.sm, marginTop: Spacing.lg, paddingTop: Spacing.lg, borderTopWidth: StyleSheet.hairlineWidth },
+  collectionHeading: { fontSize: FontSize.caption, lineHeight: 18, fontWeight: '700' },
   collectionHelp: { fontSize: FontSize.small, lineHeight: 17 },
-  removeAction: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  removeText: { fontSize: FontSize.small, fontWeight: '700' },
+  collectionActionRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs },
+  collectionActionButton: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs, borderWidth: 1, borderRadius: 12 },
+  collectionActionText: { fontSize: FontSize.small, fontWeight: '700' },
   actionError: { borderLeftWidth: 3, paddingLeft: Spacing.sm, paddingVertical: Spacing.xs },
 });

@@ -29,7 +29,7 @@ jest.mock('../../../hooks/useAppIsActive', () => ({
 }));
 
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PublicWalkingDiscoveryCard } from '../../public/components/PublicWalkingDiscoveryCard';
 import { __cairnPresentationTest, useCairnPresentationStore } from '../cairnPresentationStore';
 
@@ -122,5 +122,32 @@ describe('foreground Cairn presentation component', () => {
       activeGroupMembers: [{ ...group, sourceAudience: 'mixed' }],
     }));
     expect(view.getByText('FRIENDS + PUBLIC · ENCOUNTERED HERE')).toBeTruthy();
+  });
+
+  test('resolves an exact acquired revision before opening even a single-Cairn group', async () => {
+    const onOpen = jest.fn();
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/presentation/31/items')) return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [{ marker_id: '41', revision_id: '902', event_id: '77' }],
+        }),
+      };
+      if (url.includes('/announced')) return { ok: true, status: 200, json: async () => ({ announced: true }) };
+      return { ok: true, status: 200, json: async () => ({ groups: [] }) };
+    });
+    useCairnPresentationStore.setState({
+      pendingGroups: [], activeGroup: group, activeGroupMembers: [group], activeSurface: 'memory',
+    });
+    const view = render(<PublicWalkingDiscoveryCard surface="memory" safeTop={0} onOpen={onOpen} />);
+
+    fireEvent.press(view.getByLabelText('Open found Cairn'));
+
+    await waitFor(() => expect(onOpen).toHaveBeenCalledWith('41', undefined, { 41: '902' }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/cairn-memory/presentation/31/items',
+      expect.objectContaining({ expectedUserId: 'viewer-a' }),
+    );
   });
 });

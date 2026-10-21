@@ -40,7 +40,7 @@ export function CairnDeleteDialog({
           style={styles.action}
         />
         <PrimaryButton
-          label={hiding ? 'Hide Cairn' : 'Withdraw and delete'}
+          label={hiding ? 'Hide Cairn' : 'Withdraw & delete'}
           variant="destructive"
           onPress={onConfirm}
           loading={busy}

@@ -175,6 +175,7 @@ apply_sql_file "$BACKEND_DIR/src/migrations/052_cairn_placement_provenance.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/053_cairn_qa_fixture_cohorts.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/054_memory_hit_push_explicit_opt_in.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/055_notification_delivery_outbox.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/056_notification_target_receipt_reliability.sql"
 
 MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
   DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
@@ -235,7 +236,7 @@ if [ "${SKIP_API_BASELINE:-0}" != "1" ]; then
   fi
 fi
 
-if [ "$HARNESS_MODE" = "api" ]; then
+if [ "$HARNESS_MODE" = "api" ] && [ "${SKIP_MEMORY_BASELINE:-0}" != "1" ]; then
   if [ -n "${EVIDENCE_DIR:-}" ]; then
     mkdir -p "$EVIDENCE_DIR"
     node "$SCRIPT_DIR/cairn-memory-harness/api-mysql.js" | tee "$EVIDENCE_DIR/cairn-memory-result.json"

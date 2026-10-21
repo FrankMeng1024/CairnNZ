@@ -94,6 +94,7 @@ describe('semantic visual foundation', () => {
 
       expect(contrast(parseColor(theme.textPrimary), record)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(parseColor(theme.textSecondary), record)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.textMuted), page)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(parseColor(theme.textPrimary), input)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(parseColor(theme.onPrimary), parseColor(theme.primaryAction))).toBeGreaterThanOrEqual(4.5);
       expect(contrast(parseColor(theme.tabActive), selected)).toBeGreaterThanOrEqual(4.5);
@@ -102,6 +103,9 @@ describe('semantic visual foundation', () => {
       expect(contrast(parseColor(theme.inputFocusBorder), input)).toBeGreaterThanOrEqual(3);
       expect(contrast(parseColor(theme.destructive), destructiveSurface)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(parseColor(theme.disabledText), composite(parseColor(theme.disabledSurface), page))).toBeGreaterThanOrEqual(3);
+      expect(contrast(parseColor(theme.mapCairnClusterText), parseColor(theme.mapCairnFriendsClusterFill))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.mapCairnClusterText), parseColor(theme.mapCairnPublicClusterFill))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(parseColor(theme.mapCairnClusterText), parseColor(theme.mapCairnMixedClusterFill))).toBeGreaterThanOrEqual(4.5);
     }
   });
 });

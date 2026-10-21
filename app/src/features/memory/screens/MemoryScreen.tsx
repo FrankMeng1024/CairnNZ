@@ -1413,9 +1413,12 @@ export function MemoryScreen() {
         safeBottom={insets.bottom}
         bottomOffset={176}
         blocked={Boolean(showHint || acquiredGroupIds || pickModalOpen || hierarchyOpen || !memoryEntryUsable)}
-        onOpen={(markerId, markerIds) => markerId
-          ? nav.navigate('AcquiredCairnDetail', { markerId })
-          : nav.navigate('AllCairns', { initialSection: 'found', markerIds })}
+        onOpen={(markerId, markerIds, revisionIdsByMarker) => markerId
+          ? nav.navigate('AcquiredCairnDetail', {
+            markerId,
+            revisionId: revisionIdsByMarker?.[markerId],
+          })
+          : nav.navigate('AllCairns', { initialSection: 'found', markerIds, revisionIdsByMarker })}
       />
 
       {acquiredClusterError ? (

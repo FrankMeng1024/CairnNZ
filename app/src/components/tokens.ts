@@ -140,6 +140,10 @@ export interface VisualThemeTokens {
   mapFriendMemoryOpacity: number;
   mapMemoryOverlapFill: string;
   mapMemoryOverlapOpacity: number;
+  mapCairnFriendsClusterFill: string;
+  mapCairnPublicClusterFill: string;
+  mapCairnMixedClusterFill: string;
+  mapCairnClusterText: string;
   mapRouteLine: string;
   mapRouteCasing: string;
   mapRoutePending: string;
@@ -150,7 +154,7 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   mode: 'day',
   foreground: '#17372D',
   foregroundSecondary: '#4F625A',
-  muted: '#7A8982',
+  muted: '#5F7068',
   primary: '#2F684F',
   accent: '#72A34B',
   cairnPublic: '#B77743',
@@ -188,7 +192,7 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   tabInactive: '#586B63',
   textPrimary: '#17372D',
   textSecondary: '#4F625A',
-  textMuted: '#7A8982',
+  textMuted: '#5F7068',
   scenicText: '#17372D',
   scenicTextMuted: '#4F625A',
   borderSubtle: 'rgba(32,72,57,0.16)',
@@ -212,6 +216,10 @@ export const DAY_VISUAL_THEME: VisualThemeTokens = {
   mapFriendMemoryOpacity: 0.22,
   mapMemoryOverlapFill: '#245C4F',
   mapMemoryOverlapOpacity: 0.30,
+  mapCairnFriendsClusterFill: '#2F684F',
+  mapCairnPublicClusterFill: '#8B552F',
+  mapCairnMixedClusterFill: '#4F7338',
+  mapCairnClusterText: '#FFFFFF',
   mapRouteLine: '#2F684F',
   mapRouteCasing: 'rgba(248,246,239,0.92)',
   mapRoutePending: '#72A34B',
@@ -226,7 +234,7 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   mode: 'sunset',
   foreground: '#24332E',
   foregroundSecondary: '#4D5A55',
-  muted: '#52605A',
+  muted: '#4D5A55',
   primary: '#5F755F',
   accent: '#8B7C58',
   cairnPublic: '#8B6749',
@@ -264,7 +272,7 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   tabInactive: '#4E5B55',
   textPrimary: '#24332E',
   textSecondary: '#4D5A55',
-  textMuted: '#52605A',
+  textMuted: '#4D5A55',
   scenicText: '#FFF8EF',
   scenicTextMuted: 'rgba(255,248,239,0.88)',
   borderSubtle: 'rgba(71,67,61,0.20)',
@@ -288,6 +296,10 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   mapFriendMemoryOpacity: 0.23,
   mapMemoryOverlapFill: '#314F47',
   mapMemoryOverlapOpacity: 0.31,
+  mapCairnFriendsClusterFill: '#5F755F',
+  mapCairnPublicClusterFill: '#8B6749',
+  mapCairnMixedClusterFill: '#6B6247',
+  mapCairnClusterText: '#FFF9F0',
   mapRouteLine: '#675F45',
   mapRouteCasing: 'rgba(255,248,239,0.90)',
   mapRoutePending: '#8B7C58',
@@ -364,6 +376,10 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   mapFriendMemoryOpacity: 0.24,
   mapMemoryOverlapFill: '#477E6E',
   mapMemoryOverlapOpacity: 0.32,
+  mapCairnFriendsClusterFill: '#8FA68B',
+  mapCairnPublicClusterFill: '#C99468',
+  mapCairnMixedClusterFill: '#A9B792',
+  mapCairnClusterText: '#152019',
   mapRouteLine: '#B7C9AA',
   mapRouteCasing: 'rgba(18,27,38,0.92)',
   mapRoutePending: '#D0B879',

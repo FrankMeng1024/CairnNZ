@@ -18,6 +18,10 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'cairn',
+  // Cairn persists and compares timestamps with UTC_TIMESTAMP. Decode MySQL
+  // DATETIME values as UTC as well; otherwise a non-UTC Node host shifts
+  // fresh presentation windows when mysql2 turns them into JSON dates.
+  timezone: 'Z',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 500,

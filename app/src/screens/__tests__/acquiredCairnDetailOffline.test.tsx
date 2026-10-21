@@ -132,7 +132,7 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
     const screen = render(<AcquiredCairnDetailScreen />);
     await screen.findByText('Already found page');
 
-    fireEvent.press(screen.getByText('Archive from default view'));
+    fireEvent.press(screen.getByText('Archive'));
     fireEvent.press(screen.getByText('Archiving…'));
     expect(mockFetch.mock.calls.filter(call => String(call[0]).includes('/collection'))).toHaveLength(1);
     await act(async () => { resolveArchive({ ok: false, status: 503 }); });
@@ -149,7 +149,7 @@ describe('AcquiredCairnDetail offline entitlement boundary', () => {
       .mockResolvedValueOnce({ ok: false, status: 410 });
     const screen = render(<AcquiredCairnDetailScreen />);
     await screen.findByText('Already found page');
-    fireEvent.press(screen.getByText('Archive from default view'));
+    fireEvent.press(screen.getByText('Archive'));
 
     expect(await screen.findByText('This acquired Cairn is no longer available to this account.')).toBeTruthy();
     expect(mockMarkUnavailable).toHaveBeenCalledWith('owner-a', 'marker-1');

@@ -8,7 +8,7 @@ import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { CairnStoneMark, useReduceMotion } from '../../cairns/components/CairnPaper';
 import { CAIRN_MOTION, CAIRN_TERMS } from '../../cairns/cairnExperience';
 import { haptic } from '../../../services/hapticService';
-import { resolveCairnPresentationItems } from '../../cairns/cairnPresentationNavigation';
+import { resolveCairnPresentationDestinations } from '../../cairns/cairnPresentationNavigation';
 import { scheduleVisibleFrame, useAppIsActive } from '../../../hooks/useAppIsActive';
 
 const encounteredThisProcess = new Set<string>();
@@ -29,7 +29,11 @@ export function PublicWalkingDiscoveryCard({
 }: {
   surface: 'hike' | 'run' | 'memory';
   safeTop: number;
-  onOpen: (markerId: string | null, markerIds?: string[]) => void;
+  onOpen: (
+    markerId: string | null,
+    markerIds?: string[],
+    revisionIdsByMarker?: Record<string, string>,
+  ) => void;
   blocked?: boolean;
   verticalOffset?: number;
   safeBottom?: number;
@@ -167,23 +171,30 @@ export function PublicWalkingDiscoveryCard({
             disabled={opening}
             onPress={() => {
               if (opening) return;
-              if (visible.singleMarkerId) {
-                useCairnPresentationStore.getState().release(surface);
-                onOpen(visible.singleMarkerId);
-                return;
-              }
               const requestedViewer = viewerId;
               const requestedToken = visible.token;
               const groupIds = activeGroupMembers.map(member => member.id);
               setOpening(true);
               setOpenError(false);
-              void resolveCairnPresentationItems(requestedViewer, groupIds).then(markerIds => {
+              void resolveCairnPresentationDestinations(
+                requestedViewer,
+                groupIds,
+                { requireExactRevision: true },
+              ).then(destinations => {
                 const current = useCairnPresentationStore.getState();
                 if (String(useAppStore.getState().user?.id ?? '') !== requestedViewer
                   || current.activeSurface !== surface
                   || current.activeGroup?.token !== requestedToken) return;
+                const markerIds = [...new Set(destinations.map(item => item.markerId))];
+                const revisionIdsByMarker = Object.fromEntries(
+                  destinations.map(item => [item.markerId, item.revisionId]),
+                );
                 current.release(surface);
-                onOpen(null, markerIds);
+                onOpen(
+                  markerIds.length === 1 ? markerIds[0] : null,
+                  markerIds.length === 1 ? undefined : markerIds,
+                  revisionIdsByMarker,
+                );
               }).catch(() => {
                 if (String(useAppStore.getState().user?.id ?? '') === requestedViewer) setOpenError(true);
               }).finally(() => {

@@ -29,7 +29,7 @@ export function AcquiredCairnClusterLayer({
   const selection = useRef(createAcquiredCairnSelectionController()).current;
   const isFocused = useIsFocused();
   const featureCollection = useMemo(() => buildAcquiredCairnFeatureCollection(markers), [markers]);
-  const rendererGeneration = `${theme.primary}|${theme.cairnPublic}|${theme.accent}|${theme.surfaceElevated}`;
+  const rendererGeneration = `${theme.mapCairnFriendsClusterFill}|${theme.mapCairnPublicClusterFill}|${theme.mapCairnMixedClusterFill}|${theme.surfaceElevated}`;
   useEffect(() => {
     selection.invalidate();
   }, [featureCollection, isFocused, rendererGeneration, selection, viewerId]);
@@ -73,9 +73,9 @@ export function AcquiredCairnClusterLayer({
           style={{
             circleColor: [
               'case',
-              ['==', ['get', 'friends_total'], ['get', 'point_count']], theme.primary,
-              ['==', ['get', 'public_total'], ['get', 'point_count']], theme.cairnPublic,
-              theme.accent,
+              ['==', ['get', 'friends_total'], ['get', 'point_count']], theme.mapCairnFriendsClusterFill,
+              ['==', ['get', 'public_total'], ['get', 'point_count']], theme.mapCairnPublicClusterFill,
+              theme.mapCairnMixedClusterFill,
             ],
             circleRadius: ['step', ['get', 'point_count'], 18, 10, 22, 50, 27],
             circleStrokeColor: theme.surfaceElevated,
@@ -87,7 +87,7 @@ export function AcquiredCairnClusterLayer({
           filter={['has', 'point_count']}
           style={{
             textField: ['get', 'point_count_abbreviated'],
-            textColor: theme.onPrimary,
+            textColor: theme.mapCairnClusterText,
             textSize: 12,
             textAllowOverlap: true,
           }}

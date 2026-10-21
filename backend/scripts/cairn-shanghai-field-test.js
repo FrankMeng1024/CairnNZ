@@ -619,6 +619,13 @@ async function cleanup(args, context) {
           WHERE acquisition.marker_id IN (${placeholders})`, markerIds,
       );
       const groupIds = groups.map(row => Number(row.presentation_group_id));
+      await conn.execute(
+        `DELETE event FROM cairn_acquisition_events event
+          JOIN cairn_acquisitions acquisition ON acquisition.id=event.acquisition_id
+         WHERE acquisition.marker_id IN (${placeholders})`, markerIds,
+      );
+      await conn.execute(`DELETE FROM cairn_acquisitions WHERE marker_id IN (${placeholders})`, markerIds);
+      await conn.execute(`DELETE FROM cairn_revisions WHERE marker_id IN (${placeholders})`, markerIds);
       await conn.execute(`DELETE FROM cairn_review_cases WHERE marker_id IN (${placeholders})`, markerIds);
       await conn.execute(`DELETE FROM cairn_collections WHERE marker_id IN (${placeholders})`, markerIds);
       await conn.execute(`DELETE FROM marker_audience_epochs WHERE marker_id IN (${placeholders})`, markerIds);

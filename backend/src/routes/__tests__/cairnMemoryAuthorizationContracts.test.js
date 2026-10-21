@@ -8,6 +8,10 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
+test('the shared MySQL boundary decodes Cairn timestamps as UTC', () => {
+  assert.match(read('config/db.js'), /timezone:\s*['"]Z['"]/);
+});
+
 test('Friend revision eligibility starts after the trusted mutable revision frontier', () => {
   const source = read('routes/cairn-memory.js');
   const markerSource = read('routes/markers.js');
