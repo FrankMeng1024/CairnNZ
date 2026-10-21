@@ -20,7 +20,7 @@ This audit addresses the independent review’s five wall-time failures without 
 | `activityJournalProjection` | 3/3 pass | 3/3 pass | 20k max synchronous slices baseline 64/66/51 ms; candidate 50/73/13 ms; budget 120 ms. |
 | `memoryLivePresentationEvidence` | 3/3 pass | 3/3 pass | All existing per-slice and foreground-response assertions passed. |
 
-Candidate total: 9/9. Baseline total: 8/9. The retained baseline failure is intermittent on this host and is not evidence of a candidate regression. Conversely, passing these Node/Jest budgets is not proof of iPhone UI frame rate, battery, thermal behavior or concurrent native-map load.
+Candidate total: 9/9. Baseline total: 8/9. These measurements apply only to the listed `a9ff277…` candidate and `ab76e419…` baseline; they were not rerun for `3efbd6b…` or the later minimal deletion fix. The retained baseline failure is intermittent on this host and is not evidence of an `a9ff277…` regression. Conversely, passing these Node/Jest budgets is not proof of iPhone UI frame rate, battery, thermal behavior or concurrent native-map load.
 
 ## Evidence
 

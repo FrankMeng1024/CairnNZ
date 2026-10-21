@@ -14,6 +14,15 @@
 2. **进入 Owner 受控 iPhone 验收：READY。** 现有源码、Web 可执行路径、隔离后端和诊断导出已经足够支持一轮有限真机验收；这不是“手机已收到代码”，也不是 iPhone 已通过。
 3. **外部 TestFlight 验收：HOLD。** 尚缺物理 iPhone 的真实 GPS、锁屏/后台/系统挂起投递、原生定位丢失恢复、真实触控修路、长时电量/温度及目标构建交付证据。没有因此冒充原生 PASS，也没有递增 O 标记。
 
+## 3efbd6b 后独立复核要求的权威口径更正
+
+- Q05/Q08 的 `07-use-for-hike-activated.png` 停在 **Preparing your map**。它们证明 Route 引用被交给 Hike 导航入口，不证明 Hike 地图已经稳定完成渲染；稳定底图、完整选中 Route 线和引用身份仍待 Owner 真机验收。
+- Q08 最后约 228.7 m 的 bridge 是用缺口两端与中点明确构造的编辑事务。它证明结构 gap 归零、保存/重开和操作资格，不证明该线符合可步行道路/步道，也不证明真手指容易修复；原 Activity/Memory 的未知缺口必须保留。
+- 隔离测试 schema 已准备 `debug_events_v2`，但本轮没有执行 `/api/edit-diag` 远端摄取，所以不能宣称该 endpoint PASS。
+- 9/9 性能记录只属于 `a9ff277…` 的既有 campaign；不是 `3efbd6b…` 或后续最小删除修复的新测量。原生 iPhone FPS、电量、发热仍未知。
+- 全仓 `tsc` 仍为红门，归档输出为 252 行。本轮只用 changed-file/static gate 判断新增诊断；没有同环境基线对照时，不把全部错误一概称为“既有问题”。
+- Mapbox `200 / Ok` 后最终提交 `draw-manual` 只证明请求和生产判定边界被执行，不证明 provider geometry 已提交。`503` 是故意的 outage 测试，不是 Mapbox 普遍故障或未建图证据。
+
 ## 对独立复核 A–D 的逐项处置
 
 ### A. 困难 Activity → Route：源码/集成 PASS，原生触控待验
@@ -26,13 +35,13 @@
 - 首次 Q05 200 后无修改，以及 Q08 在 17.5 zoom 下被正确判为歧义的失败均保留。Q08 在更精确的 19.5 编辑视图通过；目标线段没有更换。
 - 自动化通过 Web QA 的 `submitStroke` 边界并检查真实生产编辑器画面；没有证明 iPhone 手指落点、缩放和撤销手感。
 
-### B. 失效契约与性能：PASS（仅当前机器/测试预算范围）
+### B. 失效契约与性能：历史 `a9ff277…` PASS（仅当时机器/测试预算范围）
 
 - 删除的是旧测试假设，不是幂等保护：`cairnCommitSingleFlight.test.ts` 现验证 Run → 完整 Plant 的当前合同、精确 Activity owner 身份和无直接空白提交。
 - 同一台 Intel i5 / 8 GB 机器、串行、Jest `--no-cache`，按奇偶轮换顺序对 `ab76e419…` 与 `a9ff277…` 做 3 组测试 × 3 轮，共 18 次固定运行。没有改预算、没有选择性重跑。
 - 候选 9/9 运行通过；基线 8/9。唯一失败是基线第二轮 `revision03MemoryScale` 的 `union_group` 切片 277 ms，超过既有 150 ms；基线另两轮同一最大切片为 53/56 ms，候选三轮为 73/28/55 ms。
 - `activityJournalProjection` 的 20k 投影最大同步切片：基线 64/66/51 ms，候选 50/73/13 ms，均小于 120 ms；`memoryLivePresentationEvidence` 两侧三轮均通过。
-- 这说明上一包的五项失败没有形成候选回归证据；仍不能外推成真机帧率、功耗或热状态 PASS。原始 Jest JSON、stdout/stderr、wall/user/sys/RSS 和基线失败全部入包。
+- 这说明上一包的五项失败没有形成 `a9ff277…` 回归证据；没有在 `3efbd6b…` 或后续最小修复上重新测量，且不能外推成真机帧率、功耗或热状态 PASS。原始 Jest JSON、stdout/stderr、wall/user/sys/RSS 和基线失败全部入包。
 
 ### C. Start → Finish → WAL → 后端 ACK：PASS（隔离真实后端 + 实际 Web recorder）
 
@@ -60,6 +69,7 @@
 - `verify:full`：客户端 2362/2367、服务端 155/155、静态 46/46，总计 2563/2568；0 failed，5 个条件 skip。skip 为 1 个需 `CAIRN_FIELD03_FIXTURE` 的外部 fixture、3 个需显式 token 的 legacy live Mapbox 集成、1 个需显式导出的 fresh-process diagnostic。真实 Q05/Q08 canary 与已接受的 18 replay 分别覆盖本轮相关边界，但 skip 仍如实列出。
 - 第一次在 detached worktree 执行 CORE 因没有挂载 backend `node_modules`，三个 suite 都是 `Cannot find module 'joi'`；补上相同锁文件依赖后同一门 637/637。首次日志保留为环境失败，不计产品 PASS。
 - 所有最终 evidence 绑定 `a9ff277…` / `ac23e61…`；性能 worktree 唯一未跟踪项是指向已安装依赖的 `app/node_modules` symlink，不是源码变更。
+- 全仓 `tsc` 红门的 252 行输出按原样保留；没有同环境基线比较，因此本报告不把其中每一项都断言为历史遗留。后续候选必须另外给出 touched-file/static 结果。
 
 ## 保留的旧结论与收窄的宣称
 

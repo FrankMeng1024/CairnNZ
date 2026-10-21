@@ -4,9 +4,14 @@
 
 ## 前置记录
 
-在每案开始前记录：设备型号、iOS 版本、安装构建号、runtime、Home `O` 标记、定位权限（使用期间/始终）、精确位置开关、低电量模式、网络状态、开始电量和温度。使用非 Owner 生产数据的专用测试账号；不要删除唯一诊断包。
+在每案开始前记录：设备型号、iOS 版本、安装构建号、runtime、Home `O` 标记、定位权限（使用期间/始终）、精确位置开关、低电量模式、网络状态、开始电量和温度。另记录 OTA update identity、候选完整 source SHA、后端 release/schema identity，并实际核对“安装包/runtime/OTA ↔ source SHA ↔ backend”映射；不能因为本地有提交就假定手机已经运行它。使用非 Owner 生产数据的专用测试账号；不要删除唯一诊断包。
 
 在支持本提交的候选到达设备之前不要执行；本轮未发布 OTA，也未运行 EAS Build。
+
+每一个场景都必须独立执行以下两步：
+
+1. **Start 之前**，明确打开 opted-in Activity diagnostic capture，并确认选择的是本案 owner。
+2. **场景结束后立即**从 Activity Detail 导出刚完成的选中 Activity diagnostic bundle，记录 Activity ID、文件名和 SHA-256；不能等六案全部结束后再导出。保留上限是每 owner 3 个 Activity、每 Activity 8 MiB、1200-event stage ring，不能承诺更久历史。
 
 ## 六个有限场景
 
@@ -43,7 +48,8 @@
 ### 6. 真实手指修复困难 Activity 与长时观察
 
 - 从 Q05 或 Q08 类似的真实困难 Activity 进入 Create Route；近景手指 Draw 修坏段，再看全程、Save、杀进程重开。
-- 验证 Route 改变、原 Activity 与 Memory 不变；分别记录 provider 成功和不可用时的可理解反馈。不要把 503 当未建图证据。
+- 验证 Route 改变、原 Activity 与 Memory 不变；分别记录 provider 成功和不可用时的可理解反馈。不要把 503 当未建图证据，也不要把 HTTP 200 后的手动画线说成 provider geometry 已提交。
+- 点 Use for Hike 后等待 **Preparing your map** 真正结束；核对实际引用的是刚保存的 Route、底图稳定、整条选中 Route 线可见且没有图层丢失。结构 gap=0 与地理可行性分开判定：Q08 自动化的约 228.7 m bridge 只是端点/中点构造，Owner 必须另验其道路/步道合理性和真手指操作难度。
 - 累计 30–60 分钟记录电量、温度、卡顿、地图空白/图层丢失和后台 callback cadence。
 
 ## 每案必须导出的材料
@@ -56,5 +62,6 @@
 ## 判定
 
 - 六案都没有新的高严重度缺陷，且后台、GPS 恢复、ACK 清理、真实触控和长时负载都有可核对证据，才可把“Owner iPhone”门从 READY 改为 PASS。
+- 在实际证据生成前，iOS 锁屏/后台 delivery、GPS 丢失/恢复、冷进程恢复、网络离线/ACK、原生电量/热状态/FPS、Preparing 后地图稳定和真手指编辑全部仍是 **未测试**；不能制造 OS 未投递的 raw GPS。
 - 任何原生缺陷只做最小复现和定向修复；不要重新开启整套算法调参。
 - 在 Owner 接受并明确授权之前，外部 TestFlight 门保持 HOLD；不要合并 main、发布 OTA、部署后端、改版本/runtime 或运行 EAS Build。

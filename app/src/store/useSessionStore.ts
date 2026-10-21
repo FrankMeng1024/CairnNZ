@@ -14,7 +14,11 @@ import { create } from 'zustand';
 import { storage } from './storage';
 import type { Coordinate } from '../utils/geo';
 import { deleteRemoteSession, deleteRemoteSessionByClientId, renameRemoteSession } from '../services/sessionService';
-import { isActivityTombstoned, tombstoneActivity } from '../features/activity/activityRegistry';
+import {
+  getActivityRegistry,
+  isActivityTombstoned,
+  tombstoneActivity,
+} from '../features/activity/activityRegistry';
 import { crashLogger } from '../services/crashLogger';
 import { mergeHydratedSessionLists, sameActivityIdentity } from '../features/activity/sessionListMerge';
 
@@ -94,6 +98,9 @@ const sessionsKey = (userId: string) => `cairn_sessions_${userId}`;
 const corruptSessionsKey = (userId: string) => `cairn_sessions_quarantine_${userId}_${Date.now()}`;
 const trackPointsKey = (userId: string, sessionId: string) =>
   `cairn_trackpoints_${userId}_${sessionId}`;
+const validSessionIdentity = (value: unknown): value is string => (
+  typeof value === 'string' && value.trim().length > 0
+);
 
 function retainPendingAndCapHistory(sessions: TrackingSession[]): TrackingSession[] {
   let retainedServerBacked = 0;
@@ -298,13 +305,39 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   deleteSession: async (id) => {
     const userId = String(get().currentUserId ?? '');
-    const session = get().sessions.find((s) => s.id === id);
-    const clientActivityId = session?.clientActivityId ?? session?.id;
-    const remoteSessionId = session?.remoteId
+    const requestedId = validSessionIdentity(id) ? id : undefined;
+    const session = requestedId
+      ? get().sessions.find((item) => (
+        item.id === requestedId
+        || (validSessionIdentity(item.clientActivityId) && item.clientActivityId === requestedId)
+      ))
+      : undefined;
+    const targetSessionId = validSessionIdentity(session?.id) ? session.id : undefined;
+    let clientActivityId = validSessionIdentity(session?.clientActivityId)
+      ? session.clientActivityId
+      : targetSessionId;
+    let remoteSessionId = session?.remoteId
       ?? session?.serverActivityId
       ?? (session && /^\d+$/.test(session.id) ? Number(session.id) : null);
+    // A strict track-file cleanup can fail after the summary and tombstone are
+    // durable. Recover that exact deletion authority on retry without ever
+    // treating an absent/empty client identity as a shared alias.
+    if (!session && requestedId && userId && userId !== 'guest') {
+      try {
+        const registry = await getActivityRegistry(userId);
+        const numericRequestedId = /^\d+$/.test(requestedId) ? Number(requestedId) : null;
+        const retainedDelete = registry.tombstones.find((item) => (
+          item.clientActivityId === requestedId
+          || (numericRequestedId != null && item.serverActivityId === numericRequestedId)
+        ));
+        if (retainedDelete && validSessionIdentity(retainedDelete.clientActivityId)) {
+          clientActivityId = retainedDelete.clientActivityId;
+          remoteSessionId = retainedDelete.serverActivityId;
+        }
+      } catch { /* local exact-id cleanup remains safe without registry recovery */ }
+    }
     crashLogger.breadcrumb(`session:delete:start id=${id} hasRemoteId=${!!session?.remoteId}`);
-    if (session && userId !== 'guest' && clientActivityId) {
+    if (userId !== 'guest' && clientActivityId) {
       await tombstoneActivity({
         userId,
         clientActivityId,
@@ -325,17 +358,28 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     let next: TrackingSession[] = [];
     const removeRun = sessionWriteTail.then(async () => {
       const base = get().currentUserId === userId ? get().sessions : await persistedSessionsFor(userId);
-      next = base.filter((sess) => sess.id !== id && sess.clientActivityId !== clientActivityId);
-      const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
-      await storage.setItem(sessionsKey(userId), JSON.stringify(summaries), { strict: true });
-      if (get().currentUserId === userId) set({ sessions: next });
+      next = base.filter((item) => {
+        if (requestedId && item.id === requestedId) return false;
+        if (targetSessionId && item.id === targetSessionId) return false;
+        if (!clientActivityId) return true;
+        return item.id !== clientActivityId && item.clientActivityId !== clientActivityId;
+      });
+      if (next.length !== base.length) {
+        const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
+        await storage.setItem(sessionsKey(userId), JSON.stringify(summaries), { strict: true });
+        if (get().currentUserId === userId) set({ sessions: next });
+      }
     });
     sessionWriteTail = removeRun.catch(() => {});
     await removeRun;
-    await storage.removeItem(trackPointsKey(userId, id));
+    const trackSessionIds = [...new Set([requestedId, targetSessionId].filter(validSessionIdentity))];
+    for (const sessionId of trackSessionIds) {
+      await storage.removeItem(trackPointsKey(userId, sessionId), { strict: true });
+    }
     try {
       const { deleteActivityFinalArtifact } = require('../features/activity/activityFinalArtifact');
-      await deleteActivityFinalArtifact(userId, clientActivityId ?? id);
+      const artifactIdentity = clientActivityId ?? targetSessionId ?? requestedId;
+      if (artifactIdentity) await deleteActivityFinalArtifact(userId, artifactIdentity);
     } catch { /* legacy sessions may not have a Final artifact */ }
     // Mirror deletion to backend.
     //
@@ -349,12 +393,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     //      session has been uploaded. Pre-upload sessions exist only
     //      in local storage — there's no backend row to delete.
     let remoteState: 'deleted' | 'queued' = 'deleted';
-    if (session && clientActivityId && get().currentUserId === userId) {
+    if (clientActivityId && get().currentUserId === userId) {
       const cancelled = await deleteRemoteSessionByClientId(clientActivityId);
       // The immutable client UUID is safe deletion authority even when the
       // local numeric mapping conflicts with the server list. Never fall back
       // to that disputed number: it may belong to a different Activity.
-      const ok = cancelled || (!session.identityConflict && remoteSessionId != null
+      const ok = cancelled || (!!session && !session.identityConflict && remoteSessionId != null
         ? await deleteRemoteSession(remoteSessionId)
         : false);
       remoteState = ok ? 'deleted' : 'queued';
