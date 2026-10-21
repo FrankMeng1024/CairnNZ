@@ -110,6 +110,26 @@ describe('bounded durable Activity registry', () => {
     expect(registry.completed[0]).toMatchObject({ clientActivityId: id, syncState: 'pending' });
   });
 
+  test('a late completion acknowledgement cannot cross a durable delete tombstone', async () => {
+    const id = '45454545-4545-4545-8545-454545454545';
+    await tombstoneActivity({ userId: 'user-deleted', clientActivityId: id });
+    await expect(completeActivity({
+      clientActivityId: id,
+      serverActivityId: 91,
+      userId: 'user-deleted',
+      activityMode: 'hiking',
+      startedAt: 100,
+      endedAt: 200,
+      lifecycle: 'completed_local',
+      syncState: 'synced',
+    })).resolves.toBe(false);
+    const registry = await getActivityRegistry('user-deleted');
+    expect(registry.completed).toEqual([]);
+    expect(registry.tombstones).toEqual([
+      expect.objectContaining({ clientActivityId: id, lifecycle: 'discarded' }),
+    ]);
+  });
+
   test('borrowed Route geometry survives unfinished recovery and is dropped at completion', async () => {
     const id = '43434343-4343-4343-8343-434343434343';
     await registerUnfinishedActivity({

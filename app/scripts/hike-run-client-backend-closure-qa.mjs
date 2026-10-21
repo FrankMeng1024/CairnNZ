@@ -14,12 +14,19 @@ const baseUrl = argument('--url', 'http://127.0.0.1:8098');
 const outputRoot = path.resolve(argument('--output', '_review/hike-run-client-backend-closure'));
 const sourceHead = argument('--head', 'dirty-development-worktree');
 const sourceTree = argument('--tree', 'dirty-development-worktree');
+const scenario = argument('--scenario', 'full');
+if (!['full', 'focused-review'].includes(scenario)) throw new Error(`unknown_scenario:${scenario}`);
 if (!/^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/.test(apiUrl)) {
   throw new Error('refusing_non_loopback_backend');
 }
 
 fs.mkdirSync(outputRoot, { recursive: true });
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+const redactProviderUrl = raw => {
+  const parsed = new URL(raw);
+  parsed.searchParams.delete('access_token');
+  return parsed.toString();
+};
 const writeJson = (file, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -32,6 +39,11 @@ let lostAckClientActivityId = null;
 let lostAckBrowserAttempts = 0;
 let lostAckCommittedResponse = null;
 let mapboxBlockedRequests = 0;
+let heldAckClientActivityId = null;
+let heldAckCommittedResponse = null;
+let resolveHeldAckCommit = null;
+let releaseHeldAckResponse = null;
+let heldAckRelease = null;
 
 async function api(pathname, options = {}) {
   const response = await fetch(`${apiUrl}${pathname}`, {
@@ -84,7 +96,7 @@ page.on('console', message => {
 });
 page.on('dialog', dialog => dialog.dismiss());
 
-async function forward(route, forceAbortAfterCommit = false) {
+async function forward(route, disposition = 'normal') {
   const request = route.request();
   const parsed = new URL(request.url());
   const headers = await request.allHeaders();
@@ -116,11 +128,18 @@ async function forward(route, forceAbortAfterCommit = false) {
     sessionId: responseBody?.session_id ?? responseBody?.id ?? null,
     idempotentReplay: responseBody?.idempotent_replay === true,
   });
-  if (forceAbortAfterCommit) {
+  if (disposition === 'abort-after-commit') {
     entry.disposition = 'server-committed-client-ack-lost';
     lostAckCommittedResponse = responseBody;
     await route.abort('failed');
     return;
+  }
+  if (disposition === 'hold-after-commit') {
+    entry.disposition = 'server-committed-client-ack-held';
+    heldAckCommittedResponse = responseBody;
+    resolveHeldAckCommit?.();
+    await heldAckRelease;
+    entry.disposition = 'server-committed-client-ack-released';
   }
   entry.disposition = 'forwarded';
   await route.fulfill({
@@ -130,7 +149,7 @@ async function forward(route, forceAbortAfterCommit = false) {
   });
 }
 
-await page.route('**/api/**', async route => {
+const handleApiRoute = async route => {
   const request = route.request();
   const parsedBody = (() => {
     try { return JSON.parse(request.postData() ?? 'null'); } catch { return null; }
@@ -139,9 +158,14 @@ await page.route('**/api/**', async route => {
     && request.method() === 'PATCH'
     && /\/api\/sessions\/\d+\/save$/.test(new URL(request.url()).pathname)
     && parsedBody?.client_activity_id === lostAckClientActivityId;
+  const isHeldAckSave = heldAckClientActivityId
+    && request.method() === 'PATCH'
+    && /\/api\/sessions\/\d+\/save$/.test(new URL(request.url()).pathname)
+    && parsedBody?.client_activity_id === heldAckClientActivityId;
+  if (isHeldAckSave) return forward(route, 'hold-after-commit');
   if (!isLostAckSave) return forward(route);
   lostAckBrowserAttempts += 1;
-  if (lostAckBrowserAttempts === 1) return forward(route, true);
+  if (lostAckBrowserAttempts === 1) return forward(route, 'abort-after-commit');
   if (lostAckBrowserAttempts === 2) {
     requestLog.push({
       ordinal: requestLog.length,
@@ -155,18 +179,21 @@ await page.route('**/api/**', async route => {
     return;
   }
   return forward(route);
-});
-await page.route('**/matching/v5/**', route => {
+};
+const blockMapboxMatching = route => {
   mapboxBlockedRequests += 1;
   return route.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"isolated Mapbox outage"}' });
-});
-await page.route('**/directions/v5/**', route => {
+};
+const blockMapboxDirections = route => {
   mapboxBlockedRequests += 1;
   return route.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"isolated Mapbox outage"}' });
-});
+};
+await page.route('**/api/**', handleApiRoute);
+await page.route('**/matching/v5/**', blockMapboxMatching);
+await page.route('**/directions/v5/**', blockMapboxDirections);
 
-async function installOwner() {
-  await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.pendingSyncStore
+async function installOwner(targetPage = page) {
+  await targetPage.waitForFunction(() => Boolean(globalThis.__cairnStores?.pendingSyncStore
     && globalThis.__cairnStores?.syncDaemon
     && globalThis.__cairnStores?.sessionService
     && globalThis.__cairnStores?.activityRegistry
@@ -174,7 +201,7 @@ async function installOwner() {
     && globalThis.__cairnStores?.hikeTrackWriter
     && globalThis.__cairnStores?.activityMemoryProjector
     && globalThis.__cairnStores?.tokenStore), null, { timeout: 120_000 });
-  await page.evaluate(async ({ ownerId, owner, jwt }) => {
+  await targetPage.evaluate(async ({ ownerId, owner, jwt }) => {
     localStorage.setItem('cairn_jwt', jwt);
     localStorage.setItem('cairn_onboarding_v1_done', 'true');
     localStorage.setItem(`cairn_onboarding_v1_done_${ownerId}`, 'true');
@@ -350,6 +377,7 @@ await installOwner();
 const cases = [];
 
 // 1. Network returns before Save: actual client Start + atomic Save, no outbox required.
+if (scenario === 'full') {
 {
   const input = activityInput(1);
   const result = await page.evaluate(async ({ ownerId, value }) => {
@@ -433,6 +461,7 @@ const cases = [];
       interpretation: 'Local/base Final upload does not call Mapbox; all Mapbox requests would fail closed.' },
     passed: drain.succeeded === 1 && after.pending.length === 0 && after.session?.syncState === 'synced' });
 }
+}
 
 // 5. Recorder-produced journey: real-source Start/observations/Finish creates
 // the WAL, Memory intent and pending outbox. A cold reopen keeps all recovery
@@ -502,6 +531,7 @@ const cases = [];
     wakeReason: 'network_online', force: true,
   }));
   const afterAck = await clientState(input.clientActivityId);
+  writeJson(path.join(outputRoot, 'CURRENT_ACTIVITY_DIAGNOSTIC_EXPORT.json'), afterAck.diagnostic);
   const afterCleanup = await recorderArtifactState(input.clientActivityId);
   const afterCleanupManifest = await localManifest();
   const cleanClientReopen = await page.evaluate(async id => {
@@ -518,10 +548,106 @@ const cases = [];
     .filter(record => record.kind === 'application-event' && record.data?.event === 'completed-activity-sync')
     .map(record => record.data.phase);
   const mapboxRequestsObserved = mapboxBlockedRequests - mapboxBefore;
+  const freshBrowser = await chromium.launch({
+    headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  });
+  const freshContext = await freshBrowser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-NZ' });
+  await freshContext.addInitScript(() => { globalThis.__initialLocalStorageKeyCount = localStorage.length; });
+  const freshPage = await freshContext.newPage();
+  const freshMapboxResources = [];
+  freshPage.on('pageerror', error => browserErrors.push(`fresh-context:${error.message}`));
+  freshPage.on('response', response => {
+    const url = response.url();
+    if (/mapbox\.(?:com|cn)/i.test(url)) {
+      freshMapboxResources.push({ kind: 'response', status: response.status(), url: redactProviderUrl(url) });
+    }
+  });
+  freshPage.on('requestfailed', request => {
+    const url = request.url();
+    if (/mapbox\.(?:com|cn)/i.test(url)) {
+      freshMapboxResources.push({ kind: 'failure', error: request.failure()?.errorText ?? 'unknown', url: redactProviderUrl(url) });
+    }
+  });
+  await freshPage.route('**/api/**', handleApiRoute);
+  await freshPage.route('**/matching/v5/**', blockMapboxMatching);
+  await freshPage.route('**/directions/v5/**', blockMapboxDirections);
+  await freshPage.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await installOwner(freshPage);
+  const freshHydration = await freshPage.evaluate(async ({ ownerId, targetId }) => {
+    const stores = globalThis.__cairnStores;
+    await stores.useSessionStore.getState().hydrate(ownerId);
+    const remote = await stores.sessionService.fetchSessions();
+    await stores.useSessionStore.getState().mergeRemoteSessions(remote.map(item => ({
+      id: item.client_activity_id || String(item.id),
+      clientActivityId: item.client_activity_id || undefined,
+      remoteId: item.id,
+      serverActivityId: item.id,
+      activityMode: item.type,
+      regionCode: 'nz',
+      startedAt: new Date(item.start_time).getTime(),
+      endedAt: new Date(item.end_time).getTime(),
+      durationS: item.duration_s,
+      distanceM: item.distance_m,
+      elevationGainM: 0,
+      trackPoints: [], markerIds: [], name: item.name ?? undefined, syncState: 'synced',
+    })), ownerId);
+    stores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'Routes' }] });
+    const session = stores.useSessionStore.getState().sessions.find(item => item.clientActivityId === targetId);
+    return { initialLocalStorageKeyCount: globalThis.__initialLocalStorageKeyCount, session };
+  }, { ownerId: ownerUserId, targetId: input.clientActivityId });
+  await freshPage.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Routes', null, { timeout: 30_000 });
+  await freshPage.getByText('Activities', { exact: true }).last().click();
+  const freshActivityRow = freshPage.getByTestId(`activity-record-${input.clientActivityId}`);
+  await freshActivityRow.waitFor({ state: 'visible', timeout: 30_000 });
+  const freshListText = await freshActivityRow.innerText();
+  await freshPage.screenshot({ path: path.join(outputRoot, 'FRESH_CONTEXT_ACTIVITY_LIST.png'), fullPage: true });
+  await freshActivityRow.click();
+  await freshPage.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'MapHistory', null, { timeout: 30_000 });
+  await freshPage.getByTestId('activity-create-route').waitFor({ state: 'visible', timeout: 30_000 });
+  await freshPage.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+  await freshPage.waitForFunction(() => {
+    const map = globalThis.__cairnMap;
+    const style = map?.getStyle?.();
+    const trackLayers = (style?.layers ?? []).map(layer => layer.id).filter(id => /track|activity/i.test(id));
+    const trackSourceIds = Object.keys(style?.sources ?? {}).filter(id => /track|activity/i.test(id));
+    return map?.isStyleLoaded?.() === true && trackLayers.length > 0 && trackSourceIds.length > 0;
+  }, null, { timeout: 30_000 });
+  const freshDetail = await freshPage.evaluate(targetId => {
+    const stores = globalThis.__cairnStores;
+    const session = stores.useSessionStore.getState().sessions.find(item => item.clientActivityId === targetId);
+    const map = globalThis.__cairnMap;
+    const style = map?.getStyle?.();
+    const trackLayers = (style?.layers ?? []).map(layer => layer.id).filter(id => /track|activity/i.test(id));
+    return {
+      currentRoute: stores.getCurrentRoute(),
+      session,
+      mapLoaded: map?.loaded?.() ?? false,
+      styleLoaded: map?.isStyleLoaded?.() ?? false,
+      trackLayers,
+      trackSourceIds: Object.keys(style?.sources ?? {}).filter(id => /track|activity/i.test(id)),
+    };
+  }, input.clientActivityId);
+  await freshPage.screenshot({ path: path.join(outputRoot, 'FRESH_CONTEXT_ACTIVITY_DETAIL.png'), fullPage: true });
+  await freshBrowser.close();
+  const freshContextActivity = {
+    ...freshHydration,
+    listText: freshListText,
+    detail: freshDetail,
+    mapboxResources: freshMapboxResources,
+    passed: freshHydration.initialLocalStorageKeyCount === 0
+      && freshHydration.session?.clientActivityId === input.clientActivityId
+      && freshDetail.currentRoute === 'MapHistory'
+      && freshDetail.session?.remoteId != null
+      && freshDetail.styleLoaded
+      && freshDetail.trackLayers.length > 0
+      && freshDetail.trackSourceIds.length > 0
+      && freshMapboxResources.some(resource => resource.kind === 'response' && resource.status >= 200 && resource.status < 400),
+  };
   cases.push({
     id: 'recorder-wal-cold-reopen-ack-cleanup', input, started, observations, finish,
     beforeReload, beforeReloadManifest, afterColdReopen, drain, afterAck,
-    afterCleanup, afterCleanupManifest, cleanClientReopen, diagnosticPhases,
+    afterCleanup, afterCleanupManifest, cleanClientReopen, diagnosticPhases, freshContextActivity,
     mapboxOutage: { response: 401, requestsObserved: mapboxRequestsObserved },
     passed: observations.at(-1)?.trackPointCount >= 2
       && beforeReload.pending.length === 1 && beforeReload.wal.available
@@ -533,12 +659,59 @@ const cases = [];
       && afterCleanup.memoryIntent?.state === 'retired'
       && diagnosticPhases.includes('ack') && diagnosticPhases.includes('phone-cleanup-complete')
       && cleanClientReopen.reopened === true
+      && freshContextActivity.passed
       && mapboxRequestsObserved >= 1,
   });
 }
 
+// 6. The server commits Save while the client ACK is deliberately held. The
+// user deletes through the production Session store before that ACK is
+// released; the tombstone must win locally and the server row must be cleaned.
+{
+  const input = activityInput(6);
+  await seedPending(input);
+  heldAckClientActivityId = input.clientActivityId;
+  heldAckCommittedResponse = null;
+  const committed = new Promise(resolve => { resolveHeldAckCommit = resolve; });
+  heldAckRelease = new Promise(resolve => { releaseHeldAckResponse = resolve; });
+  await page.evaluate(() => {
+    globalThis.__heldAckDrain = globalThis.__cairnStores.syncDaemon.drainPending({
+      wakeReason: 'network_online', force: true,
+    });
+  });
+  await committed;
+  const deletion = await page.evaluate(id => globalThis.__cairnStores.useSessionStore.getState().deleteSession(id), input.clientActivityId);
+  const afterDeleteBeforeAck = await clientState(input.clientActivityId);
+  const serverAfterDelete = await api('/api/sessions', { headers: { Authorization: `Bearer ${token}` } });
+  releaseHeldAckResponse?.();
+  const drain = await page.evaluate(() => globalThis.__heldAckDrain);
+  const afterReleasedAck = await clientState(input.clientActivityId);
+  const finalServerList = await api('/api/sessions', { headers: { Authorization: `Bearer ${token}` } });
+  const serverRowAfterDelete = (serverAfterDelete.body?.sessions ?? []).find(row => row.client_activity_id === input.clientActivityId) ?? null;
+  const serverRowAfterRelease = (finalServerList.body?.sessions ?? []).find(row => row.client_activity_id === input.clientActivityId) ?? null;
+  cases.push({
+    id: 'server-commit-held-ack-delete-release', input, committedResponse: heldAckCommittedResponse,
+    deletion, afterDeleteBeforeAck, drain, afterReleasedAck, serverRowAfterDelete, serverRowAfterRelease,
+    passed: heldAckCommittedResponse?.client_activity_id === input.clientActivityId
+      && deletion.remoteState === 'deleted'
+      && afterDeleteBeforeAck.session == null
+      && afterDeleteBeforeAck.registry.tombstones.length === 1
+      && afterReleasedAck.session == null
+      && afterReleasedAck.pending.length === 0
+      && afterReleasedAck.registry.completed.length === 0
+      && afterReleasedAck.registry.tombstones.length === 1
+      && serverRowAfterDelete == null
+      && serverRowAfterRelease == null,
+  });
+  heldAckClientActivityId = null;
+  resolveHeldAckCommit = null;
+  releaseHeldAckResponse = null;
+  heldAckRelease = null;
+}
+
 const serverList = await api('/api/sessions', { headers: { Authorization: `Bearer ${token}` } });
-const expectedIds = cases.map(item => item.input.clientActivityId);
+const deletedIds = cases.filter(item => item.id === 'server-commit-held-ack-delete-release').map(item => item.input.clientActivityId);
+const expectedIds = cases.map(item => item.input.clientActivityId).filter(id => !deletedIds.includes(id));
 const serverRows = (serverList.body?.sessions ?? []).filter(item => expectedIds.includes(item.client_activity_id));
 const serverDetails = [];
 for (const row of serverRows) {
@@ -560,17 +733,18 @@ const result = {
   sourceIdentity: { head: sourceHead, tree: sourceTree },
   platform: 'EXPO_WEB_ACTUAL_CLIENT_MODULES_AND_LOOPBACK_MYSQL_API',
   isolation: { loopbackOnly: true, syntheticOwner: true, productionRecordsTouched: false },
+  scenario,
   cases,
   clientRequests: requestLog,
   clientResponses: responseLog,
-  serverEvidenceBeforeTestDatabaseTeardown: { expectedIds, rowCount: serverRows.length, rows: serverRows, details: serverDetails },
+  serverEvidenceBeforeTestDatabaseTeardown: { expectedIds, deletedIds, rowCount: serverRows.length, rows: serverRows, details: serverDetails },
   phoneCleanupRequestedServerDelete: requestLog.some(item => item.method === 'DELETE' && /\/api\/sessions/.test(item.path)),
   browserErrors,
 };
 result.passed = cases.every(item => item.passed)
   && serverRows.length === expectedIds.length
   && new Set(serverRows.map(item => item.client_activity_id)).size === expectedIds.length
-  && result.phoneCleanupRequestedServerDelete === false
+  && result.phoneCleanupRequestedServerDelete === true
   && browserErrors.length === 0;
 writeJson(path.join(outputRoot, 'CLIENT_BACKEND_CLOSURE.json'), result);
 writeJson(path.join(outputRoot, 'CLIENT_HTTP_REQUESTS.json'), requestLog);

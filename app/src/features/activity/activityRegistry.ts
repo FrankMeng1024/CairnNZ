@@ -349,8 +349,15 @@ export async function mapActivityServerId(
   return target;
 }
 
-export async function completeActivity(record: CompletedActivityRecord): Promise<void> {
+export async function completeActivity(record: CompletedActivityRecord): Promise<boolean> {
+  let completed = false;
   await mutate(record.userId, (snapshot) => {
+    // Deletion is monotonic. A save acknowledgement arriving after the user
+    // discarded this immutable Activity identity cannot recreate it.
+    if (snapshot.tombstones.some(item => item.clientActivityId === record.clientActivityId)) {
+      return snapshot;
+    }
+    completed = true;
     const completingHead = snapshot.unfinished?.clientActivityId === record.clientActivityId;
     return {
       ...snapshot,
@@ -361,6 +368,7 @@ export async function completeActivity(record: CompletedActivityRecord): Promise
       completed: [record, ...snapshot.completed.filter((item) => item.clientActivityId !== record.clientActivityId)],
     };
   }, realmForClientActivityId(record.clientActivityId));
+  return completed;
 }
 
 export async function acknowledgeActivity(

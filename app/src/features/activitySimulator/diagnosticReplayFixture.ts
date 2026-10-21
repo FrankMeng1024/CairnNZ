@@ -3,7 +3,11 @@ import {
   type ActivityDiagnosticReplayExport,
 } from '../activity/activityDiagnosticReplay';
 import type { SnapLabPublicFixture } from './snapLabLogicalRunner';
-import type { SnapLabCassetteEntry } from './snapLabTransport';
+import {
+  sanitizeSnapLabRequestUrl,
+  snapLabRequestFingerprint,
+  type SnapLabCassetteEntry,
+} from './snapLabTransport';
 
 export interface DiagnosticEventTimelineReplay {
   events: Array<{
@@ -36,6 +40,48 @@ export interface DiagnosticEventTimelineReplay {
 }
 
 const inputKinds = new Set(['diagnostic-start', 'raw-observation', 'provider-exchange', 'application-event', 'diagnostic-finish']);
+
+/** Converts both historical Snap Lab cassette entries and real Activity
+ * diagnostic provider-response records into the one exact-identity offline
+ * transport contract. The two captured endpoints are GET-only by product
+ * definition; any other shape fails closed instead of falling through to the
+ * network. */
+export function diagnosticProviderCassetteEntries(responses: unknown[]): SnapLabCassetteEntry[] {
+  return responses.map((raw, index) => {
+    const entry = raw as Record<string, unknown>;
+    if (entry.method === 'GET'
+      && typeof entry.requestFingerprint === 'string'
+      && typeof entry.sanitizedUrl === 'string'
+      && typeof entry.status === 'number'
+      && typeof entry.provenance === 'string') {
+      return JSON.parse(JSON.stringify(entry)) as SnapLabCassetteEntry;
+    }
+    if (entry.phase !== 'response'
+      || !['map-matching', 'walking-directions'].includes(String(entry.requestKind ?? ''))
+      || typeof entry.sanitizedUrl !== 'string'
+      || typeof entry.status !== 'number') {
+      throw new Error(`diagnostic_provider_response_invalid:${index}`);
+    }
+    const sanitizedUrl = sanitizeSnapLabRequestUrl(entry.sanitizedUrl);
+    const parsed = new URL(sanitizedUrl);
+    const expectedPrefix = entry.requestKind === 'map-matching'
+      ? '/matching/v5/mapbox/walking/'
+      : '/directions/v5/mapbox/walking/';
+    if (parsed.origin !== 'https://api.mapbox.com' || !parsed.pathname.startsWith(expectedPrefix)) {
+      throw new Error(`diagnostic_provider_response_endpoint_invalid:${index}`);
+    }
+    return {
+      requestFingerprint: snapLabRequestFingerprint('GET', sanitizedUrl),
+      method: 'GET',
+      sanitizedUrl,
+      status: entry.status,
+      headers: (entry.headers ?? {}) as Record<string, string>,
+      body: entry.body ?? null,
+      provenance: 'CAPTURED_REAL_RESPONSE',
+      capturedAt: typeof entry.capturedAt === 'string' ? entry.capturedAt : null,
+    };
+  });
+}
 
 /** Replays only the recorded event/log state machine. Stored tracking
  * decisions and geometry are retained as comparison outputs, never input
@@ -148,9 +194,15 @@ export function diagnosticReplayFixture(
   const recordedMode = start?.data.mode;
   const mode = recordedMode === 'running' ? 'run' : 'hike';
   const observationTimes = observations.map(item => item.timestampMs);
-  const observationStartMs = Math.min(...observationTimes);
+  const earliestObservationMs = Math.min(...observationTimes);
   const observationEndMs = Math.max(...observationTimes);
   const startWallTimeMs = Number(start?.wallTimeMs);
+  // A native callback can contain a cached coordinate observed before Start
+  // but delivered after Start. Preserve the recorded diagnostic-start wall
+  // boundary so the production before-owner-generation rejection replays.
+  const observationStartMs = Number.isFinite(startWallTimeMs)
+    ? startWallTimeMs
+    : earliestObservationMs;
   const firstReceiptWallTimeMs = Number(observations[0]?.coordinate.receiptWallTimeMs);
   const receiptEpochMs = Number.isFinite(startWallTimeMs)
     ? startWallTimeMs
@@ -231,7 +283,7 @@ export function diagnosticReplayFixture(
     transportScenario: 'captured-owner-diagnostic',
     transportConfig: {
       mode: 'captured-real',
-      cassetteEntries: diagnostic.providerResponses as SnapLabCassetteEntry[],
+      cassetteEntries: diagnosticProviderCassetteEntries(diagnostic.providerResponses),
     },
   };
 }

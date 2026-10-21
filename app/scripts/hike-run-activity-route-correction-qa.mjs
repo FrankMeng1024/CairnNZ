@@ -97,6 +97,8 @@ const page = await context.newPage();
 const runtimeErrors = [];
 const providerRequests = [];
 const providerResponseTasks = [];
+const mapResourceEvents = [];
+const mapReadiness = [];
 let tokenFingerprint = null;
 page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
 page.on('console', message => {
@@ -106,6 +108,9 @@ page.on('console', message => {
 });
 page.on('response', response => {
   const url = response.url();
+  if (url.includes('mapbox.com') && /\/(styles|tiles|fonts|sprites)\//.test(url)) {
+    mapResourceEvents.push({ kind: 'response', url: redactMapboxUrl(url), status: response.status() });
+  }
   if (!url.includes('api.mapbox.com') || !/\/(matching|directions)\/v5\//.test(url)) return;
   const task = (async () => {
     const parsed = new URL(url);
@@ -128,6 +133,12 @@ page.on('response', response => {
   })();
   providerResponseTasks.push(task);
 });
+page.on('requestfailed', request => {
+  const url = request.url();
+  if (url.includes('mapbox.com')) {
+    mapResourceEvents.push({ kind: 'requestfailed', url: redactMapboxUrl(url), error: request.failure()?.errorText ?? null });
+  }
+});
 if (providerMode === 'outage') {
   await page.route('**/matching/v5/mapbox/walking/**', route => route.fulfill({
     status: 503,
@@ -145,6 +156,7 @@ await page.addInitScript(({ userId }) => {
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
   localStorage.setItem(`cairn_onboarding_v1_done_${userId}`, 'true');
 }, { userId: user.id });
+let routeServerRecord = null;
 await page.route('**/api/**', async route => {
   const url = new URL(route.request().url());
   if (url.pathname.endsWith('/api/auth/me')) {
@@ -159,12 +171,89 @@ await page.route('**/api/**', async route => {
     }) });
     return;
   }
+  if (url.pathname.endsWith('/api/routes') && route.request().method() === 'POST') {
+    const body = JSON.parse(route.request().postData() ?? '{}');
+    const now = new Date().toISOString();
+    routeServerRecord = {
+      id: 7001,
+      user_id: user.id,
+      name: body.name,
+      description: body.description ?? null,
+      points: body.points ?? [],
+      ordered_draft: body.ordered_draft ?? null,
+      resolution_state: body.resolution_state ?? 'continuous',
+      waypoints: body.waypoints ?? [],
+      distance_m: body.distance_m ?? 0,
+      elevation_gain_m: body.elevation_gain_m ?? 0,
+      run_count: 0,
+      last_run_at: null,
+      created_at: now,
+      updated_at: now,
+      permission: body.permission ?? 'personal',
+      client_route_id: body.client_route_id,
+      creation_origin: body.source_activity_client_id ? 'activity' : 'manual',
+      source_activity_client_id: body.source_activity_client_id ?? null,
+      source_session_id: body.source_session_id ?? null,
+      origin_geometry_hash: null,
+      created_geometry_hash: sha(body.points ?? []),
+      geometry_edited_since_creation: false,
+      origin_gap_reconnected: body.origin_gap_reconnected === true,
+    };
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ route: routeServerRecord }) });
+    return;
+  }
+  if (url.pathname.endsWith('/api/routes') && route.request().method() === 'GET') {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ routes: routeServerRecord ? [routeServerRecord] : [] }) });
+    return;
+  }
+  if (/\/api\/routes\/[^/]+$/.test(url.pathname) && route.request().method() === 'GET') {
+    await route.fulfill({ status: routeServerRecord ? 200 : 404, contentType: 'application/json', body: JSON.stringify({ route: routeServerRecord }) });
+    return;
+  }
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ data: [], sessions: [], markers: [], notifications: [], routes: [], count: 0 }),
   });
 });
+
+const waitForMapEvidence = async (label, expected = 'route') => {
+  try {
+    await page.waitForFunction(({ expectedLayer }) => {
+      const map = globalThis.__cairnMap;
+      if (!map?.loaded?.() || !map?.isStyleLoaded?.()) return false;
+      const style = map.getStyle?.();
+      const layers = (style?.layers ?? []).filter(layer => /route|activity|track|gap|ordered/i.test(layer.id));
+      const sources = Object.keys(style?.sources ?? {}).filter(id => /route|activity|track|gap|ordered/i.test(id));
+      if (expectedLayer === 'route') return layers.length > 0 && sources.length > 0;
+      return true;
+    }, { expectedLayer: expected }, { timeout: 30_000 });
+  } catch (error) {
+    const state = await page.evaluate(() => {
+      const map = globalThis.__cairnMap;
+      const style = map?.getStyle?.();
+      return {
+        mapPresent: Boolean(map), loaded: map?.loaded?.() ?? false,
+        styleLoaded: map?.isStyleLoaded?.() ?? false,
+        layers: (style?.layers ?? []).map(layer => layer.id),
+        sources: Object.keys(style?.sources ?? {}),
+      };
+    });
+    throw new Error(`map readiness timeout:${label}:${JSON.stringify(state)}:${String(error)}`);
+  }
+  const state = await page.evaluate(labelValue => {
+    const map = globalThis.__cairnMap;
+    const style = map.getStyle();
+    const layerIds = (style?.layers ?? []).map(layer => layer.id).filter(id => /route|activity|track|gap|ordered/i.test(id));
+    const sourceIds = Object.keys(style?.sources ?? {}).filter(id => /route|activity|track|gap|ordered/i.test(id));
+    const features = layerIds.flatMap(id => {
+      try { return map.queryRenderedFeatures(undefined, { layers: [id] }); } catch { return []; }
+    });
+    return { label: labelValue, loaded: map.loaded(), styleLoaded: map.isStyleLoaded(), layerIds, sourceIds, renderedFeatureCount: features.length };
+  }, label);
+  mapReadiness.push(state);
+  return state;
+};
 
 const waitForRoute = (name, timeout = 40_000) => page.waitForFunction(
   expected => globalThis.__cairnStores?.getCurrentRoute?.() === expected,
@@ -216,6 +305,7 @@ try {
   await waitForRoute('MapHistory');
   await page.getByTestId('activity-create-route').waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+  await waitForMapEvidence('activity-detail-before-create');
   await page.screenshot({ path: path.join(outputDir, '01-activity-detail-create-route.png') });
   const before = await stateSnapshot();
 
@@ -236,7 +326,7 @@ try {
       { padding: { top: 125, right: 45, bottom: 255, left: 45 }, duration: 0 },
     );
   }, selectedFinal);
-  await page.waitForTimeout(500);
+  await waitForMapEvidence('editor-import-overview');
   const initialDraft = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCurrentDraft());
   await page.screenshot({ path: path.join(outputDir, '02-route-imported-before-correction.png') });
 
@@ -254,7 +344,7 @@ try {
       pitch: 0,
     });
   }, correction.stroke);
-  await page.waitForTimeout(500);
+  await waitForMapEvidence('editor-defect-closeup');
   await page.screenshot({ path: path.join(outputDir, '02b-defect-closeup-before.png') });
   const correctionClassification = await page.evaluate(
     stroke => globalThis.__cairnRouteEditorQa.classifyStroke(stroke),
@@ -272,7 +362,43 @@ try {
     { timeout: 35_000 },
   );
   await page.waitForFunction(() => !globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot?.(), null, { timeout: 25_000 });
-  const correctedDraft = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCurrentDraft());
+  const firstCorrectedDraft = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCurrentDraft());
+  let correctedDraft = firstCorrectedDraft;
+  let localizedEditCount = 1;
+  let gapRepairClassification = null;
+  if (correctedDraft.gaps.length > 0) {
+    const gapStroke = await page.evaluate(() => {
+      const draft = globalThis.__cairnRouteEditorQa.getCurrentDraft();
+      const gap = draft.gaps[0];
+      const leftIndex = draft.parts.findIndex(part => part.id === gap.afterPartId);
+      const from = draft.parts[leftIndex]?.points?.at(-1);
+      const to = draft.parts[leftIndex + 1]?.points?.[0];
+      if (!from || !to) throw new Error('unresolved gap has no adjacent endpoints');
+      return [
+        { lat: from.lat, lng: from.lng },
+        { lat: (from.lat + to.lat) / 2, lng: (from.lng + to.lng) / 2 },
+        { lat: to.lat, lng: to.lng },
+      ];
+    });
+    gapRepairClassification = await page.evaluate(
+      stroke => globalThis.__cairnRouteEditorQa.classifyStroke(stroke),
+      gapStroke,
+    );
+    if (gapRepairClassification?.intent?.kind !== 'bridge') {
+      throw new Error(`remaining gap repair rejected:${JSON.stringify(gapRepairClassification)}`);
+    }
+    await page.getByTestId('route-tool-draw').click();
+    await page.evaluate(stroke => globalThis.__cairnRouteEditorQa.submitStroke(stroke), gapStroke);
+    await page.waitForFunction(
+      revision => (globalThis.__cairnRouteEditorQa?.getCurrentDraft?.()?.revision ?? revision) > revision,
+      firstCorrectedDraft.revision,
+      { timeout: 35_000 },
+    );
+    await page.waitForFunction(() => !globalThis.__cairnRouteEditorQa?.getPointAnimationSnapshot?.(), null, { timeout: 25_000 });
+    correctedDraft = await page.evaluate(() => globalThis.__cairnRouteEditorQa.getCurrentDraft());
+    localizedEditCount += 1;
+  }
+  if (correctedDraft.gaps.length > 0) throw new Error(`route still has ${correctedDraft.gaps.length} unresolved gaps`);
   const correctedResolutionCounts = correctedDraft.parts.reduce((counts, part) => {
     counts[part.resolution] = (counts[part.resolution] ?? 0) + 1;
     return counts;
@@ -287,12 +413,14 @@ try {
       { padding: { top: 125, right: 45, bottom: 255, left: 45 }, duration: 0 },
     );
   }, selectedFinal);
-  await page.waitForTimeout(500);
+  await waitForMapEvidence('editor-corrected-overview');
   await page.screenshot({ path: path.join(outputDir, '03b-route-local-correction-overview.png') });
   await page.getByTestId('ordered-route-save').click();
   await waitForRoute('MapHistory');
   await page.getByTestId('route-use-action').waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+  await page.waitForFunction(() => globalThis.__cairnStores.useRouteStore.getState().routes[0]?.syncState === 'synced', null, { timeout: 30_000 });
+  await waitForMapEvidence('route-detail-after-save');
   const afterSave = await stateSnapshot();
   if (!afterSave.route?.id) throw new Error('route save did not produce a durable local Route');
   await page.screenshot({ path: path.join(outputDir, '04-route-detail-saved.png') });
@@ -313,6 +441,7 @@ try {
   await waitForRoute('MapHistory');
   await page.getByTestId('route-use-action').waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+  await waitForMapEvidence('route-detail-after-cold-reopen');
   await page.screenshot({ path: path.join(outputDir, '05-route-reopened-fresh-process.png') });
   const afterReopen = await stateSnapshot();
 
@@ -321,8 +450,26 @@ try {
   }), sourceId);
   await page.getByTestId('activity-create-route').waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
+  await waitForMapEvidence('original-activity-after-route-save');
   await page.screenshot({ path: path.join(outputDir, '06-original-activity-unchanged.png') });
   const finalState = await stateSnapshot();
+
+  await page.evaluate(id => globalThis.__cairnStores.navigationRef.navigate('MapHistory', { routeId: id }), createdRouteId);
+  await page.getByTestId('route-use-action').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('route-use-action').click();
+  await page.waitForFunction(() => (
+    globalThis.__cairnStores.getCurrentRoute?.() === 'Hiking'
+    || Boolean(document.querySelector('[data-testid="route-use-hike"]'))
+  ), null, { timeout: 30_000 });
+  if (await page.getByTestId('route-use-hike').count()) await page.getByTestId('route-use-hike').click();
+  await waitForRoute('Hiking');
+  await page.getByText('This Route is shown on the map for reference.', { exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
+  const useForHike = await page.evaluate(id => ({
+    currentRoute: globalThis.__cairnStores.getCurrentRoute?.(),
+    borrowedRouteId: globalThis.__cairnStores.useTrackingStore.getState().borrowedRouteReference?.routeId ?? null,
+    expectedRouteId: id,
+  }), createdRouteId);
+  await page.screenshot({ path: path.join(outputDir, '07-use-for-hike-activated.png') });
 
   const hashes = state => ({
     activityRecord: sha({ session: state.session, track: state.durableTrack }),
@@ -387,6 +534,10 @@ try {
       productionClassification: correctionClassification,
       initialRevision: initialDraft.revision,
       correctedRevision: correctedDraft.revision,
+      firstCorrectedRevision: firstCorrectedDraft.revision,
+      localizedEditCount,
+      gapRepairClassification,
+      unresolvedGapCount: correctedDraft.gaps.length,
       initialGeometryHash: sha(initialDraft),
       correctedGeometryHash: sha(correctedDraft),
       geometryChanged: sha(initialDraft) !== sha(correctedDraft),
@@ -413,10 +564,14 @@ try {
       routeSaved: Boolean(afterSave.route?.id),
       freshJavascriptRealm: freshRealm,
       routeReopenedFromTrails: afterReopen.route?.id === createdRouteId,
+      reopenedRouteObjectStable: afterSaveHashes.route === afterReopenHashes.route,
       reopenedRouteGeometryStable: afterSaveHashes.routeGeometry === afterReopenHashes.routeGeometry,
       originalActivityUnchanged: beforeHashes.activityCore === finalHashes.activityCore,
       memoryUnchanged: beforeHashes.memory === finalHashes.memory,
       routeIsIndependent: afterSave.route?.originActivityClientId === sourceId,
+      routeFullyRepaired: correctedDraft.gaps.length === 0,
+      routeAcknowledged: afterReopen.route?.syncState === 'synced',
+      useForHikeActivated: useForHike.currentRoute === 'Hiking',
     },
     hashes: { before: beforeHashes, afterSave: afterSaveHashes, afterReopen: afterReopenHashes, final: finalHashes },
     route: {
@@ -427,6 +582,9 @@ try {
       pointCount: afterReopen.route?.points?.length ?? 0,
     },
     runtimeErrors,
+    mapReadiness,
+    mapResourceEvents,
+    useForHike,
   };
   const failures = Object.entries(result.assertions).filter(([, value]) => value !== true).map(([key]) => key);
   if (failures.length || runtimeErrors.length) throw new Error(`route correction assertions failed: ${[...failures, ...runtimeErrors].join(', ')}`);

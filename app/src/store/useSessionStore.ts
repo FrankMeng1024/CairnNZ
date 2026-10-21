@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { storage } from './storage';
 import type { Coordinate } from '../utils/geo';
 import { deleteRemoteSession, deleteRemoteSessionByClientId, renameRemoteSession } from '../services/sessionService';
-import { tombstoneActivity } from '../features/activity/activityRegistry';
+import { isActivityTombstoned, tombstoneActivity } from '../features/activity/activityRegistry';
 import { crashLogger } from '../services/crashLogger';
 import { mergeHydratedSessionLists, sameActivityIdentity } from '../features/activity/sessionListMerge';
 
@@ -319,16 +319,24 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         await removePending(clientActivityId, userId);
       } catch { /* no pending payload */ }
     }
-    const base = get().currentUserId === userId ? get().sessions : await persistedSessionsFor(userId);
-    const next = base.filter((sess) => sess.id !== id);
-    const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
-    await storage.setItem(sessionsKey(userId), JSON.stringify(summaries), { strict: true });
+    // Serialize the final local removal with acknowledgement upserts. The
+    // tombstone is already durable, so either this runs after an older ACK and
+    // removes it, or a newer ACK observes the tombstone and refuses to revive.
+    let next: TrackingSession[] = [];
+    const removeRun = sessionWriteTail.then(async () => {
+      const base = get().currentUserId === userId ? get().sessions : await persistedSessionsFor(userId);
+      next = base.filter((sess) => sess.id !== id && sess.clientActivityId !== clientActivityId);
+      const summaries = next.map(({ trackPoints: _, ...rest }) => rest);
+      await storage.setItem(sessionsKey(userId), JSON.stringify(summaries), { strict: true });
+      if (get().currentUserId === userId) set({ sessions: next });
+    });
+    sessionWriteTail = removeRun.catch(() => {});
+    await removeRun;
     await storage.removeItem(trackPointsKey(userId, id));
     try {
       const { deleteActivityFinalArtifact } = require('../features/activity/activityFinalArtifact');
       await deleteActivityFinalArtifact(userId, clientActivityId ?? id);
     } catch { /* legacy sessions may not have a Final artifact */ }
-    if (get().currentUserId === userId) set({ sessions: next });
     // Mirror deletion to backend.
     //
     // Sessions can be in two shapes:
@@ -392,6 +400,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // upsert 分支只在内存里找不到该 localId 时走 (真孤立), 无服务端 name 需要保留.
     let didUpdate = false;
     const run = sessionWriteTail.then(async () => {
+      if (await isActivityTombstoned(ownerUserId, localId)) return;
       const live = get();
       const base = live.currentUserId === ownerUserId
         ? live.sessions

@@ -353,6 +353,7 @@ async function appendDirectlyToHikeTrack(
   events: any[],
   context: DurableActivityContext,
   nativeBatchSequence: number,
+  diagnosticWrites: Promise<void>[],
 ): Promise<any[]> {
   try {
     // Runtime require avoids a module-load cycle while still sharing the same
@@ -403,7 +404,7 @@ async function appendDirectlyToHikeTrack(
         ?? `background:${Number.isFinite(event.t) ? Math.floor(event.t) : 'invalid'}:${nativeBatchSequence}:${event.nativeBatchIndex ?? 'unknown'}`;
       const recordPrefilterRejection = (reason: string, ordinalSemantics: string) => {
         if (Number.isFinite(event.t)) {
-          void recordActivityDiagnosticDecision({
+          diagnosticWrites.push(recordActivityDiagnosticDecision({
             ownerUserId: context.userId,
             clientActivityId: context.clientActivityId,
             observationTimeMs: Math.floor(event.t),
@@ -411,7 +412,7 @@ async function appendDirectlyToHikeTrack(
             reason,
             segmentId: activeSegmentId,
             receiptEvidenceId,
-          });
+          }));
         }
         void recordActivityStageEvent({
           ownerUserId: context.userId,
@@ -507,7 +508,7 @@ async function appendDirectlyToHikeTrack(
       const decision = evaluateRealGpsObservation(continuity, observation, context.activityMode, Date.now());
       continuity = decision.state;
       emitHeadlessMotionDecision(context, observation, decision, rawOrdinal, activeSegmentId);
-      void recordActivityDiagnosticDecision({
+      diagnosticWrites.push(recordActivityDiagnosticDecision({
         ownerUserId: context.userId,
         clientActivityId: context.clientActivityId,
         observationTimeMs: observation.t,
@@ -515,7 +516,7 @@ async function appendDirectlyToHikeTrack(
         reason: decision.reason,
         segmentId: activeSegmentId,
         receiptEvidenceId,
-      });
+      }));
       void recordActivityStageEvent({
         ownerUserId: context.userId,
         clientActivityId: context.clientActivityId,
@@ -649,7 +650,7 @@ async function appendDirectlyToHikeTrack(
           diagnosticDecisionRecorded: true,
         };
         if (promoted) {
-          void recordActivityDiagnosticCanonicalPromotion({
+          diagnosticWrites.push(recordActivityDiagnosticCanonicalPromotion({
             ownerUserId: context.userId,
             clientActivityId: context.clientActivityId,
             observationTimeMs: canonicalObservation.t,
@@ -657,7 +658,7 @@ async function appendDirectlyToHikeTrack(
             reason: 'candidate-confirmed',
             segmentId: activeSegmentId,
             receiptEvidenceId: sourceEvent.receiptEvidenceId ?? null,
-          });
+          }));
         }
         const acceptedContinuity = acceptRealGpsObservation(
           continuity,
@@ -862,6 +863,10 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   const diagnosticTarget: {
     current: { ownerUserId: string; clientActivityId: string } | null;
   } = { current: null };
+  // Diagnostics stay outside the ownership/WAL mutex, but an opted-in cold
+  // headless batch must join its own recovery/appends before the handler can
+  // return (including an all-rejected batch with no canonical events).
+  const diagnosticWrites: Promise<void>[] = [];
   const result = await withOwnershipBoundary(async () => {
   crashLogger.breadcrumb(
     `k10:task_fire loc_count=${data?.locations?.length ?? 0} err=${error ? String(error).slice(0, 40) : 'none'} elapsed_ms=${Date.now() - moduleLoadTs}`
@@ -944,7 +949,7 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
     if (Number.isFinite(sampleTimestamp)
       && Number.isFinite(loc.coords.latitude)
       && Number.isFinite(loc.coords.longitude)) {
-      void recordActivityDiagnosticObservation({
+      diagnosticWrites.push(recordActivityDiagnosticObservation({
         ownerUserId: context.userId,
         clientActivityId: context.clientActivityId,
         observationTimeMs: Math.floor(sampleTimestamp),
@@ -968,10 +973,10 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
           receiptEvidenceId,
           ownerGeneration: context.ownerGeneration,
         },
-      });
+      }));
     }
     if (sampleTimestamp < (context.acceptAfterMs || 0)) {
-      void recordActivityDiagnosticDecision({
+      diagnosticWrites.push(recordActivityDiagnosticDecision({
         ownerUserId: context.userId,
         clientActivityId: context.clientActivityId,
         observationTimeMs: Math.floor(sampleTimestamp),
@@ -979,7 +984,7 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
         reason: 'before-owner-generation',
         segmentId: context.segmentId,
         receiptEvidenceId,
-      });
+      }));
       void recordActivityStageEvent({
         ownerUserId: context.userId,
         clientActivityId: context.clientActivityId,
@@ -1073,7 +1078,12 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
     crashLogger.breadcrumb(
       `k10:path_b hikeActive=${hikeActive} hasSid=${hasActiveSid} legacy=${legacyEnabled}`
     );
-    const accepted = await appendDirectlyToHikeTrack(events, context, nativeBatchSequence);
+    const accepted = await appendDirectlyToHikeTrack(
+      events,
+      context,
+      nativeBatchSequence,
+      diagnosticWrites,
+    );
     for (const point of accepted) {
       pendingBackgroundLocations.push({
         latitude: point.lat,
@@ -1119,6 +1129,7 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   // a headless runtime can terminate without losing the opted-in raw suffix,
   // while Finish and the next callback never wait behind diagnostic I/O.
   if (diagnosticTarget.current) {
+    await Promise.allSettled(diagnosticWrites);
     await flushActivityDiagnosticReplay(
       diagnosticTarget.current.ownerUserId,
       diagnosticTarget.current.clientActivityId,

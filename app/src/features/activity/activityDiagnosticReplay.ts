@@ -590,7 +590,10 @@ export async function flushActivityDiagnosticReplay(
   ownerUserId: string,
   clientActivityId: string,
 ): Promise<void> {
-  const replay = activeReplays.get(activityKey(ownerUserId, clientActivityId));
+  // A TaskManager wake may be the first caller in a fresh JS process. Join an
+  // in-flight recovery instead of treating the briefly empty map as opt-out.
+  const replay = activeReplays.get(activityKey(ownerUserId, clientActivityId))
+    ?? await ensureActivityDiagnosticReplay(ownerUserId, clientActivityId);
   if (!replay) return;
   do {
     scheduleDirtyChunkWrite(replay, true);

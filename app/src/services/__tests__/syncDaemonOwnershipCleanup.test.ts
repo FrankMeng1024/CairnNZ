@@ -7,6 +7,7 @@ const mockFailures: any[] = [];
 const mockSavedPending: any[] = [];
 const mockAddedSessions: any[] = [];
 let mockArtifact: any = null;
+let mockTombstoned = false;
 const mockPersistRemoteConflict = jest.fn(async (_input?: unknown) => ({
   conflictingActivities: [{ serverActivityId: 88 }],
 }));
@@ -52,9 +53,9 @@ jest.mock('../markerTombstones', () => ({ listMarkerTombstones: jest.fn(async ()
 jest.mock('../crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
 jest.mock('../../features/activity/activityRegistry', () => ({
   acknowledgeActivity: jest.fn(async () => { mockOrder.push('registry-ack'); return true; }),
-  completeActivity: jest.fn(async () => undefined),
+  completeActivity: jest.fn(async () => true),
   getActivityRegistry: jest.fn(async () => mockRegistry),
-  isActivityTombstoned: jest.fn(async () => false),
+  isActivityTombstoned: jest.fn(async () => mockTombstoned),
   mapActivityServerId: jest.fn(async () => 'completed'),
   removeAcknowledgedActivity: jest.fn(async () => { mockOrder.push('registry-remove'); }),
   updateCompletedActivitySyncState: jest.fn(async () => undefined),
@@ -100,6 +101,7 @@ const { saveHikeAtomic: mockSaveHikeAtomic } = require('../sessionService');
 const { startSessionResolved: mockStartSessionResolved } = require('../sessionService');
 const { resetForResync: mockResetForResync } = require('../pendingSyncStore');
 const { acknowledgeActivity: mockAcknowledgeActivity } = require('../../features/activity/activityRegistry');
+const { deleteRemoteSessionByClientId: mockDeleteRemoteSessionByClientId } = require('../sessionService');
 const { reconcileActivityMemoryProjection: mockReconcileActivityMemoryProjection } = require('../../features/activity/activityMemoryProjector');
 const { retireActivityMemoryProjection: mockRetireActivityMemoryProjection } = require('../../features/activity/activityMemoryProjector');
 
@@ -136,6 +138,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
     mockSavedPending.length = 0;
     mockAddedSessions.length = 0;
     mockArtifact = null;
+    mockTombstoned = false;
     mockPersistRemoteConflict.mockClear();
     mockClearRemoteConflict.mockClear();
     jest.clearAllMocks();
@@ -344,6 +347,21 @@ describe('Activity ACK ownership and cleanup phases', () => {
     expect(mockAcknowledgeActivity).not.toHaveBeenCalled();
     expect(mockPendingRows).toHaveLength(1);
     expect(mockOrder).toEqual([]);
+  });
+
+  test('a delete committed while the save ACK is held cannot revive the Activity', async () => {
+    let resolveNetwork!: (value: { session_id: number; client_activity_id: string }) => void;
+    mockSaveHikeAtomic.mockImplementationOnce(() => new Promise(resolve => { resolveNetwork = resolve; }));
+    const draining = drainPending();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    mockTombstoned = true;
+    resolveNetwork({ session_id: 77, client_activity_id: pending.localId });
+
+    await expect(draining).resolves.toMatchObject({ skipped: 1, succeeded: 0, failed: 0 });
+    expect(mockDeleteRemoteSessionByClientId).toHaveBeenCalledWith(pending.localId);
+    expect(mockPendingRows).toHaveLength(0);
+    expect(mockOrder).toEqual(['pending-delete']);
+    expect(mockAcknowledgeActivity).not.toHaveBeenCalled();
   });
 
   test.each([

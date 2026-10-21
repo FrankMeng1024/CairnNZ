@@ -6,6 +6,7 @@ BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
 OUTPUT_DIR="${EVIDENCE_DIR:-$REPO_DIR/_review/hike-run-client-backend-closure}"
 EXPO_URL="${EXPO_URL:-http://127.0.0.1:8098}"
+HARNESS_SCENARIO="${HARNESS_SCENARIO:-full}"
 RUN_ID="${HARNESS_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 SAFE_RUN_ID="$(printf '%s' "$RUN_ID" | tr -cd 'A-Za-z0-9_')"
 CONTAINER="cairn-hike-client-mysql-${SAFE_RUN_ID}"
@@ -13,10 +14,12 @@ DB_NAME="cairn_hike_client_${SAFE_RUN_ID}"
 DB_PASSWORD="hike-client-${SAFE_RUN_ID}-local-only"
 JWT_SECRET="hike-client-closure-${SAFE_RUN_ID}-only-64-characters-long-secret"
 MYSQL_IMAGE="${HARNESS_MYSQL_IMAGE:-mysql:8.0.36}"
+MYSQL_READY_ATTEMPTS="${HARNESS_MYSQL_READY_ATTEMPTS:-180}"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cairn-hike-client.XXXXXX")"
 API_PID=""
 
 mkdir -p "$OUTPUT_DIR"
+mkdir -p "$TEMP_DIR/mysql-data"
 
 cleanup() {
   local api_stopped=false container_removed=false
@@ -51,24 +54,43 @@ if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER"; then
 fi
 
 docker run -d --name "$CONTAINER" --security-opt seccomp=unconfined \
+  -v "$TEMP_DIR/mysql-data:/var/lib/mysql" \
   -e MYSQL_ROOT_PASSWORD="$DB_PASSWORD" \
   -e MYSQL_DATABASE="$DB_NAME" \
   -p 127.0.0.1::3306 "$MYSQL_IMAGE" >/dev/null
 
 stable_mysql_checks=0
-for attempt in $(seq 1 60); do
+for attempt in $(seq 1 "$MYSQL_READY_ATTEMPTS"); do
   if docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 'SELECT 1' >/dev/null 2>&1; then
     stable_mysql_checks=$((stable_mysql_checks + 1))
     if [ "$stable_mysql_checks" -ge 2 ]; then break; fi
   else
     stable_mysql_checks=0
   fi
-  if [ "$attempt" = 60 ]; then
+  if [ "$attempt" = "$MYSQL_READY_ATTEMPTS" ]; then
     docker logs "$CONTAINER" >&2 || true
     exit 1
   fi
   sleep 1
 done
+
+# The disposable fixture predates the optional client diagnostic ingestion
+# table. Create only the schema already expected by /api/edit-diag so unrelated
+# 500s cannot contaminate this isolated browser proof.
+docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e "
+  CREATE TABLE IF NOT EXISTS debug_events_v2 (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NULL,
+    session_instance_id VARCHAR(64) NOT NULL,
+    phase VARCHAR(64) NOT NULL,
+    step VARCHAR(64) NOT NULL,
+    seq BIGINT UNSIGNED NOT NULL,
+    timestamp_unix_ms BIGINT NOT NULL,
+    outcome VARCHAR(32) NOT NULL DEFAULT '',
+    diagnostic VARCHAR(1024) NOT NULL DEFAULT '',
+    received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+" >/dev/null
 
 DB_PORT="$(docker port "$CONTAINER" 3306/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -1)"
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" \
@@ -120,7 +142,8 @@ node "$REPO_DIR/app/scripts/hike-run-client-backend-closure-qa.mjs" \
   --url "$EXPO_URL" \
   --output "$OUTPUT_DIR" \
   --head "$SOURCE_HEAD" \
-  --tree "$SOURCE_TREE"
+  --tree "$SOURCE_TREE" \
+  --scenario "$HARNESS_SCENARIO"
 
 docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse "
   SELECT client_activity_id, COUNT(*), MIN(id), MAX(id),
@@ -150,6 +173,7 @@ node -e '
   const activities=read("DB_ACTIVITY_ASSERTIONS.tsv");
   const memory=read("DB_MEMORY_ASSERTIONS.tsv");
   const idempotency=read("DB_IDEMPOTENCY_ASSERTIONS.tsv")[0]??[];
+  const scenario=process.argv[2];
   const result={
     schema:"cairn.hike-run.client-backend-db-assertions.v1",
     capturedAt:new Date().toISOString(),
@@ -161,16 +185,29 @@ node -e '
   const seeded=result.activityRows.filter(row=>!row.clientActivityId.endsWith("000000000005"));
   const recorder=result.activityRows.find(row=>row.clientActivityId.endsWith("000000000005"));
   const recorderMemory=result.memoryRows.find(row=>row.clientActivityId.endsWith("000000000005"));
-  result.passed=result.activityRows.length===5
-    && seeded.length===4
+  const heldAckDeletedMemory=result.memoryRows.find(row=>row.clientActivityId.endsWith("000000000006"));
+  result.scenario=scenario;
+  const expectedActivityRows=scenario==="focused-review"?1:5;
+  const expectedSeededRows=scenario==="focused-review"?0:4;
+  // Activity deletion wins over a late Save ACK, while independently recorded
+  // physical Memory remains. The focused case therefore requires exactly one
+  // six-fact set for the deleted Activity rather than requiring its removal.
+  const expectedMemoryRows=scenario==="focused-review"?2:5;
+  result.passed=result.activityRows.length===expectedActivityRows
+    && seeded.length===expectedSeededRows
     && seeded.every(row=>row.rowCount===1&&row.finalizedRows===1&&row.routePoints===6&&row.rawPoints===6&&row.canonicalPoints===6)
     && !!recorder&&recorder.rowCount===1&&recorder.finalizedRows===1
     && recorder.routePoints>=2&&recorder.rawPoints>=2&&recorder.canonicalPoints>=2
-    && result.memoryRows.length===5
+    && result.memoryRows.length===expectedMemoryRows
     && result.memoryRows.filter(row=>!row.clientActivityId.endsWith("000000000005")).every(row=>row.rowCount===6&&row.distinctFacts===6)
-    && !!recorderMemory&&recorderMemory.rowCount>=2&&recorderMemory.rowCount===recorderMemory.distinctFacts;
+    && !!recorderMemory&&recorderMemory.rowCount>=2&&recorderMemory.rowCount===recorderMemory.distinctFacts
+    && (scenario!=="focused-review"||(
+      !!heldAckDeletedMemory
+      && heldAckDeletedMemory.rowCount===6
+      && heldAckDeletedMemory.distinctFacts===6
+    ));
   fs.writeFileSync(path.join(out,"DB_ASSERTIONS.json"),JSON.stringify(result,null,2)+"\n");
   if(!result.passed)process.exitCode=1;
-' "$OUTPUT_DIR"
+' "$OUTPUT_DIR" "$HARNESS_SCENARIO"
 
 echo "client/backend closure evidence: $OUTPUT_DIR"

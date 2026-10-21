@@ -28,7 +28,13 @@ describe('standalone Activity diagnostic replay', () => {
       nativeBatchIndex: observations[0].coordinate.nativeBatchIndex ?? null,
     });
     expect(fixture.transportConfig?.mode).toBe('captured-real');
-    expect(fixture.transportConfig?.cassetteEntries).toEqual(diagnostic.providerResponses);
+    expect(fixture.transportConfig?.cassetteEntries).toEqual(
+      expect.arrayContaining(diagnostic.providerResponses.map((response: any) => (
+        response?.method === 'GET'
+          ? response
+          : expect.objectContaining({ method: 'GET', status: response.status })
+      ))),
+    );
     const encodedFixture = JSON.stringify(fixture);
     expect(encodedFixture).not.toContain('canonicalPoints');
     expect(encodedFixture).not.toContain('localFinalPoints');

@@ -304,4 +304,32 @@ describe('useSessionStore — per-user isolation', () => {
     expect(useSessionStore.getState().sessions).toHaveLength(0);
     expect(service.deleteRemoteSession).toHaveBeenCalledWith(42);
   });
+
+  it('refuses a late save acknowledgement after the Activity tombstone is durable', async () => {
+    const storage = setupAsyncStorageMock();
+    const { useSessionStore } = require('../src/store/useSessionStore');
+    await useSessionStore.getState().hydrate('userB');
+    await useSessionStore.getState().addSession({
+      id: 'other-owner', clientActivityId: 'other-owner', syncState: 'synced',
+      activityMode: 'running', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 20, elevationGainM: 0, trackPoints: [], markerIds: [],
+    });
+    await useSessionStore.getState().hydrate('userA');
+    await useSessionStore.getState().addSession({
+      id: 'late-ack', clientActivityId: 'late-ack', syncState: 'pending',
+      activityMode: 'hiking', regionCode: 'nz', startedAt: 1, endedAt: 2,
+      durationS: 1, distanceM: 30, elevationGainM: 0, trackPoints: [], markerIds: [],
+    });
+    await useSessionStore.getState().deleteSession('late-ack');
+
+    await expect(useSessionStore.getState().markSynced('late-ack', 91, {
+      activityMode: 'hiking', startedAt: 1, endedAt: 2, distanceM: 30,
+    }, 'userA')).resolves.toBe(false);
+    expect(useSessionStore.getState().sessions).toEqual([]);
+    expect(JSON.parse(storage.cairn_sessions_userA)).toEqual([]);
+    await useSessionStore.getState().hydrate('userB');
+    expect(useSessionStore.getState().sessions).toEqual([
+      expect.objectContaining({ id: 'other-owner', clientActivityId: 'other-owner' }),
+    ]);
+  });
 });

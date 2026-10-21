@@ -753,6 +753,17 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     // Leave A's acknowledged server entity in its idempotent pending state;
     // A's later retry will reconcile it without touching B's local stores.
     if (!isCurrentActivityOwner(hike.userId)) return 'skipped';
+    // The user may delete while the server has committed but the HTTP ACK is
+    // still in flight. Re-check the durable identity tombstone at the first
+    // post-response boundary and clean up the just-acknowledged server row.
+    if (await isActivityTombstoned(hike.userId, hike.localId)) {
+      const cancelled = await deleteRemoteSessionByClientId(hike.localId);
+      if (!cancelled) await deleteRemoteSession(result.session_id).catch(() => false);
+      await removePending(hike.localId, hike.userId).catch(error => {
+        crashLogger.breadcrumb(`activity:tombstone_cleanup_retry ${String(error).slice(0, 80)}`);
+      });
+      return 'skipped';
+    }
 
     // Sprint 6 round-10 review R10B5 fix: mark in-memory FIRST, then
     // removePending. Pre-fix, removePending ran first — if the subsequent
@@ -797,10 +808,18 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     } catch (e) {
       crashLogger.breadcrumb(`v412:sync_mark_failed ${String(e).slice(0, 60)}`);
     }
-    if (!memorySynced) return 'failed';
+    if (!memorySynced) {
+      if (await isActivityTombstoned(hike.userId, hike.localId)) {
+        const cancelled = await deleteRemoteSessionByClientId(hike.localId);
+        if (!cancelled) await deleteRemoteSession(result.session_id).catch(() => false);
+        await removePending(hike.localId, hike.userId).catch(() => undefined);
+        return 'skipped';
+      }
+      return 'failed';
+    }
     const registry = await getActivityRegistry(hike.userId);
     if (!registry.completed.some(item => item.clientActivityId === hike.localId)) {
-      await completeActivity({
+      const completed = await completeActivity({
         clientActivityId: hike.localId,
         serverActivityId: result.session_id,
         userId: hike.userId,
@@ -811,9 +830,21 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
         syncState: 'pending',
         locationProviderSource: simulatorActivity ? 'simulator' : 'real',
       });
+      if (!completed) {
+        await deleteRemoteSessionByClientId(hike.localId).catch(() => false);
+        await removePending(hike.localId, hike.userId).catch(() => undefined);
+        return 'skipped';
+      }
     }
     const registryAcked = await acknowledgeActivity(hike.userId, hike.localId, result.session_id);
-    if (!registryAcked) return 'failed';
+    if (!registryAcked) {
+      if (await isActivityTombstoned(hike.userId, hike.localId)) {
+        await deleteRemoteSessionByClientId(hike.localId).catch(() => false);
+        await removePending(hike.localId, hike.userId).catch(() => undefined);
+        return 'skipped';
+      }
+      return 'failed';
+    }
     await clearActivityRemoteStartConflict(hike.userId, hike.localId).catch(() => undefined);
     void recordActivityStageEvent({
       ownerUserId: hike.userId,

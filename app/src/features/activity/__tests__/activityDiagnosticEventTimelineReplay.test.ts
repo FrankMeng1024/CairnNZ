@@ -3,9 +3,11 @@ import type {
   ActivityDiagnosticReplayRecord,
 } from '../activityDiagnosticReplay';
 import {
+  diagnosticProviderCassetteEntries,
   diagnosticReplayFixture,
   replayDiagnosticEventTimeline,
 } from '../../activitySimulator/diagnosticReplayFixture';
+import { createSnapLabCassetteTransport } from '../../activitySimulator/snapLabTransport';
 
 const record = (
   ordinal: number,
@@ -48,6 +50,40 @@ function diagnostic(records: ActivityDiagnosticReplayRecord[]): ActivityDiagnost
 }
 
 describe('diagnostic logs-only event timeline replay', () => {
+  test('normalizes a real Activity provider response into an offline exact-identity cassette', async () => {
+    const realUrl = 'https://api.mapbox.com/matching/v5/mapbox/walking/174.0,-41.0;174.1,-41.1?geometries=geojson&access_token=public-token';
+    const entries = diagnosticProviderCassetteEntries([{
+      phase: 'response', requestId: 'matching:0-1', requestKind: 'map-matching',
+      requestFingerprint: 'matching:activity-fingerprint',
+      sanitizedUrl: realUrl.replace('public-token', '<redacted>'),
+      status: 401, headers: { 'content-type': 'application/json' }, body: null,
+      capturedAt: '2026-10-21T00:00:00.000Z',
+    }]);
+    expect(entries[0]).toMatchObject({
+      method: 'GET', status: 401, provenance: 'CAPTURED_REAL_RESPONSE', body: null,
+    });
+    expect(JSON.stringify(entries)).not.toContain('public-token');
+    const response = await createSnapLabCassetteTransport(entries).fetch(realUrl);
+    expect(response.status).toBe(401);
+  });
+
+  test('uses diagnostic Start as the replay boundary for a cached pre-Start observation', () => {
+    const source = diagnostic([
+      record(0, 'diagnostic-start', { mode: 'hiking', source: 'real' }),
+      {
+        ...record(1, 'raw-observation', {
+          observationTimeMs: 900, receiptWallTimeMs: 1_100,
+          lat: -41, lng: 174, source: 'foreground', appStateAtReceipt: 'active',
+        }),
+        wallTimeMs: 1_100,
+      },
+    ]);
+    source.records[0].wallTimeMs = 1_000;
+    const fixture = diagnosticReplayFixture(source);
+    expect(fixture.clock.observationStartMs).toBe(1_000);
+    expect(fixture.rawEvents[0]).toMatchObject({ observationTimeMs: 900, deliveryTimeMs: 1_100 });
+  });
+
   test('pause → movement receipt → resume preserves the user-event boundary', () => {
     const result = replayDiagnosticEventTimeline(diagnostic([
       record(0, 'application-event', { stage: 'lifecycle', details: { event: 'recording-paused' } }),

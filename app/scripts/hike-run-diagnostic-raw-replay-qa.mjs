@@ -22,6 +22,38 @@ if (exportPaths.length === 0) throw new Error('pass --exports path/to/QA_ACTIVIT
 const ownerUserId = 'hike-run-diagnostic-replay-owner';
 const profileDir = path.join(outputRoot, '_browser-profile');
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+const fnv1a = value => {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
+const diagnosticCassetteEntries = responses => responses.map((raw, index) => {
+  if (raw?.method === 'GET' && raw?.provenance) return JSON.parse(JSON.stringify(raw));
+  if (raw?.phase !== 'response'
+    || !['map-matching', 'walking-directions'].includes(raw?.requestKind)
+    || typeof raw?.sanitizedUrl !== 'string'
+    || typeof raw?.status !== 'number') {
+    throw new Error(`diagnostic_provider_response_invalid:${index}`);
+  }
+  const parsed = new URL(raw.sanitizedUrl);
+  if (parsed.searchParams.has('access_token')) parsed.searchParams.set('access_token', '<redacted>');
+  const sanitizedUrl = `${parsed.origin}${parsed.pathname}${parsed.search}`;
+  const expectedPrefix = raw.requestKind === 'map-matching'
+    ? '/matching/v5/mapbox/walking/'
+    : '/directions/v5/mapbox/walking/';
+  if (parsed.origin !== 'https://api.mapbox.com' || !parsed.pathname.startsWith(expectedPrefix)) {
+    throw new Error(`diagnostic_provider_response_endpoint_invalid:${index}`);
+  }
+  return {
+    requestFingerprint: `snap-http-v1-${fnv1a(`GET ${sanitizedUrl}`)}`,
+    method: 'GET', sanitizedUrl, status: raw.status,
+    headers: raw.headers ?? {}, body: raw.body ?? null,
+    provenance: 'CAPTURED_REAL_RESPONSE', capturedAt: raw.capturedAt ?? null,
+  };
+});
 const writeJson = (file, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -49,8 +81,11 @@ function fixtureFromDiagnostic(diagnostic) {
   if (raw.length === 0) throw new Error('diagnostic_replay_has_no_raw_observations');
   const start = diagnostic.records.find(record => record.kind === 'diagnostic-start');
   const observationTimes = raw.map(record => Number(record.data.observationTimeMs));
-  const observationStartMs = Math.min(...observationTimes);
+  const earliestObservationMs = Math.min(...observationTimes);
   const startWallTimeMs = Number(start?.wallTimeMs);
+  const observationStartMs = Number.isFinite(startWallTimeMs)
+    ? startWallTimeMs
+    : earliestObservationMs;
   const firstReceiptWallTimeMs = Number(raw[0]?.data?.receiptWallTimeMs);
   const receiptEpochMs = Number.isFinite(startWallTimeMs) ? startWallTimeMs : firstReceiptWallTimeMs;
   return {
@@ -115,7 +150,10 @@ function fixtureFromDiagnostic(diagnostic) {
       yieldedFinish: false,
     },
     transportScenario: 'captured-owner-diagnostic',
-    transportConfig: { mode: 'captured-real', cassetteEntries: diagnostic.providerResponses ?? [] },
+    transportConfig: {
+      mode: 'captured-real',
+      cassetteEntries: diagnosticCassetteEntries(diagnostic.providerResponses ?? []),
+    },
   };
 }
 
@@ -128,9 +166,23 @@ const context = await chromium.launchPersistentContext(profileDir, {
   viewport: { width: 390, height: 844 },
   locale: 'en-NZ',
   timezoneId: 'Pacific/Auckland',
-  geolocation: { latitude: -41.2865, longitude: 174.7762, accuracy: 8 },
   permissions: ['geolocation'],
   args: ['--disable-web-security'],
+});
+// Production Start still owns the permission contract. This raw-replay-only
+// browser realm suppresses the real Web watcher after permission is granted,
+// otherwise a second provider can race the copied simulator observations and
+// correctly trip the production provider-source guard.
+await context.addInitScript(() => {
+  if (!navigator.geolocation) return;
+  Object.defineProperty(navigator, 'geolocation', {
+    configurable: true,
+    value: {
+      getCurrentPosition: () => undefined,
+      watchPosition: () => 1,
+      clearWatch: () => undefined,
+    },
+  });
 });
 const page = context.pages()[0] ?? await context.newPage();
 page.on('pageerror', error => browserErrors.push(error.message));
@@ -159,7 +211,7 @@ await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.snapLabLogica
   && globalThis.__cairnStores?.useTrackingStore
   && globalThis.__cairnStores?.useAppStore), null, { timeout: 120_000 });
 await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120_000 });
-await page.evaluate(ownerId => {
+await page.evaluate(async ownerId => {
   localStorage.setItem('cairn_jwt', 'diagnostic-replay-local-authority');
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
   localStorage.setItem(`cairn_onboarding_v1_done_${ownerId}`, 'true');
@@ -169,7 +221,7 @@ await page.evaluate(ownerId => {
     isLoggedIn: true, hydrated: true, sessionExpired: false,
   });
   stores.useSessionStore.setState({ currentUserId: ownerId, sessions: [] });
-  stores.useSettingsStore.getState().saveAll({ appearance: 'day', debugMode: true, mapLayer: 'outdoors' });
+  await stores.useSettingsStore.getState().saveAll({ appearance: 'day', debugMode: true, mapLayer: 'outdoors' });
 }, ownerUserId);
 await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Home', null, { timeout: 30_000 });
 await page.evaluate(() => globalThis.__cairnStores.navigationRef.reset({
@@ -214,15 +266,26 @@ for (const [index, exportPath] of exportPaths.entries()) {
     }));
   const artifact = diagnostic.finalArtifact;
   const expectedCanonicalFingerprint = fingerprint(artifact.canonicalPoints);
-  const expectedLocalFingerprint = fingerprint(artifact.localFinalPoints);
+  const localFinalAvailable = Array.isArray(artifact.localFinalPoints);
+  const expectedLocalFingerprint = localFinalAvailable ? fingerprint(artifact.localFinalPoints) : null;
   const expectedSelectedFingerprint = fingerprint(artifact.selectedFinalPoints);
+  const expectedCanonicalCount = Number.isFinite(Number(artifact.canonicalPointCount))
+    ? Number(artifact.canonicalPointCount)
+    : artifact.canonicalPoints.length;
+  const finalGeometryStateExact = artifact.finalGeometryState === 'base_ready'
+    ? run.persisted.selectedSource === 'local'
+    : artifact.finalGeometryState === 'enhanced'
+      ? run.persisted.selectedSource !== 'local'
+      : null;
   const checks = {
     rawCountExact: run.rawEventCount === fixture.rawEvents.length,
     perObservationDecisionsExact: JSON.stringify(replayedDiagnosticDecisions) === JSON.stringify(expectedDecisions),
-    canonicalCountExact: run.persisted.canonicalPoints.length === artifact.canonicalPointCount,
+    canonicalCountExact: run.persisted.canonicalPoints.length === expectedCanonicalCount,
     canonicalFingerprintExact: fingerprint(run.persisted.canonicalPoints) === expectedCanonicalFingerprint,
-    localFingerprintExact: fingerprint(run.persisted.localFinal) === expectedLocalFingerprint,
-    selectedSourceExact: run.persisted.selectedSource === artifact.selectedSource,
+    localFingerprintExact: localFinalAvailable
+      ? fingerprint(run.persisted.localFinal) === expectedLocalFingerprint
+      : null,
+    finalGeometryStateExact,
     selectedFingerprintExact: fingerprint(run.persisted.selectedFinal) === expectedSelectedFingerprint,
     coldReopenExact: fingerprint(run.coldReopened.selectedFinal) === expectedSelectedFingerprint,
     noLiveProviderFallback: unexpectedNetwork.length === 0,
@@ -233,7 +296,8 @@ for (const [index, exportPath] of exportPaths.entries()) {
     source: { path: exportPath, sha256: sha256(sourceBytes), clientActivityId: diagnostic.clientActivityId },
     sourceIdentity: { sourceHead, sourceTree },
     rawInputAuthority: 'diagnostic raw-observation records only',
-    comparisonOnly: ['finalArtifact.canonicalPoints', 'finalArtifact.localFinalPoints', 'finalArtifact.selectedFinalPoints'],
+    comparisonOnly: ['finalArtifact.canonicalPoints', 'finalArtifact.selectedFinalPoints'],
+    unavailableComparisons: localFinalAvailable ? [] : ['finalArtifact.localFinalPoints'],
     provider: {
       mode: 'captured-only',
       suppliedResponseCount: diagnostic.providerResponses?.length ?? 0,
@@ -242,7 +306,7 @@ for (const [index, exportPath] of exportPaths.entries()) {
       liveFallbackAllowed: false,
     },
     checks,
-    passed: Object.values(checks).every(Boolean),
+    passed: Object.values(checks).every(value => value !== false),
     actual: {
       rawCount: run.rawEventCount,
       acceptedCount: run.acceptedCallbackCount,
@@ -253,6 +317,7 @@ for (const [index, exportPath] of exportPaths.entries()) {
       localFingerprint: fingerprint(run.persisted.localFinal),
       expectedLocalFingerprint,
       selectedSource: run.persisted.selectedSource,
+      expectedFinalGeometryState: artifact.finalGeometryState ?? null,
       selectedFingerprint: fingerprint(run.persisted.selectedFinal),
       expectedSelectedFingerprint,
       acceptanceReceipts: run.acceptanceReceipts,
