@@ -16,7 +16,7 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   const libraryControls = read('src/components/LibraryControls.tsx');
 
   test('Memory exposes a normal All Cairns route outside map/location branches', () => {
-    expect(navigation).toContain("AllCairns: { initialSection?: 'left' | 'found'; markerIds?: string[] } | undefined");
+    expect(navigation).toContain('revisionIdsByMarker?: Record<string, string>');
     expect(navigation).toContain('<Stack.Screen name="AllCairns" component={AllCairnsScreen} />');
     expect(memory).toContain('testID="memory-all-cairns-entry"');
     expect(memory).toContain("nav.navigate('AllCairns')");
@@ -75,8 +75,10 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
     expect(detail).toContain('permission: editPermission');
     expect(detail).toContain('Your draft is still here so you can try again.');
     expect(detail).toContain('Discard changes?');
-    expect(detail).toContain('disabled={!editDirty}');
-    expect(detail).not.toContain('editBody.trim()');
+    expect(detail).toContain('disabled={!editDirty || Boolean(publicEditBlock)}');
+    expect(detail).toContain('This Cairn has no Activity source');
+    expect(detail).toContain('server confirms the linked completed Activity');
+    expect(detail).toContain('cairn-edit-public-block');
   });
 
   test('delete confirmation states non-cascade semantics and truthful queued deletion', () => {

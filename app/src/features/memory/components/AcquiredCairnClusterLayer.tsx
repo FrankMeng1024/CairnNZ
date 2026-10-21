@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
 import { getMapbox } from '../services/mapboxAdapter';
-import { buildAcquiredCairnFeatureCollection, clusterLeavesShareLocation, loadAllClusterLeaves } from './acquiredCairnClusters';
+import { buildAcquiredCairnFeatureCollection } from './acquiredCairnClusters';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { createAcquiredCairnSelectionController } from './acquiredCairnSelection';
 
 /**
  * One map point per acquired Cairn. Mapbox performs screen-space clustering,
@@ -24,53 +26,28 @@ export function AcquiredCairnClusterLayer({
   const markers = useCairnPresentationStore(state => state.acquiredMarkers);
   const viewerId = useCairnPresentationStore(state => state.viewerId);
   const sourceRef = useRef<any>(null);
-  const requestGeneration = useRef(0);
-  useEffect(() => () => { requestGeneration.current += 1; }, []);
+  const selection = useRef(createAcquiredCairnSelectionController()).current;
+  const isFocused = useIsFocused();
   const featureCollection = useMemo(() => buildAcquiredCairnFeatureCollection(markers), [markers]);
+  const rendererGeneration = `${theme.primary}|${theme.cairnPublic}|${theme.accent}|${theme.surfaceElevated}`;
+  useEffect(() => {
+    selection.invalidate();
+  }, [featureCollection, isFocused, rendererGeneration, selection, viewerId]);
+  useEffect(() => () => { selection.invalidate(); }, [selection]);
   const Mapbox = getMapbox() as any;
   if (!Mapbox.available || markers.length === 0) return null;
   const { ShapeSource, SymbolLayer, CircleLayer, Images } = Mapbox;
   if (!ShapeSource || !SymbolLayer || !CircleLayer) return null;
 
-  const openFeatures = async (features: any[]) => {
-    const markerIds = features
-      .map(feature => String(feature?.properties?.markerId ?? ''))
-      .filter(Boolean);
-    if (markerIds.length === 1) onOpenSingle(markerIds[0]);
-    else if (markerIds.length > 1) onOpenGroup(markerIds);
-  };
-
   const onPress = async (event: any) => {
-    const feature = event?.features?.[0];
-    if (!feature) return;
-    const clusterCount = Number(feature?.properties?.point_count ?? 0);
-    if (!clusterCount) {
-      await openFeatures([feature]);
-      return;
-    }
-    const request = ++requestGeneration.current;
-    const requestedViewer = viewerId;
-    try {
-      const leaves = await loadAllClusterLeaves(sourceRef.current, feature, clusterCount);
-      if (request !== requestGeneration.current
-        || useCairnPresentationStore.getState().viewerId !== requestedViewer) return;
-      if (leaves.length !== clusterCount) throw new Error('incomplete_cluster_membership');
-      if (clusterLeavesShareLocation(leaves)) {
-        await openFeatures(leaves);
-        return;
-      }
-      const zoom = Number(await sourceRef.current?.getClusterExpansionZoom?.(feature));
-      if (request !== requestGeneration.current
-        || useCairnPresentationStore.getState().viewerId !== requestedViewer) return;
-      const center = feature?.geometry?.coordinates;
-      if (!Array.isArray(center) || !Number.isFinite(center[0]) || !Number.isFinite(center[1]) || !Number.isFinite(zoom)) {
-        throw new Error('cluster_expansion_unavailable');
-      }
-      onExpandCluster([Number(center[0]), Number(center[1])], zoom);
-    } catch {
-      if (request === requestGeneration.current
-        && useCairnPresentationStore.getState().viewerId === requestedViewer) onClusterError?.();
-    }
+    if (!isFocused) return;
+    await selection.select(event, sourceRef.current, viewerId, {
+      currentViewerId: () => useCairnPresentationStore.getState().viewerId,
+      onOpenSingle,
+      onOpenGroup,
+      onExpandCluster,
+      onClusterError,
+    });
   };
 
   return (

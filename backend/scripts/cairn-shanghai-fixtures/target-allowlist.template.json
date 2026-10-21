@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "approved_targets": [
+    {
+      "server_uuid": "REPLACE_WITH_READ_ONLY_INSPECT_TARGET_OUTPUT",
+      "database": "REPLACE_WITH_EXACT_DATABASE_NAME",
+      "realm": "isolated",
+      "mutation_allowed": false,
+      "approval_note": "Set mutation_allowed only in a separately controlled allowlist after target ownership is verified."
+    }
+  ]
+}

@@ -785,6 +785,10 @@ router.get('/presentation/pending', async (req, res) => {
       `SELECT presentation.id,presentation.group_token,presentation.merge_started_at,
               presentation.merge_until,presentation.haptic_eligible,presentation.sound_eligible,
               COUNT(DISTINCT acquisition.marker_id) AS cairn_count,
+              COUNT(DISTINCT CASE WHEN revision.source_audience='friends'
+                    THEN acquisition.marker_id END) AS friends_cairn_count,
+              COUNT(DISTINCT CASE WHEN revision.source_audience='public'
+                    THEN acquisition.marker_id END) AS public_cairn_count,
               CASE WHEN COUNT(DISTINCT acquisition.marker_id)=1
                    THEN MIN(acquisition.marker_id) ELSE NULL END AS single_marker_id,
               COUNT(event.id) AS event_count,
@@ -897,7 +901,7 @@ router.get('/presentation/:group_id/items', async (req, res) => {
     );
     if (!groups[0]) return res.status(404).json({ error: 'Presentation group unavailable' });
     const [items] = await pool.execute(
-      `SELECT DISTINCT acquisition.marker_id
+      `SELECT acquisition.marker_id,revision.id AS revision_id,MAX(event.id) AS event_id
          FROM cairn_acquisition_events event
          JOIN cairn_acquisitions acquisition
            ON acquisition.id=event.acquisition_id AND acquisition.viewer_id=event.viewer_id
@@ -924,16 +928,23 @@ router.get('/presentation/:group_id/items', async (req, res) => {
              WHERE (blocked.blocker_id=event.viewer_id AND blocked.blocked_id=revision.owner_id)
                 OR (blocked.blocker_id=revision.owner_id AND blocked.blocked_id=event.viewer_id)
           )
-        ORDER BY acquisition.marker_id ASC`,
+        GROUP BY acquisition.marker_id,revision.id
+        ORDER BY event_id ASC,acquisition.marker_id ASC`,
       [req.user.userId, groupId],
     );
-    const markerIds = items.map(item => String(item.marker_id));
+    const exactItems = items.map(item => ({
+      marker_id: String(item.marker_id),
+      revision_id: String(item.revision_id),
+      event_id: String(item.event_id),
+    }));
+    const markerIds = [...new Set(exactItems.map(item => item.marker_id))];
     if (markerIds.length === 0) {
       return res.status(410).json({ error: 'Presentation group no longer has available Cairns' });
     }
     return res.json({
       presentation_group_id: String(groupId),
       marker_ids: markerIds,
+      items: exactItems,
       single_marker_id: markerIds.length === 1 ? markerIds[0] : null,
     });
   } catch (error) {

@@ -86,8 +86,16 @@ export function AcquiredCairnDetailScreen() {
         setError('This acquired Cairn is unavailable right now.');
         return;
       }
+      const exactIndex = route.params.revisionId
+        ? next.findIndex(revision => String(revision.revision_id) === route.params.revisionId)
+        : 0;
+      if (route.params.revisionId && exactIndex < 0) {
+        setRevisions([]);
+        setError('This exact encountered version is no longer available. Newer pages were not opened in its place.');
+        return;
+      }
       setRevisions(next);
-      setPageIndex(0);
+      setPageIndex(Math.max(0, exactIndex));
     } catch (cause) {
       if (!isCurrentOwner()) return;
       const reason = cause instanceof Error ? cause.message : '';
@@ -97,16 +105,21 @@ export function AcquiredCairnDetailScreen() {
       } else {
         const cached = await loadCachedAcquiredCairnHistory(ownerId, route.params.markerId).catch(() => null);
         if (!isCurrentOwner()) return;
-        if (cached?.length) {
+        const cachedExactIndex = route.params.revisionId
+          ? cached?.findIndex(revision => String(revision.revision_id) === route.params.revisionId) ?? -1
+          : 0;
+        if (cached?.length && cachedExactIndex >= 0) {
           setRevisions(cached);
-          setPageIndex(0);
+          setPageIndex(cachedExactIndex);
           setShowingOfflineCopy(true);
+        } else if (route.params.revisionId) {
+          setError('This exact encountered version is unavailable right now. Reconnect to try again.');
         } else setError('This acquired Cairn is unavailable right now.');
       }
     } finally {
       if (isCurrentOwner()) setLoading(false);
     }
-  }, [ownerId, route.params.markerId]);
+  }, [ownerId, route.params.markerId, route.params.revisionId]);
 
   useEffect(() => {
     void load();

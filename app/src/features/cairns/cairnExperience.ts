@@ -90,7 +90,7 @@ export type CairnPublicationTruth = {
  * is deliberately not collapsed into "submitted" or "in review". */
 export function cairnPublicationTruth(marker: Pick<
   Marker,
-  'permission' | 'synced' | 'syncState' | 'publicState' | 'publicSubmissionCode'
+  'permission' | 'synced' | 'syncState' | 'publicState' | 'publicSubmissionCode' | 'originActivityClientId'
 >): CairnPublicationTruth | null {
   if (marker.permission !== 'public') return null;
   if (marker.syncState === 'failed') return {
@@ -106,8 +106,12 @@ export function cairnPublicationTruth(marker: Pick<
     explanation: 'This version is saved locally. It has not been submitted for review yet.',
   };
   if (marker.publicSubmissionCode === 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED') return {
-    state: 'waiting_activity', label: 'Public · Waiting for Activity', successTitle: 'Cairn saved',
-    explanation: 'When its eligible source Activity finishes, this version can proceed to Public review automatically.',
+    state: 'waiting_activity',
+    label: marker.originActivityClientId ? 'Public · Activity not confirmed' : 'Public · Activity required',
+    successTitle: 'Cairn saved',
+    explanation: marker.originActivityClientId
+      ? 'The linked Activity is not yet confirmed as eligible. This version is not in review or Public discovery; it can proceed only after the server confirms a completed eligible Activity.'
+      : 'This Cairn has no Activity source, so this version cannot enter Public review. Choose another audience, or leave a new Public Cairn from an eligible Activity.',
   };
   if (marker.publicSubmissionCode === 'PUBLIC_TEXT_REQUIRED') return {
     state: 'not_submitted', label: 'Public · Useful text required', successTitle: 'Cairn saved privately',

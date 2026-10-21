@@ -65,11 +65,14 @@ import {
   configureCairnNotificationPresentation,
   completeCairnNotificationResponse,
   consumeCairnNotificationResponse,
+  pendingCairnNotificationResponses,
   releaseCairnNotificationResponse,
   resumeEncounterNotifications,
   type CairnNotificationDestination,
 } from '../features/cairns/cairnEncounterNotifications';
-import { resolveCairnPresentationItems } from '../features/cairns/cairnPresentationNavigation';
+import { resolveCairnPresentationDestinations } from '../features/cairns/cairnPresentationNavigation';
+import { openCairnNotificationDestination } from '../features/cairns/cairnNotificationOpen';
+import { CairnNotificationRetryBanner } from '../features/cairns/components/CairnNotificationRetryBanner';
 
 // v302: mark immediately after all transitive imports above resolved.
 // If app dies between `render_about_to_mount_root` (App.tsx) and
@@ -111,11 +114,15 @@ export type RootStackParamList = {
     } | { kind: 'standalone' };
   } | undefined;
   MarkerDetail: { markerId: string };
-  AllCairns: { initialSection?: 'left' | 'found'; markerIds?: string[] } | undefined;
+  AllCairns: {
+    initialSection?: 'left' | 'found';
+    markerIds?: string[];
+    revisionIdsByMarker?: Record<string, string>;
+  } | undefined;
   Friends: undefined;
   FriendContent: { friendId: string; friendName: string };
   PublicCairnDetail: { cairnId: string };
-  AcquiredCairnDetail: { markerId: string };
+  AcquiredCairnDetail: { markerId: string; revisionId?: string };
   /** dev-only preview: renders the auto-generated FriendsScreen from spec.json.
    *  Query param 'state' picks which of F0-F6 to render. */
   FriendsPreview: { state?: string } | undefined;
@@ -159,30 +166,52 @@ export function RootNavigator() {
   const pendingNotificationOpen = React.useRef<CairnNotificationDestination[]>([]);
   const pendingNotificationResponse = React.useRef<unknown[]>([]);
   const notificationOwnerRef = React.useRef('');
-  const openCairnNotification = React.useCallback(async (destination: CairnNotificationDestination) => {
-    const ownerId = String(useAppStore.getState().user?.id ?? '');
-    if (!useAppStore.getState().isLoggedIn || ownerId !== destination.viewerId
-      || !destination.presentationGroupId) return false;
-    let markerIds: string[];
-    try {
-      markerIds = await resolveCairnPresentationItems(ownerId, [destination.presentationGroupId]);
-    } catch {
-      return false;
-    }
-    if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return false;
-    if (!navigationRef.isReady()) {
-      if (!pendingNotificationOpen.current.some(item => item.notificationId === destination.notificationId)) {
-        pendingNotificationOpen.current = [...pendingNotificationOpen.current, destination].slice(-32);
-      }
-      return false;
-    }
-    if (markerIds.length === 1) {
-      navigationRef.navigate('AcquiredCairnDetail', { markerId: markerIds[0] });
-    } else {
-      navigationRef.navigate('AllCairns', { initialSection: 'found', markerIds });
-    }
-    return true;
+  const [notificationRetryTargets, setNotificationRetryTargets] = React.useState<CairnNotificationDestination[]>([]);
+  const [notificationRetryBusy, setNotificationRetryBusy] = React.useState(false);
+  const queueNotificationRetry = React.useCallback((destination: CairnNotificationDestination) => {
+    setNotificationRetryTargets(current => current.some(item => item.notificationId === destination.notificationId)
+      ? current
+      : [...current, destination].slice(-32));
   }, []);
+  const openCairnNotification = React.useCallback(async (destination: CairnNotificationDestination) => {
+    const result = await openCairnNotificationDestination(destination, {
+      currentViewerId: () => {
+        const app = useAppStore.getState();
+        return app.isLoggedIn ? String(app.user?.id ?? '') : '';
+      },
+      navigationReady: () => navigationRef.isReady(),
+      resolve: (viewerId, groupIds) => resolveCairnPresentationDestinations(
+        viewerId, groupIds, { requireExactRevision: true },
+      ),
+      openSingle: item => navigationRef.navigate('AcquiredCairnDetail', {
+        markerId: item.markerId,
+        revisionId: item.revisionId,
+      }),
+      openGroup: items => navigationRef.navigate('AllCairns', {
+        initialSection: 'found',
+        markerIds: [...new Set(items.map(item => item.markerId))],
+        revisionIdsByMarker: Object.fromEntries(items.map(item => [item.markerId, item.revisionId])),
+      }),
+    });
+    if (result === 'deferred'
+      && !pendingNotificationOpen.current.some(item => item.notificationId === destination.notificationId)) {
+      pendingNotificationOpen.current = [...pendingNotificationOpen.current, destination].slice(-32);
+    }
+    return result;
+  }, []);
+  const finishCairnNotificationOpen = React.useCallback(async (destination: CairnNotificationDestination) => {
+    const result = await openCairnNotification(destination);
+    if (result === 'opened') {
+      await completeCairnNotificationResponse(destination);
+      setNotificationRetryTargets(current => current.filter(item => item.notificationId !== destination.notificationId));
+    } else if (result === 'retryable') {
+      await releaseCairnNotificationResponse(destination);
+      queueNotificationRetry(destination);
+    } else if (result === 'discarded') {
+      await releaseCairnNotificationResponse(destination);
+    }
+    return result;
+  }, [openCairnNotification, queueNotificationRetry]);
   const receiveCairnNotification = React.useCallback(async (response: unknown) => {
     const app = useAppStore.getState();
     const ownerId = app.isLoggedIn ? String(app.user?.id ?? '') : '';
@@ -195,15 +224,15 @@ export function RootNavigator() {
     }
     const destination = await consumeCairnNotificationResponse(response, ownerId);
     if (!destination) return;
-    const opened = await openCairnNotification(destination);
-    if (opened) await completeCairnNotificationResponse(destination);
-    else await releaseCairnNotificationResponse(destination);
-  }, [openCairnNotification]);
+    await finishCairnNotificationOpen(destination);
+  }, [finishCairnNotificationOpen]);
   React.useEffect(() => {
     if (!isLoggedIn || !user?.id) {
       notificationOwnerRef.current = '';
       pendingNotificationOpen.current = [];
       pendingNotificationResponse.current = [];
+      setNotificationRetryTargets([]);
+      setNotificationRetryBusy(false);
       usePublicCairnStore.getState().clearForAccountBoundary();
       useCairnPresentationStore.getState().clearForAccountBoundary();
       return;
@@ -212,6 +241,7 @@ export function RootNavigator() {
     if (notificationOwnerRef.current && notificationOwnerRef.current !== currentOwner) {
       pendingNotificationOpen.current = [];
       pendingNotificationResponse.current = [];
+      setNotificationRetryTargets([]);
     }
     notificationOwnerRef.current = currentOwner;
     void retryPendingFriendContentActions();
@@ -219,6 +249,10 @@ export function RootNavigator() {
     void usePublicCairnStore.getState().initialize(String(user.id));
     void useCairnPresentationStore.getState().initialize(String(user.id));
     void resumeEncounterNotifications(String(user.id));
+    void pendingCairnNotificationResponses(currentOwner, { recoverProcessing: true }).then(destinations => {
+      if (String(useAppStore.getState().user?.id ?? '') !== currentOwner) return;
+      setNotificationRetryTargets(destinations);
+    });
     const pending = pendingNotificationResponse.current;
     pendingNotificationResponse.current = [];
     for (const response of pending) void receiveCairnNotification(response);
@@ -308,6 +342,13 @@ export function RootNavigator() {
     return () => useCairnPresentationStore.getState().setPresentationBlock('onboarding', false);
   }, [isLoggedIn, onboardingChecked, showOnboarding]);
 
+  const retryNotificationOpen = React.useCallback(() => {
+    const destination = notificationRetryTargets[0];
+    if (!destination || notificationRetryBusy) return;
+    setNotificationRetryBusy(true);
+    void finishCairnNotificationOpen(destination).finally(() => setNotificationRetryBusy(false));
+  }, [finishCairnNotificationOpen, notificationRetryBusy, notificationRetryTargets]);
+
   return (
     <NavigationContainer
       theme={{
@@ -329,11 +370,7 @@ export function RootNavigator() {
         const pending = pendingNotificationOpen.current;
         pendingNotificationOpen.current = [];
         for (const destination of pending) {
-          void openCairnNotification(destination).then(opened => (
-            opened
-              ? completeCairnNotificationResponse(destination)
-              : releaseCairnNotificationResponse(destination)
-          ));
+          void finishCairnNotificationOpen(destination);
         }
         // R113 restore: expose nav helpers + internal QA stores
         // to __cairnStores for Playwright web QA. Guarded on Platform.OS==='web'.
@@ -481,6 +518,13 @@ export function RootNavigator() {
           screen when the device drops offline. Hidden when logged out
           (Auth screen has no offline-dependent actions worth flagging). */}
       {isLoggedIn && <OfflineBanner />}
+      {isLoggedIn && notificationRetryTargets[0] ? (
+        <CairnNotificationRetryBanner
+          busy={notificationRetryBusy}
+          onRetry={retryNotificationOpen}
+          onLater={() => setNotificationRetryTargets(current => current.slice(1))}
+        />
+      ) : null}
     </NavigationContainer>
   );
 }

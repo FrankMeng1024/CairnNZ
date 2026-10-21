@@ -226,7 +226,12 @@ export function MarkerDetailScreen() {
       log('marker.edit_save', { id: marker.id });
       setIsEditing(false);
     } catch (e: any) {
-      setSaveError('Changes were not saved. Your draft is still here so you can try again.');
+      const reason = e?.code === 'PUBLIC_SUSPENDED_EDIT_BLOCKED'
+        ? 'This Public version is paused by review. Choose Only me or Friends to withdraw it before changing the words.'
+        : e?.code === 'CAIRN_SOURCE_FROZEN'
+          ? 'This Cairn is under review and cannot create a new version right now.'
+          : 'Changes were not saved. Your draft is still here so you can try again.';
+      setSaveError(reason);
     } finally {
       setSaving(false);
     }
@@ -300,6 +305,24 @@ export function MarkerDetailScreen() {
   const sourceActivity = marker.originActivityClientId
     ? sessions.find(session => activityMatchesTarget(session, marker.originActivityClientId!))
     : null;
+  const editHasUsefulText = editTitle.trim().length > 0 || editBody.trim().length > 0;
+  const editChangesWords = encodeTitleBody(editTitle, editBody) !== marker.note;
+  const publicEditBlock = editPermission !== 'public'
+    ? null
+    : !publicEnabled
+      ? 'Public is not available for this account right now. Choose Only me or Friends to save.'
+      : !marker.originActivityClientId
+        ? 'This Cairn has no Activity source, so it cannot enter Public review. Leave a new Public Cairn from an eligible Activity.'
+        : !editHasUsefulText
+          ? 'Add useful words before saving a Public version.'
+          : marker.publicState === 'suspended' && editChangesWords
+            ? 'This Public version is paused by review. Choose Only me or Friends to withdraw it before changing the words.'
+            : null;
+  const publicEditTruth = sourceActivity
+    ? 'Saving creates a new version. It can enter review only after the server confirms the linked completed Activity; it is not Public until approved.'
+    : marker.originActivityClientId
+      ? 'Saving keeps Public intent, but the linked Activity is not yet confirmed as eligible. This version stays out of review and Public discovery until the server confirms eligibility and review approves it.'
+      : 'This Cairn cannot become Public because it has no Activity source.';
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
@@ -596,8 +619,19 @@ export function MarkerDetailScreen() {
           <Text style={[styles.editVersionTruth, { color: visualTheme.foregroundSecondary }]}>
             {editPermission === 'personal'
               ? 'Saving changes updates your private Cairn. Its place and original Activity stay fixed.'
-              : 'Saving creates a new encounterable version. People who already found an earlier version keep it in their Memory.'}
+              : editPermission === 'group'
+                ? 'Saving creates a new Friends version. Friends who genuinely pass nearby can encounter it; earlier acquired pages remain in Memory.'
+                : publicEditTruth}
           </Text>
+          {publicEditBlock ? (
+            <Text
+              testID="cairn-edit-public-block"
+              accessibilityLiveRegion="polite"
+              style={[styles.editBoundaryCopy, { color: visualTheme.destructive }]}
+            >
+              {publicEditBlock}
+            </Text>
+          ) : null}
           <MarkForm
             type={editType}
             title={editTitle}
@@ -610,7 +644,7 @@ export function MarkerDetailScreen() {
             mode="edit"
             showTypePicker={false}
             showVisibilityPicker
-            disableVisibilityPublic={!publicEnabled && marker.permission !== 'public'}
+            disableVisibilityPublic={(!publicEnabled || !marker.originActivityClientId) && marker.permission !== 'public'}
             showLocationLockedNotice
             autoFocus={null}
             titleMaxChars={ContentConfig.titleMaxChars}
@@ -629,10 +663,10 @@ export function MarkerDetailScreen() {
         </BottomSheetContent>
         <View style={[styles.editFooter, { backgroundColor: visualTheme.sheetSurface, borderTopColor: visualTheme.borderSubtle }]}>
           <PrimaryButton
-            label={editPermission === 'personal' ? 'Save changes' : 'Save new version'}
+            label={editPermission === 'public' ? 'Save Public version' : editPermission === 'personal' ? 'Save changes' : 'Save Friends version'}
             onPress={() => { void saveEdit(); }}
             loading={saving}
-            disabled={!editDirty}
+            disabled={!editDirty || Boolean(publicEditBlock)}
             testID="cairn-edit-save"
           />
         </View>

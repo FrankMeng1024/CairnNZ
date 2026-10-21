@@ -18,6 +18,7 @@ export interface CairnPresentationGroup {
   unannouncedUpdatedEventCount: number;
   eventCount: number;
   updatedEventCount: number;
+  sourceAudience: 'friends' | 'public' | 'mixed' | 'unknown';
 }
 
 export interface AcquiredCairnMapMarker {
@@ -186,6 +187,8 @@ async function persist(snapshot: Snapshot, generation: number): Promise<void> {
 }
 
 function normalizeGroup(raw: any): CairnPresentationGroup | null {
+  const friendsCount = Math.max(0, Number(raw?.friends_cairn_count) || 0);
+  const publicCount = Math.max(0, Number(raw?.public_cairn_count) || 0);
   const value: CairnPresentationGroup = {
     id: String(raw?.id ?? ''),
     token: String(raw?.group_token ?? ''),
@@ -198,6 +201,9 @@ function normalizeGroup(raw: any): CairnPresentationGroup | null {
     unannouncedUpdatedEventCount: Math.max(0, Number(raw?.unannounced_updated_event_count) || 0),
     eventCount: Math.max(1, Number(raw?.event_count) || 1),
     updatedEventCount: Math.max(0, Number(raw?.updated_event_count) || 0),
+    sourceAudience: friendsCount > 0 && publicCount > 0
+      ? 'mixed'
+      : friendsCount > 0 ? 'friends' : publicCount > 0 ? 'public' : 'unknown',
   };
   return validGroup(value) ? value : null;
 }
@@ -236,6 +242,11 @@ function aggregateGroups(groups: CairnPresentationGroup[]): CairnPresentationGro
     unannouncedUpdatedEventCount: groups.reduce((total, group) => total + group.unannouncedUpdatedEventCount, 0),
     eventCount: groups.reduce((total, group) => total + group.eventCount, 0),
     updatedEventCount: groups.reduce((total, group) => total + group.updatedEventCount, 0),
+    sourceAudience: groups.every(group => group.sourceAudience === 'friends')
+      ? 'friends'
+      : groups.every(group => group.sourceAudience === 'public')
+        ? 'public'
+        : groups.every(group => group.sourceAudience === 'unknown') ? 'unknown' : 'mixed',
   };
 }
 

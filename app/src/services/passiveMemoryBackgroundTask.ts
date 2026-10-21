@@ -293,7 +293,11 @@ export async function handlePassiveMemoryBackgroundTask({ data, error }: { data:
     }));
     let deliveryStatus = 'not_attempted';
     let deliveredAcquisitions = 0;
-    if (acceptedCount > 0) {
+    // A previous callback may have committed evidence but lost transport or
+    // been suspended before discovery. Every later authorized native wake is
+    // therefore a bounded retry opportunity, even when it contributes no new
+    // accepted movement. The delivery worker caps each replay at 500 records.
+    if (locations.length > 0 || acceptedCount > 0) {
       const delivery = await deliverHeadlessPassiveMemory({
         ownerUserId: context.ownerUserId,
         passiveEpoch: context.epoch,

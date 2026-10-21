@@ -23,6 +23,7 @@ jest.mock('../../../store/useAppStore', () => ({
 import {
   completeCairnNotificationResponse,
   consumeCairnNotificationResponse,
+  pendingCairnNotificationResponses,
   releaseCairnNotificationResponse,
   resumeEncounterNotifications,
   setEncounterNotificationsEnabled,
@@ -30,7 +31,7 @@ import {
   __encounterNotificationTest,
 } from '../cairnEncounterNotifications';
 
-function response(viewerId = 'viewer-a', notificationId = 'n-1', relatedId = 'group-7') {
+function response(viewerId = 'viewer-a', notificationId = 'n-1', relatedId = '7') {
   return {
     notification: {
       request: {
@@ -60,13 +61,27 @@ describe('Cairn encounter notification safety', () => {
     await expect(consumeCairnNotificationResponse(response('viewer-b'), 'viewer-a')).resolves.toBeNull();
     const destination = await consumeCairnNotificationResponse(response(), 'viewer-a');
     expect(destination).toEqual({
-      viewerId: 'viewer-a', presentationGroupId: 'group-7', notificationId: 'n-1',
+      viewerId: 'viewer-a', presentationGroupId: '7', notificationId: 'n-1',
     });
     await expect(consumeCairnNotificationResponse(response(), 'viewer-a')).resolves.toBeNull();
     await releaseCairnNotificationResponse(destination!);
     await expect(consumeCairnNotificationResponse(response(), 'viewer-a')).resolves.toEqual(destination);
     await completeCairnNotificationResponse(destination!);
     await expect(consumeCairnNotificationResponse(response(), 'viewer-a')).resolves.toBeNull();
+  });
+
+  test('cold-start recovery exposes an interrupted open as pending without navigating', async () => {
+    const destination = await consumeCairnNotificationResponse(response(), 'viewer-a');
+    expect(destination).not.toBeNull();
+    await expect(pendingCairnNotificationResponses('viewer-a')).resolves.toEqual([]);
+    await expect(pendingCairnNotificationResponses('viewer-a', { recoverProcessing: true }))
+      .resolves.toEqual([destination]);
+    expect(mockValues.get(__encounterNotificationTest.openedKey('viewer-a'))).toContain('"state":"pending"');
+  });
+
+  test('rejects malformed or missing presentation group identity', async () => {
+    await expect(consumeCairnNotificationResponse(response('viewer-a', 'n-2', 'group-7'), 'viewer-a'))
+      .resolves.toBeNull();
   });
 
   test('ignores unrelated notification kinds', async () => {

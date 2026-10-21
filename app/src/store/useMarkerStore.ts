@@ -565,7 +565,15 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         method: 'PUT',
         body: JSON.stringify(backendUpdates),
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const failure = typeof response.json === 'function'
+          ? await response.json().catch(() => null)
+          : null;
+        throw Object.assign(new Error(failure?.error || `HTTP ${response.status}`), {
+          code: failure?.code,
+          status: response.status,
+        });
+      }
       const result = await response.json().catch(() => null);
       if (result?.public_state) {
         updates.publicState = result.public_state;

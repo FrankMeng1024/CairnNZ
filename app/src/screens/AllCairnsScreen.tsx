@@ -114,13 +114,22 @@ function CairnRow({ marker }: { marker: Marker }) {
   );
 }
 
-function FoundCairnRow({ cairn, archived, onRestore, restoring }: { cairn: FoundCairn; archived: boolean; onRestore: () => void; restoring: boolean }) {
+function FoundCairnRow({ cairn, archived, onRestore, restoring, revisionId }: {
+  cairn: FoundCairn;
+  archived: boolean;
+  onRestore: () => void;
+  restoring: boolean;
+  revisionId?: string;
+}) {
   const theme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const decoded = splitTitleBody(cairn.text ?? '');
   return (
     <LibraryRecordSurface
-      onPress={() => nav.navigate('AcquiredCairnDetail', { markerId: String(cairn.marker_id) })}
+      onPress={() => nav.navigate('AcquiredCairnDetail', {
+        markerId: String(cairn.marker_id),
+        revisionId,
+      })}
       testID={`found-cairn-row-${cairn.marker_id}`}
       accessibilityLabel="Acquired Cairn"
     >
@@ -416,6 +425,7 @@ export function AllCairnsScreen() {
                 archived={foundCollectionState === 'archived'}
                 onRestore={() => void restoreFound(item.marker_id)}
                 restoring={restoringIds.includes(item.marker_id)}
+                revisionId={route.params?.revisionIdsByMarker?.[String(item.marker_id)]}
               />
             )}
             contentContainerStyle={[styles.list, visibleFound.length === 0 && styles.listEmpty]}

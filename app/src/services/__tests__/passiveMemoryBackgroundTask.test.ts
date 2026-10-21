@@ -45,6 +45,8 @@ import {
 
 const mockRecordMemoryEvidence = require('../../features/memory/services/recordMemoryEvidence')
   .recordMemoryEvidence as jest.Mock;
+const mockDeliverHeadless = require('../../features/memory/services/headlessMemoryDelivery')
+  .deliverHeadlessPassiveMemory as jest.Mock;
 
 const location = (eastM: number, timestamp: number) => ({
   timestamp,
@@ -93,6 +95,25 @@ describe('passive Memory headless task', () => {
       error: null,
     });
     expect(mockRecordMemoryEvidence).toHaveBeenCalledTimes(callsBeforeOff);
+  });
+
+  test('a later callback retries durable delivery without requiring new accepted movement', async () => {
+    mockDeliverHeadless
+      .mockResolvedValueOnce({ status: 'failed', pointCount: 1, presenceCount: 1, acquiredCount: 0 })
+      .mockResolvedValueOnce({ status: 'acknowledged_and_discovered', pointCount: 1, presenceCount: 1, acquiredCount: 1 });
+    await acquirePassiveMemoryLease({
+      ownerUserId: 'owner-a', epoch: 'epoch-retry', source: 'real', acceptAfterMs: 1_000,
+    });
+    await handlePassiveMemoryBackgroundTask({
+      data: { locations: [location(0, 1_000), location(12, 16_000), location(24, 31_000)] },
+      error: null,
+    });
+    expect(mockDeliverHeadless).toHaveBeenCalledTimes(1);
+    await handlePassiveMemoryBackgroundTask({
+      // Replayed provider sample is stale, so it produces no new evidence.
+      data: { locations: [location(24, 31_000)] }, error: null,
+    });
+    expect(mockDeliverHeadless).toHaveBeenCalledTimes(2);
   });
 
   test('an obsolete epoch stop cannot tear down a newer native passive owner', async () => {

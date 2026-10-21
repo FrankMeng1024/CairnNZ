@@ -47,6 +47,8 @@ function pending(eventThroughId = '11', cairnCount = 1): any {
       unannounced_updated_event_count: 0,
       event_count: cairnCount,
       updated_event_count: 0,
+      friends_cairn_count: cairnCount,
+      public_cairn_count: 0,
     }],
   });
 }
@@ -66,6 +68,8 @@ function pendingGroups(counts: number[]): any {
       unannounced_updated_event_count: 0,
       event_count: cairnCount,
       updated_event_count: 0,
+      friends_cairn_count: index % 2 === 0 ? cairnCount : 0,
+      public_cairn_count: index % 2 === 1 ? cairnCount : 0,
     })),
   });
 }
@@ -242,6 +246,7 @@ describe('Cairn presentation coordinator', () => {
       ['/api/cairn-memory/presentation/32/announced', '12'],
       ['/api/cairn-memory/presentation/33/announced', '13'],
     ]);
+    expect(useCairnPresentationStore.getState().activeGroup?.sourceAudience).toBe('mixed');
   });
 
   test('leaving Home before announcement returns every member without replaying acknowledged members', async () => {

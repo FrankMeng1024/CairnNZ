@@ -9,6 +9,7 @@ import { CairnStoneMark, useReduceMotion } from '../../cairns/components/CairnPa
 import { CAIRN_MOTION, CAIRN_TERMS } from '../../cairns/cairnExperience';
 import { haptic } from '../../../services/hapticService';
 import { resolveCairnPresentationItems } from '../../cairns/cairnPresentationNavigation';
+import { scheduleVisibleFrame, useAppIsActive } from '../../../hooks/useAppIsActive';
 
 const encounteredThisProcess = new Set<string>();
 
@@ -45,6 +46,7 @@ export function PublicWalkingDiscoveryCard({
   const activePrincipalAttention = useCairnPresentationStore(state => state.activePrincipalAttention);
   const presentationBlocked = useCairnPresentationStore(state => state.presentationBlocked);
   const reduceMotion = useReduceMotion();
+  const appIsActive = useAppIsActive();
   const reveal = React.useRef(new Animated.Value(0)).current;
   const [opening, setOpening] = React.useState(false);
   const [openError, setOpenError] = React.useState(false);
@@ -64,11 +66,14 @@ export function PublicWalkingDiscoveryCard({
   }, [focused, viewerId]);
 
   React.useEffect(() => {
-    if (!focused || blocked || presentationBlocked || pendingCount === 0) return;
+    if (!focused || !appIsActive || blocked || presentationBlocked || pendingCount === 0) {
+      if (!appIsActive) useCairnPresentationStore.getState().release(surface);
+      return;
+    }
     useCairnPresentationStore.getState().claim(surface);
-  }, [blocked, focused, pendingCount, presentationBlocked, surface, storeViewerId]);
+  }, [appIsActive, blocked, focused, pendingCount, presentationBlocked, surface, storeViewerId]);
 
-  const visible = focused && !blocked && !presentationBlocked && activeSurface === surface ? activeGroup : null;
+  const visible = focused && appIsActive && !blocked && !presentationBlocked && activeSurface === surface ? activeGroup : null;
   React.useEffect(() => {
     if (!visible) return undefined;
     const presentationKey = `${viewerId}:${visible.token}`;
@@ -86,15 +91,16 @@ export function PublicWalkingDiscoveryCard({
       encounteredThisProcess.add(presentationKey);
       haptic.notification('success');
     }
-    const timer = setTimeout(() => {
-      void useCairnPresentationStore.getState().markActiveDisplayed(surface);
-      void useCairnPresentationStore.getState().acknowledgeActive(surface);
-    }, 0);
+    const cancelFrame = scheduleVisibleFrame(() => {
+      void useCairnPresentationStore.getState().markActiveDisplayed(surface).then(displayed => {
+        if (displayed) void useCairnPresentationStore.getState().acknowledgeActive(surface);
+      });
+    });
     return () => {
-      clearTimeout(timer);
+      cancelFrame();
       reveal.stopAnimation();
     };
-  }, [activePrincipalAttention, reduceMotion, reveal, surface, viewerId, visible?.token]);
+  }, [activePrincipalAttention, reduceMotion, reveal, surface, viewerId, visible?.eventThroughId, visible?.token]);
 
   React.useEffect(() => () => {
     useCairnPresentationStore.getState().release(surface);
@@ -105,6 +111,13 @@ export function PublicWalkingDiscoveryCard({
   const updatedOnly = count === 1
     && visible.eventCount > 0
     && visible.updatedEventCount === visible.eventCount;
+  const provenanceLabel = visible.sourceAudience === 'friends'
+    ? 'FRIENDS CAIRN · ENCOUNTERED HERE'
+    : visible.sourceAudience === 'public'
+      ? 'PUBLIC CAIRN · ENCOUNTERED HERE'
+      : visible.sourceAudience === 'mixed'
+        ? 'FRIENDS + PUBLIC · ENCOUNTERED HERE'
+        : 'CAIRN · ENCOUNTERED HERE';
   return (
     <Animated.View
       testID={`walking-discovery-group-${visible.token}`}
@@ -126,9 +139,21 @@ export function PublicWalkingDiscoveryCard({
       accessibilityRole="alert"
       accessibilityLabel={`${count} ${count === 1 ? 'Cairn' : 'Cairns'} found and saved in Memory`}
     >
-      <View style={[styles.icon, { backgroundColor: theme.controlSelected }]}><CairnStoneMark size={31} tone="friends" /></View>
+      <View style={[styles.icon, { backgroundColor: theme.controlSelected }]}>
+        {visible.sourceAudience === 'mixed' ? (
+          <View style={styles.mixedMark}>
+            <CairnStoneMark size={21} tone="friends" />
+            <CairnStoneMark size={21} tone="public" />
+          </View>
+        ) : (
+          <CairnStoneMark
+            size={31}
+            tone={visible.sourceAudience === 'public' ? 'public' : visible.sourceAudience === 'friends' ? 'friends' : 'neutral'}
+          />
+        )}
+      </View>
       <View style={styles.copy}>
-        <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>ENCOUNTERED HERE</Text>
+        <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>{provenanceLabel}</Text>
         <Text style={[styles.title, { color: theme.foreground }]}>
           {updatedOnly ? 'A familiar Cairn has new words'
             : count === 1 ? CAIRN_TERMS.encounterTitle : `${count} notes were waiting here`}
@@ -201,15 +226,16 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     ...Shadow.card,
   },
-  icon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  mixedMark: { flexDirection: 'row', alignItems: 'flex-end', marginHorizontal: -3 },
   copy: { flex: 1 },
   eyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
   title: { fontSize: 15, lineHeight: 20, fontWeight: '700', marginTop: 1 },
   author: { fontSize: 12, lineHeight: 17, marginTop: 1 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.sm },
-  openAction: { minHeight: 34, minWidth: 76, borderRadius: 17, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  openAction: { minHeight: 44, minWidth: 84, borderRadius: 22, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
   openText: { fontSize: 12, fontWeight: '700' },
-  laterAction: { minHeight: 34, minWidth: 60, alignItems: 'center', justifyContent: 'center' },
+  laterAction: { minHeight: 44, minWidth: 68, alignItems: 'center', justifyContent: 'center' },
   laterText: { fontSize: 12, fontWeight: '700' },
   openError: { fontSize: 11, lineHeight: 15, marginTop: Spacing.xs },
 });

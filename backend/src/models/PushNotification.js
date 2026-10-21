@@ -42,6 +42,10 @@ if (typeof fetch !== 'function') {
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
 const MAX_DELIVERY_ATTEMPTS = 6;
+const MAX_RECEIPT_ATTEMPTS = 3;
+const DEFAULT_TRANSPORT_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024;
+const RETRYABLE_TICKET_ERRORS = new Set(['MessageRateExceeded', 'ExpoError']);
 
 function expoHeaders() {
   return {
@@ -60,27 +64,109 @@ function retryDelayMinutes(attemptCount) {
   return [1, 2, 5, 15, 60, 180][Math.max(0, Math.min(5, attemptCount - 1))];
 }
 
-async function retryOrFail(row, errorMessage) {
+async function retryOrFail(row, errorMessage, providerTargets = null) {
   const attemptCount = Math.max(1, Number(row.attempt_count) + 1 || 1);
   const cleanError = String(errorMessage || 'push delivery failed').slice(0, 200);
+  const serializedTargets = providerTargets ? JSON.stringify(providerTargets) : null;
   if (attemptCount >= MAX_DELIVERY_ATTEMPTS) {
     await pool.execute(
       `UPDATE notification_log
-          SET status='failed',error_msg=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+          SET status='failed',error_msg=?,provider_ticket_ids=COALESCE(?,provider_ticket_ids),
+              next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
         WHERE id=?`,
-      [cleanError, row.id],
+      [cleanError, serializedTargets, row.id],
     );
     return 'failed';
   }
   const delay = retryDelayMinutes(attemptCount);
   await pool.execute(
     `UPDATE notification_log
-        SET status='queued',error_msg=?,next_attempt_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ${delay} MINUTE),
+        SET status='queued',error_msg=?,provider_ticket_ids=COALESCE(?,provider_ticket_ids),
+            next_attempt_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ${delay} MINUTE),
             sent_at=CURRENT_TIMESTAMP
       WHERE id=?`,
-    [cleanError, row.id],
+    [cleanError, serializedTargets, row.id],
   );
   return 'queued';
+}
+
+async function readBoundedResponseBody(response, maxBytes) {
+  if (response?.body && typeof response.body.getReader === 'function') {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      size += chunk.length;
+      if (size > maxBytes) {
+        try { await reader.cancel(); } catch (_) {}
+        throw new Error('Expo response body exceeded limit');
+      }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  }
+  let text;
+  if (typeof response?.text === 'function') text = await response.text();
+  else if (typeof response?.json === 'function') text = JSON.stringify(await response.json());
+  else text = '';
+  if (Buffer.byteLength(String(text), 'utf8') > maxBytes) {
+    throw new Error('Expo response body exceeded limit');
+  }
+  return String(text);
+}
+
+async function fetchWithBoundedBody(url, options, {
+  timeoutMs = DEFAULT_TRANSPORT_TIMEOUT_MS,
+  maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
+} = {}) {
+  const abortCtrl = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      abortCtrl.abort();
+      reject(new Error('Expo transport timed out before the response body completed'));
+    }, Math.max(1, Number(timeoutMs) || DEFAULT_TRANSPORT_TIMEOUT_MS));
+  });
+  const operation = (async () => {
+    const response = await fetch(url, { ...options, signal: abortCtrl.signal });
+    const bodyText = await readBoundedResponseBody(
+      response,
+      Math.max(1024, Number(maxResponseBytes) || DEFAULT_MAX_RESPONSE_BYTES),
+    );
+    return { response, bodyText };
+  })();
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function parseProviderTargets(value) {
+  if (!value) return [];
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed.filter(item => item && typeof item === 'object') : [];
+  } catch {
+    return [];
+  }
+}
+
+function initialProviderTargets(tokens) {
+  return tokens.map((token, index) => ({
+    request_index: index,
+    token_fingerprint: tokenFingerprint(token.token),
+    status: 'pending',
+    id: null,
+    error: null,
+  }));
+}
+
+function providerTargetIsAccepted(target) {
+  return target?.status === 'ok' && typeof target?.id === 'string' && target.id.length > 0;
 }
 
 async function registerToken(userId, token, platform) {
@@ -296,7 +382,11 @@ async function listRecent(userId, limit = 50) {
 // Cron / worker loop. Flushes queued rows via Expo push. In dev without
 // EXPO_PUSH_ACCESS_TOKEN it logs + marks dropped_no_transport so the
 // queue doesn't grow indefinitely.
-async function sendPending({ batchSize = 100 } = {}) {
+async function sendPending({
+  batchSize = 100,
+  transportTimeoutMs = DEFAULT_TRANSPORT_TIMEOUT_MS,
+  maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
+} = {}) {
   const safeBatch = Math.max(1, Math.min(Number(batchSize) || 100, 500));
   // Sprint 6 round-8 review R8B3 fix: recover rows stuck in 'sending'.
   // If the process crashed / SIGKILL between the transactional claim
@@ -336,7 +426,7 @@ async function sendPending({ batchSize = 100 } = {}) {
   try {
     await conn.beginTransaction();
     [rows] = await conn.execute(
-      `SELECT id, recipient_user_id, kind, related_id, title, body, attempt_count
+      `SELECT id, recipient_user_id, kind, related_id, title, body, attempt_count, provider_ticket_ids
        FROM notification_log
        WHERE status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at<=UTC_TIMESTAMP(3))
        ORDER BY id ASC
@@ -449,28 +539,79 @@ async function sendPending({ batchSize = 100 } = {}) {
       'SELECT token, platform FROM device_tokens WHERE user_id = ?',
       [row.recipient_user_id],
     );
-    if (tokens.length === 0) {
-      await pool.execute(
-        `UPDATE notification_log SET status='dropped_no_device', sent_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [row.id],
-      );
-      dropped += 1;
-      continue;
-    }
-    if (!transportReady) {
-      console.log(`[push] (would-send) kind=${row.kind} to=user_id=${row.recipient_user_id} tokens=${tokens.length} title="${row.title}"`);
-      await pool.execute(
-        `UPDATE notification_log SET status='dropped_no_transport', sent_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [row.id],
-      );
-      dropped += 1;
-      continue;
-    }
+    const requestedTokens = tokens.filter(token => token.platform !== 'web');
+    let providerTargets = parseProviderTargets(row.provider_ticket_ids);
     try {
-      const messages = tokens
-        .filter(t => t.platform !== 'web')  // Expo push doesn't handle web tokens
-        .map(t => ({
-          to: t.token,
+      if (providerTargets.length === 0) providerTargets = initialProviderTargets(requestedTokens);
+      const currentTokensByFingerprint = new Map(requestedTokens.map(token => [tokenFingerprint(token.token), token]));
+      providerTargets = providerTargets.map((target, index) => {
+        const fingerprint = typeof target.token_fingerprint === 'string' ? target.token_fingerprint : '';
+        if (providerTargetIsAccepted(target)
+          || target.error === 'DeviceNotRegistered'
+          || (target.status === 'error' && target.error && !RETRYABLE_TICKET_ERRORS.has(target.error))) {
+          return { ...target, request_index: Number.isFinite(Number(target.request_index)) ? Number(target.request_index) : index };
+        }
+        if (!currentTokensByFingerprint.has(fingerprint)) {
+          return { ...target, request_index: index, status: 'error', id: null, error: 'TargetRevoked' };
+        }
+        return { ...target, request_index: index, status: 'pending', id: null };
+      });
+      const pendingRequests = providerTargets.flatMap((target, targetIndex) => {
+        if (target.status !== 'pending') return [];
+        const token = currentTokensByFingerprint.get(target.token_fingerprint);
+        if (!token) return [];
+        return [{ targetIndex, token }];
+      });
+
+      const acceptedBeforeSend = providerTargets.filter(providerTargetIsAccepted).length;
+      if (pendingRequests.length === 0) {
+        const terminalErrors = providerTargets.filter(target => !providerTargetIsAccepted(target));
+        if (acceptedBeforeSend > 0) {
+          await pool.execute(
+            `UPDATE notification_log
+                SET status='sent',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+              WHERE id=?`,
+            [terminalErrors.length ? 'Some original device targets were unavailable or rejected.' : null,
+              JSON.stringify(providerTargets), row.id],
+          );
+          sent += 1;
+        } else if (terminalErrors.length === 0
+          || terminalErrors.every(target => ['DeviceNotRegistered', 'TargetRevoked'].includes(target.error))) {
+          await pool.execute(
+            `UPDATE notification_log
+                SET status='dropped_no_device',provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+              WHERE id=?`,
+            [JSON.stringify(providerTargets), row.id],
+          );
+          dropped += 1;
+        } else {
+          await pool.execute(
+            `UPDATE notification_log
+                SET status='failed',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+              WHERE id=?`,
+            ['Every original device target was rejected.', JSON.stringify(providerTargets), row.id],
+          );
+          failed += 1;
+        }
+        continue;
+      }
+      if (!transportReady) {
+        console.log(`[push] (would-send) kind=${row.kind} to=user_id=${row.recipient_user_id} tokens=${pendingRequests.length} title="${row.title}"`);
+        await pool.execute(
+          `UPDATE notification_log
+              SET status='dropped_no_transport',provider_ticket_ids=?,sent_at=CURRENT_TIMESTAMP
+            WHERE id=?`,
+          [JSON.stringify(providerTargets), row.id],
+        );
+        dropped += 1;
+        continue;
+      }
+      await pool.execute(
+        'UPDATE notification_log SET provider_ticket_ids=? WHERE id=? AND status=\'sending\'',
+        [JSON.stringify(providerTargets), row.id],
+      );
+      const messages = pendingRequests.map(({ token }) => ({
+          to: token.token,
           title: row.title,
           body: row.body || undefined,
           data: {
@@ -480,77 +621,47 @@ async function sendPending({ batchSize = 100 } = {}) {
             viewer_id: String(row.recipient_user_id),
           },
         }));
-      if (messages.length === 0) {
-        await pool.execute(
-          `UPDATE notification_log SET status='dropped_web_only', sent_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [row.id],
-        );
-        dropped += 1;
-        continue;
-      }
-      // Sprint 6 round-9 review R9B2 fix: bound the Expo push fetch to
-      // 30s. Pre-fix, a stalled DNS/TCP/TLS would let the request outlive
-      // the 5-min R8B3 recovery, causing a DOUBLE SEND when recovery
-      // re-queued and a second drain claimed the row.
-      const abortCtrl = new AbortController();
-      const abortTimer = setTimeout(() => abortCtrl.abort(), 30_000);
-      let res;
-      try {
-        res = await fetch(EXPO_PUSH_URL, {
+      const { response: res, bodyText } = await fetchWithBoundedBody(EXPO_PUSH_URL, {
           method: 'POST',
           headers: expoHeaders(),
           body: JSON.stringify(messages),
-          signal: abortCtrl.signal,
-        });
-      } finally {
-        clearTimeout(abortTimer);
-      }
+        }, { timeoutMs: transportTimeoutMs, maxResponseBytes });
       if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
         const transient = res.status === 408 || res.status === 429 || res.status >= 500;
-        if (transient && await retryOrFail(row, `Expo HTTP ${res.status}: ${errBody}`) === 'queued') {
+        if (transient && await retryOrFail(row, `Expo HTTP ${res.status}: ${bodyText}`, providerTargets) === 'queued') {
           continue;
         }
         if (!transient) {
           await pool.execute(
-            `UPDATE notification_log SET status='failed',error_msg=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP WHERE id=?`,
-            [`Expo HTTP ${res.status}: ${errBody}`.slice(0, 200), row.id],
+            `UPDATE notification_log
+                SET status='failed',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+              WHERE id=?`,
+            [`Expo HTTP ${res.status}: ${bodyText}`.slice(0, 200), JSON.stringify(providerTargets), row.id],
           );
         }
         failed += 1;
         continue;
       }
-      // Sprint 6 R91 BUG-3: parse per-ticket status and delete tokens
-      // Expo has told us are dead (DeviceNotRegistered). Pre-fix, a
-      // token from an uninstalled app / revoked-permission device stayed
-      // in device_tokens for 60 days (until purgeStale swept by
-      // last_seen_at, which was only refreshed by register calls and so
-      // never fired for dead devices). Every subsequent enqueue for that
-      // user re-sent to the dead token, wasting Expo quota and — per
-      // Expo's own docs — risking cross-user delivery if APNs/FCM
-      // reassigns the token to a different install (rare but real).
-      //
-      // Response shape: { data: [{ status: 'ok'|'error', message?,
-      // details?: { error?: 'DeviceNotRegistered' | ... } }, ...] } with
-      // one entry per message in the request order. We correlate back to
-      // the token by index (same order as `messages` above), skipping
-      // the web-filtered tokens that never entered the request.
       let expoBody = null;
-      try { expoBody = await res.clone().json(); } catch (_) { /* non-JSON 200 — treat as sent */ }
-      let ticketSummary = null;
-      if (expoBody && Array.isArray(expoBody.data)) {
-        const requestedTokens = tokens.filter(t => t.platform !== 'web');
-        ticketSummary = expoBody.data.slice(0, requestedTokens.length).map((ticket, index) => ({
-          request_index: index,
-          token_fingerprint: tokenFingerprint(requestedTokens[index].token),
-          status: ticket?.status === 'ok' ? 'ok' : 'error',
-          id: typeof ticket?.id === 'string' ? ticket.id.slice(0, 160) : null,
-          error: typeof ticket?.details?.error === 'string' ? ticket.details.error.slice(0, 80) : null,
-        }));
-        for (let i = 0; i < expoBody.data.length && i < requestedTokens.length; i++) {
-          const ticket = expoBody.data[i];
-          if (ticket && ticket.status === 'error' && ticket.details && ticket.details.error === 'DeviceNotRegistered') {
-            const deadToken = requestedTokens[i].token;
+      try { expoBody = JSON.parse(bodyText); } catch (_) { /* bounded retry below */ }
+      const topLevelErrors = Array.isArray(expoBody?.errors) && expoBody.errors.length > 0;
+      const ticketData = !topLevelErrors && Array.isArray(expoBody?.data) ? expoBody.data : [];
+      for (let responseIndex = 0; responseIndex < pendingRequests.length; responseIndex++) {
+        const requestTarget = pendingRequests[responseIndex];
+        const ticket = ticketData[responseIndex];
+        if (ticket?.status === 'ok' && typeof ticket.id === 'string' && ticket.id.trim()) {
+          providerTargets[requestTarget.targetIndex] = {
+            ...providerTargets[requestTarget.targetIndex],
+            status: 'ok', id: ticket.id.slice(0, 160), error: null,
+          };
+          continue;
+        }
+        const code = typeof ticket?.details?.error === 'string' ? ticket.details.error.slice(0, 80) : null;
+        if (ticket?.status === 'error' && code === 'DeviceNotRegistered') {
+          providerTargets[requestTarget.targetIndex] = {
+            ...providerTargets[requestTarget.targetIndex], status: 'error', id: null, error: code,
+          };
+          const deadToken = requestTarget.token.token;
             await pool.execute(
               `DELETE FROM device_tokens WHERE token = ? AND user_id = ?`,
               [deadToken, row.recipient_user_id],
@@ -558,46 +669,71 @@ async function sendPending({ batchSize = 100 } = {}) {
               console.warn(`[push] failed to delete dead token: ${err.message}`);
             });
             console.log(`[push] deleted DeviceNotRegistered token user=${row.recipient_user_id}`);
-          }
-        }
-        const accepted = ticketSummary.filter(ticket => ticket.status === 'ok').length;
-        const errors = ticketSummary.filter(ticket => ticket.status === 'error');
-        if (accepted === 0 && errors.length > 0) {
-          const allDead = errors.every(ticket => ticket.error === 'DeviceNotRegistered');
-          const retryable = errors.some(ticket => ['MessageRateExceeded', 'ExpoError', null].includes(ticket.error));
-          if (allDead) {
-            await pool.execute(
-              `UPDATE notification_log
-                  SET status='dropped_no_device',provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
-                WHERE id=?`,
-              [JSON.stringify(ticketSummary), row.id],
-            );
-            dropped += 1;
-            continue;
-          }
-          if (retryable && await retryOrFail(row, `Expo ticket error: ${errors.map(ticket => ticket.error || 'unknown').join(',')}`) === 'queued') {
-            continue;
-          }
-          await pool.execute(
-            `UPDATE notification_log
-                SET status='failed',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
-              WHERE id=?`,
-            [`Expo ticket error: ${errors.map(ticket => ticket.error || 'unknown').join(',')}`.slice(0, 200), JSON.stringify(ticketSummary), row.id],
-          );
-          failed += 1;
           continue;
         }
+        if (ticket?.status === 'error' && code && !RETRYABLE_TICKET_ERRORS.has(code)) {
+          providerTargets[requestTarget.targetIndex] = {
+            ...providerTargets[requestTarget.targetIndex], status: 'error', id: null, error: code,
+          };
+          continue;
+        }
+        providerTargets[requestTarget.targetIndex] = {
+          ...providerTargets[requestTarget.targetIndex],
+          status: 'pending', id: null,
+          error: code || (topLevelErrors ? 'ProviderTopLevelError' : 'InvalidProviderTicket'),
+        };
+      }
+
+      const unresolved = providerTargets.filter(target => target.status === 'pending');
+      const accepted = providerTargets.filter(providerTargetIsAccepted);
+      const terminalErrors = providerTargets.filter(target => target.status === 'error');
+      const responseIssues = [];
+      if (!expoBody || typeof expoBody !== 'object') responseIssues.push('invalid JSON');
+      if (topLevelErrors) responseIssues.push('top-level provider error');
+      if (!Array.isArray(expoBody?.data)) responseIssues.push('missing ticket array');
+      else if (expoBody.data.length !== pendingRequests.length) {
+        responseIssues.push(`ticket cardinality ${expoBody.data.length}/${pendingRequests.length}`);
+      }
+      if (unresolved.length > 0) {
+        const message = responseIssues.length
+          ? `Expo acknowledgement invalid: ${responseIssues.join(', ')}`
+          : `Expo ticket retry: ${unresolved.map(target => target.error || 'unknown').join(',')}`;
+        if (await retryOrFail(row, message, providerTargets) === 'queued') continue;
+        failed += 1;
+        continue;
+      }
+      if (accepted.length === 0 && terminalErrors.every(target => ['DeviceNotRegistered', 'TargetRevoked'].includes(target.error))) {
+        await pool.execute(
+          `UPDATE notification_log
+              SET status='dropped_no_device',provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+            WHERE id=?`,
+          [JSON.stringify(providerTargets), row.id],
+        );
+        dropped += 1;
+        continue;
+      }
+      if (accepted.length === 0) {
+        await pool.execute(
+          `UPDATE notification_log
+              SET status='failed',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
+            WHERE id=?`,
+          ['Every original device target was rejected.', JSON.stringify(providerTargets), row.id],
+        );
+        failed += 1;
+        continue;
       }
       await pool.execute(
         `UPDATE notification_log
             SET status='sent',error_msg=?,provider_ticket_ids=?,next_attempt_at=NULL,sent_at=CURRENT_TIMESTAMP
           WHERE id=?`,
-        [ticketSummary?.some(ticket => ticket.status === 'error') ? 'Partial Expo ticket error; at least one device accepted.' : null,
-          ticketSummary ? JSON.stringify(ticketSummary) : null, row.id],
+        [responseIssues.length
+          ? `Provider acknowledgement warning: ${responseIssues.join(', ')}`.slice(0, 200)
+          : terminalErrors.length ? 'Some original device targets were rejected after provider acknowledgement.' : null,
+          JSON.stringify(providerTargets), row.id],
       );
       sent += 1;
     } catch (err) {
-      if (await retryOrFail(row, err.message || err) !== 'queued') failed += 1;
+      if (await retryOrFail(row, err.message || err, providerTargets.length ? providerTargets : null) !== 'queued') failed += 1;
     }
   }
 
@@ -611,53 +747,104 @@ async function sendPending({ batchSize = 100 } = {}) {
  * fingerprint lets a DeviceNotRegistered receipt retire only the matching
  * current token without leaking that credential into review artifacts.
  */
-async function checkPendingReceipts({ batchSize = 500 } = {}) {
+async function checkPendingReceipts({
+  batchSize = 500,
+  transportTimeoutMs = DEFAULT_TRANSPORT_TIMEOUT_MS,
+  maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
+} = {}) {
   const transportReady = !!process.env.EXPO_PUSH_ACCESS_TOKEN || process.env.PUSH_TRANSPORT === 'expo';
-  if (!transportReady) return { checked: 0, deliveryFailed: 0, tokensRetired: 0 };
+  if (!transportReady) return { checked: 0, deliveryFailed: 0, tokensRetired: 0, deferred: 0, unknown: 0 };
   const safeBatch = Math.max(1, Math.min(Number(batchSize) || 500, 1000));
   const [rows] = await pool.execute(
-    `SELECT id,recipient_user_id,provider_ticket_ids
+    `SELECT id,recipient_user_id,provider_ticket_ids,provider_receipt_attempt_count
        FROM notification_log
-      WHERE status='sent' AND provider_ticket_ids IS NOT NULL
+      WHERE status IN ('sent','failed') AND provider_ticket_ids IS NOT NULL
         AND provider_receipt_checked_at IS NULL
+        AND (provider_receipt_next_attempt_at IS NULL OR provider_receipt_next_attempt_at<=UTC_TIMESTAMP(3))
         AND sent_at<=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 15 SECOND)
-      ORDER BY id ASC LIMIT ${safeBatch}`,
+      ORDER BY COALESCE(provider_receipt_next_attempt_at,sent_at),id ASC LIMIT ${safeBatch}`,
   );
-  const parsedRows = rows.flatMap(row => {
-    try {
-      const tickets = typeof row.provider_ticket_ids === 'string'
-        ? JSON.parse(row.provider_ticket_ids) : row.provider_ticket_ids;
-      const accepted = Array.isArray(tickets) ? tickets.filter(ticket => (
-        ticket?.status === 'ok' && typeof ticket?.id === 'string' && ticket.id
-      )) : [];
-      return accepted.length ? [{ ...row, accepted }] : [];
-    } catch { return []; }
-  });
-  const ids = [...new Set(parsedRows.flatMap(row => row.accepted.map(ticket => ticket.id)))];
-  if (ids.length === 0) return { checked: 0, deliveryFailed: 0, tokensRetired: 0 };
-
-  const abortCtrl = new AbortController();
-  const abortTimer = setTimeout(() => abortCtrl.abort(), 30_000);
-  let response;
-  try {
-    response = await fetch(EXPO_RECEIPTS_URL, {
-      method: 'POST',
-      headers: expoHeaders(),
-      body: JSON.stringify({ ids }),
-      signal: abortCtrl.signal,
-    });
-  } finally {
-    clearTimeout(abortTimer);
-  }
-  if (!response.ok) throw new Error(`Expo receipts HTTP ${response.status}`);
-  const body = await response.json();
-  const receipts = body && typeof body.data === 'object' && body.data ? body.data : {};
   let checked = 0;
   let deliveryFailed = 0;
   let tokensRetired = 0;
+  let deferred = 0;
+  let unknown = 0;
+  const parsedRows = [];
+  for (const row of rows) {
+    const accepted = parseProviderTargets(row.provider_ticket_ids).filter(providerTargetIsAccepted);
+    if (!accepted.length) {
+      await pool.execute(
+        `UPDATE notification_log
+            SET provider_receipt_checked_at=UTC_TIMESTAMP(3),provider_receipt_error='No valid accepted provider tickets to check'
+          WHERE id=? AND provider_receipt_checked_at IS NULL`,
+        [row.id],
+      );
+      checked += 1;
+      unknown += 1;
+      continue;
+    }
+    parsedRows.push({ ...row, accepted });
+    await pool.execute(
+      `UPDATE notification_log
+          SET provider_receipt_attempt_count=provider_receipt_attempt_count+1,
+              provider_receipt_next_attempt_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 15 MINUTE)
+        WHERE id=? AND provider_receipt_checked_at IS NULL`,
+      [row.id],
+    );
+  }
+  const ids = [...new Set(parsedRows.flatMap(row => row.accepted.map(ticket => ticket.id)))];
+  if (ids.length === 0) return { checked, deliveryFailed, tokensRetired, deferred, unknown };
+
+  let response;
+  let bodyText;
+  try {
+    ({ response, bodyText } = await fetchWithBoundedBody(EXPO_RECEIPTS_URL, {
+      method: 'POST',
+      headers: expoHeaders(),
+      body: JSON.stringify({ ids }),
+    }, { timeoutMs: transportTimeoutMs, maxResponseBytes }));
+    if (!response.ok) throw new Error(`Expo receipts HTTP ${response.status}`);
+  } catch (error) {
+    for (const row of parsedRows) {
+      const attempt = Number(row.provider_receipt_attempt_count || 0) + 1;
+      if (attempt >= MAX_RECEIPT_ATTEMPTS) {
+        await pool.execute(
+          `UPDATE notification_log
+              SET provider_receipt_checked_at=UTC_TIMESTAMP(3),provider_receipt_next_attempt_at=NULL,
+                  provider_receipt_error=?
+            WHERE id=? AND provider_receipt_checked_at IS NULL`,
+          [`Receipt status unknown after bounded retries: ${String(error.message || error)}`.slice(0, 200), row.id],
+        );
+        checked += 1;
+        unknown += 1;
+      } else {
+        deferred += 1;
+      }
+    }
+    return { checked, deliveryFailed, tokensRetired, deferred, unknown };
+  }
+  let body = null;
+  try { body = JSON.parse(bodyText); } catch (_) { /* handled as missing receipts */ }
+  const receipts = body && typeof body.data === 'object' && body.data ? body.data : {};
 
   for (const row of parsedRows) {
-    if (!row.accepted.every(ticket => receipts[ticket.id])) continue;
+    if (!row.accepted.every(ticket => receipts[ticket.id])) {
+      const attempt = Number(row.provider_receipt_attempt_count || 0) + 1;
+      if (attempt >= MAX_RECEIPT_ATTEMPTS) {
+        await pool.execute(
+          `UPDATE notification_log
+              SET provider_receipt_checked_at=UTC_TIMESTAMP(3),provider_receipt_next_attempt_at=NULL,
+                  provider_receipt_error='Receipt status unavailable after bounded checks'
+            WHERE id=? AND provider_receipt_checked_at IS NULL`,
+          [row.id],
+        );
+        checked += 1;
+        unknown += 1;
+      } else {
+        deferred += 1;
+      }
+      continue;
+    }
     const failures = row.accepted.flatMap(ticket => {
       const receipt = receipts[ticket.id];
       if (receipt?.status === 'ok') return [];
@@ -690,14 +877,15 @@ async function checkPendingReceipts({ batchSize = 500 } = {}) {
       : null;
     await pool.execute(
       `UPDATE notification_log
-          SET status=?,provider_receipt_checked_at=UTC_TIMESTAMP(3),provider_receipt_error=?
+          SET status=?,provider_receipt_checked_at=UTC_TIMESTAMP(3),provider_receipt_next_attempt_at=NULL,
+              provider_receipt_error=?
         WHERE id=? AND provider_receipt_checked_at IS NULL`,
       [allFailed ? 'delivery_failed' : 'sent', summary, row.id],
     );
     checked += 1;
     if (allFailed) deliveryFailed += 1;
   }
-  return { checked, deliveryFailed, tokensRetired };
+  return { checked, deliveryFailed, tokensRetired, deferred, unknown };
 }
 
 // Cron sweep — purge old device_tokens + notification_log rows.

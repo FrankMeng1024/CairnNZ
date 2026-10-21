@@ -14,7 +14,10 @@ let mockContentSubmit: ((payload: any) => void) | null = null;
 let mockContentAdjust: (() => void) | null = null;
 let mockDraftChange: ((patch: any) => void) | null = null;
 let mockGpsLocked: ((...args: any[]) => void) | null = null;
+let mockGpsCancel: (() => void) | null = null;
 let mockPinConfirm: ((lat: number, lng: number) => void) | null = null;
+let mockPinBack: (() => void) | null = null;
+let mockContentProps: Record<string, any> | null = null;
 const activityId = 'activity-client-id';
 let mockAppUserId = 'owner-a';
 let mockMarkerOwnerId = 'owner-a';
@@ -64,16 +67,26 @@ jest.mock('../../features/activitySimulator/simulatorTime', () => ({
 }));
 
 jest.mock('../../features/plant/components/GpsLockStep', () => ({
-  GpsLockStep: ({ onLocked }: any) => { mockGpsLocked = onLocked; return null; },
+  GpsLockStep: ({ onLocked, onCancel }: any) => {
+    mockGpsLocked = onLocked;
+    mockGpsCancel = onCancel;
+    return null;
+  },
 }));
 jest.mock('../../features/plant/components/PinAdjustStep', () => ({
-  PinAdjustStep: ({ onConfirm }: any) => { mockPinConfirm = onConfirm; return null; },
+  PinAdjustStep: ({ onConfirm, onBack }: any) => {
+    mockPinConfirm = onConfirm;
+    mockPinBack = onBack;
+    return null;
+  },
 }));
 jest.mock('../../features/plant/components/ContentStep', () => {
   const ReactModule = require('react');
   const { Pressable, Text } = require('react-native');
   return {
-    ContentStep: ({ onSubmit, onAdjustLocation, onDraftChange }: any) => {
+    ContentStep: (props: any) => {
+      const { onSubmit, onAdjustLocation, onDraftChange } = props;
+      mockContentProps = props;
       mockContentSubmit = onSubmit;
       mockContentAdjust = onAdjustLocation;
       mockDraftChange = onDraftChange;
@@ -141,6 +154,12 @@ function activitySession() {
   };
 }
 
+async function renderHydratedActivity() {
+  const screen = render(<PlantScreen />);
+  await waitFor(() => expect(mockContentSubmit).not.toBeNull());
+  return screen;
+}
+
 describe('full Plant to Activity Detail Cairn linkage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -148,7 +167,10 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     mockContentAdjust = null;
     mockDraftChange = null;
     mockGpsLocked = null;
+    mockGpsCancel = null;
     mockPinConfirm = null;
+    mockPinBack = null;
+    mockContentProps = null;
     mockAppUserId = 'owner-a';
     mockMarkerOwnerId = 'owner-a';
     mockRouteParams = {
@@ -193,7 +215,7 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     ['test-south'],
   ])('uses canonical %s region so the origin-linked Cairn remains visible on Activity Detail', async regionCode => {
     mockGetCurrentRegion.mockReturnValue({ code: regionCode });
-    const screen = render(<PlantScreen />);
+    const screen = await renderHydratedActivity();
 
     fireEvent.press(screen.getByTestId('submit-full-plant'));
     await waitFor(() => expect(mockAddMarker).toHaveBeenCalledTimes(1));
@@ -214,9 +236,9 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
       .toEqual(['cairn-client-id']);
   });
 
-  test('coalesces two full-Plant submits in the same render turn into one durable commit', () => {
+  test('coalesces two full-Plant submits in the same render turn into one durable commit', async () => {
     mockAddMarker.mockReturnValue(new Promise(() => {}));
-    render(<PlantScreen />);
+    await renderHydratedActivity();
     expect(mockContentSubmit).not.toBeNull();
     const payload = {
       type: 'cairn',
@@ -236,7 +258,7 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
   });
 
   test('captures S1 identity and rejects a submit after the Plant context has become S2', async () => {
-    const screen = render(<PlantScreen />);
+    const screen = await renderHydratedActivity();
     mockTrackingState = {
       ...mockTrackingState,
       sessionId: 'activity-s2',
@@ -255,7 +277,7 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
   test('suppresses A feedback, navigation, and retry draft after durable acceptance resolves under B', async () => {
     let resolveCommit!: (value: any) => void;
     mockAddMarker.mockReturnValue(new Promise(resolve => { resolveCommit = resolve; }));
-    const screen = render(<PlantScreen />);
+    const screen = await renderHydratedActivity();
     fireEvent.press(screen.getByTestId('submit-full-plant'));
     mockAppUserId = 'owner-b';
     mockMarkerOwnerId = 'owner-b';
@@ -271,7 +293,10 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     expect(mockGoBack).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
-    expect(mockDraftSet).not.toHaveBeenCalled();
+    expect(mockDraftSet).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(mockDraftSet.mock.calls[0][1]).draft).toMatchObject({
+      title: 'Turn and return', text: 'Private Activity Cairn',
+    });
   });
 
   test('a true pre-commit failure unlocks one retry and retains the owner-scoped draft', async () => {
@@ -283,7 +308,7 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
         projection: 'current',
         marker: { id: 'retry-cairn', clientCairnId: 'retry-cairn', originActivityClientId: activityId },
       });
-    render(<PlantScreen />);
+    await renderHydratedActivity();
     const payload = {
       type: 'cairn',
       title: 'Retry',
@@ -301,8 +326,9 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     expect(mockDraftSet.mock.calls[0][0]).toContain('owner-a');
     const persisted = JSON.parse(mockDraftSet.mock.calls[0][1]);
     expect(persisted).toMatchObject({
-      v: 4,
+      v: 5,
       ownerUserId: 'owner-a',
+      scopeId: expect.stringContaining(`activity:${activityId}`),
       activityContext: {
         ownerUserId: 'owner-a',
         clientActivityId: activityId,
@@ -326,7 +352,7 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
         projection: 'current',
         marker: { id: 'adjusted-cairn', clientCairnId: 'adjusted-cairn', originActivityClientId: activityId },
       });
-    render(<PlantScreen />);
+    await renderHydratedActivity();
     await waitFor(() => expect(mockDraftGet).toHaveBeenCalled());
 
     act(() => {
@@ -380,7 +406,7 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
       .map(([, value]) => JSON.parse(value))
       .find(value => value?.draft?.title === 'Keep across adjustment');
     expect(persistedFailure).toMatchObject({
-      v: 4,
+      v: 5,
       ownerUserId: 'owner-a',
       origin: { kind: 'activity', clientActivityId: activityId },
       draft: {
@@ -393,16 +419,30 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     });
   });
 
-  test('restores failed words without replacing the current Activity location', async () => {
+  test('does not transfer an Activity A draft into Activity B words, audience, place, or provenance', async () => {
     mockDraftGet.mockResolvedValueOnce(JSON.stringify({
-      title: 'Old-place words', text: 'Keep only this copy', type: 'cairn',
-      visibility: 'personal', lat: -45, lng: 170, gpsLat: -45, gpsLng: 170,
-      accuracyM: 5, locationProvenance: 'real',
+      v: 4,
+      ownerUserId: 'owner-a',
+      sessionId: 'activity-a-plant',
+      origin: {
+        kind: 'activity', clientActivityId: 'activity-a',
+        ownerGeneration: 'activity-a-generation', activityMode: 'hiking',
+      },
+      activityContext: {
+        ownerUserId: 'owner-a', clientActivityId: 'activity-a',
+        ownerGeneration: 'activity-a-generation',
+      },
+      savedAtMs: 1_799_000_000_000,
+      draft: {
+        title: 'Activity A words', text: 'Only for Activity A', type: 'cairn',
+        visibility: 'group', lat: -45, lng: 170, gpsLat: -45, gpsLng: 170,
+        accuracyM: 5, locationProvenance: 'real', locationCapturedAtMs: 1_799_000_000_000,
+      },
     }));
-    render(<PlantScreen />);
-    await waitFor(() => expect(mockDraftGet).toHaveBeenCalled());
+    await renderHydratedActivity();
+    expect(mockContentProps).toMatchObject({ title: '', text: '', visibility: 'personal' });
     act(() => { mockContentSubmit!({
-      type: 'cairn', title: 'Old-place words', text: 'Keep only this copy',
+      type: 'cairn', title: 'Activity B words', text: 'Only for Activity B',
       voiceUri: null, voiceMs: null, visibility: 'personal',
     }); });
     await waitFor(() => expect(mockAddMarker).toHaveBeenCalledTimes(1));
@@ -413,6 +453,42 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     expect(mockAddMarker.mock.calls[0][0].activityContext).toMatchObject({ clientActivityId: activityId });
   });
 
+  test('resumes the exact same Activity draft with its original words, audience, and chosen place', async () => {
+    mockDraftGet.mockResolvedValueOnce(JSON.stringify({
+      v: 4,
+      ownerUserId: 'owner-a',
+      sessionId: 'same-activity-old-session',
+      origin: mockRouteParams.origin,
+      activityContext: {
+        ownerUserId: 'owner-a', clientActivityId: activityId,
+        ownerGeneration: 'activity-generation-1',
+      },
+      savedAtMs: 1_800_000_000_500,
+      draft: {
+        gpsLat: -41.287, gpsLng: 174.777, lat: -41.2871, lng: 174.7771,
+        accuracyM: 6, locationProvenance: 'real', locationCapturedAtMs: 1_800_000_000_500,
+        locationSampleCount: 4, locationCaptureMethod: 'activity', type: 'cairn',
+        title: 'Same Activity', text: 'Keep this exact place', voiceUri: null, voiceMs: null,
+        visibility: 'group',
+      },
+    }));
+    await renderHydratedActivity();
+    expect(mockContentProps).toMatchObject({
+      title: 'Same Activity', text: 'Keep this exact place', visibility: 'group',
+    });
+    act(() => { mockContentSubmit!({
+      type: 'cairn', title: 'Same Activity', text: 'Keep this exact place',
+      voiceUri: null, voiceMs: null, visibility: 'group',
+    }); });
+    await waitFor(() => expect(mockAddMarker).toHaveBeenCalledTimes(1));
+    expect(mockAddMarker.mock.calls[0][0]).toMatchObject({
+      lat: -41.2871,
+      lng: 174.7771,
+      permission: 'group',
+      activityContext: { clientActivityId: activityId },
+    });
+  });
+
   test('a standalone failed draft never bypasses a fresh GPS lock', async () => {
     mockRouteParams = { origin: { kind: 'standalone' } };
     mockTrackingState = { ...mockTrackingState, status: 'idle' };
@@ -420,17 +496,76 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
       title: 'Saved words', text: '', type: 'cairn', visibility: 'personal',
       lat: -45, lng: 170, gpsLat: -45, gpsLng: 170, accuracyM: 5,
     }));
-    render(<PlantScreen />);
-    await waitFor(() => expect(mockDraftGet).toHaveBeenCalled());
+    const screen = render(<PlantScreen />);
+    await waitFor(() => expect(screen.getByTestId('plant-resume-modal')).toBeTruthy());
     expect(mockContentSubmit).toBeNull();
     expect(mockAddMarker).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('plant-resume-discard'));
+    await waitFor(() => expect(mockGpsLocked).not.toBeNull());
+    expect(mockContentSubmit).toBeNull();
+  });
+
+  test('gates editing until delayed hydration resolves instead of overwriting newer typing', async () => {
+    let resolveRead!: (value: string | null) => void;
+    mockDraftGet.mockReturnValueOnce(new Promise(resolve => { resolveRead = resolve; }));
+    const screen = render(<PlantScreen />);
+    expect(screen.getByTestId('plant-draft-hydration')).toBeTruthy();
+    expect(mockContentSubmit).toBeNull();
+    expect(mockDraftChange).toBeNull();
+
+    resolveRead(null);
+    await waitFor(() => expect(mockContentSubmit).not.toBeNull());
+    act(() => { mockDraftChange!({ title: 'Typed after hydration', text: 'Never overwritten' }); });
+    await waitFor(() => expect(mockContentProps).toMatchObject({
+      title: 'Typed after hydration', text: 'Never overwritten',
+    }));
+  });
+
+  test('GPS Cancel during Adjust restores the editor, words, audience, pin, and Activity', async () => {
+    await renderHydratedActivity();
+    act(() => { mockDraftChange!({ title: 'Keep me', text: 'Still here', visibility: 'group' }); });
+    act(() => { mockContentAdjust!(); });
+    expect(mockGpsCancel).not.toBeNull();
+    act(() => { mockGpsCancel!(); });
+
+    await waitFor(() => expect(mockContentProps).toMatchObject({
+      title: 'Keep me', text: 'Still here', visibility: 'group', activityLocation: true,
+    }));
+    expect(mockGoBack).not.toHaveBeenCalled();
+  });
+
+  test('Pin Back during Adjust restores the original pin rather than exiting Plant', async () => {
+    await renderHydratedActivity();
+    act(() => { mockDraftChange!({ title: 'Original place', text: 'Do not move', visibility: 'personal' }); });
+    act(() => { mockContentAdjust!(); });
+    act(() => {
+      mockGpsLocked!(-41.3, 174.8, 5, 'real', 1_800_000_000_900, 3, 'gps_window');
+    });
+    expect(mockPinBack).not.toBeNull();
+    act(() => { mockPinBack!(); });
+
+    await waitFor(() => expect(mockContentProps).toMatchObject({
+      title: 'Original place', text: 'Do not move', visibility: 'personal',
+      accuracyM: 8,
+      capturedAtMs: 1_800_000_000_000,
+    }));
+    expect(mockGoBack).not.toHaveBeenCalled();
+  });
+
+  test('first-entry GPS Cancel still exits the whole standalone flow', async () => {
+    mockRouteParams = { origin: { kind: 'standalone' } };
+    mockTrackingState = { ...mockTrackingState, status: 'idle' };
+    render(<PlantScreen />);
+    await waitFor(() => expect(mockGpsCancel).not.toBeNull());
+    act(() => { mockGpsCancel!(); });
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
   test('suppresses stale failure feedback when A becomes B while the retry draft write awaits', async () => {
     let releaseDraft!: () => void;
     mockDraftSet.mockReturnValueOnce(new Promise<void>(resolve => { releaseDraft = resolve; }));
     mockAddMarker.mockRejectedValueOnce(new Error('storage full'));
-    render(<PlantScreen />);
+    await renderHydratedActivity();
     act(() => { mockContentSubmit!({
       type: 'cairn',
       title: 'Owner A draft',
@@ -450,7 +585,7 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
   });
 
   test('post-Plant rediscovery choice keeps durable acceptance terminal', async () => {
-    const view = render(<PlantScreen />);
+    const view = await renderHydratedActivity();
     const payload = {
       type: 'cairn',
       title: 'One durable object',

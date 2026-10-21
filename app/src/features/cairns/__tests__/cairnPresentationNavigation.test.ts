@@ -8,7 +8,10 @@ jest.mock('../../../store/useAppStore', () => ({
   useAppStore: { getState: () => ({ user: mockOwnerId ? { id: mockOwnerId } : null }) },
 }));
 
-import { resolveCairnPresentationItems } from '../cairnPresentationNavigation';
+import {
+  resolveCairnPresentationDestinations,
+  resolveCairnPresentationItems,
+} from '../cairnPresentationNavigation';
 
 const response = (markerIds: string[]) => ({ ok: true, json: async () => ({ marker_ids: markerIds }) });
 
@@ -38,5 +41,23 @@ describe('durable exact presentation navigation', () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 410, json: async () => ({}) });
     await expect(resolveCairnPresentationItems('viewer-a', ['7']))
       .rejects.toThrow('presentation_group_unavailable_410');
+  });
+
+  test('notification resolution requires the exact acquisition revision and event', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        marker_ids: ['41'],
+        items: [{ marker_id: '41', revision_id: '91', event_id: '101' }],
+      }),
+    });
+    await expect(resolveCairnPresentationDestinations('viewer-a', ['7'], { requireExactRevision: true }))
+      .resolves.toEqual([{ markerId: '41', revisionId: '91', eventId: '101' }]);
+  });
+
+  test('notification resolution never labels a rolling-deploy marker-only fallback exact', async () => {
+    mockFetch.mockResolvedValueOnce(response(['41']));
+    await expect(resolveCairnPresentationDestinations('viewer-a', ['7'], { requireExactRevision: true }))
+      .rejects.toThrow('presentation_exact_revision_unavailable');
   });
 });

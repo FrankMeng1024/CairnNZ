@@ -23,7 +23,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -61,6 +61,18 @@ import { Spacing } from '../components/tokens';
 import { CairnStoneMark, useReduceMotion } from '../features/cairns/components/CairnPaper';
 import { CAIRN_MOTION, cairnPublicationTruth } from '../features/cairns/cairnExperience';
 import { cairnMatchesIdentity } from '../features/cairns/cairnIdentity';
+import {
+  claimPlantDraftSession,
+  legacyPlantDraftStorageKey,
+  persistPlantDraft,
+  plantDraftScopeId,
+  plantDraftStorageKey,
+  readPlantDraft,
+  releasePlantDraftSession,
+  removeLegacyDraftIfUnchanged,
+  removePlantDraftIfSessionMatches,
+  type PlantDraftScope,
+} from '../features/plant/plantDraftLifecycle';
 
 type Step = 'gps' | 'pin' | 'content';
 const MAX_PLANT_LOCATION_AGE_MS = 2 * 60 * 1000;
@@ -95,21 +107,22 @@ interface PlantDraft {
 // separate social/field-report decision and is not the moving default.
 const DEFAULT_TYPE = 'cairn';
 
-/** AsyncStorage key for the one outstanding Plant draft, scoped by owner. */
-function draftKey(uid: string): string {
-  // Keep the deployed key so an O87/O88 failed draft is migrated in place.
-  return `cairn:plant:draft:v3:${uid}`;
-}
-
 interface PersistedPlantDraft {
-  v: 4;
+  v: 5;
   ownerUserId: string;
   sessionId: string;
+  scopeId: string;
   origin: PlantOrigin;
   activityContext: CairnActivityContext | null;
   savedAtMs: number;
   draft: PlantDraft;
 }
+
+interface LegacyPersistedPlantDraft extends Omit<PersistedPlantDraft, 'v' | 'scopeId'> {
+  v: 4;
+}
+
+type LocationFlow = 'initial' | 'adjust' | 'refresh';
 
 function defaultVisibility(): MarkerPermission {
   switch (VisibilityConfig.defaultLevel) {
@@ -241,10 +254,36 @@ export function PlantScreen() {
     undefined,
     route.params?.origin ?? { kind: 'standalone' },
   ));
+  const [draftScope] = useState<PlantDraftScope>(() => {
+    const origin = route.params?.origin ?? { kind: 'standalone' as const };
+    if (origin.kind === 'activity' && initialContext.activityContext) {
+      return {
+        kind: 'activity',
+        clientActivityId: origin.clientActivityId,
+        ownerGeneration: origin.ownerGeneration,
+        activityMode: origin.activityMode,
+      };
+    }
+    return { kind: 'standalone' };
+  });
   const [step, setStep] = useState<Step>(initialContext.step);
   const [draft, setDraft] = useState<PlantDraft>(initialContext.draft);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const plantSessionId = useRef(`plant-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).current;
+  const scopedDraftKey = userId ? plantDraftStorageKey(userId, draftScope) : '';
+  const [pendingResume, setPendingResume] = useState<{
+    draft: PlantDraft;
+    storedSessionId: string;
+    sourceKey: string;
+    sourceRaw: string;
+    savedAtMs: number | null;
+  } | null>(null);
+  const [locationFlow, setLocationFlow] = useState<LocationFlow>('initial');
+  const locationSnapshotRef = useRef<PlantDraft | null>(null);
+  const draftRef = useRef(draft);
+  const draftHydratedRef = useRef(false);
+  const plantedResultRef = useRef(false);
+  const draftTerminalRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [plantedResult, setPlantedResult] = useState<{
     markerId: string;
@@ -256,6 +295,9 @@ export function PlantScreen() {
   const commitGateRef = useRef<CairnCommitGate>({ current: null });
   const mountedRef = useRef(true);
   const publicEnabled = usePublicCairnStore((state) => state.enabled);
+  draftRef.current = draft;
+  draftHydratedRef.current = draftHydrated;
+  plantedResultRef.current = Boolean(plantedResult);
   useEffect(() => () => { mountedRef.current = false; }, []);
   useEffect(() => {
     if (!plantedResult) {
@@ -313,78 +355,156 @@ export function PlantScreen() {
     };
   })();
 
-  /**
-   * K3 fix (v0.2.6.3): on mount, hydrate any failed-plant draft from
-   * AsyncStorage. Gated on userId — won't read with key
-   * '...:undefined'. Single draft per user; latest failure overwrites
-   * the previous (intentional, simpler than a draft list).
-   */
+  const makeDraftEnvelope = useCallback((value: PlantDraft): PersistedPlantDraft => ({
+    v: 5,
+    ownerUserId: userId,
+    sessionId: plantSessionId,
+    scopeId: plantDraftScopeId(draftScope),
+    origin: route.params?.origin ?? { kind: 'standalone' },
+    activityContext: initialContext.activityContext,
+    savedAtMs: Date.now(),
+    draft: value,
+  }), [draftScope, initialContext.activityContext, plantSessionId, route.params?.origin, userId]);
+
+  const normalizeStoredDraft = useCallback((value: unknown): PlantDraft | null => {
+    if (!value || typeof value !== 'object') return null;
+    const parsed = value as Partial<PlantDraft>;
+    if (typeof parsed.title !== 'string' || typeof parsed.text !== 'string') return null;
+    const coordinate = (candidate: unknown): number | null => {
+      if (candidate == null) return null;
+      return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : null;
+    };
+    return {
+      ...initialContext.draft,
+      gpsLat: coordinate(parsed.gpsLat),
+      gpsLng: coordinate(parsed.gpsLng),
+      lat: coordinate(parsed.lat),
+      lng: coordinate(parsed.lng),
+      accuracyM: coordinate(parsed.accuracyM),
+      locationProvenance: parsed.locationProvenance ?? null,
+      locationCapturedAtMs: coordinate(parsed.locationCapturedAtMs),
+      locationSampleCount: coordinate(parsed.locationSampleCount),
+      locationCaptureMethod: parsed.locationCaptureMethod ?? null,
+      type: parsed.type ?? initialContext.draft.type,
+      title: parsed.title,
+      text: parsed.text,
+      voiceUri: typeof parsed.voiceUri === 'string' ? parsed.voiceUri : null,
+      voiceMs: coordinate(parsed.voiceMs),
+      visibility: parsed.visibility ?? initialContext.draft.visibility,
+    };
+  }, [initialContext.draft]);
+
+  const storedEnvelopeMatchesScope = useCallback((value: PersistedPlantDraft | LegacyPersistedPlantDraft): boolean => {
+    if (value.ownerUserId !== userId) return false;
+    if (value.v === 5) return value.scopeId === plantDraftScopeId(draftScope);
+    if (draftScope.kind === 'standalone') return value.origin?.kind === 'standalone';
+    return value.origin?.kind === 'activity'
+      && value.origin.clientActivityId === draftScope.clientActivityId
+      && value.origin.ownerGeneration === draftScope.ownerGeneration
+      && value.origin.activityMode === draftScope.activityMode
+      && value.activityContext?.ownerUserId === userId
+      && value.activityContext.clientActivityId === draftScope.clientActivityId
+      && value.activityContext.ownerGeneration === draftScope.ownerGeneration;
+  }, [draftScope, userId]);
+
+  const applyResumedDraft = useCallback(async (
+    resumedDraft: PlantDraft,
+    sourceKey: string,
+    sourceRaw: string,
+  ) => {
+    const adopted = makeDraftEnvelope(resumedDraft);
+    await persistPlantDraft(storage, scopedDraftKey, plantSessionId, JSON.stringify(adopted));
+    if (sourceKey !== scopedDraftKey) {
+      await removeLegacyDraftIfUnchanged(storage, sourceKey, sourceRaw);
+    }
+    if (!mountedRef.current) return;
+    setDraft(resumedDraft);
+    setStep(resumedDraft.lat != null && resumedDraft.lng != null ? 'content' : initialContext.step);
+    setPendingResume(null);
+    setDraftHydrated(true);
+  }, [initialContext.step, makeDraftEnvelope, plantSessionId, scopedDraftKey]);
+
+  // Hydration is an honest gate: the editor does not accept typing until the
+  // exact owner/origin draft decision has resolved. Activity drafts resume
+  // only for the identical Activity identity. Standalone drafts require an
+  // explicit continue-or-discard choice, so old words are never silently
+  // reinterpreted at a new place.
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !scopedDraftKey) {
       setDraftHydrated(false);
-      return;
+      return undefined;
     }
     let cancelled = false;
+    claimPlantDraftSession(scopedDraftKey, plantSessionId);
     (async () => {
+      let sourceKey = scopedDraftKey;
+      let raw = await readPlantDraft(storage, sourceKey);
+      if (!raw) {
+        sourceKey = legacyPlantDraftStorageKey(userId);
+        raw = await readPlantDraft(storage, sourceKey);
+      }
+      if (cancelled) return;
+      if (!raw) {
+        setDraftHydrated(true);
+        return;
+      }
       try {
-        const raw = await storage.getItem(draftKey(userId));
-        if (cancelled) return;
-        if (!raw) {
+        const parsed = JSON.parse(raw) as PersistedPlantDraft | LegacyPersistedPlantDraft | PlantDraft;
+        const hasEnvelope = Boolean(parsed && typeof parsed === 'object' && 'draft' in parsed);
+        const envelope = hasEnvelope ? parsed as PersistedPlantDraft | LegacyPersistedPlantDraft : null;
+        const storedDraft = normalizeStoredDraft(envelope ? envelope.draft : parsed);
+        const matches = envelope
+          ? storedEnvelopeMatchesScope(envelope)
+          : draftScope.kind === 'standalone';
+        if (!storedDraft || !matches) {
           setDraftHydrated(true);
           return;
         }
-        const envelope = JSON.parse(raw) as PersistedPlantDraft | PlantDraft;
-        const parsed = 'draft' in envelope ? envelope.draft : envelope;
-        const persistedOwner = 'ownerUserId' in envelope ? envelope.ownerUserId : userId;
-        if (
-          persistedOwner === userId &&
-          parsed && typeof parsed === 'object' &&
-          typeof parsed.title === 'string' &&
-          typeof parsed.text === 'string'
-        ) {
-          // A failed submission may preserve words and audience, but never
-          // location authority. Activity entry keeps its current accepted
-          // fix; standalone entry must acquire a new GPS lock.
-          const migrated: PlantDraft = {
-            ...initialContext.draft,
-            type: parsed.type ?? initialContext.draft.type,
-            title: parsed.title,
-            text: parsed.text,
-            voiceUri: parsed.voiceUri ?? null,
-            voiceMs: parsed.voiceMs ?? null,
-            visibility: parsed.visibility ?? initialContext.draft.visibility,
-          };
-          setDraft(migrated);
-          setStep(initialContext.step);
+        if (draftScope.kind === 'standalone'
+          && (!envelope || envelope.sessionId !== plantSessionId)) {
+          setPendingResume({
+            draft: storedDraft,
+            storedSessionId: envelope?.sessionId ?? 'legacy-unscoped',
+            sourceKey,
+            sourceRaw: raw,
+            savedAtMs: envelope?.savedAtMs ?? null,
+          });
+          return;
         }
+        await applyResumedDraft(storedDraft, sourceKey, raw);
       } catch {
-        // Ignore — corrupt draft is silently dropped.
-      } finally {
         if (!cancelled) setDraftHydrated(true);
       }
-    })();
-    return () => { cancelled = true; };
-  }, [initialContext, userId]);
+    })().catch(() => {
+      if (!cancelled) setDraftHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+      if (draftHydratedRef.current && !draftTerminalRef.current && !plantedResultRef.current) {
+        const envelope = makeDraftEnvelope(draftRef.current);
+        void persistPlantDraft(storage, scopedDraftKey, plantSessionId, JSON.stringify(envelope));
+      }
+      releasePlantDraftSession(scopedDraftKey, plantSessionId);
+    };
+  }, [
+    applyResumedDraft,
+    draftScope,
+    makeDraftEnvelope,
+    normalizeStoredDraft,
+    plantSessionId,
+    scopedDraftKey,
+    storedEnvelopeMatchesScope,
+    userId,
+  ]);
 
-  // ContentStep is deliberately controlled by this single owner. Persist the
-  // complete record after hydration so Adjust/back/unmount/network failure can
-  // never split words/audience from pin provenance or Activity identity.
   useEffect(() => {
-    if (!userId || !draftHydrated || plantedResult) return undefined;
+    if (!userId || !scopedDraftKey || !draftHydrated || plantedResult || draftTerminalRef.current) return undefined;
     const timeout = setTimeout(() => {
-      const envelope: PersistedPlantDraft = {
-        v: 4,
-        ownerUserId: userId,
-        sessionId: plantSessionId,
-        origin: route.params?.origin ?? { kind: 'standalone' },
-        activityContext: initialContext.activityContext,
-        savedAtMs: Date.now(),
-        draft,
-      };
-      void storage.setItem(draftKey(userId), JSON.stringify(envelope)).catch(() => undefined);
+      const envelope = makeDraftEnvelope(draft);
+      void persistPlantDraft(storage, scopedDraftKey, plantSessionId, JSON.stringify(envelope));
     }, 120);
     return () => clearTimeout(timeout);
-  }, [draft, draftHydrated, initialContext.activityContext, plantSessionId, plantedResult, route.params?.origin, userId]);
+  }, [draft, draftHydrated, makeDraftEnvelope, plantSessionId, plantedResult, scopedDraftKey, userId]);
 
   const commit = useCallback(
     async (final: PlantDraft) => {
@@ -455,15 +575,21 @@ export function PlantScreen() {
           // draft. Account/activity changes suppress only stale UI feedback.
           try {
             const envelope: PersistedPlantDraft = {
-              v: 4,
+              v: 5,
               ownerUserId: initiatingOwnerId,
               sessionId: plantSessionId,
+              scopeId: plantDraftScopeId(draftScope),
               origin: route.params?.origin ?? { kind: 'standalone' },
               activityContext,
               savedAtMs: Date.now(),
               draft: final,
             };
-            await storage.setItem(draftKey(initiatingOwnerId), JSON.stringify(envelope));
+            await persistPlantDraft(
+              storage,
+              plantDraftStorageKey(initiatingOwnerId, draftScope),
+              plantSessionId,
+              JSON.stringify(envelope),
+            );
           } catch { /* best-effort */ }
           if (!contextCurrent || !contextIsCurrent()) return;
           const raw = String((error as any)?.message ?? '').toLowerCase();
@@ -483,12 +609,18 @@ export function PlantScreen() {
         },
         onCommitted: async result => {
           log('plant.commit_ok', { id: result.marker.id, projection: result.projection });
+          draftTerminalRef.current = true;
           // Plant's bounded five-second lock proves placement quality, not the
           // server's 15-second passive-presence contract. Personal Memory is
           // produced by the independent recorder (or canonical Activity), so
           // a single Cairn placement can never manufacture shareable Fog.
           try {
-            await storage.removeItem(draftKey(initiatingOwnerId));
+            await removePlantDraftIfSessionMatches(
+              storage,
+              plantDraftStorageKey(initiatingOwnerId, draftScope),
+              plantSessionId,
+              plantSessionId,
+            );
           } catch { /* best-effort */ }
         },
         onCommittedCurrent: async result => {
@@ -509,8 +641,27 @@ export function PlantScreen() {
         releaseOnCommittedCurrent: false,
       });
     },
-    [addMarker, userId, initialContext, plantSessionId, route.params?.origin]
+    [addMarker, userId, initialContext, plantSessionId, draftScope, route.params?.origin]
   );
+
+  const beginLocationFlow = useCallback((kind: Exclude<LocationFlow, 'initial'>, snapshot = draftRef.current) => {
+    locationSnapshotRef.current = snapshot;
+    setLocationFlow(kind);
+    setStep('gps');
+  }, []);
+
+  const cancelLocationFlow = useCallback(() => {
+    if (locationFlow === 'initial' || !locationSnapshotRef.current) {
+      log('plant.cancel');
+      nav.goBack();
+      return;
+    }
+    const snapshot = locationSnapshotRef.current;
+    locationSnapshotRef.current = null;
+    setDraft(snapshot);
+    setLocationFlow('initial');
+    setStep('content');
+  }, [locationFlow, nav]);
 
   const onContentSubmit = (payload: {
     type: MarkerType;
@@ -530,7 +681,7 @@ export function PlantScreen() {
       Alert.alert(
         'Refresh this place',
         'Your position is no longer fresh enough to leave this Cairn accurately. Your note and audience are saved while Cairn confirms the place again.',
-        [{ text: 'Confirm position', onPress: () => setStep('gps') }],
+        [{ text: 'Confirm position', onPress: () => beginLocationFlow('refresh', final) }],
       );
       return;
     }
@@ -540,7 +691,14 @@ export function PlantScreen() {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
       <View style={styles.container}>
-        {step === 'gps' && (
+        {!draftHydrated && !pendingResume ? (
+          <View style={styles.hydrationState} testID="plant-draft-hydration">
+            <ActivityIndicator color={visualTheme.primary} />
+            <Text style={[styles.hydrationTitle, { color: visualTheme.textPrimary }]}>Checking your saved note…</Text>
+            <Text style={[styles.hydrationBody, { color: visualTheme.textMuted }]}>Your words stay closed until the right place and Activity are confirmed.</Text>
+          </View>
+        ) : null}
+        {draftHydrated && step === 'gps' && (
           <GpsLockStep
             onLocked={(lat, lng, accuracyM, locationProvenance, observedAtMs, sampleCount, captureMethod) => {
               log('plant.step_gps_to_pin', { accuracyM });
@@ -562,10 +720,10 @@ export function PlantScreen() {
               }));
               setStep('pin');
             }}
-            onCancel={() => { log('plant.cancel'); nav.goBack(); }}
+            onCancel={cancelLocationFlow}
           />
         )}
-        {step === 'pin' && draft.gpsLat != null && draft.gpsLng != null && draft.lat != null && draft.lng != null && (
+        {draftHydrated && step === 'pin' && draft.gpsLat != null && draft.gpsLng != null && draft.lat != null && draft.lng != null && (
           <PinAdjustStep
             gpsLat={draft.gpsLat}
             gpsLng={draft.gpsLng}
@@ -575,17 +733,22 @@ export function PlantScreen() {
               log('plant.step_pin_to_content');
               // Only update the pin coord — gpsLat/gpsLng stays frozen.
               setDraft((d) => ({ ...d, lat, lng }));
+              locationSnapshotRef.current = null;
+              setLocationFlow('initial');
               setStep('content');
             }}
-            // Back from Pin Adjust exits the whole Plant flow.
-            // Going back to step='gps' is useless: gps step auto-
-            // advances the moment it gets a fix (which we already have),
-            // so the user would just bounce right back to 'pin'. Closing
-            // the screen is the only behavior that matches user intent.
-            onBack={() => { log('plant.step_back_pin_to_home'); nav.goBack(); }}
+            onBack={() => {
+              if (locationFlow !== 'initial' && locationSnapshotRef.current) {
+                log('plant.location_adjustment_cancelled');
+                cancelLocationFlow();
+                return;
+              }
+              log('plant.step_back_pin_to_home');
+              nav.goBack();
+            }}
           />
         )}
-        {step === 'content' && (
+        {draftHydrated && step === 'content' && (
           <ContentStep
             title={draft.title}
             text={draft.text}
@@ -603,10 +766,54 @@ export function PlantScreen() {
             // A deliberate adjustment starts with a fresh physical fix. The
             // parent-owned draft remains mounted in state/storage, including
             // the Activity identity; only location evidence is replaced.
-            onAdjustLocation={() => setStep('gps')}
+            onAdjustLocation={() => beginLocationFlow('adjust')}
           />
         )}
       </View>
+      <ModalCard visible={Boolean(pendingResume)} dismissible={false} testID="plant-resume-modal">
+        <ModalCardHeader
+          title="Continue your saved note?"
+          body={pendingResume?.savedAtMs
+            ? `It still belongs to its original place and was saved ${new Date(pendingResume.savedAtMs).toLocaleString()}. You can refresh the position before leaving it.`
+            : 'It still belongs to its original place. You can refresh the position before leaving it.'}
+        />
+        <View style={styles.successActions}>
+          <PrimaryButton
+            label="Continue saved note"
+            onPress={() => {
+              if (!pendingResume) return;
+              void applyResumedDraft(pendingResume.draft, pendingResume.sourceKey, pendingResume.sourceRaw);
+            }}
+            testID="plant-resume-continue"
+          />
+          <PrimaryButton
+            label="Discard and start new"
+            variant="secondary"
+            onPress={() => {
+              if (!pendingResume) return;
+              const pending = pendingResume;
+              void (async () => {
+                if (pending.sourceKey === scopedDraftKey) {
+                  await removePlantDraftIfSessionMatches(
+                    storage,
+                    pending.sourceKey,
+                    pending.storedSessionId,
+                    plantSessionId,
+                  );
+                } else {
+                  await removeLegacyDraftIfUnchanged(storage, pending.sourceKey, pending.sourceRaw);
+                }
+                if (!mountedRef.current) return;
+                setPendingResume(null);
+                setDraft(initialContext.draft);
+                setStep(initialContext.step);
+                setDraftHydrated(true);
+              })();
+            }}
+            testID="plant-resume-discard"
+          />
+        </View>
+      </ModalCard>
       <ModalCard visible={Boolean(plantedResult)} dismissible={false} testID="plant-success-modal">
         <Animated.View style={[
           styles.successMark,
@@ -657,6 +864,9 @@ export function PlantScreen() {
 const styles = StyleSheet.create({
   root:      { flex: 1 },
   container: { flex: 1, padding: 20 },
+  hydrationState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.sm },
+  hydrationTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  hydrationBody: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
   successActions: { gap: Spacing.sm },
   successMark: { alignItems: 'center', marginBottom: Spacing.sm },
 });

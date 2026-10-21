@@ -7,6 +7,7 @@ import {
 
 const HEADLESS_TIMEOUT_MS = 20_000;
 const HEADLESS_POINT_LIMIT = 500;
+const HEADLESS_RESPONSE_LIMIT_BYTES = 512 * 1024;
 
 export type HeadlessMemoryDeliveryResult = {
   status: 'acknowledged_and_discovered' | 'nothing_to_push' | 'auth_unavailable' | 'authority_changed' | 'failed';
@@ -28,18 +29,37 @@ async function headlessFetch(
   path: string,
   token: string,
   body: Record<string, unknown>,
-): Promise<Response> {
+): Promise<{ ok: boolean; body: any }> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), HEADLESS_TIMEOUT_MS);
+  let timeout: ReturnType<typeof setTimeout> | null = null;
   try {
-    return await fetch(`${API_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(`${API_BASE_URL}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        let parsed: any = null;
+        if (typeof response.text === 'function') {
+          const raw = await response.text();
+          if (raw.length > HEADLESS_RESPONSE_LIMIT_BYTES) throw new Error('headless_response_too_large');
+          try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
+        } else {
+          parsed = await response.json().catch(() => null);
+        }
+        return { ok: response.ok, body: parsed };
+      })(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error('headless_request_timeout'));
+        }, HEADLESS_TIMEOUT_MS);
+      }),
+    ]);
   } finally {
-    clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -104,7 +124,7 @@ export async function deliverHeadlessPassiveMemory(args: {
     });
     if (!await args.authorityIsCurrent()) return result('authority_changed', points.length, presence.length);
     if (!upload.ok) return result('failed', points.length, presence.length);
-    const uploadBody = await upload.json().catch(() => null);
+    const uploadBody = upload.body;
     const pointEcho = Array.isArray(uploadBody?.points) ? uploadBody.points : [];
     const presenceEcho = Array.isArray(uploadBody?.presence_witnesses) ? uploadBody.presence_witnesses : [];
     const acknowledged = pointEcho.length === points.length
@@ -119,7 +139,7 @@ export async function deliverHeadlessPassiveMemory(args: {
     const discovery = await headlessFetch('/api/cairn-memory/discover', token, {});
     if (!await args.authorityIsCurrent()) return result('authority_changed', points.length, presence.length);
     if (!discovery.ok) return result('failed', points.length, presence.length);
-    const discoveryBody = await discovery.json().catch(() => null);
+    const discoveryBody = discovery.body;
     const acquiredCount = Array.isArray(discoveryBody?.acquired) ? discoveryBody.acquired.length : 0;
     return result('acknowledged_and_discovered', points.length, presence.length, acquiredCount);
   } catch {

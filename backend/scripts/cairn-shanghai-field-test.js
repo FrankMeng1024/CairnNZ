@@ -11,6 +11,14 @@ const {
   publicLocationPolicyConfigured,
 } = require('../src/services/publicLocationPolicy');
 const { publicPilotAuthorized } = require('../src/services/publicPublication');
+const {
+  approvalPlan,
+  assertMutationAuthority,
+  normalizedIds,
+  readFieldReview,
+  readTargetAllowlist,
+  resolveApprovedTarget,
+} = require('./cairn-shanghai-authority');
 
 const DEFAULT_MANIFEST = path.join(__dirname, 'cairn-shanghai-fixtures', 'manifest.o88.json');
 const EXPECTED = {
@@ -26,16 +34,19 @@ function usage(message) {
     'Cairn O88 Shanghai fixture tool (default command is read-only plan)',
     '',
     '  node scripts/cairn-shanghai-field-test.js plan [--manifest=FILE]',
+    '  node scripts/cairn-shanghai-field-test.js inspect-target',
+    '  node scripts/cairn-shanghai-field-test.js approval-plan --environment=isolated|staging|production',
     '  node scripts/cairn-shanghai-field-test.js apply --environment=isolated|staging|production',
     '       --reader-ids=ID[,ID] --public-author-ids=ID[,ID] --friend-author-ids=ID[,ID]',
-    '       --field-review=FILE --confirm-batch=BATCH --confirm-target=FINGERPRINT',
+    '       --target-allowlist=FILE --field-review=FILE --confirm-batch=BATCH',
+    '       --confirm-target=FINGERPRINT --owner-approval=BATCH:PLAN_SHA256',
     '  node scripts/cairn-shanghai-field-test.js verify --environment=... --confirm-target=...',
     '  node scripts/cairn-shanghai-field-test.js advance-revision --keys=KEY[,KEY] [apply confirmations]',
     '  node scripts/cairn-shanghai-field-test.js cleanup [apply confirmations] --confirm-cleanup=BATCH',
     '',
-    'Target fingerprint: <environment>:<DB_HOST>:<DB_PORT>:<DB_NAME>.',
-    'Production additionally requires CAIRN_ENABLE_PRODUCTION_FIXTURE_APPLY=1 and',
-    '--owner-approval=<batch>:<manifest-sha256>. No command fabricates reader GPS.',
+    'Target fingerprint: mysql:<server-uuid>:<database>, resolved through an approved allowlist.',
+    'Every mutation requires the exact expiring approval plan. Production additionally requires',
+    'CAIRN_ENABLE_PRODUCTION_FIXTURE_APPLY=1. No command fabricates reader GPS.',
   ].join('\n') + '\n');
   process.exitCode = 2;
 }
@@ -58,12 +69,7 @@ function readManifest(file = DEFAULT_MANIFEST) {
 }
 
 function ids(value, label) {
-  if (!value) return [];
-  const parsed = String(value).split(',').map(item => item.trim());
-  if (parsed.some(item => !/^[1-9]\d*$/.test(item)) || new Set(parsed).size !== parsed.length) {
-    throw new Error(`${label} must be unique positive integer ids`);
-  }
-  return parsed;
+  return normalizedIds(value, label);
 }
 
 function pointsById(manifest) {
@@ -117,8 +123,8 @@ function validateManifest(manifest) {
   return { counts, pointMap };
 }
 
-function targetConfig(environment) {
-  if (!['isolated', 'staging', 'production'].includes(environment || '')) {
+function targetConfig(environment, requireEnvironment = true) {
+  if (requireEnvironment && !['isolated', 'staging', 'production'].includes(environment || '')) {
     throw new Error('--environment must be isolated, staging, or production');
   }
   const host = process.env.DB_HOST || 'localhost';
@@ -126,44 +132,7 @@ function targetConfig(environment) {
   const database = process.env.DB_NAME || 'cairn';
   return {
     environment, host, port, database,
-    fingerprint: `${environment}:${host}:${port}:${database}`,
   };
-}
-
-function fieldReview(file, batchId, manifestSha, keys) {
-  if (!file) throw new Error('--field-review is required before apply');
-  const review = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
-  if (review.batch_id !== batchId || review.manifest_sha256 !== manifestSha) {
-    throw new Error('Field review does not bind this exact batch and manifest');
-  }
-  const verified = new Set(review.field_verified_fixture_keys || []);
-  if (verified.size !== keys.length || keys.some(key => !verified.has(key))) {
-    throw new Error('Every exact fixture point requires field verification');
-  }
-  if (!review.reviewer || !review.reviewed_at || review.coordinate_system !== 'WGS84') {
-    throw new Error('Field review requires reviewer, reviewed_at, and WGS84 confirmation');
-  }
-  return review;
-}
-
-function assertMutationAuthority(command, args, manifestSha, manifest) {
-  const target = targetConfig(args.environment);
-  if (args['confirm-batch'] !== manifest.batch_id) throw new Error('Exact --confirm-batch is required');
-  if (args['confirm-target'] !== target.fingerprint) {
-    throw new Error(`Exact --confirm-target is required: ${target.fingerprint}`);
-  }
-  if (target.environment === 'production') {
-    if (process.env.CAIRN_ENABLE_PRODUCTION_FIXTURE_APPLY !== '1') {
-      throw new Error('Production fixture mutation is disabled by environment');
-    }
-    if (args['owner-approval'] !== `${manifest.batch_id}:${manifestSha}`) {
-      throw new Error('Exact Owner approval reference is required for production');
-    }
-  }
-  if (command === 'cleanup' && args['confirm-cleanup'] !== manifest.batch_id) {
-    throw new Error('Cleanup requires the exact batch id');
-  }
-  return target;
 }
 
 async function connection(target) {
@@ -174,10 +143,111 @@ async function connection(target) {
     password: process.env.DB_PASSWORD || '',
     database: target.database,
     multipleStatements: false,
+    timezone: 'Z',
   });
-  const [[row]] = await conn.query('SELECT DATABASE() AS db, @@hostname AS server_host');
+  const [[row]] = await conn.query(
+    'SELECT DATABASE() AS db, @@hostname AS server_host, @@port AS server_port, @@server_uuid AS server_uuid',
+  );
   if (row.db !== target.database) throw new Error('Connected database does not match target fingerprint');
-  return conn;
+  return {
+    conn,
+    observed: {
+      database: row.db,
+      serverHost: row.server_host,
+      serverPort: Number(row.server_port),
+      serverUuid: row.server_uuid,
+    },
+  };
+}
+
+async function approvedConnection(args, mutation) {
+  const configured = targetConfig(args.environment);
+  const opened = await connection(configured);
+  try {
+    const allowlist = readTargetAllowlist(args['target-allowlist']);
+    const target = resolveApprovedTarget(opened.observed, allowlist, args.environment, mutation);
+    return { ...opened, target, allowlist };
+  } catch (error) {
+    await opened.conn.end();
+    throw error;
+  }
+}
+
+function approvalBinding(context, target) {
+  return {
+    batchId: context.manifest.batch_id,
+    manifestSha256: context.sha256,
+    fixtureKeys: context.manifest.fixtures.map(item => item.key),
+    ttlDays: context.manifest.ttl_days,
+    target,
+  };
+}
+
+function exactApprovedReview(args, context, target) {
+  const binding = approvalBinding(context, target);
+  const review = readFieldReview(args['field-review'], binding);
+  const plan = approvalPlan(binding, review);
+  return { binding, review, plan };
+}
+
+function sameIds(left, right) {
+  return left.length === right.length && left.every((value, index) => String(value) === String(right[index]));
+}
+
+function expectedFixtureAuthors(manifest, publicAuthors, friendAuthors) {
+  const expected = new Map();
+  let publicIndex = 0;
+  let friendIndex = 0;
+  for (const fixture of manifest.fixtures) {
+    const authorId = fixture.audience === 'public'
+      ? publicAuthors[publicIndex++ % publicAuthors.length]
+      : friendAuthors[friendIndex++ % friendAuthors.length];
+    expected.set(fixture.key, { authorId: String(authorId), audience: fixture.audience });
+  }
+  return expected;
+}
+
+async function assertStoredPlan(conn, context, target, review, plan, options = {}) {
+  const [rows] = await conn.execute(
+    `SELECT target_environment,manifest_sha256,state,expires_at,approval_reference
+       FROM cairn_qa_fixture_batches WHERE batch_id=?${options.lock ? ' FOR UPDATE' : ''}`,
+    [context.manifest.batch_id],
+  );
+  const batch = rows[0];
+  if (!batch) {
+    if (options.requireBatch) throw new Error('Approved fixture batch has not been applied');
+    return null;
+  }
+  const storedExpiry = new Date(batch.expires_at).toISOString();
+  if (batch.target_environment !== target.realm || batch.manifest_sha256 !== context.sha256
+    || batch.approval_reference !== plan.owner_approval || storedExpiry !== review.batchExpiresAt
+    || batch.state === 'cleaned' || Date.parse(storedExpiry) <= Date.now()) {
+    throw new Error('Existing batch does not match the exact active approval plan');
+  }
+  const [storedReaders] = await conn.execute(
+    'SELECT viewer_id FROM cairn_qa_fixture_readers WHERE batch_id=? ORDER BY viewer_id',
+    [context.manifest.batch_id],
+  );
+  const readerIds = storedReaders.map(row => String(row.viewer_id));
+  if (readerIds.some(id => !review.readers.includes(id))
+    || (options.requireComplete && !sameIds(readerIds, review.readers))) {
+    throw new Error('Stored reader cohort does not match the exact approved plan');
+  }
+  const [storedFixtures] = await conn.execute(
+    'SELECT fixture_key,author_id,audience FROM cairn_qa_fixtures WHERE batch_id=? ORDER BY fixture_key',
+    [context.manifest.batch_id],
+  );
+  const expected = expectedFixtureAuthors(context.manifest, review.publicAuthors, review.friendAuthors);
+  for (const fixture of storedFixtures) {
+    const approved = expected.get(fixture.fixture_key);
+    if (!approved || approved.authorId !== String(fixture.author_id) || approved.audience !== fixture.audience) {
+      throw new Error(`Stored fixture creator does not match the approved plan: ${fixture.fixture_key}`);
+    }
+  }
+  if (options.requireComplete && storedFixtures.length !== context.manifest.fixtures.length) {
+    throw new Error('Stored fixture cohort is incomplete');
+  }
+  return batch;
 }
 
 function deterministicUuid(batchId, fixtureKey) {
@@ -336,30 +406,28 @@ async function insertFixture(conn, manifest, manifestSha, target, fixture, point
 
 async function apply(command, args, context) {
   const { manifest, sha256, pointMap } = context;
-  const target = assertMutationAuthority(command, args, sha256, manifest);
-  fieldReview(args['field-review'], manifest.batch_id, sha256, manifest.fixtures.map(item => item.key));
   const readers = ids(args['reader-ids'], 'reader ids');
   const publicAuthors = ids(args['public-author-ids'], 'public author ids');
   const friendAuthors = ids(args['friend-author-ids'], 'friend author ids');
-  const sensitiveZones = requirePublicPilotAuthority(readers, publicAuthors);
-  const conn = await connection(target);
+  const opened = await approvedConnection(args, true);
+  const { conn, target } = opened;
   try {
+    const { binding, review, plan } = exactApprovedReview(args, context, target);
+    if (!sameIds(readers, review.readers) || !sameIds(publicAuthors, review.publicAuthors)
+      || !sameIds(friendAuthors, review.friendAuthors)) {
+      throw new Error('CLI reader/creator cohorts do not match the exact field-reviewed plan');
+    }
+    assertMutationAuthority(command, args, binding, review, plan);
+    const sensitiveZones = requirePublicPilotAuthority(readers, publicAuthors);
     const users = await verifyAccounts(conn, readers, publicAuthors, friendAuthors);
     await conn.beginTransaction();
-    const [existing] = await conn.execute(
-      'SELECT target_environment,manifest_sha256,state,expires_at FROM cairn_qa_fixture_batches WHERE batch_id=? FOR UPDATE',
-      [manifest.batch_id],
-    );
-    if (existing[0] && (existing[0].target_environment !== target.environment
-      || existing[0].manifest_sha256 !== sha256 || existing[0].state === 'cleaned')) {
-      throw new Error('Existing batch identity does not match this manifest/target');
-    }
-    if (!existing[0]) {
+    const existing = await assertStoredPlan(conn, context, target, review, plan, { lock: true });
+    if (!existing) {
       await conn.execute(
         `INSERT INTO cairn_qa_fixture_batches
            (batch_id,target_environment,manifest_sha256,state,expires_at,approval_reference)
-         VALUES (?,?,?,'active',DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ? DAY),?)`,
-        [manifest.batch_id, target.environment, sha256, manifest.ttl_days, args['owner-approval'] || null],
+         VALUES (?,?,?,'active',?,?)`,
+        [manifest.batch_id, target.realm, sha256, new Date(review.batchExpiresAt), plan.owner_approval],
       );
     }
     for (const reader of readers) {
@@ -381,7 +449,10 @@ async function apply(command, args, context) {
       ));
     }
     await conn.commit();
-    return { command, applied: true, target: target.fingerprint, batchId: manifest.batch_id, rows: written.length };
+    return {
+      command, applied: true, target: target.fingerprint, targetRealm: target.realm,
+      approvalPlanSha256: plan.plan_sha256, batchId: manifest.batch_id, rows: written.length,
+    };
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
     throw error;
@@ -391,9 +462,11 @@ async function apply(command, args, context) {
 }
 
 async function verify(args, context) {
-  const target = targetConfig(args.environment);
-  if (args['confirm-target'] !== target.fingerprint) throw new Error(`Exact --confirm-target is required: ${target.fingerprint}`);
-  const conn = await connection(target);
+  const { conn, target } = await approvedConnection(args, false);
+  if (args['confirm-target'] !== target.fingerprint) {
+    await conn.end();
+    throw new Error(`Exact --confirm-target is required: ${target.fingerprint}`);
+  }
   try {
     const [[batch]] = await conn.execute(
       `SELECT batch_id,target_environment,manifest_sha256,state,expires_at,
@@ -426,16 +499,17 @@ async function verify(args, context) {
 }
 
 async function advanceRevision(args, context) {
-  const target = assertMutationAuthority('advance-revision', args, context.sha256, context.manifest);
-  fieldReview(args['field-review'], context.manifest.batch_id, context.sha256, context.manifest.fixtures.map(item => item.key));
   const requested = new Set(String(args.keys || '').split(',').filter(Boolean));
   if (!requested.size) throw new Error('--keys must select explicit revision fixtures');
   const fixtures = context.manifest.fixtures.filter(item => requested.has(item.key));
   if (fixtures.length !== requested.size || fixtures.some(item => !item.revision_2_text)) {
     throw new Error('Every requested key must exist and define revision_2_text');
   }
-  const conn = await connection(target);
+  const { conn, target } = await approvedConnection(args, true);
   try {
+    const { binding, review, plan } = exactApprovedReview(args, context, target);
+    assertMutationAuthority('advance-revision', args, binding, review, plan);
+    await assertStoredPlan(conn, context, target, review, plan, { requireBatch: true, requireComplete: true });
     const [batchReaders] = await conn.execute(
       'SELECT viewer_id FROM cairn_qa_fixture_readers WHERE batch_id=?', [context.manifest.batch_id],
     );
@@ -525,10 +599,12 @@ async function advanceRevision(args, context) {
 }
 
 async function cleanup(args, context) {
-  const target = assertMutationAuthority('cleanup', args, context.sha256, context.manifest);
-  const conn = await connection(target);
+  const { conn, target } = await approvedConnection(args, true);
   try {
+    const { binding, review, plan } = exactApprovedReview(args, context, target);
+    assertMutationAuthority('cleanup', args, binding, review, plan);
     await conn.beginTransaction();
+    await assertStoredPlan(conn, context, target, review, plan, { lock: true, requireBatch: true });
     const [markers] = await conn.execute(
       `SELECT marker_id FROM cairn_qa_fixtures
         WHERE batch_id=? AND marker_id IS NOT NULL FOR UPDATE`, [context.manifest.batch_id],
@@ -601,6 +677,33 @@ function plan(context) {
   };
 }
 
+async function inspectTarget(args) {
+  const configured = targetConfig(undefined, false);
+  const { conn, observed } = await connection(configured);
+  try {
+    return {
+      command: 'inspect-target', writePerformed: false,
+      serverUuid: String(observed.serverUuid).toLowerCase(),
+      database: observed.database,
+      serverHost: observed.serverHost,
+      serverPort: observed.serverPort,
+      warning: 'Read-only identity inspection does not approve this target for mutation.',
+    };
+  } finally {
+    await conn.end();
+  }
+}
+
+async function showApprovalPlan(args, context) {
+  const { conn, target } = await approvedConnection(args, false);
+  try {
+    const { plan: approvedPlan } = exactApprovedReview(args, context, target);
+    return { command: 'approval-plan', writePerformed: false, ...approvedPlan };
+  } finally {
+    await conn.end();
+  }
+}
+
 async function main() {
   const [command = 'plan', ...rawArgs] = process.argv.slice(2);
   const args = argsOf(rawArgs);
@@ -609,6 +712,8 @@ async function main() {
   const context = { ...loaded, ...validated };
   let result;
   if (command === 'plan') result = plan(context);
+  else if (command === 'inspect-target') result = await inspectTarget(args);
+  else if (command === 'approval-plan') result = await showApprovalPlan(args, context);
   else if (command === 'apply') result = await apply(command, args, context);
   else if (command === 'verify') result = await verify(args, context);
   else if (command === 'advance-revision') result = await advanceRevision(args, context);

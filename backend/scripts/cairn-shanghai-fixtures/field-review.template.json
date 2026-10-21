@@ -1,11 +1,32 @@
 {
+  "schema_version": 2,
   "batch_id": "o88-shanghai-encounter-20261020",
   "manifest_sha256": "REPLACE_WITH_PLAN_OUTPUT",
   "coordinate_system": "WGS84",
   "reviewer": "REPLACE_WITH_AUTHORIZED_REVIEWER",
   "reviewed_at": "REPLACE_WITH_ISO_TIMESTAMP",
+  "target_fingerprint": "mysql:REPLACE_WITH_INSPECTED_SERVER_UUID:REPLACE_WITH_DATABASE",
+  "target_realm": "REPLACE_WITH_isolated_staging_or_production",
+  "target_allowlist_sha256": "REPLACE_WITH_ALLOWLIST_FILE_SHA256",
+  "reader_ids": ["REPLACE_WITH_EXACT_READER_IDS"],
+  "public_author_ids": ["REPLACE_WITH_EXACT_PUBLIC_AUTHOR_IDS"],
+  "friend_author_ids": ["REPLACE_WITH_EXACT_FRIEND_AUTHOR_IDS"],
+  "ttl_days": 14,
+  "approval_expires_at": "REPLACE_WITH_ISO_TIMESTAMP",
+  "batch_expires_at": "REPLACE_WITH_ISO_TIMESTAMP_NO_MORE_THAN_14_DAYS_AHEAD",
+  "cleanup_scope": [
+    "cairn_qa_fixture_batches:batch_id",
+    "cairn_qa_fixture_readers:batch_id",
+    "cairn_qa_fixtures:batch_id",
+    "markers:approved_fixture_marker_ids",
+    "cairn_review_cases:approved_fixture_marker_ids",
+    "cairn_collections:approved_fixture_marker_ids",
+    "marker_audience_epochs:approved_fixture_marker_ids",
+    "notification_log:orphaned_fixture_only_presentation_groups",
+    "cairn_presentation_groups:orphaned_fixture_only_groups"
+  ],
   "field_verified_fixture_keys": [
     "REPLACE_WITH_ALL_60_KEYS_AFTER_PUBLIC_GROUND_AND_COORDINATE_REVIEW"
   ],
-  "notes": "Confirm every point is legal public ground, walkable, not a private entrance/roadway/sensitive place, and correctly transformed to WGS84."
+  "notes": "Confirm every point is legal public ground, walkable, not a private entrance/roadway/sensitive place, and correctly transformed to WGS84. Generate the immutable approval reference with the read-only approval-plan command."
 }

@@ -30,4 +30,26 @@ describe('Cairn publication truth', () => {
   test('non-Public Cairns have no publication claim', () => {
     expect(cairnPublicationTruth({ permission: 'group', synced: true })).toBeNull();
   });
+
+  test('an impossible standalone source is not described as waiting to finish', () => {
+    const truth = cairnPublicationTruth({
+      ...publicMarker,
+      originActivityClientId: null,
+      publicSubmissionCode: 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED',
+    });
+    expect(truth).toMatchObject({ label: 'Public · Activity required' });
+    expect(truth?.explanation).toContain('has no Activity source');
+    expect(truth?.explanation).not.toContain('finishes');
+  });
+
+  test('a linked but unconfirmed Activity remains conditional, not published or submitted', () => {
+    const truth = cairnPublicationTruth({
+      ...publicMarker,
+      originActivityClientId: 'activity-a',
+      publicSubmissionCode: 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED',
+    });
+    expect(truth).toMatchObject({ label: 'Public · Activity not confirmed' });
+    expect(truth?.explanation).toContain('server confirms');
+    expect(truth?.explanation).toContain('not in review or Public discovery');
+  });
 });

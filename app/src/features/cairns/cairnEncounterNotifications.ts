@@ -237,6 +237,7 @@ export async function consumeCairnNotificationResponse(
   if (!expectedOwnerId || viewerId !== expectedOwnerId || !notificationId) return null;
   if (!ownerIsCurrent(expectedOwnerId)) return null;
   const presentationGroupId = data?.related_id == null ? null : String(data.related_id);
+  if (!presentationGroupId || !/^\d+$/.test(presentationGroupId)) return null;
   return withOpenLifecycle(expectedOwnerId, async lifecycle => {
     if (!ownerIsCurrent(expectedOwnerId)) return null;
     const now = Date.now();
@@ -285,6 +286,42 @@ export async function releaseCairnNotificationResponse(destination: CairnNotific
       ? { ...entry, state: 'pending' as const, updatedAtMs: Date.now() }
       : entry);
     await saveOpenLifecycle(destination.viewerId, lifecycle);
+  });
+}
+
+/**
+ * Returns durable retry targets without consuming them or navigating. Fresh
+ * processing entries remain owned by the in-flight handler; stale entries are
+ * safely returned to pending after a crash.
+ */
+export async function pendingCairnNotificationResponses(
+  ownerId: string,
+  options: { recoverProcessing?: boolean } = {},
+): Promise<CairnNotificationDestination[]> {
+  if (!ownerIsCurrent(ownerId)) return [];
+  return withOpenLifecycle(ownerId, async lifecycle => {
+    if (!ownerIsCurrent(ownerId)) return [];
+    const now = Date.now();
+    let changed = false;
+    lifecycle.entries = lifecycle.entries.map(entry => {
+      if (entry.state === 'processing'
+        && (options.recoverProcessing || now - entry.updatedAtMs >= PROCESSING_STALE_MS)) {
+        changed = true;
+        return { ...entry, state: 'pending' as const, updatedAtMs: now };
+      }
+      return entry;
+    });
+    if (changed) await saveOpenLifecycle(ownerId, lifecycle);
+    if (!ownerIsCurrent(ownerId)) return [];
+    return lifecycle.entries.flatMap(entry => (
+      entry.state === 'pending' && entry.presentationGroupId
+        ? [{
+          viewerId: ownerId,
+          presentationGroupId: entry.presentationGroupId,
+          notificationId: entry.notificationId,
+        }]
+        : []
+    ));
   });
 }
 

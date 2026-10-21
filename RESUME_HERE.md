@@ -1,4 +1,97 @@
-# O88 quality-closure recovery checkpoint
+# O88 targeted correctness and visual closure checkpoint
+
+Updated: 2026-10-21 (Asia/Shanghai), after focused R01-R08 correctness work;
+bounded visual closure and real-journey verification remain in progress.
+
+## Current targeted task authority
+
+- Worktree/branch: `/Users/mzm/Desktop/cairn/CairnNZ-o88-cairn-experience`
+  on `codex/cairn-encounter-experience-20261020`.
+- Recovered HEAD: `cfcf19d8ffea3c98cbef117154b6c91f321e0f2f`; worktree was clean,
+  with no staged, unstaged, or untracked files before this checkpoint edit.
+- The independent review of this commit reopens prior PASS claims. R01-R06
+  have now been reproduced, repaired, and focused-tested. R07 publication
+  truth and R08 provenance/hit-target changes are focused-tested; real UI and
+  journey evidence remains pending.
+- Available review authority:
+  `~/Downloads/Cairn_O88_Independent_Quality_Review_20261021.md`. The optional
+  `Cairn_O88_Independent_Probe_Evidence_20261021.zip` is not present.
+- Applicable visual-system documents, asset manifest, locked QA boards, prior
+  O88 closure package, and prior global visual audit have been read/inspected.
+- Concurrent Hike/Run worktree was observed read-only at
+  `c516ba2749f6e30660e7d462de829c8c1e397202` with its own uncommitted Activity
+  changes. Do not touch, stash, clean, merge, rebase, or use it as an edit
+  source. Re-read its identity only at delivery.
+- No merge, rebase, push, deploy, shared/production write, seed, EAS Build,
+  OTA, version/runtime marker change, or publication is authorized.
+
+## R01-R05 corrected checkpoint
+
+- R01: v4 persists session/origin/Activity/location, but hydration only checks
+  owner/title/text, then combines old words/audience with the current entry
+  context. The editor is not gated against a late storage result; draft writes
+  and cleanup use only the owner-wide legacy key.
+- R02: adjustment GPS Cancel and Pin Back both call `nav.goBack()`, exiting the
+  complete Plant flow instead of restoring the existing editor and pin.
+- R03: HTTP 200 malformed/empty/top-error bodies can still become `sent`; a
+  partial ticket result marks the whole row sent; the 30-second bound ends at
+  response headers rather than the body; unresolved receipt rows can starve
+  later rows.
+- R04: cluster intent generation increments only for cluster presses/unmount;
+  a newer single-marker press does not invalidate delayed cluster work.
+- R05: mutation authority trusts `--environment`; review material omits exact
+  target/cohort/expiry/cleanup identity; reapply inserts new readers without
+  rejecting cohort expansion.
+
+Corrections now present but not yet locally committed:
+
+- R01/R02: owner + exact Activity/generation/mode-scoped v5 Plant drafts,
+  serialized writes with active-session fencing, truthful hydration gate,
+  explicit standalone resume/discard, exact-session cleanup, and reversible
+  GPS/pin adjustment Cancel/Back. Focused Plant suites: 18/18 passed.
+- R03: push dispatch now retains per-original-target receipt identity, retries
+  only unresolved targets, requires accepted ticket IDs, bounds headers and
+  body, rejects malformed/short/unknown responses, and prevents unresolved
+  receipt rows from starving later rows. Migration 056 persists bounded
+  receipt attempts. Focused delivery/contract suites: 19/19 passed.
+- R04: every single/cluster selection, dismissal/focus loss, data/theme
+  generation, account switch, and unmount invalidates older asynchronous map
+  work. Focused controller/component suites: 18/18 passed.
+- R05: mutation target is resolved from MySQL server UUID + database against
+  an explicit allowlist; the caller realm is only an assertion. The v2 field
+  review and Owner plan bind target, allowlist, exact readers/creators, all
+  reviewed points, fixed expiry/TTL, and exact cleanup scope. Unit authority
+  suite: 8/8 passed. Fresh disposable MySQL rehearsal passed 10/10 checks,
+  including target inspection, exact approval, cohort-expansion rejection,
+  intentional partial-state recovery, revision, and cleanup. Evidence:
+  `/tmp/cairn-o88-r05-rehearsal-20261021b`.
+- R06: notification-open navigation now carries exact acquired revision
+  identity, is account- and readiness-fenced, and persists a bounded generic
+  retry target for cold-start/interrupted handling. Foreground visibility
+  acknowledgement is AppState/frame-gated; headless delivery bounds both
+  headers and body and retries durable work on later callbacks. Focused Cairn
+  notification/presentation tests: 43/43 passed; focused headless/background
+  tests: 14/14 passed.
+- R07: an unlinked Cairn now reports Public publication as impossible rather
+  than implying that waiting will make it eligible. Linked-but-unconfirmed
+  Activity truth remains conditional and explicitly outside review/discovery;
+  capability, empty-content, and suspension blocks are surfaced before Save.
+- R08: encounter presentation now derives and exposes Friends/Public/mixed
+  provenance from backend counts instead of hard-coding Public; Open/Later
+  controls meet the 44px target. The combined publication/provenance/
+  notification suite passes 71/71; the backend contract passes 26/26.
+- Repository-wide TypeScript remains baseline-red in generated previews,
+  Playwright typings, existing Activity tests, and Turf declarations. A
+  filtered run reports no diagnostics in any file changed by this task.
+
+First safe next action after interruption: inspect `git status`, verify the
+latest local checkpoint commit, then continue the bounded R09 visual fixes
+and real Mapbox/user-journey evidence. Do not run a production/shared fixture
+command.
+
+---
+
+# Previous O88 quality-closure checkpoint (historical, superseded by review)
 
 Updated: 2026-10-21 (Asia/Shanghai), after Q01-Q20 engineering closure and
 final real-Mapbox review. This checkpoint is intended to make the exact work
