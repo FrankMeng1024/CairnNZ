@@ -32,6 +32,10 @@ const {
 const { logicalRevisionStateSql } = require('../services/ownedCairnLibrary');
 const PushNotification = require('../models/PushNotification');
 const { qaFixtureEligibleSql } = require('../services/qaFixtureEligibility');
+const {
+  decodeLibraryCursor,
+  encodeLibraryCursor,
+} = require('../services/cairnLibraryCursor');
 
 const router = express.Router();
 router.use(authenticate);
@@ -55,41 +59,6 @@ function libraryPageLimit(value) {
   if (value == null || value === '') return 100;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 200 ? parsed : null;
-}
-
-function mysqlCursorTimestamp(value) {
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) return null;
-  const pad = (part, width = 2) => String(part).padStart(width, '0');
-  // mysql2 interprets a timezone-free DATETIME using the process timezone.
-  // Serializing with toISOString() would shift the wall-clock value (eight
-  // hours in the Shanghai closure run) and make the next keyset page empty.
-  // Preserve the exact local components that mysql2 read from the column.
-  return `${pad(value.getFullYear(), 4)}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
-    + ` ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
-    + `.${pad(value.getMilliseconds(), 3)}`;
-}
-
-function encodeLibraryCursor(row, timestampField) {
-  const sortAt = mysqlCursorTimestamp(row?.[timestampField]);
-  if (!sortAt) throw new Error('library_cursor_timestamp_invalid');
-  return Buffer.from(JSON.stringify({ v: 1, sort_at: sortAt, marker_id: String(row.marker_id) }))
-    .toString('base64url');
-}
-
-function decodeLibraryCursor(value) {
-  if (value == null || value === '') return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
-    const markerId = positiveId(parsed?.marker_id);
-    const sortAt = parsed?.sort_at;
-    if (parsed?.v !== 1 || !markerId
-      || typeof sortAt !== 'string'
-      || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/.test(sortAt)
-      || !Number.isFinite(new Date(sortAt.replace(' ', 'T')).getTime())) return undefined;
-    return { markerId, sortAt };
-  } catch {
-    return undefined;
-  }
 }
 
 function setDiscoveryTiming(res, stages) {

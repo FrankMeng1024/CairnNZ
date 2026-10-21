@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "dev": "node --watch src/index.js",
     "public:operator": "node scripts/public-cairn-operator.js",
     "cairn:shanghai": "node scripts/cairn-shanghai-field-test.js",
     "test:public:api": "scripts/run-public-cairn-harness.sh",
@@ -28,12 +28,8 @@
     "joi": "^18.2.3",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.22.3",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^8.0.7",
+    "node-cron": "^4.6.0",
     "pbf": "^3.3.0",
     "polygon-clipping": "^0.15.7"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
   }
 }

@@ -10,6 +10,8 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('the shared MySQL boundary decodes Cairn timestamps as UTC', () => {
   assert.match(read('config/db.js'), /timezone:\s*['"]Z['"]/);
+  assert.match(read('../scripts/cairn-memory-harness/api-mysql.js'), /timezone:\s*['"]Z['"]/);
+  assert.match(read('../scripts/public-cairn-harness/api-mysql.js'), /timezone:\s*['"]Z['"]/);
 });
 
 test('Friend revision eligibility starts after the trusted mutable revision frontier', () => {

@@ -18,6 +18,9 @@ const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  // Match src/config/db.js so direct evidence comparisons interpret MySQL
+  // DATETIME values with the same UTC authority as the mounted API.
+  timezone: 'Z',
 };
 
 const result = {
