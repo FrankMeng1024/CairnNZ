@@ -505,6 +505,40 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
     expect(mockContentSubmit).toBeNull();
   });
 
+  test('a numeric authenticated profile resumes its string-owned standalone draft after relaunch', async () => {
+    mockAppUserId = 100 as any;
+    mockMarkerOwnerId = '100';
+    mockRouteParams = { origin: { kind: 'standalone' } };
+    mockTrackingState = { ...mockTrackingState, status: 'idle' };
+    mockDraftGet.mockResolvedValueOnce(JSON.stringify({
+      v: 5,
+      ownerUserId: '100',
+      sessionId: 'prior-browser-session',
+      scopeId: 'standalone',
+      origin: { kind: 'standalone' },
+      activityContext: null,
+      savedAtMs: 1_800_000_000_500,
+      draft: {
+        gpsLat: -41.287, gpsLng: 174.777, lat: -41.2871, lng: 174.7771,
+        accuracyM: 6, locationProvenance: 'real', locationCapturedAtMs: 1_800_000_000_500,
+        locationSampleCount: 4, locationCaptureMethod: 'gps_window', type: 'cairn',
+        title: 'Survives relaunch', text: 'Keep this exact draft', voiceUri: null, voiceMs: null,
+        visibility: 'personal',
+      },
+    }));
+
+    const screen = render(<PlantScreen />);
+    await waitFor(() => expect(screen.getByTestId('plant-resume-modal')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('plant-resume-continue'));
+    await waitFor(() => expect(mockContentProps).toMatchObject({
+      title: 'Survives relaunch', text: 'Keep this exact draft', visibility: 'personal',
+    }));
+    expect(mockDraftSet.mock.calls.some(([key, value]) => (
+      key === 'cairn:plant:draft:v5:100:standalone'
+      && JSON.parse(value).ownerUserId === '100'
+    ))).toBe(true);
+  });
+
   test('gates editing until delayed hydration resolves instead of overwriting newer typing', async () => {
     let resolveRead!: (value: string | null) => void;
     mockDraftGet.mockReturnValueOnce(new Promise(resolve => { resolveRead = resolve; }));
@@ -555,10 +589,13 @@ describe('full Plant to Activity Detail Cairn linkage', () => {
   test('first-entry GPS Cancel still exits the whole standalone flow', async () => {
     mockRouteParams = { origin: { kind: 'standalone' } };
     mockTrackingState = { ...mockTrackingState, status: 'idle' };
-    render(<PlantScreen />);
+    const screen = render(<PlantScreen />);
     await waitFor(() => expect(mockGpsCancel).not.toBeNull());
     act(() => { mockGpsCancel!(); });
     expect(mockGoBack).toHaveBeenCalledTimes(1);
+    screen.unmount();
+    await act(async () => undefined);
+    expect(mockDraftSet).not.toHaveBeenCalled();
   });
 
   test('suppresses stale failure feedback when A becomes B while the retry draft write awaits', async () => {

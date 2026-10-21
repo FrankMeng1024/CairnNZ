@@ -383,6 +383,10 @@ async function main() {
 
     await page.getByTestId('cairn-delete-open').click();
     await page.getByTestId('cairn-delete-confirmation').waitFor({ state: 'visible' });
+    // React Native Web reports the transparent Modal subtree visible before
+    // its fade has reached the stable presentation frame. Evidence must show
+    // the decision surface users read, not a compositor midpoint.
+    await page.waitForTimeout(500);
     await capture('08-owner-real-withdraw-confirmation');
     await page.getByTestId('cairn-delete-confirm').click();
     await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() !== 'MarkerDetail', null, { timeout: 20_000 });

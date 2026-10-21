@@ -249,7 +249,10 @@ export function PlantScreen() {
   const leaveReveal = useRef(new Animated.Value(0)).current;
   // O1: recordCircleUnlock selector removed (v351 stopped calling it, dead ref
   // triggered re-render every time useMemoryStore changed)
-  const userId = useAppStore((s) => s.user?.id ?? '');
+  // Backend profiles use numeric IDs while several in-memory/test handoffs use
+  // strings. Draft ownership and commit fences must use one canonical form or
+  // a valid relaunch can reject (and then overwrite) its own persisted draft.
+  const userId = useAppStore((s) => String(s.user?.id ?? ''));
   const [initialContext] = useState(() => resolveInitialPlantContext(
     undefined,
     route.params?.origin ?? { kind: 'standalone' },
@@ -650,10 +653,27 @@ export function PlantScreen() {
     setStep('gps');
   }, []);
 
+  const discardInitialLocationFlowAndExit = useCallback(() => {
+    // Cancel before an editor exists is an explicit whole-flow discard, not
+    // an interrupted note. Fence unmount persistence first so an empty/new
+    // location envelope cannot reappear as a resumable draft next visit.
+    draftTerminalRef.current = true;
+    locationSnapshotRef.current = null;
+    if (scopedDraftKey) {
+      void removePlantDraftIfSessionMatches(
+        storage,
+        scopedDraftKey,
+        plantSessionId,
+        plantSessionId,
+      ).catch(() => undefined);
+    }
+    log('plant.cancel');
+    nav.goBack();
+  }, [nav, plantSessionId, scopedDraftKey]);
+
   const cancelLocationFlow = useCallback(() => {
     if (locationFlow === 'initial' || !locationSnapshotRef.current) {
-      log('plant.cancel');
-      nav.goBack();
+      discardInitialLocationFlowAndExit();
       return;
     }
     const snapshot = locationSnapshotRef.current;
@@ -661,7 +681,7 @@ export function PlantScreen() {
     setDraft(snapshot);
     setLocationFlow('initial');
     setStep('content');
-  }, [locationFlow, nav]);
+  }, [discardInitialLocationFlowAndExit, locationFlow]);
 
   const onContentSubmit = (payload: {
     type: MarkerType;
@@ -744,7 +764,7 @@ export function PlantScreen() {
                 return;
               }
               log('plant.step_back_pin_to_home');
-              nav.goBack();
+              discardInitialLocationFlowAndExit();
             }}
           />
         )}

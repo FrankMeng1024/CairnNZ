@@ -51,6 +51,10 @@ interface Props {
 const WEB_MOCK_LAT = 31.232068;
 const WEB_MOCK_LNG = 121.434262;
 const WEB_MOCK_ACCURACY_M = 5;
+// Keep the dev-only sampling state briefly operable so a human or browser QA
+// run can exercise its real Cancel affordance. Native still uses the genuine
+// sampler and this delay never enters a production web bundle.
+const WEB_MOCK_LOCK_DELAY_MS = 750;
 
 export function GpsLockStep({ onLocked, onCancel }: Props) {
   const [progress, setProgress] = useState(0);
@@ -78,7 +82,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
       log('plant.gps_lock_web_mock', { lat: WEB_MOCK_LAT, lng: WEB_MOCK_LNG });
       const t = setTimeout(() => {
         onLockedRef.current(WEB_MOCK_LAT, WEB_MOCK_LNG, WEB_MOCK_ACCURACY_M, 'simulator_test', Date.now(), 1, 'simulator_test');
-      }, 100);
+      }, WEB_MOCK_LOCK_DELAY_MS);
       return () => clearTimeout(t);
     }
     if (inFlightRetryRef.current === retryToken) {

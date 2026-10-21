@@ -13,7 +13,7 @@ const ownerGeneration = 'o88-review-generation';
 const requests = [];
 const runtimeErrors = [];
 const captures = [];
-const mapboxNetwork = { requested: [], finished: [], failed: [] };
+const mapboxNetwork = { requested: [], finished: [], failed: [], abortedOnReload: [] };
 let createdMarker = null;
 
 fs.mkdirSync(outputDir, { recursive: true });
@@ -115,7 +115,14 @@ page.on('response', response => {
 });
 page.on('requestfailed', request => {
   if (request.url().includes('mapbox.com')) {
-    mapboxNetwork.failed.push({ resource: mapboxResource(request.url()), error: request.failure()?.errorText ?? 'unknown' });
+    const failure = { resource: mapboxResource(request.url()), error: request.failure()?.errorText ?? 'unknown' };
+    // The explicit relaunch proof intentionally replaces the document while
+    // Mapbox may still have background tile/glyph requests in flight. Chrome
+    // reports those canceled requests as ERR_ABORTED; preserve their count as
+    // provenance without misclassifying a deliberate navigation as a network
+    // or renderer failure.
+    if (failure.error === 'net::ERR_ABORTED') mapboxNetwork.abortedOnReload.push(failure);
+    else mapboxNetwork.failed.push(failure);
   }
 });
 page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
@@ -319,7 +326,7 @@ await page.waitForFunction(() => globalThis.__cairnStores.usePublicCairnStore.ge
 await setTheme('day');
 await primeActivityPlant();
 await navigate('Plant', { origin: { kind: 'activity', clientActivityId: activityId, ownerGeneration, activityMode: 'hiking' } });
-await page.getByText('Leave a Cairn', { exact: true }).waitFor({ state: 'visible' });
+await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visible' });
 await capture('01-day-plant-only-me', { route: 'Plant', theme: 'day', fixture: 'isolated QA', interaction: 'Hike Activity route' });
 await page.getByRole('textbox', { name: 'Cairn note' }).fill('The pavement shines, and the city sounds softer for a minute.');
 await page.getByRole('textbox', { name: 'Short title' }).fill('Plane trees after rain');
@@ -329,6 +336,37 @@ await capture('02-sunset-plant-friends', { route: 'Plant', theme: 'sunset', fixt
 await page.getByLabel('Visibility Public').click();
 await setTheme('night');
 await capture('03-night-plant-public', { route: 'Plant', theme: 'night', fixture: 'isolated QA', interaction: 'Hike Activity route' });
+
+// Exercise the two distinct adjustment cancellation paths through the real
+// rendered Plant UI. The editor's words/audience/place must survive both the
+// GPS-step Cancel and the pin-step Back without leaving Plant.
+const assertActivityDraftPreserved = async label => {
+  const values = await Promise.all([
+    page.getByRole('textbox', { name: 'Short title' }).inputValue(),
+    page.getByRole('textbox', { name: 'Cairn note' }).inputValue(),
+  ]);
+  if (values[0] !== 'Plane trees after rain'
+    || values[1] !== 'The pavement shines, and the city sounds softer for a minute.') {
+    throw new Error(`${label}: Plant adjustment did not preserve the editor draft`);
+  }
+};
+await page.getByLabel(/Adjust location$/).click();
+await page.getByText('Cancel', { exact: true }).click({ timeout: 2_000 });
+await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visible' });
+await assertActivityDraftPreserved('gps-cancel');
+await capture('03a-night-plant-adjust-gps-cancelled', {
+  route: 'Plant', theme: 'night', fixture: 'isolated QA', interaction: 'Adjust → GPS Cancel preserves editor',
+});
+
+await page.getByLabel(/Adjust location$/).click();
+await page.getByText("Where's your cairn?", { exact: true }).waitFor({ state: 'visible', timeout: 5_000 });
+await page.getByLabel('Back', { exact: true }).click();
+await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visible' });
+await assertActivityDraftPreserved('pin-back');
+await capture('03b-night-plant-adjust-pin-back', {
+  route: 'Plant', theme: 'night', fixture: 'isolated QA', interaction: 'Adjust → Pin Back preserves editor',
+});
+
 await setTheme('day');
 await page.getByTestId('plant-submit').click();
 await page.getByTestId('plant-success-modal').waitFor({ state: 'visible', timeout: 20_000 });
@@ -476,6 +514,74 @@ await page.setViewportSize({ width: 430, height: 932 });
 await setTheme('sunset');
 await capture('14-sunset-plant-430-layout', { route: 'Plant', theme: 'sunset', fixture: 'isolated QA', interaction: 'Hike Activity route' });
 
+// First-entry Cancel is a whole-flow discard. Reopening must not offer an
+// empty resumable draft created by unmount cleanup.
+await page.setViewportSize({ width: 390, height: 844 });
+await setTheme('day');
+await page.evaluate(() => globalThis.__cairnStores.navigationRef.reset({
+  index: 1,
+  routes: [
+    { name: 'Home' },
+    { name: 'Plant', params: { origin: { kind: 'standalone' } } },
+  ],
+}));
+await routeName('Plant');
+await page.getByText('Cancel', { exact: true }).click({ timeout: 2_000 });
+await routeName('Home');
+await page.evaluate(() => globalThis.__cairnStores.navigationRef.navigate('Plant', { origin: { kind: 'standalone' } }));
+await routeName('Plant');
+await page.waitForTimeout(250);
+if (await page.getByTestId('plant-resume-modal').isVisible().catch(() => false)) {
+  throw new Error('first-entry Cancel left an empty resumable draft');
+}
+await page.getByText("Where's your cairn?", { exact: true }).waitFor({ state: 'visible', timeout: 5_000 });
+await capture('15-day-standalone-reopen-after-cancel', {
+  route: 'Plant pin', theme: 'day', fixture: 'isolated QA', interaction: 'First-entry Cancel discarded exact empty session',
+});
+
+// A genuinely interrupted standalone editor is different: its words and
+// original place must be offered explicitly on the next visit.
+await page.getByText('Confirm this spot', { exact: true }).click();
+await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visible' });
+await page.getByRole('textbox', { name: 'Short title' }).fill('Interrupted standalone note');
+await page.getByRole('textbox', { name: 'Cairn note' }).fill('These words still belong to their captured place.');
+const standaloneDraftKey = 'cairn:plant:draft:v5:100:standalone';
+await page.waitForFunction(key => {
+  const raw = localStorage.getItem(key);
+  if (!raw) return false;
+  try {
+    const value = JSON.parse(raw);
+    return value?.draft?.title === 'Interrupted standalone note'
+      && value?.draft?.text === 'These words still belong to their captured place.';
+  } catch {
+    return false;
+  }
+}, standaloneDraftKey, { timeout: 5_000 });
+await page.reload({ waitUntil: 'domcontentloaded', timeout: 180_000 });
+await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.navigationRef), null, { timeout: 180_000 });
+await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 180_000 });
+const durableDraftAfterReload = await page.evaluate(key => localStorage.getItem(key), standaloneDraftKey);
+if (!durableDraftAfterReload) {
+  throw new Error('standalone draft was durable before reload but absent after app hydration');
+}
+await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Home', null, { timeout: 30_000 });
+await page.evaluate(() => globalThis.__cairnStores.navigationRef.navigate('Plant', { origin: { kind: 'standalone' } }));
+await routeName('Plant');
+await page.getByTestId('plant-resume-modal').waitFor({ state: 'visible', timeout: 10_000 });
+await page.getByTestId('plant-resume-continue').click();
+await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visible' });
+const resumedValues = await Promise.all([
+  page.getByRole('textbox', { name: 'Short title' }).inputValue(),
+  page.getByRole('textbox', { name: 'Cairn note' }).inputValue(),
+]);
+if (resumedValues[0] !== 'Interrupted standalone note'
+  || resumedValues[1] !== 'These words still belong to their captured place.') {
+  throw new Error('standalone reload did not restore the explicit saved draft and place');
+}
+await capture('16-day-standalone-explicit-resume', {
+  route: 'Plant', theme: 'day', fixture: 'isolated QA', interaction: 'Browser interruption → explicit resume',
+});
+
 const result = {
   schema: 'cairnnz.o88.cairn-core.loaded-web.v1',
   generated_at: new Date().toISOString(),
@@ -499,6 +605,8 @@ const result = {
     'Library separates I left and I found; public acquired identity is anonymous.',
     'Found Detail separates encoded title/body and presents retained version history.',
     'Memory encounter uses one authoritative presentation group with Open/Later actions.',
+    'Adjust GPS Cancel and pin Back preserve the real editor; first-entry Cancel leaves no empty resume.',
+    'A standalone editor interrupted by reload offers an explicit place-bound resume and restores its words.',
   ],
   captures,
   request_count: requests.length,
@@ -507,6 +615,7 @@ const result = {
     requested: mapboxNetwork.requested.length,
     finished: mapboxNetwork.finished.length,
     failed: mapboxNetwork.failed,
+    aborted_on_explicit_reload: mapboxNetwork.abortedOnReload.length,
     distinct_resources: [...new Set(mapboxNetwork.finished)],
   },
 };
