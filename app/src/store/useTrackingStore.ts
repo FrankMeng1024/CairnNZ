@@ -621,6 +621,35 @@ function clearCommittedResumeFrontierIfPublished(state: TrackingState): void {
   if (covered) committedResumeFrontier = null;
 }
 
+function foregroundRecoveryOwnerIsCurrent(
+  owner: Pick<TrackingState,
+    | 'status'
+    | 'isFinishing'
+    | 'ownerUserId'
+    | 'sessionId'
+    | 'liveOwnerGeneration'
+    | 'locationProviderSource'>,
+  expectedIntentEpoch?: number,
+): boolean {
+  const current = useTrackingStore.getState();
+  return owner.status === 'tracking'
+    && !owner.isFinishing
+    && owner.locationProviderSource === 'real'
+    && !!owner.ownerUserId
+    && !!owner.sessionId
+    && !!owner.liveOwnerGeneration
+    && current.status === 'tracking'
+    && !current.isFinishing
+    && current.locationProviderSource === 'real'
+    && current.ownerUserId === owner.ownerUserId
+    && current.sessionId === owner.sessionId
+    && current.liveOwnerGeneration === owner.liveOwnerGeneration
+    && String(useAppStore.getState().user?.id ?? '') === owner.ownerUserId
+    && AppState.currentState === 'active'
+    && (expectedIntentEpoch == null
+      || expectedIntentEpoch === realLocationLifecycleIntentEpoch);
+}
+
 function selectRealForegroundCadenceExperiment(): LocationCadenceExperiment {
   realForegroundCadenceExperiment = resolveLocationCadenceExperiment({
     internalBuild: activitySimulatorBuildCapable,
@@ -1794,7 +1823,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const SecureStore = require('expo-secure-store');
           const KEY = 'cairn_has_seen_always_allow_education';
-          if (!hasSeenBackgroundEducation) {
+          // A user can lock/background the phone while Start is still awaiting
+          // native permission reads. A foreground Alert is not actionable in
+          // that state and awaiting its button would leave the Activity stuck
+          // in `requesting` with no native source. Defer education until a
+          // later active Start; the background source check below still fails
+          // closed when Always permission is unavailable.
+          if (!hasSeenBackgroundEducation && AppState.currentState === 'active') {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { Alert, Linking } = require('react-native');
             await new Promise<void>((resolve) => {
@@ -6916,10 +6951,19 @@ function enqueueActivation(task: () => Promise<void>): Promise<void> {
     debugLogger.logError(err, 'enqueueActivation');
   });
   activationChain = actualSettlement;
-  return Promise.race([
-    actualSettlement,
-    new Promise<void>((resolve) => setTimeout(resolve, 5000)),
-  ]);
+  return new Promise<void>((resolve) => {
+    let callerReleased = false;
+    const timeout = setTimeout(() => {
+      callerReleased = true;
+      resolve();
+    }, 5000);
+    void actualSettlement.then(() => {
+      if (callerReleased) return;
+      clearTimeout(timeout);
+      callerReleased = true;
+      resolve();
+    });
+  });
 }
 
 /** Web-only QA entry into the same AppState callback installed by Start.
@@ -7774,9 +7818,15 @@ async function stopRealBackgroundSourceForHandoff(): Promise<void> {
 
 async function restoreForegroundContinuityFromDurableContext(
   owner: TrackingState,
+  expectedIntentEpoch?: number,
 ): Promise<'durable-context' | 'journal' | 'unavailable'> {
-  if (!owner.sessionId || !owner.liveOwnerGeneration) return 'unavailable';
+  const recoveryOwnerIsCurrent = () => foregroundRecoveryOwnerIsCurrent(
+    owner,
+    expectedIntentEpoch,
+  );
+  if (!recoveryOwnerIsCurrent()) return 'unavailable';
   const durableContext = await readDurableActivityContext();
+  if (!recoveryOwnerIsCurrent()) return 'unavailable';
   const ownedContext = durableContext?.clientActivityId === owner.sessionId
     && durableContext.userId === owner.ownerUserId
     && durableContext.ownerGeneration === owner.liveOwnerGeneration
@@ -7789,21 +7839,28 @@ async function restoreForegroundContinuityFromDurableContext(
     // waits for every admitted append; this does not scan the complete route.
     const { readActiveHikeTail } = require('../services/hikeTrackWriter');
     const tail = await readActiveHikeTail(owner.sessionId, 2);
+    if (!recoveryOwnerIsCurrent()) return 'unavailable';
     ownedTail = tail.filter((point: any) => (
       point.clientActivityId === owner.sessionId
       && point.ownerGeneration === owner.liveOwnerGeneration
     ));
   } catch { /* durable context remains a verified post-WAL fallback */ }
+  if (!recoveryOwnerIsCurrent()) return 'unavailable';
   if (!ownedContext && ownedTail.length === 0) return 'unavailable';
   const reconciled = reconcileActivityContinuityAfterJournal({
-    clientActivityId: owner.sessionId,
-    ownerGeneration: owner.liveOwnerGeneration,
+    clientActivityId: owner.sessionId!,
+    ownerGeneration: owner.liveOwnerGeneration!,
     journal: ownedTail,
     durableContext: ownedContext,
     currentRawOrdinal: realGpsRawOrdinal,
   });
   const restoredTimestamp = reconciled.continuityState.latestObservationTimestamp ?? 0;
   const currentTimestamp = realGpsContinuityState.latestObservationTimestamp ?? 0;
+  // Every value below is module/store state shared with Pause, Finish,
+  // account parking, replacement Activities and newer AppState intents. The
+  // captured result is safe to consume only while its exact authority is
+  // still current after both asynchronous reads.
+  if (!recoveryOwnerIsCurrent()) return 'unavailable';
   if (restoredTimestamp >= currentTimestamp) {
     realGpsContinuityState = reconciled.continuityState;
     realGpsContinuitySessionId = owner.sessionId;
@@ -7854,10 +7911,7 @@ async function restoreForegroundContinuityFromDurableContext(
 
 async function transitionToForegroundSource(expectedIntentEpoch?: number): Promise<void> {
   const owner = useTrackingStore.getState();
-  const intentIsCurrent = () => expectedIntentEpoch == null || (
-    expectedIntentEpoch === realLocationLifecycleIntentEpoch
-    && AppState.currentState === 'active'
-  );
+  const intentIsCurrent = () => foregroundRecoveryOwnerIsCurrent(owner, expectedIntentEpoch);
   appendSimulatorLog('PROVIDER', 'real_activity_foreground_takeover', {
     phase: 'started',
     appState: AppState.currentState,
@@ -7876,7 +7930,7 @@ async function transitionToForegroundSource(expectedIntentEpoch?: number): Promi
   // ordering activated the watcher first, allowing a new fix to reuse a raw
   // ordinal and compare against the pre-background trusted anchor.
   const continuityHandoff = intentIsCurrent()
-    ? await restoreForegroundContinuityFromDurableContext(owner)
+    ? await restoreForegroundContinuityFromDurableContext(owner, expectedIntentEpoch)
     : 'unavailable';
   // Start complete-history publication as soon as the bounded committed
   // predecessor is available. It remains independently fenced and may rebase

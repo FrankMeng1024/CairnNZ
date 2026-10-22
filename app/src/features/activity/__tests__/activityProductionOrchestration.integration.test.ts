@@ -17,6 +17,7 @@ let mockAppStateListener: ((state: 'active' | 'background' | 'inactive') => void
 let mockAppStateCurrent: 'active' | 'background' | 'inactive' = 'active';
 let mockNativeBackgroundStarted = false;
 let mockDurableActivityContext: any = null;
+let mockDurableActivityContextReader = async () => mockDurableActivityContext;
 let mockBackgroundLocations: any[] = [];
 const mockAuthenticatedFetch = jest.fn();
 let mockWallTimeMs = 1_800_200_000_000;
@@ -109,7 +110,7 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
   drainBackgroundLocations: jest.fn(() => mockBackgroundLocations.splice(0)),
   settleBackgroundLocationWrites: jest.fn(async () => undefined),
   persistBackgroundContext: jest.fn(async () => true),
-  readDurableActivityContext: jest.fn(async () => mockDurableActivityContext),
+  readDurableActivityContext: jest.fn(() => mockDurableActivityContextReader()),
 }));
 jest.mock('../../../services/debugLogger', () => ({
   debugLogger: { startSession: jest.fn(), endSession: jest.fn(async () => null), log: jest.fn(), logError: jest.fn(), isEnabled: jest.fn(() => false) },
@@ -173,6 +174,18 @@ function deferredResponse() {
   let resolve!: (value: Response) => void;
   const promise = new Promise<Response>(done => { resolve = done; });
   return { promise, resolve };
+}
+
+function deferredValue<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function settleTurns(turns = 12): Promise<void> {
+  for (let index = 0; index < turns; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
 }
 
 async function settleUntil(predicate: () => boolean, turns = 80, label = 'unspecified'): Promise<void> {
@@ -239,6 +252,7 @@ describe.each(['hiking', 'running'] as const)(
       mockAppStateCurrent = 'active';
       mockNativeBackgroundStarted = false;
       mockDurableActivityContext = null;
+      mockDurableActivityContextReader = async () => mockDurableActivityContext;
       mockBackgroundLocations = [];
       mockWallTimeMs = mode === 'hiking' ? 1_800_200_000_000 : 1_800_300_000_000;
       mockDateNowSpy?.mockRestore();
@@ -675,6 +689,7 @@ describe('production-path foreground resume recovery', () => {
     mockAppStateCurrent = 'active';
     mockNativeBackgroundStarted = false;
     mockDurableActivityContext = null;
+    mockDurableActivityContextReader = async () => mockDurableActivityContext;
     mockBackgroundLocations = [];
     mockWallTimeMs = 1_802_000_000_000;
     mockDateNowSpy?.mockRestore();
@@ -696,6 +711,50 @@ describe('production-path foreground resume recovery', () => {
     { ...fieldCase, caseIndex, arrival: 'before-playback' as const },
     { ...fieldCase, caseIndex, arrival: 'after-playback' as const },
   ]));
+
+  async function primeHeldResume(clientActivityId: string, rawOrdinal = 2) {
+    await expect(useTrackingStore.getState().startTracking(clientActivityId)).resolves.toBe(true);
+    const started = useTrackingStore.getState();
+    const ownerGeneration = started.liveOwnerGeneration!;
+    const segmentId = started.currentSegmentId!;
+    const observationTimeMs = mockWallTimeMs + 5_000;
+    await appendHikePoint({
+      t: observationTimeMs,
+      lat: 0,
+      lng: rawOrdinal / 100_000,
+      acc: 5,
+      alt: 5,
+      vAcc: 7,
+      speed: 1.5,
+      rawOrdinal,
+      src: 'bg',
+      clientActivityId,
+      ownerGeneration,
+      segmentId,
+      segmentStartReason: 'start',
+    });
+    mockDurableActivityContext = {
+      clientActivityId,
+      userId: 'owner-a',
+      ownerGeneration,
+      segmentId,
+      activityMode: started.activityMode,
+      acceptAfterMs: started.liveOwnerAcceptAfterMs,
+      continuityState: null,
+      rawOrdinal,
+      backgroundPermissionState: 'granted',
+      latestSourceReceipt: {
+        observationTimeMs,
+        receiptWallTimeMs: observationTimeMs + 25,
+        source: 'background',
+      },
+    };
+    mockAppStateCurrent = 'background';
+    mockAppStateListener?.('background');
+    await settleUntil(() => mockNativeBackgroundStarted, 160, `${clientActivityId}:background-active`);
+    useTrackingStore.setState({ latestSourceLocationTime: null, latestSourceKind: null });
+    return { ownerGeneration, segmentId, observationTimeMs };
+  }
 
   test.each(arrivals)(
     '$name uses the committed predecessor when the first fix arrives $arrival',
@@ -855,6 +914,377 @@ describe('production-path foreground resume recovery', () => {
       }
     },
   );
+
+  test('Pause while the durable-context read is held cannot publish a stale source receipt', async () => {
+    const clientActivityId = '91000000-0000-4000-8000-000000000001';
+    const fixture = await primeHeldResume(clientActivityId);
+    const heldContext = deferredValue<any>();
+    let contextReadCount = 0;
+    mockDurableActivityContextReader = async () => {
+      contextReadCount += 1;
+      return contextReadCount === 1 ? heldContext.promise : mockDurableActivityContext;
+    };
+
+    mockAppStateCurrent = 'active';
+    mockAppStateListener?.('active');
+    await settleUntil(() => contextReadCount === 1, 160, 'pause:context-read-held');
+    const pause = useTrackingStore.getState().pauseTracking();
+    expect(useTrackingStore.getState().status).toBe('paused');
+    heldContext.resolve(mockDurableActivityContext);
+    await pause;
+    await settleTurns();
+
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'paused',
+      sessionId: clientActivityId,
+      liveOwnerGeneration: fixture.ownerGeneration,
+      latestSourceLocationTime: null,
+      latestSourceKind: null,
+    });
+  });
+
+  test('account switch while the bounded WAL read is held cannot expose the old owner receipt', async () => {
+    const clientActivityId = '91000000-0000-4000-8000-000000000002';
+    await primeHeldResume(clientActivityId);
+    const writer = require('../../../services/hikeTrackWriter');
+    const originalRead = writer.readActiveHikeTail.bind(writer);
+    const heldTail = deferredValue<void>();
+    let boundedTailStarted = false;
+    const tailSpy = jest.spyOn(writer, 'readActiveHikeTail').mockImplementation(
+      async (...args: unknown[]) => {
+        const [sessionId, limit] = args as [string, number?];
+        const result = await originalRead(sessionId, limit);
+        if (limit === 2) {
+          boundedTailStarted = true;
+          await heldTail.promise;
+        }
+        return result;
+      },
+    );
+
+    try {
+      mockAppStateCurrent = 'active';
+      mockAppStateListener?.('active');
+      await settleUntil(() => boundedTailStarted, 160, 'account-switch:tail-read-held');
+      mockCurrentUserId = 'owner-b';
+      heldTail.resolve();
+      await settleTurns();
+      expect(useTrackingStore.getState().latestSourceLocationTime).toBeNull();
+      expect(useTrackingStore.getState().latestSourceKind).toBeNull();
+    } finally {
+      mockCurrentUserId = 'owner-a';
+      heldTail.resolve();
+      tailSpy.mockRestore();
+    }
+  });
+
+  test('discard then Activity 2 while the old WAL read is held cannot contaminate the new durable context', async () => {
+    const oldClientActivityId = '91000000-0000-4000-8000-000000000003';
+    const oldFixture = await primeHeldResume(oldClientActivityId, 40);
+    const writer = require('../../../services/hikeTrackWriter');
+    const originalRead = writer.readActiveHikeTail.bind(writer);
+    const heldTail = deferredValue<void>();
+    let boundedTailStarted = false;
+    const tailSpy = jest.spyOn(writer, 'readActiveHikeTail').mockImplementation(
+      async (...args: unknown[]) => {
+        const [sessionId, limit] = args as [string, number?];
+        const result = await originalRead(sessionId, limit);
+        if (sessionId === oldClientActivityId && limit === 2) {
+          boundedTailStarted = true;
+          await heldTail.promise;
+        }
+        return result;
+      },
+    );
+
+    try {
+      mockAppStateCurrent = 'active';
+      mockAppStateListener?.('active');
+      await settleUntil(() => boundedTailStarted, 160, 'activity-replace:tail-read-held');
+      await useTrackingStore.getState().discardCurrentSession();
+      const newClientActivityId = '91000000-0000-4000-8000-000000000004';
+      mockDurableActivityContext = null;
+      await expect(useTrackingStore.getState().startTracking(newClientActivityId)).resolves.toBe(true);
+      heldTail.resolve();
+      await settleTurns(20);
+
+      const backgroundTask = require('../../../services/backgroundLocationTask');
+      backgroundTask.persistBackgroundContext.mockClear();
+      mockAppStateCurrent = 'background';
+      mockAppStateListener?.('background');
+      await settleUntil(
+        () => backgroundTask.persistBackgroundContext.mock.calls.some((call: unknown[]) => (
+          (call[2] as any)?.clientActivityId === newClientActivityId
+        )),
+        160,
+        'activity-replace:new-context-persisted',
+      );
+      const persisted = backgroundTask.persistBackgroundContext.mock.calls.find((call: unknown[]) => (
+        (call[2] as any)?.clientActivityId === newClientActivityId
+      ))?.[2];
+      expect(persisted).toMatchObject({
+        clientActivityId: newClientActivityId,
+        latestSourceReceipt: null,
+      });
+      expect(persisted.latestSourceReceipt?.observationTimeMs).not.toBe(oldFixture.observationTimeMs);
+    } finally {
+      heldTail.resolve();
+      tailSpy.mockRestore();
+    }
+  });
+
+  test('a renewed background intent while the WAL read is held wins without foreground side effects', async () => {
+    const clientActivityId = '91000000-0000-4000-8000-000000000005';
+    await primeHeldResume(clientActivityId);
+    const writer = require('../../../services/hikeTrackWriter');
+    const originalRead = writer.readActiveHikeTail.bind(writer);
+    const heldTail = deferredValue<void>();
+    let boundedTailStarted = false;
+    const tailSpy = jest.spyOn(writer, 'readActiveHikeTail').mockImplementation(
+      async (...args: unknown[]) => {
+        const [sessionId, limit] = args as [string, number?];
+        const result = await originalRead(sessionId, limit);
+        if (limit === 2) {
+          boundedTailStarted = true;
+          await heldTail.promise;
+        }
+        return result;
+      },
+    );
+
+    try {
+      mockAppStateCurrent = 'active';
+      mockAppStateListener?.('active');
+      await settleUntil(() => boundedTailStarted, 160, 'background-wins:tail-read-held');
+      mockAppStateCurrent = 'background';
+      mockAppStateListener?.('background');
+      mockAppStateListener?.('background');
+      heldTail.resolve();
+      await settleUntil(() => mockNativeBackgroundStarted, 160, 'background-wins:source-active');
+      await settleTurns();
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'tracking',
+        sessionId: clientActivityId,
+        latestSourceLocationTime: null,
+        latestSourceKind: null,
+      });
+    } finally {
+      heldTail.resolve();
+      tailSpy.mockRestore();
+    }
+  });
+});
+
+describe('production-path Start to immediate background handoff', () => {
+  jest.setTimeout(30_000);
+
+  beforeEach(() => {
+    mockAsyncValues.clear();
+    mockStorageValues.clear();
+    mockWebValues.clear();
+    mockAuthenticatedFetch.mockReset();
+    mockCurrentUserId = 'owner-a';
+    mockNetworkState = 'offline';
+    mockNetworkListener = null;
+    mockAppStateListener = null;
+    mockAppStateCurrent = 'active';
+    mockNativeBackgroundStarted = false;
+    mockDurableActivityContext = null;
+    mockDurableActivityContextReader = async () => mockDurableActivityContext;
+    mockBackgroundLocations = [];
+    mockWallTimeMs = 1_803_000_000_000;
+    mockDateNowSpy?.mockRestore();
+    mockDateNowSpy = jest.spyOn(Date, 'now').mockImplementation(() => mockWallTimeMs);
+    __activityRemoteStartCoordinatorTest.reset();
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true });
+    useTrackingStore.setState(useTrackingStore.getInitialState(), true);
+    useSessionStore.setState({ sessions: [], currentUserId: 'owner-a' });
+
+    const location = require('expo-location');
+    location.requestForegroundPermissionsAsync.mockReset();
+    location.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted', granted: true });
+    location.getBackgroundPermissionsAsync.mockReset();
+    location.getBackgroundPermissionsAsync.mockResolvedValue({
+      status: 'granted', granted: true, canAskAgain: true,
+    });
+    location.requestBackgroundPermissionsAsync.mockReset();
+    location.requestBackgroundPermissionsAsync.mockResolvedValue({
+      status: 'granted', granted: true, canAskAgain: true,
+    });
+    location.watchPositionAsync.mockClear();
+    location.startLocationUpdatesAsync.mockReset();
+    location.startLocationUpdatesAsync.mockImplementation(async () => { mockNativeBackgroundStarted = true; });
+    location.stopLocationUpdatesAsync.mockReset();
+    location.stopLocationUpdatesAsync.mockImplementation(async () => { mockNativeBackgroundStarted = false; });
+    location.hasStartedLocationUpdatesAsync.mockClear();
+
+    const backgroundTask = require('../../../services/backgroundLocationTask');
+    backgroundTask.registerBackgroundTask.mockReset();
+    backgroundTask.registerBackgroundTask.mockResolvedValue(true);
+    backgroundTask.persistBackgroundContext.mockClear();
+  });
+
+  afterEach(async () => {
+    mockCurrentUserId = 'owner-a';
+    const state = useTrackingStore.getState();
+    if (state.status !== 'idle' && state.sessionId) await state.discardCurrentSession();
+    mockDateNowSpy?.mockRestore();
+    mockDateNowSpy = null;
+  });
+
+  const immediateBackgroundCases = (['hiking', 'running'] as const).flatMap((mode, modeIndex) => (
+    [0, 100, 500, 2_000].map((offsetMs, offsetIndex) => ({
+      mode,
+      offsetMs,
+      clientActivityId: `92000000-0000-4000-8000-${String(
+        modeIndex * 10 + offsetIndex + 1,
+      ).padStart(12, '0')}`,
+    }))
+  ));
+
+  test.each(immediateBackgroundCases)(
+    '$mode Start backgrounds at $offsetMs ms without a foreground-only recording window',
+    async ({ mode, offsetMs, clientActivityId }) => {
+      const location = require('expo-location');
+      const permission = deferredValue<{ status: string; granted: boolean }>();
+      let foregroundPermissionRequested = false;
+      if (offsetMs === 0) {
+        mockAppStateCurrent = 'background';
+      } else {
+        location.requestForegroundPermissionsAsync.mockImplementationOnce(async () => {
+          foregroundPermissionRequested = true;
+          return permission.promise;
+        });
+      }
+
+      useTrackingStore.getState().setActivityMode(mode);
+      const starting = useTrackingStore.getState().startTracking(clientActivityId);
+      if (offsetMs > 0) {
+        await settleUntil(() => foregroundPermissionRequested, 160, `${mode}:${offsetMs}:permission-held`);
+        mockWallTimeMs += offsetMs;
+        mockAppStateCurrent = 'background';
+        permission.resolve({ status: 'granted', granted: true });
+      }
+      await expect(starting).resolves.toBe(true);
+
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'tracking',
+        activityMode: mode,
+        sessionId: clientActivityId,
+        locationAvailable: true,
+      });
+      expect(mockNativeBackgroundStarted).toBe(true);
+      expect(location.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+      expect(location.watchPositionAsync).not.toHaveBeenCalled();
+      expect((await listActiveHikes()).map(item => item.session_id)).toContain(clientActivityId);
+    },
+  );
+
+  test.each(['hiking', 'running'] as const)(
+    '%s preserves the first committed foreground fix before immediate background ownership',
+    async (mode) => {
+      const clientActivityId = mode === 'hiking'
+        ? '92000000-0000-4000-8000-000000000021'
+        : '92000000-0000-4000-8000-000000000022';
+      useTrackingStore.getState().setActivityMode(mode);
+      await expect(useTrackingStore.getState().startTracking(clientActivityId)).resolves.toBe(true);
+      const owner = useTrackingStore.getState();
+      const fixTime = mockWallTimeMs + 5_000;
+      const accepted = await owner.addTrackPoint({
+        lat: 0,
+        lng: 0,
+        accuracy: 5,
+        speed: mode === 'running' ? 2.5 : 1.3,
+        source: 'foreground',
+        receiptWallTimeMs: fixTime + 20,
+        clientActivityId,
+        ownerGeneration: owner.liveOwnerGeneration!,
+        segmentId: owner.currentSegmentId!,
+      }, fixTime);
+      expect(accepted.accepted).toBe(true);
+
+      mockWallTimeMs = fixTime + 100;
+      mockAppStateCurrent = 'background';
+      mockAppStateListener?.('background');
+      await settleUntil(() => mockNativeBackgroundStarted, 160, `${mode}:post-fix-background`);
+      const durable = await readActiveHikeTail(clientActivityId);
+      expect(durable).toHaveLength(1);
+      expect(durable[0]).toMatchObject({
+        t: fixTime,
+        clientActivityId,
+        ownerGeneration: owner.liveOwnerGeneration,
+      });
+      expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
+    },
+  );
+
+  test.each(['hiking', 'running'] as const)(
+    '%s foreground re-entry before native background start resolves converges to one foreground owner',
+    async (mode) => {
+      const clientActivityId = mode === 'hiking'
+        ? '92000000-0000-4000-8000-000000000031'
+        : '92000000-0000-4000-8000-000000000032';
+      const location = require('expo-location');
+      const backgroundStart = deferredValue<void>();
+      let backgroundStartEntered = false;
+      location.startLocationUpdatesAsync.mockImplementationOnce(async () => {
+        backgroundStartEntered = true;
+        await backgroundStart.promise;
+        mockNativeBackgroundStarted = true;
+      });
+      mockAppStateCurrent = 'background';
+      useTrackingStore.getState().setActivityMode(mode);
+      const starting = useTrackingStore.getState().startTracking(clientActivityId);
+      await settleUntil(() => backgroundStartEntered, 160, `${mode}:background-start-held`);
+      mockAppStateCurrent = 'active';
+      backgroundStart.resolve();
+      await expect(starting).resolves.toBe(true);
+      await settleUntil(
+        () => location.watchPositionAsync.mock.calls.length === 1 && !mockNativeBackgroundStarted,
+        160,
+        `${mode}:foreground-owner-restored`,
+      );
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'tracking', sessionId: clientActivityId, locationAvailable: true,
+      });
+      expect(location.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+      expect(location.watchPositionAsync).toHaveBeenCalledTimes(1);
+      expect(mockNativeBackgroundStarted).toBe(false);
+    },
+  );
+
+  test.each(['hiking', 'running'] as const)(
+    '%s fails closed when background permission is denied before an immediate lock',
+    async (mode) => {
+      const location = require('expo-location');
+      location.getBackgroundPermissionsAsync.mockResolvedValue({
+        status: 'denied', granted: false, canAskAgain: false,
+      });
+      mockAppStateCurrent = 'background';
+      useTrackingStore.getState().setActivityMode(mode);
+      await expect(useTrackingStore.getState().startTracking()).resolves.toBe(false);
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'idle', activityMode: mode, startError: 'initialization-failed',
+      });
+      expect(location.startLocationUpdatesAsync).not.toHaveBeenCalled();
+      expect(mockNativeBackgroundStarted).toBe(false);
+    },
+  );
+
+  test.each(['hiking', 'running'] as const)(
+    '%s fails closed when TaskManager registration cannot be established at immediate background Start',
+    async (mode) => {
+      const backgroundTask = require('../../../services/backgroundLocationTask');
+      backgroundTask.registerBackgroundTask.mockResolvedValue(false);
+      mockAppStateCurrent = 'background';
+      useTrackingStore.getState().setActivityMode(mode);
+      await expect(useTrackingStore.getState().startTracking()).resolves.toBe(false);
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'idle', activityMode: mode, startError: 'initialization-failed',
+      });
+      expect(mockNativeBackgroundStarted).toBe(false);
+    },
+  );
 });
 
 describe('production-path remote Start conflict fencing', () => {
@@ -865,6 +1295,30 @@ describe('production-path remote Start conflict fencing', () => {
     mockAuthenticatedFetch.mockReset();
     mockCurrentUserId = 'owner-a';
     mockNetworkState = 'online';
+    mockAppStateListener = null;
+    mockAppStateCurrent = 'active';
+    mockNativeBackgroundStarted = false;
+    mockDurableActivityContext = null;
+    mockDurableActivityContextReader = async () => mockDurableActivityContext;
+    mockBackgroundLocations = [];
+    const location = require('expo-location');
+    location.requestForegroundPermissionsAsync.mockReset();
+    location.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted', granted: true });
+    location.getBackgroundPermissionsAsync.mockReset();
+    location.getBackgroundPermissionsAsync.mockResolvedValue({
+      status: 'granted', granted: true, canAskAgain: true,
+    });
+    location.requestBackgroundPermissionsAsync.mockReset();
+    location.requestBackgroundPermissionsAsync.mockResolvedValue({
+      status: 'granted', granted: true, canAskAgain: true,
+    });
+    location.startLocationUpdatesAsync.mockReset();
+    location.startLocationUpdatesAsync.mockImplementation(async () => { mockNativeBackgroundStarted = true; });
+    location.stopLocationUpdatesAsync.mockReset();
+    location.stopLocationUpdatesAsync.mockImplementation(async () => { mockNativeBackgroundStarted = false; });
+    const backgroundTask = require('../../../services/backgroundLocationTask');
+    backgroundTask.registerBackgroundTask.mockReset();
+    backgroundTask.registerBackgroundTask.mockResolvedValue(true);
     __activityRemoteStartCoordinatorTest.reset();
     Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true });
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);

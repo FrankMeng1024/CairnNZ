@@ -270,8 +270,11 @@ describe('Free Activity integration contracts', () => {
     );
     expect(queue).toContain('const actualSettlement = activationChain.then(task)');
     expect(queue).toContain('activationChain = actualSettlement');
-    expect(queue).toContain('return Promise.race([');
-    expect(queue.indexOf('activationChain = actualSettlement')).toBeLessThan(queue.indexOf('return Promise.race(['));
+    expect(queue).toContain('const timeout = setTimeout(() =>');
+    expect(queue).toContain('clearTimeout(timeout)');
+    expect(queue).toContain('void actualSettlement.then(() =>');
+    expect(queue.indexOf('activationChain = actualSettlement')).toBeLessThan(queue.indexOf('return new Promise<void>'));
+    expect(queue.indexOf('activationChain = actualSettlement')).toBeLessThan(queue.indexOf('const timeout = setTimeout'));
   });
 
   test('foreground and background request one fixed precision policy without a sampling state machine', () => {
