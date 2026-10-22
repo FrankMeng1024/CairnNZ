@@ -608,24 +608,36 @@ if (scenario === 'full') {
   await freshPage.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});
   await freshPage.waitForFunction(() => {
     const map = globalThis.__cairnMap;
-    const style = map?.getStyle?.();
-    const trackLayers = (style?.layers ?? []).map(layer => layer.id).filter(id => /track|activity/i.test(id));
-    const trackSourceIds = Object.keys(style?.sources ?? {}).filter(id => /track|activity/i.test(id));
-    return map?.isStyleLoaded?.() === true && trackLayers.length > 0 && trackSourceIds.length > 0;
+    try {
+      // The web adapter replaces the global map reference during a style/map
+      // remount. GL JS can briefly expose that retiring object while its
+      // internal Style has already been released; getStyle() throws in that
+      // window. That is a transient "not ready", not a terminal harness error.
+      const style = map?.getStyle?.();
+      const trackLayers = (style?.layers ?? []).map(layer => layer.id).filter(id => /track|activity/i.test(id));
+      const trackSourceIds = Object.keys(style?.sources ?? {}).filter(id => /track|activity/i.test(id));
+      const styleLoaded = map?.isStyleLoaded?.() === true;
+      if (styleLoaded && trackLayers.length > 0 && trackSourceIds.length > 0) {
+        globalThis.__o88FreshActivityMapProof = {
+          mapLoaded: map?.loaded?.() ?? false,
+          styleLoaded,
+          trackLayers,
+          trackSourceIds,
+        };
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
   }, null, { timeout: 30_000 });
   const freshDetail = await freshPage.evaluate(targetId => {
     const stores = globalThis.__cairnStores;
     const session = stores.useSessionStore.getState().sessions.find(item => item.clientActivityId === targetId);
-    const map = globalThis.__cairnMap;
-    const style = map?.getStyle?.();
-    const trackLayers = (style?.layers ?? []).map(layer => layer.id).filter(id => /track|activity/i.test(id));
     return {
       currentRoute: stores.getCurrentRoute(),
       session,
-      mapLoaded: map?.loaded?.() ?? false,
-      styleLoaded: map?.isStyleLoaded?.() ?? false,
-      trackLayers,
-      trackSourceIds: Object.keys(style?.sources ?? {}).filter(id => /track|activity/i.test(id)),
+      ...globalThis.__o88FreshActivityMapProof,
     };
   }, input.clientActivityId);
   await freshPage.screenshot({ path: path.join(outputRoot, 'FRESH_CONTEXT_ACTIVITY_DETAIL.png'), fullPage: true });
