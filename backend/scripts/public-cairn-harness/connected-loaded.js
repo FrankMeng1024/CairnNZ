@@ -296,7 +296,17 @@ async function main() {
         fix.lat, fix.lng, fix.ts, fix.accuracyM, 'real', ownerId,
       );
     }, acceptedCameraFix);
-    await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()), null, { timeout: 60_000 });
+    // GL JS v2 can keep already-rendered hosted tiles in `expired` while it
+    // refreshes them, so its strict `loaded()` flag is not the user-visible
+    // readiness boundary. Wait for the real map instance and for Cairn's
+    // blocking entry overlay to leave after the adapter proves a hosted
+    // basemap feature and the exact Fog authority have rendered.
+    await page.waitForFunction(() => Boolean(globalThis.__cairnMap), null, { timeout: 60_000 });
+    await page.waitForFunction(
+      () => !document.querySelector('[data-testid="memory-entry-loading"]'),
+      null,
+      { timeout: 60_000 },
+    );
 
     // Create the real acquisition only after the destination screen and its
     // own transient blockers are stable, mirroring a Cairn found mid-journey.
