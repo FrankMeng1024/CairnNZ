@@ -112,7 +112,12 @@ for migration in \
   048_friends_memory_history_repair.sql \
   049_retire_legacy_memory_sharing.sql \
   050_complete_legacy_memory_retirement.sql \
-  051_memory_coverage_read_model.sql; do
+  051_memory_coverage_read_model.sql \
+  052_cairn_placement_provenance.sql \
+  053_cairn_qa_fixture_cohorts.sql \
+  054_memory_hit_push_explicit_opt_in.sql \
+  055_notification_delivery_outbox.sql \
+  056_notification_target_receipt_reliability.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" \
     < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done
@@ -192,7 +197,7 @@ node -e '
   // Activity deletion wins over a late Save ACK, while independently recorded
   // physical Memory remains. The focused case therefore requires exactly one
   // six-fact set for the deleted Activity rather than requiring its removal.
-  const expectedMemoryRows=scenario==="focused-review"?2:5;
+  const expectedMemoryRows=scenario==="focused-review"?2:6;
   result.passed=result.activityRows.length===expectedActivityRows
     && seeded.length===expectedSeededRows
     && seeded.every(row=>row.rowCount===1&&row.finalizedRows===1&&row.routePoints===6&&row.rawPoints===6&&row.canonicalPoints===6)

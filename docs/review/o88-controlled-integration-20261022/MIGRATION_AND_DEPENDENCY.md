@@ -12,6 +12,8 @@ The frozen Hike/main delta adds no migration file. The reviewed Cairn history ad
 
 There is no filename/ordinal collision. The disposable current-schema fixture contains both Hike telemetry columns/indexes and Cairn marker-vote/abuse tables. Exact application and harness results are recorded in the external integration receipt package.
 
+The inherited Hike/Run client-to-backend closure wrapper also now applies 052–056. Its first combined run proved all six browser/API cases but exposed that the wrapper stopped at 051 and that its DB postcondition expected five Memory sources while the current late-ACK deletion contract deliberately retains the sixth Activity's independent Memory facts. The wrapper now rehearses the full combined ledger and expects all six distinct six-fact Memory sources; production code and data semantics are unchanged.
+
 For a separately authorized future deployment, the safe order is: back up and verify the production ledger; apply 052 through 056 once in order; deploy the compatible backend/API and workers; verify cron registration and health; then make the tested client eligible. Code integration alone does not make an existing phone/server pair ready. No production migration, fixture or deployment is part of this integration.
 
 ## Dependency disposition
