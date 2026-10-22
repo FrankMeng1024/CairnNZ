@@ -108,18 +108,18 @@ captures.push(await capture('standalone-compose-day'));
 
 await setTheme('day');
 await navigatePlant(true);
-await page.getByText('Using your Activity location', { exact: true }).waitFor();
+await page.getByRole('button', { name: /^Using Activity location\./ }).waitFor();
 captures.push(await capture('activity-compose-day'));
 
 await setTheme('night');
 await navigatePlant(true);
-await page.getByText('Using your Activity location', { exact: true }).waitFor();
+await page.getByRole('button', { name: /^Using Activity location\./ }).waitFor();
 captures.push(await capture('activity-compose-night'));
 
 const contract = {
   viewport: await page.evaluate(() => ({ width: innerWidth, height: innerHeight })),
-  plantButtonEnabledWithoutText: await page.getByRole('button', { name: 'Plant Cairn' }).isEnabled(),
-  hasActivityLocationCopy: await page.getByText('Using your Activity location', { exact: true }).isVisible(),
+  plantButtonEnabledWithoutText: await page.getByTestId('plant-submit').isEnabled(),
+  hasActivityLocationCopy: await page.getByRole('button', { name: /^Using Activity location\./ }).isVisible(),
   exposesTypePickerWhileMoving: await page.getByText('What kind?', { exact: true }).count() > 0,
   exposesVisibilityPickerWhileMoving: await page.getByText('Who can see it?', { exact: true }).count() > 0,
 };

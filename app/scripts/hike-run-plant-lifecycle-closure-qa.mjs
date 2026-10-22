@@ -240,7 +240,7 @@ try {
     plantActivationMethod = 'WEB_QA_NAVIGATION_BRIDGE_AFTER_VISIBLE_BUTTON_ATTEMPT';
   }
   await waitForRoute('Plant');
-  await page.getByText('Using your Activity location', { exact: true })
+  await page.getByRole('button', { name: /^Using Activity location\./ })
     .waitFor({ state: 'visible', timeout: 15_000 });
   await screenshot(page, '03-plant-open');
 
@@ -273,7 +273,7 @@ try {
   await page.getByRole('textbox', { name: 'Note' }).fill('Placed while the same Hike continued recording.');
   const coordinateAtPlant = await trackingSnapshot();
   const markerApiBefore = networkAudit.filter(item => item.pathname?.startsWith('/api/markers')).length;
-  await page.getByRole('button', { name: 'Plant Cairn' }).click();
+  await page.getByTestId('plant-submit').click();
   await page.getByTestId('plant-success-modal').waitFor({ state: 'visible', timeout: 15_000 });
   await screenshot(page, '06-plant-accepted');
   const planted = await page.evaluate(id => {

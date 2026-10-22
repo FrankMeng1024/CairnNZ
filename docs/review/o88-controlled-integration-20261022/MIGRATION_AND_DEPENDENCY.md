@@ -20,6 +20,7 @@ For a separately authorized future deployment, the safe order is: back up and ve
 
 - Frozen installs use the committed lockfiles with `npm ci --ignore-scripts`; lifecycle scripts are intentionally not evidence of a native build.
 - Web runtime remains on locked Mapbox GL JS 2 through `react-map-gl/mapbox-legacy`; the unused umbrella GL3 peer metadata remains visible to `npm ls` and is not hidden with overrides.
+- Exact combined Web probing found a GL2 readiness edge: hosted styles, sprites, vector tiles and glyphs all returned successfully and rendered real features, while immediately-refreshing vector tiles remained in GL2's `expired` state and prevented its strict `load`/`idle` events. The adapter now has a Web-only fallback that declares readiness only after a feature from a hosted Mapbox source in the active style is actually rendered. It does not accept local overlays or a merely mounted canvas, and native RNMapbox behavior is unchanged.
 - `react-native-view-shot` remains outside Expo's expected version and requires an Owner/native-release decision.
 - App audit findings and inherited TypeScript diagnostics are assessed separately in the exact-source receipts; no `audit fix --force`, SDK upgrade, second Mapbox major or blanket TypeScript suppression is authorized or used.
 - iOS native capability remains a device gate. A Web-only import resolution neither proves nor requires a new binary by itself.

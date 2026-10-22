@@ -328,13 +328,23 @@ const capture = async (runDir, name) => {
 const waitForMapVisualEvidence = async () => {
   await page.waitForFunction(() => {
     const map = globalThis.__cairnMap;
-    if (!map?.loaded?.() || !map?.queryRenderedFeatures || !map?.getStyle) return false;
-    const layerIds = (map.getStyle()?.layers ?? [])
-      .map(layer => layer.id)
-      .filter(id => id.startsWith('track-line-layer-')
-        || id.startsWith('track-body-')
-        || id.startsWith('track-active-')
-        || id.startsWith('route-detail-'));
+    // GL JS v2 can hold already-rendered, immediately-refreshing tiles in an
+    // `expired` state, so `loaded()` may remain false. Require the actual
+    // hosted basemap and Cairn route features on the rendered canvas instead.
+    if (!map?.queryRenderedFeatures || !map?.getStyle) return false;
+    let layerIds = [];
+    try {
+      layerIds = (map.getStyle()?.layers ?? [])
+        .map(layer => layer.id)
+        .filter(id => id.startsWith('track-line-layer-')
+          || id.startsWith('track-body-')
+          || id.startsWith('track-active-')
+          || id.startsWith('route-detail-'));
+    } catch {
+      // GL JS v2 can briefly expose the Map before its replacement style is
+      // serializable. Poll the real readiness boundary instead of crashing.
+      return false;
+    }
     if (layerIds.length === 0) return false;
     let routeVisible = false;
     try {
@@ -656,12 +666,12 @@ async function runJourney(entry) {
       plantActivationMethod = 'WEB_QA_NAVIGATION_BRIDGE_AFTER_VISIBLE_BUTTON_ATTEMPT';
     }
     await waitForRoute('Plant', 10_000);
-    await page.getByText('Using your Activity location', { exact: true })
+    await page.getByRole('button', { name: /^Using Activity location\./ })
       .waitFor({ state: 'visible', timeout: 15_000 });
     await capture(runDir, '01b-plant-content');
     await page.getByRole('textbox', { name: 'Title' }).fill(`Activity Cairn ${fixture.runId}`);
     await page.getByRole('textbox', { name: 'Note' }).fill('Placed through the full Plant flow while this Activity kept recording.');
-    await page.getByRole('button', { name: 'Plant Cairn' }).click();
+    await page.getByTestId('plant-submit').click();
     await page.getByTestId('plant-success-modal').waitFor({ state: 'visible', timeout: 15_000 });
     await capture(runDir, '01c-plant-accepted');
     const plantAccepted = await page.evaluate(({ ownerId, id }) => {
@@ -818,9 +828,10 @@ async function runJourney(entry) {
     await capture(runDir, '03-finish-timeout');
     throw new Error(`real_map_finish_timeout:${JSON.stringify(finishFailure.tracking)}:${String(error)}`);
   }
-  await page.getByText('View activity', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+  const viewActivityButton = page.getByRole('button', { name: `Finish ${noun} and view activity` });
+  await viewActivityButton.waitFor({ state: 'visible', timeout: 10_000 });
   await capture(runDir, '03-complete');
-  await page.getByText('View activity', { exact: true }).click();
+  await viewActivityButton.click();
   await waitForRoute('MapHistory');
   await waitForDetailEvidence();
   await capture(runDir, '04-detail');

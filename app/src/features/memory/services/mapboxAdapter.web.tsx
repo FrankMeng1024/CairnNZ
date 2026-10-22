@@ -44,6 +44,7 @@ import type { MapRef } from 'react-map-gl/mapbox-legacy';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { queryWebShapeSourcePressFeatures } from './mapboxAdapterWebPress';
+import { hasRenderedHostedMapboxBasemap } from './mapboxWebReadiness';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
@@ -106,6 +107,7 @@ interface MapViewProps {
   styleJSON?: string;
   onMapIdle?: (feature: any) => void;
   onWillStartLoadingMap?: () => void;
+  onDidFinishLoadingStyle?: () => void;
   onDidFinishLoadingMap?: () => void;
   onDidFinishRenderingMapFully?: () => void;
   onDidFinishRenderingFrameFully?: () => void;
@@ -182,6 +184,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   onMapIdle,
   onCameraChanged,
   onWillStartLoadingMap,
+  onDidFinishLoadingStyle,
   onDidFinishLoadingMap,
   onDidFinishRenderingMapFully,
   onDidFinishRenderingFrameFully,
@@ -194,6 +197,8 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
 }: MapViewProps, ref) {
   const mapRef = useRef<MapRef | null>(null);
   const loadingStartedRef = useRef(false);
+  const styleReadyEmittedRef = useRef(false);
+  const mapReadyEmittedRef = useRef(false);
   const lastProgrammaticCameraEventAtRef = useRef(0);
   const pointMotionVisibilityRef = useRef(new Map<string, unknown>());
   const pointMotionGenerationRef = useRef(0);
@@ -443,6 +448,25 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
     && Boolean((window as any).__cairnMapQaLocalStyle);
   const localQaTestMode = localQaStyleEnabled
     && (window as any).__cairnMapQaTestMode !== false;
+  const effectiveStyleIdentity = localQaStyleEnabled
+    ? 'local-qa-style'
+    : styleJSON ?? styleUrl;
+  useEffect(() => {
+    styleReadyEmittedRef.current = false;
+    mapReadyEmittedRef.current = false;
+  }, [effectiveStyleIdentity]);
+  const emitWebMapReadiness = React.useCallback((target: any, requireHostedFeature: boolean) => {
+    if (requireHostedFeature && !hasRenderedHostedMapboxBasemap(target)) return false;
+    if (!styleReadyEmittedRef.current) {
+      styleReadyEmittedRef.current = true;
+      onDidFinishLoadingStyle?.();
+    }
+    if (!mapReadyEmittedRef.current) {
+      mapReadyEmittedRef.current = true;
+      onDidFinishLoadingMap?.();
+    }
+    return true;
+  }, [onDidFinishLoadingMap, onDidFinishLoadingStyle]);
 
   // react-map-gl needs an initialViewState. We pull it from the first
   // <Camera> child if present. Otherwise default to a sensible center.
@@ -555,7 +579,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
               });
             }
             if (logoEnabled) applyLogoOffset(event.target, logoPosition);
-            onDidFinishLoadingMap?.();
+            emitWebMapReadiness(event.target, false);
           }}
           initialViewState={
             initialCenter && Array.isArray(initialCenter)
@@ -572,7 +596,12 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
             onDidFinishRenderingMapFully?.();
             onDidFinishRenderingFrameFully?.();
           }}
-          onRender={() => {
+          onRender={(event) => {
+            // GL JS v2 can keep already-rendered tiles in `expired` while it
+            // refreshes them, preventing its strict load/idle events forever.
+            // Release Cairn's loading cover only after a feature from a
+            // hosted source in the active style is genuinely rendered.
+            emitWebMapReadiness(event.target, true);
             // Native supplies a fully-rendered-frame callback independently of
             // the later all-map completion event. Forward Web render frames as
             // well; MemoryMap only accepts one after its exact Fog authority

@@ -79,6 +79,8 @@ describe('real Mapbox Web consumer coverage', () => {
     expect(adapter).toContain("delete (window as any).__cairnMap;");
     expect(adapter).toContain('if (onMapLoadingError) onMapLoadingError(event);');
     expect(adapter).toContain('else console.error((event as any)?.error ?? event);');
+    expect(adapter).toContain('hasRenderedHostedMapboxBasemap(target)');
+    expect(adapter).toContain('emitWebMapReadiness(event.target, true)');
     expect(adapter).toContain('requestAnimationFrame(() => {');
     expect(adapter).toContain('if (currentMap !== map || !map.isStyleLoaded?.()) return;');
     expect(adapter.indexOf('if (currentMap !== map || !map.isStyleLoaded?.()) return;'))

@@ -1354,7 +1354,7 @@ async function runLoadedJourney() {
     await onlyMe.click();
     await capture('plant-text-private');
     qaStep = 'normal-plant-commit';
-    await page.getByRole('button', { name: 'Plant Cairn' }).click();
+    await page.getByTestId('plant-submit').click();
     await waitForRoute('Hiking');
     await page.getByTestId('activity-hike-control-dock').waitFor({ state: 'visible', timeout: 30_000 });
     recordFlow('plant-return-same-recording', 'Plant commit handler goBack');

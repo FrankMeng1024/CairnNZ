@@ -223,7 +223,7 @@ await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 
 await page.getByLabel('Title').fill('Wind through the tōtara');
 await page.getByLabel('Note').fill('A quiet place to pause above the harbour.');
 await page.getByLabel('Visibility Public').click();
-await page.getByRole('button', { name: 'Plant Cairn' }).click();
+await page.getByTestId('plant-submit').click();
 await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Home', null, { timeout: 20_000 });
 await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.setState({
   status: 'idle', sessionId: null, locationAvailable: false,
