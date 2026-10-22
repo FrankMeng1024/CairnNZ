@@ -74,6 +74,7 @@ describe('real Mapbox Web consumer coverage', () => {
     expect(adapter).toContain("import mapboxgl from 'mapbox-gl'");
     expect(adapter).toContain("if (typeof window !== 'undefined') mapboxgl.prewarm();");
     expect(adapter).toContain('inner._setCacheLimits?.(500, Number.POSITIVE_INFINITY);');
+    expect(adapter).toContain('guardMapboxGl2RetiredDispatcher(inner);');
     expect(adapter).toContain('refreshLayout: () => {');
     expect(adapter).toContain('inner?.resize?.();');
     expect(adapter).toContain("delete (window as any).__cairnMap;");

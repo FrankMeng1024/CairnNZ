@@ -43,6 +43,7 @@ import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-m
 import type { MapRef } from 'react-map-gl/mapbox-legacy';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { guardMapboxGl2RetiredDispatcher } from './mapboxGl2LifecycleGuard';
 import { queryWebShapeSourcePressFeatures } from './mapboxAdapterWebPress';
 import { hasRenderedHostedMapboxBasemap } from './mapboxWebReadiness';
 
@@ -512,6 +513,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
               // racy worker-side trim cadence for Cairn's Web SPA. Native
               // RNMapbox and tile rendering/caching are unchanged.
               inner._setCacheLimits?.(500, Number.POSITIVE_INFINITY);
+              guardMapboxGl2RetiredDispatcher(inner);
 
               // Pin-as-zoom-anchor: tell mapbox-gl to anchor every pinch
               // and wheel zoom on the viewport center (which is where

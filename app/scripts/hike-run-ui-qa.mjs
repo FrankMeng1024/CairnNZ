@@ -174,7 +174,7 @@ const exerciseRecordingControls = async () => {
   await page.getByRole('button', { name: 'Pause hike' }).click();
   await page.getByRole('button', { name: 'Resume hike' }).click();
   await page.getByRole('button', { name: 'Finish hike' }).click();
-  await page.getByText('Finish hike', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Finish hike and view activity' }).waitFor();
   await settle(400);
   await page.screenshot({ path: path.join(outputDir, 'hike-finish-intent-day-390x844.png'), fullPage: false });
   await page.getByRole('button', { name: 'Close and keep tracking' }).click();
@@ -205,12 +205,12 @@ const exerciseRecordingControls = async () => {
   await page.getByRole('button', { name: 'Pause run' }).click();
   await page.getByRole('button', { name: 'Resume run' }).click();
   await page.getByRole('button', { name: 'Finish run' }).click();
-  await page.getByText('Finish run', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Finish run and view activity' }).waitFor();
   await page.locator('input').last().blur();
   await page.evaluate(() => window.scrollTo(0, 0));
   await settle(400);
   await page.screenshot({ path: path.join(outputDir, 'run-finish-intent-day-390x844.png'), fullPage: false });
-  await page.getByRole('button', { name: 'Cancel and keep running' }).click();
+  await page.getByRole('button', { name: 'Close and keep tracking' }).click();
   await page.waitForFunction(() => globalThis.__cairnStores.useTrackingStore.getState().status === 'tracking');
 
   return page.evaluate(() => globalThis.__activityUiInteractionCounts);
