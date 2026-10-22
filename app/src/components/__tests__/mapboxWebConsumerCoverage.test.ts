@@ -27,6 +27,8 @@ describe('real Mapbox Web consumer coverage', () => {
   });
 
   test('Web MarkerView maps Cairn view annotations to a real Mapbox marker', () => {
+    expect(adapter).toContain("from 'react-map-gl/mapbox-legacy'");
+    expect(adapter).not.toContain("from 'react-map-gl/mapbox'");
     expect(adapter).toContain('export function MarkerView');
     expect(adapter).toContain('<Marker longitude={coordinate[0]} latitude={coordinate[1]} anchor="center">');
     expect(adapter).toContain('MarkerView,');
@@ -51,9 +53,11 @@ describe('real Mapbox Web consumer coverage', () => {
 
   test('acquired Cairn Mapbox clusters resolve presentation from active theme tokens', () => {
     expect(acquiredClusters).toContain('const theme = useVisualTheme()');
-    expect(acquiredClusters).toContain('circleColor: theme.primary');
+    expect(acquiredClusters).toContain('theme.mapCairnFriendsClusterFill');
+    expect(acquiredClusters).toContain('theme.mapCairnPublicClusterFill');
+    expect(acquiredClusters).toContain('theme.mapCairnMixedClusterFill');
     expect(acquiredClusters).toContain('circleStrokeColor: theme.surfaceElevated');
-    expect(acquiredClusters).toContain('textColor: theme.onPrimary');
+    expect(acquiredClusters).toContain('textColor: theme.mapCairnClusterText');
     expect(acquiredClusters).not.toMatch(/#[0-9A-Fa-f]{6}/);
     expect(adapter).toContain("typeof clusterMaxZoomLevel === 'number' ? { clusterMaxZoom: clusterMaxZoomLevel }");
     expect(adapter).toContain('clusterProperties ? { clusterProperties }');
@@ -61,6 +65,9 @@ describe('real Mapbox Web consumer coverage', () => {
     expect(adapter).not.toContain('filter={filter as any}');
     expect(adapter).toContain("if (key === 'lineEmissiveStrength') continue");
     expect(adapter).toContain("if (key === 'circleEmissiveStrength') continue");
+    expect(adapter).toContain("standardLightPreset === 'night'");
+    expect(adapter).toContain("standardLightPreset === 'dusk'");
+    expect(adapter).toContain('Images: WebImages');
   });
 
   test('Web style-import cleanup never sends layer mutations into a removed GL worker', () => {

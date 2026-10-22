@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "purpose": "cleanup-only",
+  "batch_id": "o88-shanghai-encounter-20261020",
+  "manifest_sha256": "REPLACE_WITH_EXACT_MANIFEST_SHA256",
+  "target_fingerprint": "mysql:REPLACE_WITH_INSPECTED_SERVER_UUID:REPLACE_WITH_DATABASE",
+  "target_realm": "REPLACE_WITH_isolated_staging_or_production",
+  "target_allowlist_sha256": "REPLACE_WITH_SCHEMA_V2_ALLOWLIST_FILE_SHA256",
+  "expected_activation_approval": "o88-shanghai-encounter-20261020:REPLACE_WITH_ORIGINAL_ACTIVATION_PLAN_SHA256",
+  "fixture_keys": ["REPLACE_WITH_ALL_EXACT_ORIGINAL_FIXTURE_KEYS"],
+  "reader_ids": ["REPLACE_WITH_EXACT_ORIGINAL_READER_IDS"],
+  "public_author_ids": ["REPLACE_WITH_EXACT_ORIGINAL_PUBLIC_AUTHOR_IDS"],
+  "friend_author_ids": ["REPLACE_WITH_EXACT_ORIGINAL_FRIEND_AUTHOR_IDS"],
+  "cleanup_scope": [
+    "cairn_qa_fixture_batches:batch_id",
+    "cairn_qa_fixture_readers:batch_id",
+    "cairn_qa_fixtures:batch_id",
+    "markers:approved_fixture_marker_ids",
+    "cairn_review_cases:approved_fixture_marker_ids",
+    "cairn_collections:approved_fixture_marker_ids",
+    "marker_audience_epochs:approved_fixture_marker_ids",
+    "cairn_acquisition_events:approved_fixture_marker_ids",
+    "cairn_acquisitions:approved_fixture_marker_ids",
+    "cairn_revisions:approved_fixture_marker_ids",
+    "notification_log:orphaned_fixture_only_presentation_groups",
+    "cairn_presentation_groups:orphaned_fixture_only_groups"
+  ],
+  "authorized_by": "REPLACE_WITH_AUTHORIZED_OWNER_OR_DELEGATE",
+  "authorized_at": "REPLACE_WITH_ISO_TIMESTAMP",
+  "cleanup_approval_expires_at": "REPLACE_WITH_FUTURE_ISO_TIMESTAMP",
+  "reason": "Cleanup-only authority for the exact previously activated batch. This does not authorize fixture creation, update, or reactivation."
+}

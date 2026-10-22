@@ -1,4 +1,8 @@
-const secure = { token: null as string | null };
+const mockSecureValues = new Map<string, string>();
+const secure = {
+  get token(): string | null { return mockSecureValues.get('cairn_jwt') ?? null; },
+  set token(value: string | null) { if (value == null) mockSecureValues.delete('cairn_jwt'); else mockSecureValues.set('cairn_jwt', value); },
+};
 const mockStorage = {
   getItem: jest.fn(async () => null),
   setItem: jest.fn(async () => undefined),
@@ -19,9 +23,9 @@ const mockResumeDeletedAccountPurge = jest.fn(async () => false);
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK: 1,
-  getItemAsync: jest.fn(async () => secure.token),
-  setItemAsync: jest.fn(async (_key: string, value: string) => { secure.token = value; }),
-  deleteItemAsync: jest.fn(async () => { secure.token = null; }),
+  getItemAsync: jest.fn(async (key: string) => mockSecureValues.get(key) ?? null),
+  setItemAsync: jest.fn(async (key: string, value: string) => { mockSecureValues.set(key, value); }),
+  deleteItemAsync: jest.fn(async (key: string) => { mockSecureValues.delete(key); }),
 }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
@@ -95,7 +99,7 @@ async function waitForCall(mock: jest.Mock): Promise<void> {
 describe('real pre-publish authenticated hydrate authority', () => {
   beforeEach(() => {
     jest.resetModules();
-    secure.token = null;
+    mockSecureValues.clear();
     mockSessionState.sessions = [];
     mockSessionState.hydrate.mockClear();
     mockSessionState.mergeRemoteSessions.mockClear();

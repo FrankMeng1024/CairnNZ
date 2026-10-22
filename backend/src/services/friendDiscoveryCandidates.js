@@ -7,6 +7,7 @@ const {
   MAX_OBSERVATION_SPAN_MS,
 } = require('./encounterPolicy');
 const { eligibleSourceProvenanceSql } = require('./activitySourceProvenance');
+const { qaFixtureEligibleSql } = require('./qaFixtureEligibility');
 
 const FRIEND_DISCOVERY_PAGE_SIZE = 500;
 const FRIEND_DISCOVERY_EVIDENCE_LIMIT = 100;
@@ -47,6 +48,7 @@ function buildFriendDiscoveryCandidatePage(viewerId) {
           ON owner.id = marker.user_id AND owner.deleted_at IS NULL
        WHERE friend.user_id = ?
          AND marker.user_id <> ?
+         AND ${qaFixtureEligibleSql('marker.id', 'friend.user_id')}
          AND NOT EXISTS (
            SELECT 1 FROM blocked_users blocked
             WHERE (blocked.blocker_id = ? AND blocked.blocked_id = marker.user_id)

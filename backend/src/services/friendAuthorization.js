@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { qaFixtureEligibleSql, qaFixtureExpirySql } = require('./qaFixtureEligibility');
 
 function orderedPair(a, b) {
   const left = Number(a);
@@ -195,7 +196,9 @@ async function authorizedFriendCairn(db, viewerId, markerId, { includeHidden = f
             revision.audience_epoch,revision.content_revision,
             revision.friend_author_name_snapshot AS author_name,
             acquisition.acquired_at AS encountered_at,acquisition.opened_at,
-            NULL AS hidden_at
+            NULL AS hidden_at,
+            qa_fixture.batch_id AS qa_batch_id,
+            ${qaFixtureExpirySql('revision.marker_id')} AS qa_expires_at
        FROM cairn_acquisitions acquisition
        JOIN cairn_revisions revision ON revision.id=acquisition.cairn_revision_id
        JOIN cairn_collections collection
@@ -208,12 +211,14 @@ async function authorizedFriendCairn(db, viewerId, markerId, { includeHidden = f
        LEFT JOIN hidden_items hidden
          ON hidden.user_id=acquisition.viewer_id
         AND hidden.item_type='mark' AND hidden.item_id=acquisition.marker_id
+       LEFT JOIN cairn_qa_fixtures qa_fixture ON qa_fixture.marker_id=revision.marker_id
       WHERE acquisition.viewer_id=? AND acquisition.marker_id=?
         AND acquisition.acquired_via='friends'
         AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
         ${includeHidden ? '' : 'AND hidden.user_id IS NULL'}
         AND revision.availability='available'
         AND COALESCE(moderation.state,'available')='available'
+        AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
         AND NOT EXISTS (
           SELECT 1 FROM blocked_users b
            WHERE (b.blocker_id=acquisition.viewer_id AND b.blocked_id=revision.owner_id)

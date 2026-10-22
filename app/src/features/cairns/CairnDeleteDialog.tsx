@@ -26,10 +26,10 @@ export function CairnDeleteDialog({
       testID="cairn-delete-confirmation"
     >
       <ModalCardHeader
-        title={hiding ? 'Hide this Cairn?' : 'Delete this Cairn?'}
+        title={hiding ? 'Hide this Cairn?' : 'Withdraw and delete this Cairn?'}
         body={hiding
           ? 'It will leave your Memory map. This does not remove the creator’s Cairn or your Friend Content access.'
-          : 'This removes the Cairn. Its source Activity, independent Routes, and ordinary personal Memory remain.'}
+          : 'It disappears from your collection and cannot be encountered again. Versions already acquired by other people remain in their Memory. Its source Activity, Routes, and ordinary personal Memory are unchanged.'}
       />
       <View style={styles.actions}>
         <PrimaryButton
@@ -40,7 +40,7 @@ export function CairnDeleteDialog({
           style={styles.action}
         />
         <PrimaryButton
-          label={hiding ? 'Hide Cairn' : 'Delete Cairn'}
+          label={hiding ? 'Hide Cairn' : 'Withdraw & delete'}
           variant="destructive"
           onPress={onConfirm}
           loading={busy}

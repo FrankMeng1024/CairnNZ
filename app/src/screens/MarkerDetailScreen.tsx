@@ -21,14 +21,14 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions, Platform, Alert,
-  TouchableOpacity,
+  Animated, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useMarkerStore, type MarkerPermission } from '../store/useMarkerStore';
+import { useMarkerStore, type Marker, type MarkerPermission } from '../store/useMarkerStore';
 import { useAppStore } from '../store/useAppStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { MARKER_TYPES, type MarkerType } from '../config/markerTypes';
@@ -76,6 +76,12 @@ import { CairnIdentityLine } from '../features/cairns/CairnIdentityLine';
 import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
+import {
+  CairnPaper,
+  CairnStoneMark,
+  useCairnPaperExit,
+} from '../features/cairns/components/CairnPaper';
+import { cairnPublicationTruth } from '../features/cairns/cairnExperience';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -138,7 +144,7 @@ export function MarkerDetailScreen() {
   const sessions = useSessionStore((s) => s.sessions);
   const publicEnabled = usePublicCairnStore((state) => state.enabled);
 
-  const marker = useMemo(
+  const liveMarker = useMemo(
     // v423 C1 fix: offline-first ack 后 marker.id 会从 localId 换成 server id.
     // Plant flow nav.replace 传的 markerId 是 localId, 若只按 m.id 匹配, ack
     // 一成功 find 立刻返回 undefined, 屏幕空白. 用 (id | localId) 双匹配保证
@@ -160,9 +166,18 @@ export function MarkerDetailScreen() {
   const [discardEditOpen, setDiscardEditOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletionSnapshot, setDeletionSnapshot] = useState<{ ownerId: string; marker: Marker } | null>(null);
+  const { style: paperExitStyle, run: runPaperExit, reset: resetPaperExit } = useCairnPaperExit();
   const [mapReady, setMapReady] = useState(false);
   const [mapLoadState, setMapLoadState] = useState<MapLoadState>('loading');
   const [mapEpoch, setMapEpoch] = useState(0);
+  // Durable tombstoning removes the live projection before the network await.
+  // Keep the exact initiating owner's record visible until deleteMarker tells
+  // us whether the operation was accepted or queued; never show it to a new
+  // account after an auth switch.
+  const marker = liveMarker ?? (
+    deleting && deletionSnapshot?.ownerId === String(userId) ? deletionSnapshot.marker : undefined
+  );
 
   useEffect(() => {
     if (mapReady || !MapView) return undefined;
@@ -216,7 +231,12 @@ export function MarkerDetailScreen() {
       log('marker.edit_save', { id: marker.id });
       setIsEditing(false);
     } catch (e: any) {
-      setSaveError('Changes were not saved. Your draft is still here so you can try again.');
+      const reason = e?.code === 'PUBLIC_SUSPENDED_EDIT_BLOCKED'
+        ? 'This Public version is paused by review. Choose Only me or Friends to withdraw it before changing the words.'
+        : e?.code === 'CAIRN_SOURCE_FROZEN'
+          ? 'This Cairn is under review and cannot create a new version right now.'
+          : 'Changes were not saved. Your draft is still here so you can try again.';
+      setSaveError(reason);
     } finally {
       setSaving(false);
     }
@@ -224,25 +244,36 @@ export function MarkerDetailScreen() {
 
   const handleDelete = useCallback(async () => {
     if (!marker || deleting) return;
+    const initiatingOwnerId = String(userId);
+    setDeletionSnapshot({ ownerId: initiatingOwnerId, marker });
     setDeleting(true);
+    let accepted = false;
     try {
       log('marker.delete', { id: marker.id });
       const result = await deleteMarker(marker.id);
+      accepted = true;
       setDeleteConfirmOpen(false);
-      if (nav.canGoBack()) nav.goBack();
-      else nav.replace('AllCairns');
-      if (result.remoteState === 'queued') {
-        Alert.alert(
-          'Delete queued',
-          'This Cairn is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
-        );
-      }
+      runPaperExit(() => {
+        if (nav.canGoBack()) nav.goBack();
+        else nav.replace('AllCairns');
+        if (result.remoteState === 'queued') {
+          Alert.alert(
+            'Delete queued',
+            'This Cairn is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
+          );
+        }
+      });
     } catch {
+      resetPaperExit();
+      setDeletionSnapshot(null);
       Alert.alert('Could not delete', 'This Cairn is still here. Check your connection and try again.');
     } finally {
-      setDeleting(false);
+      // A successful durable delete is terminal for this screen. Keeping the
+      // busy snapshot through the navigation transition prevents a one-frame
+      // "Cairn not found" ghost after the store projection is removed.
+      if (!accepted) setDeleting(false);
     }
-  }, [deleteMarker, deleting, marker, nav]);
+  }, [deleteMarker, deleting, marker, nav, resetPaperExit, runPaperExit, userId]);
 
   if (!marker) {
     return (
@@ -263,12 +294,8 @@ export function MarkerDetailScreen() {
   const meta = MARKER_TYPES[marker.type] ?? MARKER_TYPES.cairn;
   const { title: privateTitle, body: privateBody } = splitTitleBody(marker.note);
   const displayTitle = cairnDisplayTitle(privateTitle, privateBody, marker.createdAt);
-  const publicStateLabel = marker.publicState === 'pending' ? 'Public · In review'
-    : marker.publicState === 'published' ? 'Public · Published'
-      : marker.publicState === 'rejected' ? 'Public · Not approved'
-        : marker.publicState === 'suspended' ? 'Public · Paused by review'
-          : marker.publicState === 'withdrawn' ? 'Public · Withdrawn'
-            : marker.permission === 'public' ? 'Public · Not submitted' : null;
+  const publicationTruth = cairnPublicationTruth(marker);
+  const publicStateLabel = publicationTruth?.label ?? null;
   const vis = marker.permission === 'public'
     ? { label: publicStateLabel ?? 'Public', iconName: 'Globe' as IconName }
     : VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
@@ -286,6 +313,24 @@ export function MarkerDetailScreen() {
   const sourceActivity = marker.originActivityClientId
     ? sessions.find(session => activityMatchesTarget(session, marker.originActivityClientId!))
     : null;
+  const editHasUsefulText = editTitle.trim().length > 0 || editBody.trim().length > 0;
+  const editChangesWords = encodeTitleBody(editTitle, editBody) !== marker.note;
+  const publicEditBlock = editPermission !== 'public'
+    ? null
+    : !publicEnabled
+      ? 'Public is not available for this account right now. Choose Only me or Friends to save.'
+      : !marker.originActivityClientId
+        ? 'This Cairn has no Activity source, so it cannot enter Public review. Leave a new Public Cairn from an eligible Activity.'
+        : !editHasUsefulText
+          ? 'Add useful words before saving a Public version.'
+          : marker.publicState === 'suspended' && editChangesWords
+            ? 'This Public version is paused by review. Choose Only me or Friends to withdraw it before changing the words.'
+            : null;
+  const publicEditTruth = sourceActivity
+    ? 'Saving creates a new version. It can enter review only after the server confirms the linked completed Activity; it is not Public until approved.'
+    : marker.originActivityClientId
+      ? 'Saving keeps Public intent, but the linked Activity is not yet confirmed as eligible. This version stays out of review and Public discovery until the server confirms eligibility and review approves it.'
+      : 'This Cairn cannot become Public because it has no Activity source.';
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
@@ -403,24 +448,32 @@ export function MarkerDetailScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 1. Title */}
-        <Text
-          style={[styles.title, !privateTitle && !privateBody && styles.titleEmpty, { color: privateTitle || privateBody ? visualTheme.foreground : visualTheme.muted }]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
+        <Animated.View style={paperExitStyle}>
+        <CairnPaper
+          motionKey={`owned-cairn-paper:${marker.contentRevision ?? 1}:${marker.note}`}
+          style={styles.notePaper}
+          testID="owned-cairn-paper"
         >
-          {displayTitle}
-        </Text>
-
-        {/* 2. Body */}
-        {privateBody ? <Text style={[styles.body, { color: visualTheme.foregroundSecondary }]}>{privateBody}</Text> : null}
-
-        <CairnIdentityLine
-          isOwner={isOwner}
-          permission={marker.permission}
-          authorName={marker.authorName}
-          qa={marker.qaProvenance === 'simulator_test'}
-        />
+          <View style={styles.notePaperHeader}>
+            <CairnStoneMark size={36} tone={marker.permission === 'group' ? 'friends' : marker.permission === 'public' ? 'public' : 'owner'} />
+            <Text style={[styles.notePaperEyebrow, { color: visualTheme.foregroundSecondary }]}>YOUR CAIRN · LEFT HERE</Text>
+          </View>
+          <Text
+            style={[styles.title, !privateTitle && !privateBody && styles.titleEmpty, { color: privateTitle || privateBody ? visualTheme.foreground : visualTheme.muted }]}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            {displayTitle}
+          </Text>
+          {privateBody ? <Text style={[styles.body, { color: visualTheme.foregroundSecondary }]}>{privateBody}</Text> : null}
+          <CairnIdentityLine
+            isOwner={isOwner}
+            permission={marker.permission}
+            authorName={marker.authorName}
+            qa={marker.qaProvenance === 'simulator_test'}
+          />
+        </CairnPaper>
+        </Animated.View>
 
         {isOwner && Number(marker.thanksCount ?? 0) > 0 ? (
           <View
@@ -517,13 +570,7 @@ export function MarkerDetailScreen() {
               <Text style={[styles.snapshotHeader, { color: visualTheme.foregroundSecondary }]}>{publicStateLabel}</Text>
             </View>
             <Text style={[styles.snapshotBody, { color: visualTheme.foreground }]}>
-              {marker.publicSubmissionCode === 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED'
-                ? 'This Cairn is saved. Finish its source Activity, then save Public again to request review.'
-                : marker.publicSubmissionCode === 'PUBLIC_TEXT_REQUIRED'
-                  ? 'This Cairn is saved, but Public discovery needs useful text.'
-                  : marker.publicState === 'published'
-                    ? 'People who qualify nearby can discover the exact currently approved version.'
-                    : 'Your personal Cairn remains saved independently of Public review.'}
+              {publicationTruth?.explanation ?? 'Public status is not available yet.'}
             </Text>
             <Text style={[styles.snapshotFootnote, { color: visualTheme.muted }]}>
               A material edit or changing audience removes the approved version from new Public delivery.
@@ -579,6 +626,32 @@ export function MarkerDetailScreen() {
           contentContainerStyle={styles.editBody}
           testID="cairn-edit-content"
         >
+          <Text style={[styles.editVersionTruth, { color: visualTheme.foregroundSecondary }]}>
+            {editPermission === 'personal'
+              ? 'Saving changes updates your private Cairn. Its place and original Activity stay fixed.'
+              : editPermission === 'group'
+                ? 'Saving creates a new Friends version. Friends who genuinely pass nearby can encounter it; earlier acquired pages remain in Memory.'
+                : publicEditTruth}
+          </Text>
+          {publicEditBlock ? (
+            <Text
+              testID="cairn-edit-public-block"
+              accessibilityLiveRegion="polite"
+              style={[styles.editBoundaryCopy, { color: visualTheme.destructive }]}
+            >
+              {publicEditBlock}
+            </Text>
+          ) : null}
+          {saveError ? (
+            <ContentSurface level="record" style={styles.editError} testID="cairn-edit-error">
+              <Text
+                accessibilityLiveRegion="assertive"
+                style={[styles.editErrorText, { color: visualTheme.destructive }]}
+              >
+                {saveError}
+              </Text>
+            </ContentSurface>
+          ) : null}
           <MarkForm
             type={editType}
             title={editTitle}
@@ -591,7 +664,7 @@ export function MarkerDetailScreen() {
             mode="edit"
             showTypePicker={false}
             showVisibilityPicker
-            disableVisibilityPublic={!publicEnabled && marker.permission !== 'public'}
+            disableVisibilityPublic={(!publicEnabled || !marker.originActivityClientId) && marker.permission !== 'public'}
             showLocationLockedNotice
             autoFocus={null}
             titleMaxChars={ContentConfig.titleMaxChars}
@@ -602,18 +675,13 @@ export function MarkerDetailScreen() {
               This synced Cairn needs a connection to save. Your draft stays here if saving fails.
             </Text>
           ) : null}
-          {saveError ? (
-            <ContentSurface level="record" style={styles.editError} testID="cairn-edit-error">
-              <Text style={[styles.editErrorText, { color: visualTheme.destructive }]}>{saveError}</Text>
-            </ContentSurface>
-          ) : null}
         </BottomSheetContent>
         <View style={[styles.editFooter, { backgroundColor: visualTheme.sheetSurface, borderTopColor: visualTheme.borderSubtle }]}>
           <PrimaryButton
-            label="Save changes"
+            label={editPermission === 'public' ? 'Save Public version' : editPermission === 'personal' ? 'Save changes' : 'Save Friends version'}
             onPress={() => { void saveEdit(); }}
             loading={saving}
-            disabled={!editDirty}
+            disabled={!editDirty || Boolean(publicEditBlock)}
             testID="cairn-edit-save"
           />
         </View>
@@ -695,6 +763,15 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
+  notePaper: { marginBottom: Spacing.md },
+  notePaperHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    paddingRight: 22,
+  },
+  notePaperEyebrow: { flex: 1, fontSize: 10, lineHeight: 14, fontWeight: '700', letterSpacing: 1 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -749,6 +826,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 18,
   },
+  editVersionTruth: { fontSize: FontSize.caption, lineHeight: 18, marginBottom: Spacing.sm },
   thanksAcknowledgement: {
     alignSelf: 'flex-start',
     flexDirection: 'row',

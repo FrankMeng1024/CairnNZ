@@ -284,10 +284,33 @@ export async function projectActivityJournalCooperatively(
       if (!byKey.has(key)) appendedFromJournal += 1;
       byKey.set(key, point);
     })) return null;
-    canonical = measureSynchronous(() => Array.from(byKey.values()).sort((left, right) => (
-      left.t - right.t
-      || (left.rawOrdinal ?? Number.MAX_SAFE_INTEGER) - (right.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
-    )));
+    // Materialize the Map cooperatively. Array.from plus sort allocated and
+    // ordered all 20k entries in one measured foreground turn; under memory
+    // pressure that turn included a 251 ms collection pause. Durable journals
+    // are already ordered in the common cold-recovery path, so detect that
+    // while filling and sort only a genuinely out-of-order merge.
+    canonical = new Array<TrackPoint>(byKey.size);
+    const values = byKey.values();
+    let canonicalAlreadyOrdered = true;
+    if (!await cooperativeRange(canonical.length, index => {
+      const point = values.next().value as TrackPoint;
+      canonical[index] = point;
+      if (index > 0) {
+        const previous = canonical[index - 1];
+        canonicalAlreadyOrdered = canonicalAlreadyOrdered && (
+          previous.t < point.t
+          || (previous.t === point.t
+            && (previous.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
+              <= (point.rawOrdinal ?? Number.MAX_SAFE_INTEGER))
+        );
+      }
+    })) return null;
+    if (!canonicalAlreadyOrdered) {
+      canonical = measureSynchronous(() => canonical.sort((left, right) => (
+        left.t - right.t
+        || (left.rawOrdinal ?? Number.MAX_SAFE_INTEGER) - (right.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
+      )));
+    }
     const replay = await buildCausalLiveRouteCooperatively(canonical, {
       maxPointsPerSlice,
       yieldToHost,

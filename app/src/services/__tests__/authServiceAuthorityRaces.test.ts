@@ -1,4 +1,8 @@
-const mockSecureToken = { current: null as string | null };
+const mockSecureValues = new Map<string, string>();
+const mockSecureToken = {
+  get current(): string | null { return mockSecureValues.get('cairn_jwt') ?? null; },
+  set current(value: string | null) { if (value == null) mockSecureValues.delete('cairn_jwt'); else mockSecureValues.set('cairn_jwt', value); },
+};
 const mockApp = {
   state: {
     user: null as null | { id: string },
@@ -15,9 +19,9 @@ const mockApp = {
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK: 1,
-  getItemAsync: jest.fn(async () => mockSecureToken.current),
-  setItemAsync: jest.fn(async (_key: string, value: string) => { mockSecureToken.current = value; }),
-  deleteItemAsync: jest.fn(async () => { mockSecureToken.current = null; }),
+  getItemAsync: jest.fn(async (key: string) => mockSecureValues.get(key) ?? null),
+  setItemAsync: jest.fn(async (key: string, value: string) => { mockSecureValues.set(key, value); }),
+  deleteItemAsync: jest.fn(async (key: string) => { mockSecureValues.delete(key); }),
 }));
 jest.mock('../../config/api', () => ({ API_BASE_URL: 'https://authority.test' }));
 jest.mock('../crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
@@ -67,7 +71,7 @@ async function install(owner: string, token: string) {
 describe('authService account/token authority races', () => {
   beforeEach(() => {
     jest.resetModules();
-    mockSecureToken.current = null;
+    mockSecureValues.clear();
     mockApp.state.user = null;
     mockApp.state.isLoggedIn = false;
     mockApp.state.logout.mockClear();

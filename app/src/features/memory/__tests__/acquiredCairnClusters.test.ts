@@ -1,4 +1,9 @@
-import { buildAcquiredCairnFeatureCollection, stableAcquiredGroupOrder } from '../components/acquiredCairnClusters';
+import {
+  buildAcquiredCairnFeatureCollection,
+  clusterLeavesShareLocation,
+  loadAllClusterLeaves,
+  stableAcquiredGroupOrder,
+} from '../components/acquiredCairnClusters';
 
 describe('acquired Cairn map source', () => {
   test('keeps one selectable feature per Cairn even at identical coordinates', () => {
@@ -10,6 +15,9 @@ describe('acquired Cairn map source', () => {
     expect(collection.features.map(feature => feature.id)).toEqual(['1', '2', '3']);
     expect(collection.features[0].geometry.coordinates).toEqual(collection.features[1].geometry.coordinates);
     expect(collection.features.map(feature => feature.properties.unread)).toEqual([1, 0, 1]);
+    expect(collection.features.map(feature => [feature.properties.friends, feature.properties.public])).toEqual([
+      [1, 0], [0, 1], [0, 0],
+    ]);
   });
 
   test('freezes deterministic unread/current-friend ordering for an opened group', () => {
@@ -19,5 +27,43 @@ describe('acquired Cairn map source', () => {
       { markerId: 'friend', lat: 0, lng: 0, unread: false, acquiredAt: '2026-10-13T01:00:00Z', sourceAudience: 'friends' as const, authorName: 'A', currentFriend: true },
     ];
     expect(stableAcquiredGroupOrder(['read', 'unread', 'friend'], markers)).toEqual(['friend', 'unread', 'read']);
+  });
+
+  test.each([20, 60, 100])(
+    'pages through a %i-Cairn exact-coordinate density group without dropping leaves',
+    async count => {
+      const all = Array.from({ length: count }, (_, index) => ({
+        id: String(index + 1), properties: { markerId: String(index + 1) },
+      }));
+      const calls: Array<[number, number]> = [];
+      const source = {
+        getClusterLeaves: jest.fn(async (_feature: unknown, limit: number, offset: number) => {
+          calls.push([limit, offset]);
+          return { features: all.slice(offset, offset + limit) };
+        }),
+      };
+      const leaves = await loadAllClusterLeaves(source, { properties: { point_count: count } }, count, 20);
+      expect(leaves).toHaveLength(count);
+      expect(new Set(leaves.map(leaf => leaf.properties.markerId)).size).toBe(count);
+      expect(calls).toHaveLength(Math.ceil(count / 20));
+    },
+  );
+
+  test('exact-coordinate and sub-metre stacks open as one intentional group', () => {
+    expect(clusterLeavesShareLocation([
+      { geometry: { coordinates: [174.7762, -41.2865] } },
+      { geometry: { coordinates: [174.776204, -41.286499] } },
+    ])).toBe(true);
+  });
+
+  test('geographically distributed clusters expand instead of opening an arbitrary list', () => {
+    expect(clusterLeavesShareLocation([
+      { geometry: { coordinates: [174.7762, -41.2865] } },
+      { geometry: { coordinates: [174.7764, -41.2865] } },
+    ])).toBe(false);
+    expect(clusterLeavesShareLocation([
+      { geometry: { coordinates: [174.7762, -41.2865] } },
+      { geometry: { coordinates: ['bad', -41.2865] } },
+    ])).toBe(false);
   });
 });

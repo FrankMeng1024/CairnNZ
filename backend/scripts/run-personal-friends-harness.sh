@@ -16,7 +16,9 @@ API_PID=""
 cleanup() {
   if [ -n "$API_PID" ]; then kill "$API_PID" >/dev/null 2>&1 || true; fi
   if [ "${HARNESS_KEEP_CONTAINER:-0}" != "1" ]; then
-    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    # Remove the image-declared anonymous MySQL volume together with this
+    # disposable harness container. Named or shared volumes are never used.
+    docker rm -fv "$CONTAINER" >/dev/null 2>&1 || true
   else
     echo "retained debug container: $CONTAINER" >&2
   fi
@@ -102,6 +104,10 @@ docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" -e "
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/049_retire_legacy_memory_sharing.sql" >/dev/null
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/050_complete_legacy_memory_retirement.sql" >/dev/null
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/051_memory_coverage_read_model.sql" >/dev/null
+docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/052_cairn_placement_provenance.sql" >/dev/null
+docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/053_cairn_qa_fixture_cohorts.sql" >/dev/null
+docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/054_memory_hit_push_explicit_opt_in.sql" >/dev/null
+docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/055_notification_delivery_outbox.sql" >/dev/null
 legacy_fixture_state="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse "
   SELECT CONCAT(
     (SELECT COUNT(*) FROM $DB_NAME.memory_share_grants WHERE owner_id=990001 AND viewer_id=990002 AND status='revoked' AND revoked_reason='legacy_contract_retired'), ':',

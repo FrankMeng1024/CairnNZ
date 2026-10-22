@@ -31,6 +31,7 @@ import { useSettingsStore } from '../store/useSettingsStore';
 import { authenticatedFetch } from '../services/apiService';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import { useAppStore } from '../store/useAppStore';
+import { cairnPublicationTruth } from '../features/cairns/cairnExperience';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'AllCairns'>;
@@ -45,6 +46,7 @@ type FoundCairn = {
   type: Marker['type'];
   text: string | null;
   author_name: string | null;
+  source_audience: 'friends' | 'public';
   availability: 'available' | 'under_review' | 'unavailable' | 'removed';
   acquired_at: string;
   opened_at: string | null;
@@ -74,6 +76,7 @@ function CairnRow({ marker }: { marker: Marker }) {
   const title = cairnDisplayTitle(decoded.title, decoded.body, marker.createdAt);
   const preview = decoded.body.trim();
   const id = cairnStableId(marker);
+  const publicationTruth = cairnPublicationTruth(marker);
   return (
     <LibraryRecordSurface
       onPress={() => nav.navigate('MarkerDetail', { markerId: id })}
@@ -87,6 +90,9 @@ function CairnRow({ marker }: { marker: Marker }) {
         <View style={styles.rowCopy}>
           <Text style={[styles.rowTitle, { color: theme.foreground }]} numberOfLines={1}>{title}</Text>
           <CairnIdentityLine isOwner permission={marker.permission} compact qa={marker.qaProvenance === 'simulator_test'} />
+          {publicationTruth ? (
+            <Text style={[styles.rowMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{publicationTruth.label}</Text>
+          ) : null}
           <Text style={[styles.rowMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{formatDate(marker.createdAt)}</Text>
           {preview ? (
             <Text style={[styles.rowPreview, { color: theme.muted }]} numberOfLines={2}>{preview}</Text>
@@ -108,19 +114,28 @@ function CairnRow({ marker }: { marker: Marker }) {
   );
 }
 
-function FoundCairnRow({ cairn, archived, onRestore, restoring }: { cairn: FoundCairn; archived: boolean; onRestore: () => void; restoring: boolean }) {
+function FoundCairnRow({ cairn, archived, onRestore, restoring, revisionId }: {
+  cairn: FoundCairn;
+  archived: boolean;
+  onRestore: () => void;
+  restoring: boolean;
+  revisionId?: string;
+}) {
   const theme = useVisualTheme();
   const nav = useNavigation<Nav>();
   const decoded = splitTitleBody(cairn.text ?? '');
   return (
     <LibraryRecordSurface
-      onPress={() => nav.navigate('AcquiredCairnDetail', { markerId: String(cairn.marker_id) })}
+      onPress={() => nav.navigate('AcquiredCairnDetail', {
+        markerId: String(cairn.marker_id),
+        revisionId,
+      })}
       testID={`found-cairn-row-${cairn.marker_id}`}
       accessibilityLabel="Acquired Cairn"
     >
       <View style={styles.row}>
         <View style={styles.rowIcon}>
-          <CairnPinV10 tier="friend" type={cairn.type} size="detail" />
+          <CairnPinV10 tier={cairn.source_audience === 'public' ? 'public' : 'friend'} type={cairn.type} size="detail" />
         </View>
         <View style={styles.rowCopy}>
           <Text style={[styles.rowTitle, { color: theme.foreground }]} numberOfLines={1}>
@@ -129,7 +144,9 @@ function FoundCairnRow({ cairn, archived, onRestore, restoring }: { cairn: Found
               : cairn.availability === 'under_review' ? 'Content under review' : 'Content unavailable'}
           </Text>
           <Text style={[styles.rowMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
-            {cairn.author_name ? `Left by ${cairn.author_name}` : 'Acquired Cairn'} · {cairn.revision_count} {Number(cairn.revision_count) === 1 ? 'version' : 'versions'}
+            {cairn.author_name
+              ? `Left by ${cairn.author_name}`
+              : cairn.source_audience === 'public' ? 'Left anonymously' : 'Left by a friend'} · {cairn.revision_count} {Number(cairn.revision_count) === 1 ? 'version' : 'versions'}
           </Text>
           <Text style={[styles.rowMeta, { color: theme.muted }]}>{new Date(cairn.acquired_at).toLocaleDateString()}</Text>
         </View>
@@ -165,19 +182,23 @@ export function AllCairnsScreen() {
   const [foundCairns, setFoundCairns] = useState<FoundCairn[]>([]);
   const [foundLoading, setFoundLoading] = useState(false);
   const [foundError, setFoundError] = useState('');
+  const [foundHasMore, setFoundHasMore] = useState(false);
   const [foundCollectionState, setFoundCollectionState] = useState<FoundCollectionState>('active');
   const [restoringIds, setRestoringIds] = useState<number[]>([]);
   const restoringRef = useRef(new Set<number>());
   const foundRequestRef = useRef(0);
+  const foundCursorRef = useRef<string | null>(null);
   const ownerId = useAppStore(state => String(state.user?.id ?? ''));
 
   useEffect(() => {
     foundRequestRef.current += 1;
     restoringRef.current.clear();
+    foundCursorRef.current = null;
+    setFoundHasMore(false);
     setRestoringIds([]);
   }, [ownerId]);
 
-  const loadFound = useCallback(async () => {
+  const loadFound = useCallback(async (reset = true) => {
     const request = ++foundRequestRef.current;
     const requestedState = foundCollectionState;
     const requestedOwner = ownerId;
@@ -185,15 +206,40 @@ export function AllCairnsScreen() {
     setFoundLoading(true);
     setFoundError('');
     try {
-      const response = await authenticatedFetch(`/api/cairn-memory/library?section=found&state=${requestedState}`, {
-        expectedUserId: requestedOwner,
+      const requestedIds = route.params?.markerIds?.length
+        ? new Set(route.params.markerIds.map(String)) : null;
+      let cursor = reset ? null : foundCursorRef.current;
+      let rows: FoundCairn[] = [];
+      let hasMore = false;
+      const seenCursors = new Set<string>();
+      do {
+        const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+        const response = await authenticatedFetch(`/api/cairn-memory/library?section=found&state=${requestedState}&limit=100${suffix}`, {
+          expectedUserId: requestedOwner,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json();
+        if (request !== foundRequestRef.current
+          || requestedState !== foundCollectionState
+          || String(useAppStore.getState().user?.id ?? '') !== requestedOwner) return;
+        rows = [...rows, ...(Array.isArray(body.cairns) ? body.cairns : [])];
+        hasMore = body.has_more === true;
+        const next = typeof body.next_cursor === 'string' && body.next_cursor ? body.next_cursor : null;
+        if (!hasMore) cursor = null;
+        else {
+          if (!next || seenCursors.has(next)) throw new Error('INVALID_LIBRARY_CURSOR_CHAIN');
+          seenCursors.add(next);
+          cursor = next;
+        }
+        if (!requestedIds || [...requestedIds].every(id => rows.some(row => String(row.marker_id) === id))) break;
+      } while (hasMore);
+      foundCursorRef.current = cursor;
+      setFoundHasMore(hasMore);
+      setFoundCairns(current => {
+        const mergedRows = reset ? rows : [...current, ...rows];
+        const byId = new Map(mergedRows.map(row => [String(row.marker_id), row]));
+        return [...byId.values()];
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const body = await response.json();
-      if (request !== foundRequestRef.current
-        || requestedState !== foundCollectionState
-        || String(useAppStore.getState().user?.id ?? '') !== requestedOwner) return;
-      setFoundCairns(Array.isArray(body.cairns) ? body.cairns : []);
       void useCairnPresentationStore.getState().refreshAcquiredMap();
     } catch {
       if (request !== foundRequestRef.current) return;
@@ -201,7 +247,7 @@ export function AllCairnsScreen() {
     } finally {
       if (request === foundRequestRef.current) setFoundLoading(false);
     }
-  }, [foundCollectionState, ownerId]);
+  }, [foundCollectionState, ownerId, route.params?.markerIds]);
 
   const restoreFound = useCallback(async (markerId: number) => {
     if (restoringRef.current.has(markerId) || !ownerId) return;
@@ -227,7 +273,7 @@ export function AllCairnsScreen() {
   }, [ownerId]);
 
   useEffect(() => {
-    if (section === 'found') void loadFound();
+    if (section === 'found') void loadFound(true);
   }, [loadFound, section]);
 
   useEffect(() => {
@@ -379,10 +425,11 @@ export function AllCairnsScreen() {
                 archived={foundCollectionState === 'archived'}
                 onRestore={() => void restoreFound(item.marker_id)}
                 restoring={restoringIds.includes(item.marker_id)}
+                revisionId={route.params?.revisionIdsByMarker?.[String(item.marker_id)]}
               />
             )}
             contentContainerStyle={[styles.list, visibleFound.length === 0 && styles.listEmpty]}
-            refreshControl={<RefreshControl refreshing={foundLoading} onRefresh={() => void loadFound()} tintColor={theme.primary} />}
+            refreshControl={<RefreshControl refreshing={foundLoading} onRefresh={() => void loadFound(true)} tintColor={theme.primary} />}
             ListHeaderComponent={foundError ? <Text style={[styles.coverageText, { color: theme.foregroundSecondary }]}>{foundError}</Text> : null}
             ListEmptyComponent={(
               <View style={styles.centerState} testID="found-cairns-empty">
@@ -393,6 +440,18 @@ export function AllCairnsScreen() {
                 <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{foundCollectionState === 'archived' ? 'Archived Cairns can be restored here.' : 'Cairns discovered during eligible visits will appear here.'}</Text>
               </View>
             )}
+            ListFooterComponent={foundHasMore ? (
+              <TouchableOpacity
+                style={[styles.loadMore, { borderColor: theme.borderStrong, backgroundColor: theme.secondaryAction }]}
+                onPress={() => { void loadFound(false); }}
+                disabled={foundLoading}
+                testID="found-cairns-load-more"
+              >
+                {foundLoading ? <ActivityIndicator color={theme.primary} /> : (
+                  <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Load older found Cairns</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
           />
         )
       ) : showInitialLoading ? (

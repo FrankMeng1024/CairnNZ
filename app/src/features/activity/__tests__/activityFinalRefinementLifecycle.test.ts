@@ -115,6 +115,7 @@ jest.mock('../activityRegistry', () => ({
     if (!mockRegistry.completed.some((item: any) => item.clientActivityId === activity.clientActivityId)) {
       mockRegistry.completed.push(activity);
     }
+    return true;
   },
   acknowledgeActivity: async (_owner: string, id: string, serverId: number) => {
     const item = mockRegistry.completed.find((entry: any) => entry.clientActivityId === id);

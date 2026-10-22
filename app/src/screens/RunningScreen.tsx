@@ -979,9 +979,9 @@ export function RunningScreen() {
           || permissionDeniedVisible
         )}
         safeTop={insets.top}
-        onOpen={(markerId) => markerId
+        onOpen={(markerId, markerIds) => markerId
           ? nav.navigate('AcquiredCairnDetail', { markerId })
-          : nav.navigate('AllCairns', { initialSection: 'found' })}
+          : nav.navigate('AllCairns', { initialSection: 'found', markerIds })}
       />
 
       {!showSaveSheet ? (

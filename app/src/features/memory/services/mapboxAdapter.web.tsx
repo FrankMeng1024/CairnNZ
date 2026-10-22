@@ -38,10 +38,12 @@
  */
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
-import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox';
-import type { MapRef } from 'react-map-gl/mapbox';
+import { Image as ReactNativeImage } from 'react-native';
+import { Map as MapGL, Source, Layer, Marker, AttributionControl } from 'react-map-gl/mapbox-legacy';
+import type { MapRef } from 'react-map-gl/mapbox-legacy';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { queryWebShapeSourcePressFeatures } from './mapboxAdapterWebPress';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
@@ -50,6 +52,7 @@ const POINT_MOTION_RASTER_LAYER_ID = 'cairn-point-motion-basemap-layer';
 // Its session request is intercepted by the visual harness; it is never used
 // to access Mapbox tiles or emitted by production builds.
 const LOCAL_QA_MAPBOX_TOKEN = 'pk.cairn-local-qa-no-network';
+const WEB_SUNSET_STYLE = require('../../../../assets/map-styles/sunset-2d.json');
 const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
   && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
 
@@ -414,13 +417,25 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
     if (!styleJSON) return null;
     try { return JSON.parse(styleJSON); } catch { return null; }
   }, [styleJSON]);
-  // R21-v3 v2 (2026-08-30): mapbox-gl-js v2.15.0 does NOT support Mapbox
-  // Standard style (v3+ feature). Substitute outdoors-v12 on web so the
-  // Playwright smoke test surface still renders. Real theme (day/dusk/night)
-  // will not show on web — this is a documented compromise until we upgrade
-  // mapbox-gl to v3.x.
+  const standardLightPreset = React.Children.toArray(children).reduce<string | null>((preset, child) => {
+    if (preset || !React.isValidElement(child)) return preset;
+    const candidate = (child.props as any)?.config?.lightPreset;
+    return candidate === 'day' || candidate === 'dusk' || candidate === 'night'
+      ? candidate
+      : null;
+  }, null);
+  // GL JS v2 cannot consume Standard imports. Keep Web on genuine supported
+  // Mapbox/vector styles while preserving the app's actual three-state
+  // contract: outdoors for Day, the packaged Mapbox-vector Sunset style for
+  // Dusk, and Mapbox Navigation Night for Night. Native continues to receive
+  // Standard plus its real lightPreset unchanged.
+  const webStandardFallback = standardLightPreset === 'night'
+    ? 'mapbox://styles/mapbox/navigation-night-v1'
+    : standardLightPreset === 'dusk'
+      ? WEB_SUNSET_STYLE
+      : 'mapbox://styles/mapbox/outdoors-v12';
   const rewrittenStyleURL = (styleURL === 'mapbox://styles/mapbox/standard')
-    ? 'mapbox://styles/mapbox/outdoors-v12'
+    ? webStandardFallback
     : styleURL;
   const styleUrl = rewrittenStyleURL ?? 'mapbox://styles/mapbox/outdoors-v12';
   const localQaStyleEnabled = process.env.NODE_ENV !== 'production'
@@ -637,7 +652,6 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
         >
           {attributionEnabled ? (
             <AttributionControl
-              compact
               position={webControlPosition(attributionPosition, 'bottom-right')}
               style={controlOffsetStyle(attributionPosition)}
             />
@@ -864,6 +878,7 @@ interface ShapeSourceProps {
   id: string;
   shape: any;
   children?: React.ReactNode;
+  onPress?: (event: { features: any[]; coordinates?: [number, number]; point?: { x: number; y: number } }) => void;
   cluster?: boolean;
   clusterRadius?: number;
   clusterMaxZoomLevel?: number;
@@ -875,6 +890,7 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
   id,
   shape,
   children,
+  onPress,
   cluster,
   clusterRadius,
   clusterMaxZoomLevel,
@@ -882,6 +898,45 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
   lineMetrics,
 }: ShapeSourceProps, ref) {
   const mapCtx = React.useContext(MapInstanceContext);
+  const onPressRef = useRef(onPress);
+  useEffect(() => { onPressRef.current = onPress; }, [onPress]);
+  const interactiveLayerIds = useMemo(() => React.Children.toArray(children)
+    .filter(React.isValidElement)
+    .map(child => String((child as React.ReactElement<{ id?: string }>).props.id ?? ''))
+    .filter(Boolean), [children]);
+  const interactiveLayerKey = interactiveLayerIds.join('|');
+  useEffect(() => {
+    if (!onPressRef.current || !interactiveLayerKey) return undefined;
+    let disposed = false;
+    let frame: number | null = null;
+    let map: any = null;
+    const layerIds = interactiveLayerKey.split('|');
+    const handleClick = (event: any) => {
+      if (!onPressRef.current) return;
+      const features = queryWebShapeSourcePressFeatures(map, event.point, layerIds, id);
+      if (features.length === 0) return;
+      onPressRef.current({
+        features,
+        coordinates: event.lngLat ? [event.lngLat.lng, event.lngLat.lat] : undefined,
+        point: event.point ? { x: event.point.x, y: event.point.y } : undefined,
+      });
+    };
+    const attach = () => {
+      if (disposed) return;
+      map = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      if (!map) {
+        frame = requestAnimationFrame(attach);
+        return;
+      }
+      map.on?.('click', handleClick);
+    };
+    attach();
+    return () => {
+      disposed = true;
+      if (frame != null) cancelAnimationFrame(frame);
+      map?.off?.('click', handleClick);
+    };
+  }, [id, interactiveLayerKey, mapCtx]);
   React.useImperativeHandle(ref, () => ({
     setNativeProps: (props: { shape?: unknown }) => {
       if (props.shape == null) return;
@@ -894,6 +949,32 @@ export const ShapeSource = React.forwardRef<any, ShapeSourceProps>(function Shap
         // A malformed development payload must not tear down the map.
       }
     },
+    getClusterLeaves: (feature: any, limit: number, offset: number) => new Promise((resolve, reject) => {
+      const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      const source = inner?.getSource?.(id);
+      const clusterId = Number(feature?.properties?.cluster_id);
+      if (!source?.getClusterLeaves || !Number.isFinite(clusterId)) {
+        reject(new Error('cluster_leaves_unavailable'));
+        return;
+      }
+      source.getClusterLeaves(clusterId, limit, offset, (error: unknown, features: any[]) => {
+        if (error) reject(error);
+        else resolve(features ?? []);
+      });
+    }),
+    getClusterExpansionZoom: (feature: any) => new Promise((resolve, reject) => {
+      const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      const source = inner?.getSource?.(id);
+      const clusterId = Number(feature?.properties?.cluster_id);
+      if (!source?.getClusterExpansionZoom || !Number.isFinite(clusterId)) {
+        reject(new Error('cluster_expansion_unavailable'));
+        return;
+      }
+      source.getClusterExpansionZoom(clusterId, (error: unknown, zoom: number) => {
+        if (error) reject(error);
+        else resolve(zoom);
+      });
+    }),
   }), [id, mapCtx]);
   // react-map-gl handles `data` prop diffing internally and calls
   // mapbox-gl's source.setData when the prop changes. We do NOT manually
@@ -995,16 +1076,15 @@ export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ 
 });
 
 export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
-  const filterProps = filter ? { filter: filter as any } : {};
-  const paintStyle: Record<string, any> = {};
+  const supportedStyle: Record<string, any> = {};
   for (const [key, value] of Object.entries(style ?? {})) {
-    // Match LineLayer's compatibility boundary. GL JS v2 rejects the v3
-    // Standard-style emissive property and otherwise drops the whole puck
-    // layer; native RNMapbox continues to receive it through its own adapter.
+    // Native Standard uses this valid v11 paint property. GL JS v2 rejects
+    // it, so omit it only at the Web adapter boundary.
     if (key === 'circleEmissiveStrength') continue;
-    paintStyle[key] = value;
+    supportedStyle[key] = value;
   }
-  return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(paintStyle) as any} />;
+  const filterProps = filter ? { filter: filter as any } : {};
+  return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(supportedStyle) as any} />;
 }
 
 export function SymbolLayer({ id, style, __sourceId, filter }: LayerProps) {
@@ -1123,6 +1203,46 @@ export function MarkerView({ coordinate, children }: MarkerViewProps) {
 // mapboxAdapter.ts 里的 sprite/circle 是否 web-supported。
 const NoopComponent = () => null;
 
+function resolveWebImageUri(source: unknown): string | null {
+  if (typeof source === 'string') return source;
+  if (source && typeof source === 'object' && typeof (source as any).uri === 'string') {
+    return (source as any).uri;
+  }
+  return ReactNativeImage.resolveAssetSource(source as any)?.uri ?? null;
+}
+
+function WebImages({ images = {} }: { images?: Record<string, unknown>; children?: React.ReactNode }) {
+  const mapCtx = React.useContext(MapInstanceContext);
+  const entries = Object.entries(images)
+    .map(([name, source]) => [name, resolveWebImageUri(source)] as const)
+    .filter((entry): entry is readonly [string, string] => Boolean(entry[1]));
+  const signature = entries.map(([name, uri]) => `${name}:${uri}`).join('|');
+  useEffect(() => {
+    const map = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+    if (!map || entries.length === 0) return undefined;
+    let disposed = false;
+    const register = () => {
+      for (const [name, uri] of entries) {
+        if (map.hasImage?.(name)) continue;
+        map.loadImage?.(uri, (error: unknown, image: unknown) => {
+          if (disposed || error || !image || map.hasImage?.(name)) return;
+          try { map.addImage(name, image); } catch { /* style replaced mid-load */ }
+        });
+      }
+    };
+    map.on?.('style.load', register);
+    if (map.isStyleLoaded?.()) register();
+    return () => {
+      disposed = true;
+      map.off?.('style.load', register);
+    };
+    // The normalized signature is the image authority; callers commonly
+    // create a new object literal every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapCtx, signature]);
+  return null;
+}
+
 interface WebStyleImportProps {
   config?: Record<string, string | boolean>;
 }
@@ -1237,7 +1357,7 @@ export function makeWebMapboxAdapter() {
     ShapeSource,
     CircleLayer,
     SymbolLayer,
-    Images: NoopComponent,
+    Images: WebImages,
     Image: NoopComponent,
     MarkerView,
     // Native Mapbox v11 owns real imports. The v2 Web fallback applies the

@@ -1,0 +1,18 @@
+{
+  "schema": "cairnnz.o88.realtime-walk-diary.v1",
+  "frozen_at": "2026-10-21T15:20:00+08:00",
+  "label": "DELIBERATELY SIMULATED QA PEDESTRIAN JOURNEY — REALTIME PACING — NOT PHYSICAL TRAVEL",
+  "seed": 882021,
+  "speed_kmh": 4.8,
+  "origin": { "label": "A", "lat": 31.2341, "lng": 121.4312 },
+  "waypoints": [
+    { "label": "B", "lat": 31.2341, "lng": 121.43135, "intent": "short straight east leg" },
+    { "label": "C", "lat": 31.23422, "lng": 121.43135, "intent": "left turn north" },
+    { "label": "D", "lat": 31.23422, "lng": 121.43125, "intent": "poor-fix west backtrack" },
+    { "label": "E", "lat": 31.23422, "lng": 121.43135, "intent": "normal-signal retrace" },
+    { "label": "F", "lat": 31.23434, "lng": 121.43146, "intent": "north-east exit" }
+  ],
+  "stationary_seconds": 8,
+  "lost_signal_seconds": 5,
+  "separation_rule": "The frozen diary is traveler reference truth. The existing raw-GPS simulator independently generates provider observations; only the production acceptance pipeline may accept Activity and Memory points."
+}

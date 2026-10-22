@@ -34,6 +34,7 @@ const {
 } = require('../services/ownedCairnLibrary');
 const { synchronizePublicSubmission, withdrawPublication } = require('../services/publicPublication');
 const { captureCurrentMarkerRevision } = require('../services/cairnHistory');
+const { authorizedLegacyGroupInteraction } = require('../services/legacyCairnInteractionAuthorization');
 
 router.use(authenticate);
 
@@ -135,6 +136,8 @@ router.get('/', async (req, res) => {
               marker.lat, marker.lng, marker.alt, marker.permission, marker.approximate,
               marker.public_snapshot, marker.public_intent, marker.public_state,
               marker.publication_epoch, marker.content_revision,
+              marker.placement_accuracy_m, marker.placement_observed_at,
+              marker.placement_source, marker.placement_sample_count,
               CASE WHEN COALESCE(moderation.state,'available')<>'available'
                    THEN moderation.state ELSE (${logicalRevisionStateSql}) END AS content_state,
               (SELECT COUNT(*)
@@ -275,6 +278,8 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       client_cairn_id,
       origin_activity_client_id,
       type, text, lat, lng, alt, permission, approximate,
+      placement_accuracy_m, placement_observed_at,
+      placement_source, placement_sample_count,
     } = req.body;
 
     if (!type || lat == null || lng == null) {
@@ -295,6 +300,26 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       permission === PERMISSION.FRIEND ? PERMISSION.GROUP_LEGACY :
       permission || PERMISSION.PERSONAL;
     const approx = approximate ? 1 : 0;
+    const placementAccuracyM = placement_accuracy_m == null
+      ? null
+      : Number(Number(placement_accuracy_m).toFixed(2));
+    const placementObservedAt = placement_observed_at == null
+      ? null
+      : new Date(placement_observed_at);
+    const placementSource = placement_source ?? null;
+    const placementSampleCount = placement_sample_count ?? null;
+    if (placementObservedAt && placementObservedAt.getTime() > Date.now() + 5 * 60_000) {
+      return res.status(400).json({
+        error: 'Placement observation cannot be in the future.',
+        code: 'PLACEMENT_OBSERVED_AT_INVALID',
+      });
+    }
+    if (placementSource === 'activity' && !origin_activity_client_id) {
+      return res.status(400).json({
+        error: 'Activity placement requires an Activity origin.',
+        code: 'PLACEMENT_ACTIVITY_ORIGIN_REQUIRED',
+      });
+    }
 
     // v300 snapshot logic only applied to public — H1 now blocks the public
     // write path at the API layer, so the snapshot branch below is unreachable
@@ -335,8 +360,9 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       `INSERT INTO markers
          (user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
           type, text, lat, lng, alt, permission, approximate, public_snapshot,
+          placement_accuracy_m, placement_observed_at, placement_source, placement_sample_count,
           public_intent, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
        ON DUPLICATE KEY UPDATE
          id=LAST_INSERT_ID(id),
          origin_session_id=COALESCE(origin_session_id, VALUES(origin_session_id))`,
@@ -344,6 +370,7 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
         req.user.userId, client_cairn_id ?? null,
         origin_activity_client_id ?? null, originSessionId,
         type, text || '', lat, lng, alt ?? null, perm, approx, publicSnapshotJson,
+        placementAccuracyM, placementObservedAt, placementSource, placementSampleCount,
         perm === PERMISSION.PUBLIC ? 1 : 0,
       ]
     );
@@ -351,7 +378,9 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       `SELECT id, user_id, client_cairn_id, origin_activity_client_id, origin_session_id,
               type, text, lat, lng, alt, permission, audience_epoch, audience_changed_at,
               content_revision, public_intent, public_state, publication_epoch,
-              approximate, public_snapshot, created_at
+              approximate, public_snapshot,
+              placement_accuracy_m, placement_observed_at,
+              placement_source, placement_sample_count, created_at
        FROM markers WHERE id = ? AND user_id = ? FOR UPDATE`,
       [result.insertId, req.user.userId],
     );
@@ -362,7 +391,13 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
         stored.client_cairn_id === client_cairn_id &&
         (stored.origin_activity_client_id ?? null) === (origin_activity_client_id ?? null) &&
         Number(stored.lat) === Number(lat) && Number(stored.lng) === Number(lng) &&
-        (stored.alt == null ? null : Number(stored.alt)) === (alt == null ? null : Number(alt));
+        (stored.alt == null ? null : Number(stored.alt)) === (alt == null ? null : Number(alt)) &&
+        (stored.placement_accuracy_m == null ? null : Number(stored.placement_accuracy_m)) === placementAccuracyM &&
+        (stored.placement_observed_at == null ? null : new Date(stored.placement_observed_at).getTime())
+          === (placementObservedAt == null ? null : placementObservedAt.getTime()) &&
+        (stored.placement_source ?? null) === placementSource &&
+        (stored.placement_sample_count == null ? null : Number(stored.placement_sample_count))
+          === placementSampleCount;
       if (!sameImmutableFacts) {
         const mismatch = new Error('Cairn client identity was reused for different facts.');
         mismatch.code = 'CAIRN_IDENTITY_MISMATCH';
@@ -462,6 +497,12 @@ router.post('/', validateBody(schemas.marker.create), idempotency, async (req, r
       public_state: publicSubmission.state,
       publication_epoch: publicSubmission.publicationEpoch ?? Number(stored.publication_epoch ?? 0),
       content_revision: publicSubmission.contentRevision ?? Number(stored.content_revision ?? 1),
+      placement_accuracy_m: stored.placement_accuracy_m == null
+        ? null : Number(stored.placement_accuracy_m),
+      placement_observed_at: stored.placement_observed_at ?? null,
+      placement_source: stored.placement_source ?? null,
+      placement_sample_count: stored.placement_sample_count == null
+        ? null : Number(stored.placement_sample_count),
       created_at: stored.created_at,
       public_submission: publicSubmission,
     });
@@ -727,25 +768,28 @@ router.get('/:id/community-state', async (req, res) => {
   }
   try {
     const [[marker]] = await pool.execute(
-      `SELECT id, user_id, permission, helpful_count, report_count, status, hidden_at
+      `SELECT id, user_id, permission, content_revision,
+              helpful_count, report_count, status, hidden_at
          FROM markers WHERE id = ?`,
       [markerId],
     );
     if (!marker) return res.status(404).json({ error: 'Marker not found' });
-    // R17F5: enforce visibility. Owner can always read. Non-owner: reject
-    // personal markers (never their business) + hidden markers (moderator
-    // signal, don't leak).
+    // A sequential marker id, current friendship, or physical proximity is
+    // not content authority. Non-owners need a retained acquisition for the
+    // exact current Friends revision. Public revisions use cairn-memory's
+    // revision-scoped Thanks/report endpoints instead of this legacy path.
     const isOwner = String(marker.user_id) === String(req.user.userId);
     if (!isOwner) {
-      if (marker.permission === 'public') {
+      if (marker.permission !== 'group' || marker.status === 'hidden') {
         return res.status(404).json({ error: 'Marker not found' });
       }
-      if (marker.permission === 'personal') {
-        return res.status(404).json({ error: 'Marker not found' });
-      }
-      if (marker.status === 'hidden') {
-        return res.status(404).json({ error: 'Marker not found' });
-      }
+      const entitlement = await authorizedLegacyGroupInteraction(pool, {
+        viewerId: req.user.userId,
+        markerId,
+        ownerId: marker.user_id,
+        contentRevision: marker.content_revision,
+      });
+      if (!entitlement) return res.status(404).json({ error: 'Marker not found' });
     }
     const [voteRows] = await pool.execute(
       `SELECT type, reason FROM marker_votes WHERE marker_id = ? AND user_id = ?`,
@@ -781,18 +825,22 @@ router.get('/:id/interact-nonce', async (req, res) => {
   }
   try {
     const [[marker]] = await pool.execute(
-      `SELECT user_id, permission, status FROM markers WHERE id = ?`,
+      `SELECT user_id, permission, status, content_revision FROM markers WHERE id = ?`,
       [markerId],
     );
     if (!marker) return res.status(404).json({ error: 'Marker not found' });
     const isOwner = String(marker.user_id) === String(req.user.userId);
     if (!isOwner) {
-      if (marker.permission === 'public') {
+      if (marker.permission !== 'group' || marker.status === 'hidden') {
         return res.status(404).json({ error: 'Marker not found' });
       }
-      if (marker.permission === 'personal' || marker.status === 'hidden') {
-        return res.status(404).json({ error: 'Marker not found' });
-      }
+      const entitlement = await authorizedLegacyGroupInteraction(pool, {
+        viewerId: req.user.userId,
+        markerId,
+        ownerId: marker.user_id,
+        contentRevision: marker.content_revision,
+      });
+      if (!entitlement) return res.status(404).json({ error: 'Marker not found' });
     }
     const issued = nonceUtil.issue(req.user.userId, markerId);
     res.json({ marker_id: markerId, ...issued });
@@ -869,7 +917,8 @@ router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
     await conn.beginTransaction();
 
     const [[marker]] = await conn.execute(
-      `SELECT id, user_id, lat, lng, helpful_count, report_count, status, permission
+      `SELECT id, user_id, lat, lng, helpful_count, report_count, status,
+              permission, content_revision
          FROM markers WHERE id = ? FOR UPDATE`,
       [markerId],
     );
@@ -887,22 +936,21 @@ router.post('/:id/vote', voteRateLimit, idempotency, async (req, res) => {
       await conn.rollback();
       return res.status(404).json({ error: 'Marker not found' });
     }
-    // Controlled Public v1 has its own encounter-bound interaction namespace.
-    // Sequential marker IDs and a legacy proximity nonce must not bypass it.
-    if (marker.permission === 'public' && String(marker.user_id) !== String(userId)) {
-      await conn.rollback();
-      return res.status(404).json({ error: 'Marker not found' });
-    }
-    // Sprint 6 R83 BUG-4: defense-in-depth against permission='personal'
-    // votes by non-owners. R17F5 gated /interact-nonce so a non-owner
-    // shouldn't get a valid nonce for a personal marker in the first
-    // place, but permission-flip race (owner marks public → nonce
-    // issued → owner flips to personal → non-owner still holds the
-    // nonce) or leaked nonce would bypass. Mirror the R17F5 gate here:
-    // non-owner + personal marker = 404 (same as R17F5).
-    if (marker.permission === 'personal' && String(marker.user_id) !== String(userId)) {
-      await conn.rollback();
-      return res.status(404).json({ error: 'Marker not found' });
+    if (String(marker.user_id) !== String(userId)) {
+      if (marker.permission !== 'group') {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Marker not found' });
+      }
+      const entitlement = await authorizedLegacyGroupInteraction(conn, {
+        viewerId: userId,
+        markerId,
+        ownerId: marker.user_id,
+        contentRevision: marker.content_revision,
+      });
+      if (!entitlement) {
+        await conn.rollback();
+        return res.status(404).json({ error: 'Marker not found' });
+      }
     }
     // Sprint 6 round-38 R38B1: reject votes on markers whose owner has
     // soft-deleted their account. Pre-fix, the marker row survived the

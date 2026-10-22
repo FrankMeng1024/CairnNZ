@@ -25,6 +25,7 @@ import { useWeatherStore, NZ_TEST_CITIES } from '../store/useWeatherStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useMarkerStore } from '../store/useMarkerStore';
 import { useScenicTimeState } from '../hooks/useScenicTimeState';
+import { scheduleVisibleFrame, useAppIsActive } from '../hooks/useAppIsActive';
 import { resolveCurrentCountry } from '../services/countryService';
 import { getHomeBackground, getWeatherReviewBackground } from '../utils/homeBackground';
 import { SUNNY_AMBIENT_MOTION_ENABLED } from '../config/homeVisual';
@@ -130,6 +131,7 @@ export function HomeScreen() {
   const presentationViewerId = useCairnPresentationStore(s => s.viewerId);
   const presentationPendingCount = useCairnPresentationStore(s => s.pendingGroups.length);
   const presentationGroup = useCairnPresentationStore(s => s.activeGroup);
+  const appIsActive = useAppIsActive();
   const presentationSurface = useCairnPresentationStore(s => s.activeSurface);
   const presentationBlocked = useCairnPresentationStore(s => s.presentationBlocked);
   const memoryUnreadCount = useCairnPresentationStore(s => s.unreadCount);
@@ -293,7 +295,7 @@ export function HomeScreen() {
   const showSaveRecovery = Boolean(saveLostSessionId
     && saveLostPayload
     && String(saveLostPayload.userId) === currentUserId);
-  const hasDiscoverySurface = isHomeFocused && presentationSurface === 'home' && !!presentationGroup;
+  const hasDiscoverySurface = isHomeFocused && appIsActive && presentationSurface === 'home' && !!presentationGroup;
   const homeWindow = resolveHomeStateWindow({
     saveRecovery: showSaveRecovery,
     activeOrRecoverable: showUnfinished,
@@ -321,20 +323,22 @@ export function HomeScreen() {
   }, [currentUserId]));
 
   useEffect(() => {
-    if (!isHomeFocused || showPriorityActivity || presentationBlocked) {
+    if (!isHomeFocused || !appIsActive || showPriorityActivity || presentationBlocked) {
       useCairnPresentationStore.getState().release('home');
       return;
     }
     if (presentationPendingCount > 0) useCairnPresentationStore.getState().claim('home');
-  }, [isHomeFocused, presentationBlocked, presentationPendingCount, presentationViewerId, showPriorityActivity]);
+  }, [appIsActive, isHomeFocused, presentationBlocked, presentationPendingCount, presentationViewerId, showPriorityActivity]);
 
   useEffect(() => {
     if (!showDiscovery || !presentationGroup) return undefined;
-    const timer = setTimeout(() => {
-      void useCairnPresentationStore.getState().acknowledgeActive('home');
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [presentationGroup?.eventThroughId, presentationGroup?.token, showDiscovery]);
+    const cancelFrame = scheduleVisibleFrame(() => {
+      void useCairnPresentationStore.getState().markActiveDisplayed('home').then(displayed => {
+        if (displayed) void useCairnPresentationStore.getState().acknowledgeActive('home');
+      });
+    });
+    return cancelFrame;
+  }, [appIsActive, presentationGroup?.eventThroughId, presentationGroup?.token, showDiscovery]);
   const displayedMode = showLiveActivity ? liveActivityMode : topUnfinished?.activityMode;
   const displayedDistanceM = showLiveActivity ? liveDistanceM : (topUnfinished?.distanceM ?? 0);
   const displayedDurationS = showLiveActivity ? liveDurationS : (topUnfinished?.durationS ?? 0);

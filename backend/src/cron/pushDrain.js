@@ -23,12 +23,18 @@ const PushNotification = require('../models/PushNotification');
 async function runDrain({ verbose = false } = {}) {
   try {
     const stats = await PushNotification.sendPending({ batchSize: 100 });
+    let receipts = { checked: 0, deliveryFailed: 0, tokensRetired: 0 };
+    try {
+      receipts = await PushNotification.checkPendingReceipts({ batchSize: 500 });
+    } catch (error) {
+      if (verbose) console.warn(`[cron/pushDrain] receipt check deferred: ${error.message}`);
+    }
     if (verbose && stats.attempted > 0) {
       console.log(
-        `[cron/pushDrain] attempted=${stats.attempted} sent=${stats.sent} dropped=${stats.dropped} failed=${stats.failed}`
+        `[cron/pushDrain] attempted=${stats.attempted} sent=${stats.sent} dropped=${stats.dropped} failed=${stats.failed} receipts=${receipts.checked} receiptFailed=${receipts.deliveryFailed}`
       );
     }
-    return stats;
+    return { ...stats, ...receipts };
   } catch (err) {
     console.error('[cron/pushDrain] error:', err.message);
     return { attempted: 0, sent: 0, dropped: 0, failed: 0, error: err.message };

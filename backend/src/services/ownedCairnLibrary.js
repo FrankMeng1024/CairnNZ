@@ -77,6 +77,8 @@ function buildOwnedCairnLibraryQuery({ userId, limit, query, cursor }) {
                  marker.lat, marker.lng, marker.alt, marker.permission, marker.approximate,
                  marker.public_snapshot, marker.public_intent, marker.public_state,
                  marker.publication_epoch, marker.content_revision,
+                 marker.placement_accuracy_m, marker.placement_observed_at,
+                 marker.placement_source, marker.placement_sample_count,
                  CASE WHEN COALESCE(moderation.state,'available')<>'available'
                       THEN moderation.state ELSE (${logicalRevisionStateSql}) END AS content_state,
                  (SELECT COUNT(*)

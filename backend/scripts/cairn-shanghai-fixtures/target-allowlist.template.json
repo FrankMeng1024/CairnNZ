@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "approved_targets": [
+    {
+      "server_uuid": "REPLACE_WITH_READ_ONLY_INSPECT_TARGET_OUTPUT",
+      "database": "REPLACE_WITH_EXACT_DATABASE_NAME",
+      "realm": "isolated",
+      "apply_allowed": false,
+      "cleanup_allowed": false,
+      "approval_note": "Authorize creation/update and cleanup independently only after target ownership is verified. A cleanup-only renewal may set cleanup_allowed without re-enabling apply_allowed."
+    }
+  ]
+}

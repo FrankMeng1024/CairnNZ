@@ -167,6 +167,21 @@ describe('Memory evidence rendering continuity', () => {
       .toContain(`|${MEMORY_FOG_GEOMETRY_REVISION}|`);
   });
 
+  test('metadata-only point revisions retain the geometry cache signature', () => {
+    const points = [
+      { cid: 'original', lat: -41, lng: 174, ts: 1 },
+      { cid: 'second', lat: -41.001, lng: 174.001, ts: 2 },
+    ];
+    const metadataOnly = points.map(point => ({
+      ...point,
+      cid: `${point.cid}-resynced`,
+      ts: point.ts + 10_000,
+    }));
+
+    expect(memoryFogContentSignature('viewer|self', metadataOnly, []))
+      .toBe(memoryFogContentSignature('viewer|self', points, []));
+  });
+
   test.each(['day', 'sunset', 'night'])('%s Mine + Friends keeps the exact Mine authority when no friend cells exist', theme => {
     const mine = memoryFogRenderAuthority('viewer-a', 'self', `ready:${theme}`, 0);
     expect(memoryFogRenderAuthority('viewer-a', 'combined', `loading:${theme}`, 0)).toBe(mine);

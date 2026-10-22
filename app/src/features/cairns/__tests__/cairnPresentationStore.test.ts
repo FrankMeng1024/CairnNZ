@@ -47,6 +47,8 @@ function pending(eventThroughId = '11', cairnCount = 1): any {
       unannounced_updated_event_count: 0,
       event_count: cairnCount,
       updated_event_count: 0,
+      friends_cairn_count: cairnCount,
+      public_cairn_count: 0,
     }],
   });
 }
@@ -66,6 +68,8 @@ function pendingGroups(counts: number[]): any {
       unannounced_updated_event_count: 0,
       event_count: cairnCount,
       updated_event_count: 0,
+      friends_cairn_count: index % 2 === 0 ? cairnCount : 0,
+      public_cairn_count: index % 2 === 1 ? cairnCount : 0,
     })),
   });
 }
@@ -112,6 +116,36 @@ describe('Cairn presentation coordinator', () => {
       activeGroup: { token: 'visit:alpha', eventThroughId: '19', cairnCount: 3 },
     });
     expect(useCairnPresentationStore.getState().pendingGroups).toEqual([]);
+  });
+
+  test('one stable group receives principal attention once across 1 → 3 → 6 membership', async () => {
+    mockFetch.mockResolvedValueOnce(pending('11', 1)).mockResolvedValueOnce(response(200));
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+    expect(useCairnPresentationStore.getState().activePrincipalAttention).toBe(true);
+    await expect(useCairnPresentationStore.getState().markActiveDisplayed('home')).resolves.toBe(true);
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+    useCairnPresentationStore.getState().release('home');
+
+    mockFetch.mockResolvedValueOnce(pending('19', 3));
+    await useCairnPresentationStore.getState().refresh();
+    useCairnPresentationStore.getState().claim('home');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeGroup: { token: 'visit:alpha', cairnCount: 3 }, activePrincipalAttention: false,
+    });
+    await useCairnPresentationStore.getState().acknowledgeActive('home');
+    useCairnPresentationStore.getState().release('home');
+
+    // The previous acknowledgement is intentionally retryable after its
+    // dispatch failed; refresh drains that durable ACK before fetching the
+    // newly expanded group.
+    mockFetch.mockResolvedValueOnce(response(200)).mockResolvedValueOnce(pending('27', 6));
+    await useCairnPresentationStore.getState().refresh();
+    useCairnPresentationStore.getState().claim('home');
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      activeGroup: { token: 'visit:alpha', cairnCount: 6 }, activePrincipalAttention: false,
+    });
+    expect(mockValues.get(`${__cairnPresentationTest.cachePrefix}viewer-a`)).toContain('"visit:alpha":true');
   });
 
   test('acknowledgement does not erase the currently rendered summary on refresh', async () => {
@@ -212,6 +246,7 @@ describe('Cairn presentation coordinator', () => {
       ['/api/cairn-memory/presentation/32/announced', '12'],
       ['/api/cairn-memory/presentation/33/announced', '13'],
     ]);
+    expect(useCairnPresentationStore.getState().activeGroup?.sourceAudience).toBe('mixed');
   });
 
   test('leaving Home before announcement returns every member without replaying acknowledged members', async () => {
@@ -395,7 +430,11 @@ describe('Cairn presentation coordinator', () => {
     }));
     await useCairnPresentationStore.getState().refreshAcquiredMap();
     expect(useCairnPresentationStore.getState().acquiredMarkers).toEqual([
-      { markerId: '1', lat: -41.28, lng: 174.77, unread: true, acquiredAt: null, sourceAudience: null, authorName: null, currentFriend: false },
+      {
+        markerId: '1', lat: -41.28, lng: 174.77, unread: true, acquiredAt: null,
+        sourceAudience: null, authorName: null, currentFriend: false,
+        title: null, preview: null, revisionCount: 1,
+      },
     ]);
   });
 });

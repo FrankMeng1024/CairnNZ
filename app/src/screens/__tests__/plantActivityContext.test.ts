@@ -167,4 +167,25 @@ describe('Plant active-Activity location authority', () => {
 
     expect(resolveInitialPlantContext(tracking)).toMatchObject({ step: 'gps', fromActivity: false });
   });
+
+  test('an Activity fix with unusable accuracy reacquires GPS instead of failing at commit', () => {
+    const wallNow = 1_800_000_000_000;
+    const tracking = {
+      status: 'tracking',
+      locationProviderSource: 'real',
+      locationAvailable: true,
+      lastCoordinate: { lat: -41.2864, lng: 174.7763, accuracy: 140 },
+      lastCoordinateTime: wallNow - 1_000,
+      sessionId: 'real-activity',
+      ownerUserId: 'owner-a',
+      liveOwnerGeneration: 'real-generation',
+    } as const;
+    mockActivityFreshnessNow.mockReturnValue(wallNow);
+
+    expect(resolveInitialPlantContext(tracking)).toMatchObject({
+      step: 'gps',
+      fromActivity: true,
+      activityContext: { clientActivityId: 'real-activity' },
+    });
+  });
 });

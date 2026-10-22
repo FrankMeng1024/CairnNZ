@@ -4,8 +4,8 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
+const User = require('../../src/models/User');
 const { chromium } = require(path.resolve(__dirname, '../../../app/node_modules/playwright'));
 
 const apiUrl = process.env.HARNESS_API_URL;
@@ -23,10 +23,6 @@ const dbConfig = {
 if (!apiUrl || !jwtSecret) throw new Error('HARNESS_API_URL and JWT_SECRET are required');
 fs.mkdirSync(outputDir, { recursive: true });
 
-function tokenFor(id, label) {
-  return jwt.sign({ userId: String(id), token_version: 0, jti: `connected-${label}-${crypto.randomUUID()}` }, jwtSecret, { expiresIn: '2h' });
-}
-
 async function api(actor, pathname, { method = 'GET', body, expected } = {}) {
   const response = await fetch(`${apiUrl}${pathname}`, {
     method,
@@ -35,6 +31,18 @@ async function api(actor, pathname, { method = 'GET', body, expected } = {}) {
   });
   const payload = await response.json().catch(() => null);
   if (expected !== undefined) assert.equal(response.status, expected, `${method} ${pathname}: ${JSON.stringify(payload)}`);
+  return payload;
+}
+
+async function login(email, password) {
+  const response = await fetch(`${apiUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const payload = await response.json().catch(() => null);
+  assert.equal(response.status, 200, `POST /api/auth/login: ${JSON.stringify(payload)}`);
+  assert.ok(payload?.token);
   return payload;
 }
 
@@ -90,15 +98,21 @@ async function main() {
   let browser;
   try {
     const actors = {};
+    const loginPassword = 'Connected-O88-review-passphrase-2026!';
+    const passwordHash = await User.hashPassword(loginPassword);
     for (const label of ['A', 'B', 'M']) {
+      const email = `connected-${label.toLowerCase()}-${process.env.HARNESS_RUN_ID}@example.org`;
       const [created] = await db.execute(
         `INSERT INTO users
           (name,email,password_hash,date_of_birth,public_cairn_operator,activity_source_realm)
          VALUES (?,?,?,?,?,'isolated_qa')`,
-        [`Connected ${label}`, `connected-${label.toLowerCase()}-${process.env.HARNESS_RUN_ID}@example.org`,
-          'synthetic-no-login', '1990-01-01', label === 'M' ? 1 : 0],
+        [`Connected ${label}`, email, passwordHash, '1990-01-01', label === 'M' ? 1 : 0],
       );
-      actors[label] = { label, id: String(created.insertId), token: tokenFor(created.insertId, label) };
+      const signedIn = await login(email, loginPassword);
+      assert.equal(String(signedIn.user.id), String(created.insertId));
+      actors[label] = { label, id: String(created.insertId), email, token: signedIn.token };
+      const me = await api(actors[label], '/api/auth/me', { expected: 200 });
+      assert.equal(String(me.user.id), String(created.insertId));
     }
     const place = { lat: -41.2867, lng: 174.7763 };
     const ownerActivity = await completeActivity(actors.A, place, Date.now() - 60_000);
@@ -109,6 +123,7 @@ async function main() {
     let createdMarkerId = null;
     let createdPublication = null;
     let publicTransportOffline = false;
+    let cairnMemoryTransportOffline = false;
 
     browser = await chromium.launch({ headless: true, executablePath: chromePath, args: ['--disable-web-security'] });
     const context = await browser.newContext({
@@ -130,14 +145,21 @@ async function main() {
       const request = route.request();
       const requested = new URL(request.url());
       const pathname = `${requested.pathname}${requested.search}`;
+      if (requested.pathname === '/api/edit-diag') {
+        return route.fulfill({ status: 204, body: '' });
+      }
       if (publicTransportOffline && requested.pathname.startsWith('/api/public-cairns')) {
+        requests.push({ actorId: activeActor.id, method: request.method(), pathname, offline: true });
+        return route.abort('internetdisconnected');
+      }
+      if (cairnMemoryTransportOffline && requested.pathname.startsWith('/api/cairn-memory')) {
         requests.push({ actorId: activeActor.id, method: request.method(), pathname, offline: true });
         return route.abort('internetdisconnected');
       }
       const response = await fetch(`${apiUrl}${pathname}`, {
         method: request.method(),
         headers: {
-          Authorization: `Bearer ${activeActor.token}`,
+          ...(request.headers().authorization ? { Authorization: request.headers().authorization } : {}),
           ...(request.postData() == null ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(request.postData() == null ? {} : { body: request.postData() }),
@@ -170,27 +192,21 @@ async function main() {
     const setActor = async actor => {
       activeActor = actor;
       await page.evaluate(user => {
-        const stores = globalThis.__cairnStores;
-        stores.usePublicCairnStore.getState().clearForAccountBoundary();
-        stores.useMemoryStore.getState().resetForUserSwitch();
-        stores.useTrackingStore.setState({
-          status: 'idle', sessionId: null, ownerUserId: null,
-          locationAvailable: false, lastCoordinate: null, lastCoordinateTime: null,
-        });
-        localStorage.setItem('cairn_jwt', 'connected-review-token-routed-by-harness');
+        localStorage.setItem('cairn_jwt', user.token);
+        localStorage.setItem('cairn_jwt_owner_v1', user.id);
         localStorage.setItem('cairn_onboarding_v1_done', 'true');
         localStorage.setItem(`cairn_onboarding_v1_done_${user.id}`, 'true');
-        stores.useAppStore.setState({
-          user: { ...user, createdAt: '2026-01-01T00:00:00.000Z', hasPassword: true, providers: ['email'] },
-          isLoggedIn: true, hydrated: true, sessionExpired: false,
-        });
+      }, { id: actor.id, token: actor.token });
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
+      await waitBridge();
+      await page.waitForFunction(expected => String(globalThis.__cairnStores.useAppStore.getState().user?.id ?? '') === expected, actor.id);
+      await page.evaluate(() => {
+        const stores = globalThis.__cairnStores;
         stores.useMemoryStore.setState({ lastWatcherFix: { lat: -41.2867, lng: 174.7763, ts: Date.now() } });
-      }, { id: actor.id, name: `Connected ${actor.label}`, email: `connected-${actor.label.toLowerCase()}@example.org` });
-      await page.evaluate(async userId => {
-        await globalThis.__cairnStores.useMarkerStore.getState().hydrate(userId);
-        await globalThis.__cairnStores.usePublicCairnStore.getState().initialize(userId);
-      }, actor.id);
-      await page.waitForFunction(expected => globalThis.__cairnStores.useAppStore.getState().user?.id === expected, actor.id);
+        if (stores.navigationRef?.isReady?.()) {
+          stores.navigationRef.reset({ index: 0, routes: [{ name: 'Home' }] });
+        }
+      });
       await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Home');
     };
 
@@ -200,17 +216,36 @@ async function main() {
     await page.evaluate(({ activityId, lat, lng }) => {
       globalThis.__cairnStores.useTrackingStore.setState({
         status: 'tracking', sessionId: activityId, ownerUserId: globalThis.__cairnStores.useAppStore.getState().user.id,
+        liveOwnerGeneration: 'o88-connected-owner-generation', activityMode: 'hiking',
         locationAvailable: true, lastCoordinate: { lat, lng, accuracy: 8 },
         lastCoordinateTime: Date.now(), locationProviderSource: 'native',
       });
     }, { activityId: ownerActivity.clientActivityId, ...place });
-    await page.getByText('Leave a Cairn', { exact: true }).click();
+    await page.evaluate(activityId => globalThis.__cairnStores.navigationRef.navigate('Plant', {
+      origin: {
+        kind: 'activity', clientActivityId: activityId,
+        ownerGeneration: 'o88-connected-owner-generation', activityMode: 'hiking',
+      },
+    }), ownerActivity.clientActivityId);
     await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Plant');
-    await page.getByLabel('Title').fill('Connected tōtara note');
-    await page.getByLabel('Note').fill('A real review API journey with Unicode and <script>plain text only</script>.');
+    await page.getByRole('textbox', { name: 'Short title' }).fill('Connected tōtara note');
+    await page.getByRole('textbox', { name: 'Cairn note' }).fill('A real review API journey with Unicode and <script>plain text only</script>.');
+    try {
+      await page.waitForFunction(() => globalThis.__cairnStores.usePublicCairnStore.getState().enabled === true, null, { timeout: 20_000 });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => ({
+        route: globalThis.__cairnStores.getCurrentRoute(),
+        publicCairn: globalThis.__cairnStores.usePublicCairnStore.getState(),
+        tracking: globalThis.__cairnStores.useTrackingStore.getState(),
+        body: document.body.innerText.slice(0, 6_000),
+      }));
+      fs.writeFileSync(path.join(outputDir, 'public-capability-failure.json'), `${JSON.stringify({ diagnostic, requests, runtimeErrors }, null, 2)}\n`);
+      await page.screenshot({ path: path.join(outputDir, 'public-capability-failure.png') });
+      throw error;
+    }
     await page.getByLabel('Visibility Public').click();
-    await page.getByRole('button', { name: 'Plant Cairn' }).click();
-    await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Home', null, { timeout: 20_000 });
+    await page.getByTestId('plant-submit').click();
+    await page.getByTestId('plant-success-modal').waitFor({ state: 'visible', timeout: 20_000 });
     for (let attempt = 0; attempt < 200 && !createdMarkerId; attempt += 1) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -223,10 +258,14 @@ async function main() {
       }));
       fs.writeFileSync(path.join(outputDir, 'owner-save-failure.json'), `${JSON.stringify({ diagnostic, requests, runtimeErrors }, null, 2)}\n`);
       await page.screenshot({ path: path.join(outputDir, 'owner-save-failure.png') });
-      throw new Error('Normal Plant returned Home without an observed committed marker response.');
+      throw new Error('Normal Plant showed no committed marker response.');
     }
     assert.equal(createdPublication?.state, 'pending');
     await capture('01-owner-normal-public-save');
+    await page.getByTestId('plant-success-view').click();
+    await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'MarkerDetail');
+    await page.getByTestId('owned-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
+    await capture('01b-owner-real-detail-after-save');
 
     const pending = await api(actors.M, '/api/public-cairns/operator/submissions?state=pending&limit=50', { expected: 200 });
     const submission = pending.submissions.find(item => String(item.marker_id) === createdMarkerId);
@@ -238,60 +277,165 @@ async function main() {
 
     await new Promise(resolve => setTimeout(resolve, 16_000));
     const viewerActivity = await completeActivity(actors.B, place, Date.now() - 15_000, [0, 15_000]);
-    const encounter = await api(actors.B, '/api/public-cairns/encounters/verify', {
-      method: 'POST', expected: 200, body: { source_activity_client_id: viewerActivity.clientActivityId },
-    });
-    assert.ok(encounter.encountered_marker_ids.includes(createdMarkerId));
-
     await setActor(actors.B);
     await page.getByText('Memory', { exact: true }).last().click();
     await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Memory', null, { timeout: 20_000 });
     const gotIt = page.getByText('Got it', { exact: true }).last();
     if (await gotIt.isVisible().catch(() => false)) await gotIt.click();
-    await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()), null, { timeout: 20_000 });
-    await page.getByTestId(`public-cairn-card-${createdMarkerId}`).waitFor({ state: 'visible', timeout: 20_000 });
-    await capture('02-viewer-actual-scene-card');
-    await page.getByTestId(`public-cairn-card-${createdMarkerId}`).click();
-    await page.getByTestId('public-cairn-detail').waitFor({ state: 'visible', timeout: 20_000 });
-    await page.getByText('PUBLIC CAIRN · READ ONLY', { exact: true }).waitFor({ state: 'visible' });
-    await capture('03-viewer-actual-readonly-detail');
-    await page.getByTestId('public-thanks').click();
-    await page.getByText('Thanks sent', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
-    await page.getByLabel('Report Cairn').click();
-    await page.getByText('unsafe', { exact: true }).click();
-    await page.getByLabel('Report context').fill('Connected synthetic review report.');
-    await page.getByTestId('public-report-submit').click();
-    await page.getByText('Report received.', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
-    await capture('04-viewer-actual-thanks-report');
-    await page.getByLabel('Close').last().click();
+    await page.waitForTimeout(1_500);
+    const acceptedCameraFix = {
+      lat: viewerActivity.points[viewerActivity.points.length - 1].lat,
+      lng: viewerActivity.points[viewerActivity.points.length - 1].lng,
+      accuracyM: viewerActivity.points[viewerActivity.points.length - 1].acc,
+      ts: Date.now(),
+    };
+    await page.evaluate(fix => {
+      const stores = globalThis.__cairnStores;
+      const ownerId = String(stores.useAppStore.getState().user?.id ?? '');
+      stores.useMemoryStore.getState().setLastWatcherFix(
+        fix.lat, fix.lng, fix.ts, fix.accuracyM, 'real', ownerId,
+      );
+    }, acceptedCameraFix);
+    await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()), null, { timeout: 60_000 });
 
-    await api(actors.A, `/api/markers/${createdMarkerId}`, {
-      method: 'PUT', expected: 200, body: { permission: 'personal' },
+    // Create the real acquisition only after the destination screen and its
+    // own transient blockers are stable, mirroring a Cairn found mid-journey.
+    const encounter = await api(actors.B, '/api/cairn-memory/discover', {
+      method: 'POST', expected: 200, body: {},
     });
-    await page.evaluate(() => globalThis.__cairnStores.usePublicCairnStore.getState().refreshScene());
-    await page.getByText('Public Cairn unavailable', { exact: true }).waitFor({ state: 'visible', timeout: 15_000 });
-    await capture('05-viewer-learned-withdrawal');
+    const acquired = encounter.acquired.find(item => String(item.marker_id) === createdMarkerId);
+    assert.ok(acquired, JSON.stringify(encounter));
+    const presentationGroupId = String(acquired.presentation_group_id);
+    const pendingPresentation = await api(actors.B, '/api/cairn-memory/presentation/pending', { expected: 200 });
+    assert.ok(pendingPresentation.groups.some(item => String(item.id) === presentationGroupId));
+    const exactGroup = await api(actors.B, `/api/cairn-memory/presentation/${presentationGroupId}/items`, { expected: 200 });
+    assert.equal(exactGroup.items.length, 1);
+    assert.equal(String(exactGroup.items[0].marker_id), createdMarkerId);
+    const acquiredRevisionId = String(exactGroup.items[0].revision_id);
+    await page.evaluate(async () => globalThis.__cairnStores.useCairnPresentationStore.getState().refresh());
+    const encounterCard = page.getByTestId(/^walking-discovery-group-/);
+    try {
+      await encounterCard.waitFor({ state: 'visible', timeout: 30_000 });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => ({
+        route: globalThis.__cairnStores.getCurrentRoute(),
+        presentation: globalThis.__cairnStores.useCairnPresentationStore.getState(),
+        memory: globalThis.__cairnStores.useMemoryStore.getState(),
+        body: document.body.innerText.slice(0, 8_000),
+      }));
+      fs.writeFileSync(path.join(outputDir, 'retained-encounter-failure.json'), `${JSON.stringify({ diagnostic, pendingPresentation, exactGroup, requests, runtimeErrors }, null, 2)}\n`);
+      await page.screenshot({ path: path.join(outputDir, 'retained-encounter-failure.png') });
+      throw error;
+    }
+    await capture('02-viewer-real-retained-encounter');
+    await page.getByLabel('Open found Cairn').click();
+    await page.waitForFunction(({ markerId, revisionId }) => {
+      const route = globalThis.__cairnStores.navigationRef.getCurrentRoute();
+      return route?.name === 'AcquiredCairnDetail'
+        && String(route?.params?.markerId ?? '') === markerId
+        && String(route?.params?.revisionId ?? '') === revisionId;
+    }, { markerId: createdMarkerId, revisionId: acquiredRevisionId }, { timeout: 20_000 });
+    await page.getByTestId('acquired-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
+    await capture('03-viewer-real-exact-acquired-revision');
+    const thanks = page.getByText('Thanks', { exact: true });
+    await thanks.waitFor({ state: 'visible' });
+    await page.waitForTimeout(500);
+    await thanks.click();
+    await page.getByText('Thanked', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+    await capture('04-viewer-real-thanks');
 
-    publicTransportOffline = true;
+    await page.evaluate(markerId => globalThis.__cairnStores.navigationRef.reset({
+      index: 0, routes: [{ name: 'AllCairns', params: { initialSection: 'found', markerIds: [markerId] } }],
+    }), createdMarkerId);
+    await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'AllCairns');
+    await page.getByTestId(`found-cairn-row-${createdMarkerId}`).waitFor({ state: 'visible', timeout: 20_000 });
+    await capture('05-viewer-real-found-library');
+    await page.getByTestId(`found-cairn-row-${createdMarkerId}`).click();
+    await page.getByTestId('acquired-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
+    await page.getByTestId('acquired-cairn-paper').getByText('Connected tōtara note', { exact: true }).waitFor({ state: 'visible' });
+    await capture('06-viewer-real-history-before-owner-update');
+
+    await setActor(actors.A);
+    await page.evaluate(() => globalThis.__cairnStores.navigationRef.reset({
+      index: 0, routes: [{ name: 'AllCairns', params: { initialSection: 'left' } }],
+    }));
+    await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'AllCairns');
+    const ownedClientId = await page.evaluate(serverId => {
+      const markers = globalThis.__cairnStores.useMarkerStore.getState().markers;
+      return markers.find(item => String(item.serverCairnId ?? '') === serverId)?.id ?? null;
+    }, createdMarkerId);
+    assert.ok(ownedClientId);
+    await page.getByTestId(`all-cairns-row-${ownedClientId}`).waitFor({ state: 'visible', timeout: 20_000 });
+    await page.getByTestId(`all-cairns-row-${ownedClientId}`).click();
+    await page.getByTestId('owned-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
+    await page.getByTestId('cairn-edit-open').click();
+    await page.getByRole('textbox', { name: 'Cairn note' }).fill('This real API edit creates a second page without rewriting the acquired first page.');
+    await page.getByTestId('cairn-edit-save').click();
+    await page.getByTestId('cairn-edit-sheet').waitFor({ state: 'hidden', timeout: 20_000 });
+    await page.getByTestId('owned-cairn-paper').getByText('This real API edit creates a second page without rewriting the acquired first page.', { exact: true }).waitFor({ state: 'visible' });
+    await capture('07-owner-real-update-new-page');
+    const [[afterEdit]] = await db.execute(
+      'SELECT content_revision,text,permission FROM markers WHERE id=? AND user_id=?',
+      [createdMarkerId, actors.A.id],
+    );
+    assert.equal(Number(afterEdit.content_revision), 2);
+    assert.match(String(afterEdit.text), /second page/);
+
+    await page.getByTestId('cairn-delete-open').click();
+    await page.getByTestId('cairn-delete-confirmation').waitFor({ state: 'visible' });
+    // React Native Web reports the transparent Modal subtree visible before
+    // its fade has reached the stable presentation frame. Evidence must show
+    // the decision surface users read, not a compositor midpoint.
+    await page.waitForTimeout(500);
+    await capture('08-owner-real-withdraw-confirmation');
+    await page.getByTestId('cairn-delete-confirm').click();
+    await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() !== 'MarkerDetail', null, { timeout: 20_000 });
+    const [[afterDelete]] = await db.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM markers WHERE id=?) AS marker_n,
+         (SELECT COUNT(*) FROM cairn_revisions WHERE marker_id=?) AS revision_n,
+         (SELECT COUNT(*) FROM cairn_acquisitions WHERE marker_id=? AND viewer_id=? AND removed_at IS NULL) AS retained_n`,
+      [createdMarkerId, createdMarkerId, createdMarkerId, actors.B.id],
+    );
+    assert.equal(Number(afterDelete.marker_n), 0);
+    // Only acquired/published snapshots enter retained history. The owner's
+    // just-edited pending v2 must not fabricate a reader entitlement.
+    assert.equal(Number(afterDelete.revision_n), 1);
+    assert.equal(Number(afterDelete.retained_n), 1);
+
+    await setActor(actors.B);
+    await page.evaluate(markerId => globalThis.__cairnStores.navigationRef.reset({
+      index: 0, routes: [{ name: 'AllCairns', params: { initialSection: 'found', markerIds: [markerId] } }],
+    }), createdMarkerId);
+    await page.getByTestId(`found-cairn-row-${createdMarkerId}`).waitFor({ state: 'visible', timeout: 20_000 });
+    await page.getByTestId(`found-cairn-row-${createdMarkerId}`).click();
+    await page.getByTestId('acquired-cairn-paper').getByText('Connected tōtara note', { exact: true }).waitFor({ state: 'visible', timeout: 20_000 });
+    assert.equal(await page.getByTestId('acquired-cairn-paper').getByText('This real API edit creates a second page without rewriting the acquired first page.', { exact: true }).isVisible().catch(() => false), false);
+    await capture('09-viewer-retained-v1-after-owner-withdrawal');
+
+    cairnMemoryTransportOffline = true;
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
     await waitBridge();
-    await setActor(actors.B);
-    const durableAbsent = await page.evaluate(markerId => {
-      const state = globalThis.__cairnStores.usePublicCairnStore.getState();
-      return !state.entries.some(item => item.id === markerId) && !state.details[markerId];
-    }, createdMarkerId);
-    assert.equal(durableAbsent, true);
-    await capture('06-viewer-offline-reload-no-resurrection');
-    publicTransportOffline = false;
+    await page.evaluate(({ markerId, revisionId }) => globalThis.__cairnStores.navigationRef.reset({
+      index: 0, routes: [{ name: 'AcquiredCairnDetail', params: { markerId, revisionId } }],
+    }), { markerId: createdMarkerId, revisionId: acquiredRevisionId });
+    await page.getByTestId('acquired-cairn-paper').getByText('Connected tōtara note', { exact: true }).waitFor({ state: 'visible', timeout: 20_000 });
+    await capture('10-viewer-offline-reload-retains-acquired-page');
+    cairnMemoryTransportOffline = false;
 
     const [[counts]] = await db.execute(
       `SELECT
-        (SELECT COUNT(*) FROM public_cairn_thanks WHERE marker_id=? AND viewer_id=?) AS thanks_n,
-        (SELECT COUNT(*) FROM public_cairn_reports WHERE marker_id=? AND viewer_id=?) AS reports_n,
-        (SELECT COUNT(*) FROM public_cairn_encounters WHERE marker_id=? AND viewer_id=?) AS encounters_n`,
-      [createdMarkerId, actors.B.id, createdMarkerId, actors.B.id, createdMarkerId, actors.B.id],
+        (SELECT COUNT(*) FROM cairn_acquisitions WHERE marker_id=? AND viewer_id=?) AS acquisitions_n,
+        (SELECT COUNT(*) FROM cairn_acquisitions WHERE marker_id=? AND viewer_id=? AND opened_at IS NOT NULL) AS opened_n,
+        (SELECT COUNT(*) FROM cairn_acquisitions WHERE marker_id=? AND viewer_id=? AND thanked_at IS NOT NULL) AS thanked_n,
+        (SELECT COUNT(*) FROM cairn_presentation_groups WHERE id=? AND viewer_id=?) AS presentation_n`,
+      [createdMarkerId, actors.B.id, createdMarkerId, actors.B.id,
+        createdMarkerId, actors.B.id, presentationGroupId, actors.B.id],
     );
-    assert.deepEqual([Number(counts.thanks_n), Number(counts.reports_n), Number(counts.encounters_n)], [1, 1, 1]);
+    assert.deepEqual(
+      [Number(counts.acquisitions_n), Number(counts.opened_n), Number(counts.thanked_n), Number(counts.presentation_n)],
+      [1, 1, 1, 1],
+    );
 
     const { calculateV1SourceFingerprint } = await import('../v1-source-fingerprint.mjs');
     const result = {
@@ -300,7 +444,7 @@ async function main() {
       environment: {
         kind: 'loaded Expo Web + isolated real API/MySQL 8',
         realm: 'isolated_review',
-        boundary: 'Normal author Plant and viewer Memory/Detail/Thanks/Report handlers; operator and withdrawal used real API commands. Not native-device evidence.',
+        boundary: 'Normal author Plant/Detail/Edit/Withdraw and viewer Memory/Detail/Thanks handlers; only the protected moderation decision used a direct real-API command. Not native-device evidence.',
       },
       candidateFingerprint: calculateV1SourceFingerprint(),
       connectedTrace: {
@@ -308,6 +452,8 @@ async function main() {
         publicationId: String(submission.id),
         publicationEpoch: Number(submission.publication_epoch),
         contentRevision: Number(submission.content_revision),
+        acquiredRevisionId,
+        presentationGroupId,
         ownerActivityId: ownerActivity.clientActivityId,
         viewerActivityId: viewerActivity.clientActivityId,
         authorId: actors.A.id,
@@ -315,18 +461,20 @@ async function main() {
         operatorId: actors.M.id,
       },
       assertions: [
+        { id: 'PUB-CONNECTED-00', result: 'PASS', detail: 'All three actors authenticated through the real login endpoint and resolved the same account through /auth/me.' },
         { id: 'PUB-CONNECTED-01', result: 'PASS', detail: 'Normal loaded Plant submitted the traced Cairn to the real isolated API/MySQL and returned pending.' },
         { id: 'PUB-CONNECTED-02', result: 'PASS', detail: 'A protected real operator decision approved the exact traced revision.' },
-        { id: 'PUB-CONNECTED-03', result: 'PASS', detail: 'Post-publication isolated-source Activity evidence created the traced encounter; normal Memory navigation opened the same read-only Cairn.' },
-        { id: 'PUB-CONNECTED-04', result: 'PASS', detail: 'Normal Thanks and Report handlers each committed exactly one real MySQL row.' },
-        { id: 'PUB-CONNECTED-05', result: 'PASS', detail: 'A real author withdrawal invalidated the open viewer Detail and remained absent after offline page reconstruction.' },
+        { id: 'PUB-CONNECTED-03', result: 'PASS', detail: 'Post-publication Activity evidence created one retained acquisition and exact presentation group; normal Memory Open targeted its exact revision.' },
+        { id: 'PUB-CONNECTED-04', result: 'PASS', detail: 'Normal read and Thanks handlers updated the exact real MySQL acquisition once.' },
+        { id: 'PUB-CONNECTED-05', result: 'PASS', detail: 'Normal owner Edit created v2, then normal withdraw/delete removed the source while preserving the viewer’s acquired v1.' },
+        { id: 'PUB-CONNECTED-06', result: 'PASS', detail: 'The acquired v1 remained readable after owner withdrawal and an offline browser reconstruction did not replace it with unacquired v2.' },
       ],
       captures,
       requests,
-      databaseCounts: { thanks: 1, reports: 1, encounters: 1 },
+      databaseCounts: { acquisitions: 1, opened: 1, thanked: 1, presentations: 1, retainedRevisionsAfterDelete: 1 },
       runtimeErrors: [...new Set(runtimeErrors)],
-      limitation: 'The author withdrawal leg used the authenticated API command rather than the owner Edit screen; this is connected handler/API proof, not a fully normal-navigation E2E PASS.',
-      summary: { passed: runtimeErrors.length === 0 ? 5 : 4, failed: runtimeErrors.length === 0 ? 0 : 1 },
+      limitation: 'Browser/Expo-Web and isolated MySQL evidence, not native-device GPS, haptics, locked-background, or production evidence.',
+      summary: { passed: runtimeErrors.length === 0 ? 7 : 6, failed: runtimeErrors.length === 0 ? 0 : 1 },
     };
     fs.writeFileSync(path.join(outputDir, 'RESULTS.json'), `${JSON.stringify(result, null, 2)}\n`);
     if (runtimeErrors.length > 0) throw new Error(runtimeErrors.join(' | '));

@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "batch_id": "o88-shanghai-encounter-20261020",
+  "ttl_days": 14,
+  "coordinate_system": "WGS84",
+  "frequency_status": "frequency not established",
+  "privacy_note": "Synthetic public-area candidates only; no source GPS trace or personal schedule is included.",
+  "activation_state": "NOT_APPLIED",
+  "corridors": [
+    {
+      "area_code": "jinke_sap_public",
+      "area_label": "Jinke Road / SAP public streets",
+      "source_note": "Public address and metro references; exact sidewalk access requires field verification.",
+      "points": [
+        { "id": "JK-A", "lat": 31.203789, "lng": 121.601378, "surface": "metro-exit public sidewalk candidate" },
+        { "id": "JK-B", "lat": 31.204250, "lng": 121.600750, "surface": "public street-edge candidate" },
+        { "id": "JK-C", "lat": 31.205100, "lng": 121.599900, "surface": "public pedestrian corridor candidate" },
+        { "id": "JK-D", "lat": 31.206200, "lng": 121.598500, "surface": "public plaza approach candidate" },
+        { "id": "JK-E", "lat": 31.207563, "lng": 121.596640, "surface": "public street outside commercial frontage candidate" }
+      ]
+    },
+    {
+      "area_code": "sanhe_exterior",
+      "area_label": "Sanhe Garden exterior public roads",
+      "source_note": "Converted public POI reference; every point remains outside-private-space candidate pending field verification.",
+      "points": [
+        { "id": "SH-A", "lat": 31.230206, "lng": 121.435345, "surface": "exterior public sidewalk candidate" },
+        { "id": "SH-B", "lat": 31.229800, "lng": 121.435200, "surface": "public road frontage candidate" },
+        { "id": "SH-C", "lat": 31.230600, "lng": 121.435000, "surface": "public sidewalk candidate" },
+        { "id": "SH-D", "lat": 31.230200, "lng": 121.434300, "surface": "public intersection approach candidate" }
+      ]
+    },
+    {
+      "area_code": "caojiadu_public",
+      "area_label": "Caojiadu public walking area",
+      "source_note": "Broad public locality reference; candidate corridor intentionally avoids private entrances and sensitive places.",
+      "points": [
+        { "id": "CJ-A", "lat": 31.231390, "lng": 121.435230, "surface": "public sidewalk candidate" },
+        { "id": "CJ-B", "lat": 31.231000, "lng": 121.433900, "surface": "public walking corridor candidate" },
+        { "id": "CJ-C", "lat": 31.230700, "lng": 121.432700, "surface": "public street-edge candidate" },
+        { "id": "CJ-D", "lat": 31.230400, "lng": 121.431500, "surface": "public intersection approach candidate" }
+      ]
+    },
+    {
+      "area_code": "wuding_station_surface",
+      "area_label": "Line 14 Wuding Road station surface exits",
+      "source_note": "Station reference is WGS84; exit-side placements require on-site confirmation after GPS reacquisition.",
+      "points": [
+        { "id": "WD-A", "lat": 31.228920, "lng": 121.431989, "surface": "station surface public sidewalk candidate" },
+        { "id": "WD-B", "lat": 31.228600, "lng": 121.432200, "surface": "public sidewalk beyond exit candidate" },
+        { "id": "WD-C", "lat": 31.229200, "lng": 121.431500, "surface": "public road frontage candidate" },
+        { "id": "WD-D", "lat": 31.229000, "lng": 121.430800, "surface": "public walking corridor candidate" }
+      ]
+    }
+  ],
+  "fixtures": [
+    { "key": "O88-JK-P01", "area": "jinke_sap_public", "point": "JK-A", "audience": "public", "scenario": "single_short", "layout_case": "short_cn", "text": "Test Cairn · 风从路口来\u001e走到这里，先抬头看看天。 A small pause for open sky.", "revision_2_text": "Test Cairn · 风从路口来\u001e第二次经过，天色可能已经不同。 Same corner, another sky." },
+    { "key": "O88-JK-P02", "area": "jinke_sap_public", "point": "JK-B", "audience": "public", "scenario": "small_stack", "text": "Test Cairn · 轻一点\u001e今天不用赶着证明什么。 Walk gently for the next block." },
+    { "key": "O88-JK-P03", "area": "jinke_sap_public", "point": "JK-B", "audience": "public", "scenario": "small_stack", "text": "Test Cairn · Green light\u001e等一盏灯，也算给自己留了一点空白。" },
+    { "key": "O88-JK-P04", "area": "jinke_sap_public", "point": "JK-C", "audience": "public", "scenario": "single", "text": "Test Cairn · 转角\u001eIf the route changed, curiosity can still be the plan. 路线变了也没关系。" },
+    { "key": "O88-JK-P05", "area": "jinke_sap_public", "point": "JK-D", "audience": "public", "scenario": "dense_stack", "layout_case": "long_mixed", "text": "Test Cairn · 城市缝隙\u001e玻璃、树影和脚步声挤在一起时，还是能找到一小段属于自己的节奏。 Between buildings, keep one quiet rhythm for yourself." },
+    { "key": "O88-JK-P06", "area": "jinke_sap_public", "point": "JK-D", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · Two breaths\u001e停两次呼吸，再继续。 Nothing else is required." },
+    { "key": "O88-JK-P07", "area": "jinke_sap_public", "point": "JK-D", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · 路边的小胜利\u001eYou made it outside. 这已经是一件值得记住的小事。" },
+    { "key": "O88-JK-P08", "area": "jinke_sap_public", "point": "JK-E", "audience": "public", "scenario": "single", "text": "Test Cairn · 慢半步\u001e慢半步，城市会多露出一点细节。" },
+    { "key": "O88-JK-F01", "area": "jinke_sap_public", "point": "JK-A", "audience": "friends", "scenario": "mixed_stack", "text": "Test Cairn · Friend note\u001e路过时替我看看今天的云。 Tell me only if you want to." },
+    { "key": "O88-JK-F02", "area": "jinke_sap_public", "point": "JK-C", "audience": "friends", "scenario": "small_stack", "text": "Test Cairn · 下班以后\u001e把工作的声音留在身后一个街区。" },
+    { "key": "O88-JK-F03", "area": "jinke_sap_public", "point": "JK-C", "audience": "friends", "scenario": "small_stack", "layout_case": "short_en", "text": "Test Cairn · Still here\u001eNo reply needed." },
+    { "key": "O88-JK-F04", "area": "jinke_sap_public", "point": "JK-D", "audience": "friends", "scenario": "dense_stack", "text": "Test Cairn · 一起但不打扰\u001eWe can share a place without sharing a schedule." },
+    { "key": "O88-JK-F05", "area": "jinke_sap_public", "point": "JK-D", "audience": "friends", "scenario": "dense_stack", "text": "Test Cairn · 今天的风\u001e如果风很大，就当它替我们把疲惫吹远一点。" },
+    { "key": "O88-JK-F06", "area": "jinke_sap_public", "point": "JK-E", "audience": "friends", "scenario": "single", "text": "Test Cairn · 走过就好\u001eNo check-in, no pressure—just a note that waited." },
+
+    { "key": "O88-SH-P01", "area": "sanhe_exterior", "point": "SH-A", "audience": "public", "scenario": "dense_stack", "layout_case": "long_cn", "text": "Test Cairn · 街道的边缘\u001e不要走进院门，只在公共人行道上停一会儿；看看树叶、路灯和今天缓慢变化的光。" },
+    { "key": "O88-SH-P02", "area": "sanhe_exterior", "point": "SH-A", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · 经过\u001eA place can matter even when you only pass through." },
+    { "key": "O88-SH-P03", "area": "sanhe_exterior", "point": "SH-A", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · 三块石头\u001e一块给来路，一块给此刻，一块给还没决定的方向。" },
+    { "key": "O88-SH-P04", "area": "sanhe_exterior", "point": "SH-A", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · Street hum\u001eListen for the ordinary sound that makes this moment real." },
+    { "key": "O88-SH-P05", "area": "sanhe_exterior", "point": "SH-B", "audience": "public", "scenario": "small_stack", "text": "Test Cairn · 不必回答\u001e这是一张不用回复的便笺。" },
+    { "key": "O88-SH-P06", "area": "sanhe_exterior", "point": "SH-B", "audience": "public", "scenario": "small_stack", "text": "Test Cairn · A softer route\u001eTake the safer, calmer pavement when you can." },
+    { "key": "O88-SH-P07", "area": "sanhe_exterior", "point": "SH-C", "audience": "public", "scenario": "single", "text": "Test Cairn · 树影\u001e树影移动得比待办事项慢。" },
+    { "key": "O88-SH-P08", "area": "sanhe_exterior", "point": "SH-D", "audience": "public", "scenario": "mixed_stack", "text": "Test Cairn · One good detail\u001eFind one detail worth carrying into the rest of your day." },
+    { "key": "O88-SH-P09", "area": "sanhe_exterior", "point": "SH-D", "audience": "public", "scenario": "mixed_stack", "text": "Test Cairn · 公共路面\u001e只在可以安心走过的地方相遇。 Meet only where the path is truly public." },
+    { "key": "O88-SH-P10", "area": "sanhe_exterior", "point": "SH-D", "audience": "public", "scenario": "mixed_stack", "text": "Test Cairn · 未完待续\u001eThis walk does not need a perfect ending." },
+    { "key": "O88-SH-F01", "area": "sanhe_exterior", "point": "SH-A", "audience": "friends", "scenario": "dense_stack_update", "text": "Test Cairn · 给朋友\u001e第一次经过：记得走公共人行道，别为了一张便笺绕进私人空间。", "revision_2_text": "Test Cairn · 给朋友\u001e第二次经过：还是走公共人行道。今天可以多留意一棵树。" },
+    { "key": "O88-SH-F02", "area": "sanhe_exterior", "point": "SH-A", "audience": "friends", "scenario": "dense_stack", "text": "Test Cairn · 近况不用说完\u001eA small hello is enough for today." },
+    { "key": "O88-SH-F03", "area": "sanhe_exterior", "point": "SH-B", "audience": "friends", "scenario": "small_stack", "text": "Test Cairn · 脚步暗号\u001e看到这张便笺，就算我们隔空碰了个拳。" },
+    { "key": "O88-SH-F04", "area": "sanhe_exterior", "point": "SH-B", "audience": "friends", "scenario": "small_stack", "layout_case": "long_en", "text": "Test Cairn · No live map required\u001eYou reached this place in your own time. The note waited without asking where you were before or where you are going next." },
+    { "key": "O88-SH-F05", "area": "sanhe_exterior", "point": "SH-C", "audience": "friends", "scenario": "single", "text": "Test Cairn · 平常的一天\u001eOrdinary days deserve landmarks too." },
+    { "key": "O88-SH-F06", "area": "sanhe_exterior", "point": "SH-D", "audience": "friends", "scenario": "mixed_stack", "text": "Test Cairn · 先看路\u001eRead this only after you are safely stopped." },
+    { "key": "O88-SH-F07", "area": "sanhe_exterior", "point": "SH-D", "audience": "friends", "scenario": "mixed_stack", "text": "Test Cairn · 迟到的问候\u001e晚一点发现，也刚刚好。" },
+    { "key": "O88-SH-F08", "area": "sanhe_exterior", "point": "SH-D", "audience": "friends", "scenario": "mixed_stack", "text": "Test Cairn · Shared quiet\u001eWe do not have to be here together to share the pause." },
+
+    { "key": "O88-CJ-P01", "area": "caojiadu_public", "point": "CJ-A", "audience": "public", "scenario": "small_stack_update", "text": "Test Cairn · 曹家渡一页\u001e第一页：选一条安全、公开、让你舒服的人行道。", "revision_2_text": "Test Cairn · 曹家渡二页\u001e第二页：同一条路，也会因为季节和心情变成新的地方。" },
+    { "key": "O88-CJ-P02", "area": "caojiadu_public", "point": "CJ-A", "audience": "public", "scenario": "revisit_new_page", "layout_case": "page_turn", "text": "Test Cairn · Page one\u001eThe first pass leaves one quiet line.", "revision_2_text": "Test Cairn · Page two\u001eA later pass adds a second line without erasing the first." },
+    { "key": "O88-CJ-P03", "area": "caojiadu_public", "point": "CJ-B", "audience": "public", "scenario": "single", "text": "Test Cairn · 路口之外\u001eThe destination is not the only part worth keeping." },
+    { "key": "O88-CJ-P04", "area": "caojiadu_public", "point": "CJ-C", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · 留白\u001e给今天留一点没有安排的地方。" },
+    { "key": "O88-CJ-P05", "area": "caojiadu_public", "point": "CJ-C", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · Found slowly\u001eSome notes are better encountered than searched for." },
+    { "key": "O88-CJ-P06", "area": "caojiadu_public", "point": "CJ-C", "audience": "public", "scenario": "dense_stack", "layout_case": "punctuation", "text": "Test Cairn · 走、停、看\u001e走。停。看一眼。再走——城市不催这一秒。" },
+    { "key": "O88-CJ-P07", "area": "caojiadu_public", "point": "CJ-D", "audience": "public", "scenario": "small_stack", "text": "Test Cairn · A human pace\u001eThe map can wait while you cross safely." },
+    { "key": "O88-CJ-P08", "area": "caojiadu_public", "point": "CJ-D", "audience": "public", "scenario": "small_stack", "text": "Test Cairn · 不是任务\u001e发现不是打卡，也不需要收集完整。" },
+    { "key": "O88-CJ-F01", "area": "caojiadu_public", "point": "CJ-A", "audience": "friends", "scenario": "small_stack", "text": "Test Cairn · 同一座城\u001eWe can cross the same city on different days." },
+    { "key": "O88-CJ-F02", "area": "caojiadu_public", "point": "CJ-B", "audience": "friends", "scenario": "single", "text": "Test Cairn · 路过时\u001e路过时不用停太久，知道便笺在就好。" },
+    { "key": "O88-CJ-F03", "area": "caojiadu_public", "point": "CJ-C", "audience": "friends", "scenario": "dense_stack", "text": "Test Cairn · Pocket moment\u001eA tiny moment for the walk back." },
+    { "key": "O88-CJ-F04", "area": "caojiadu_public", "point": "CJ-C", "audience": "friends", "scenario": "dense_stack", "text": "Test Cairn · 熟悉但不同\u001e熟悉的路也会长出新内容。" },
+    { "key": "O88-CJ-F05", "area": "caojiadu_public", "point": "CJ-C", "audience": "friends", "scenario": "dense_stack", "layout_case": "long_cn", "text": "Test Cairn · 异步散步\u001e你不需要告诉我实时位置，也不需要为了见到这张便笺改变计划；只是在某次真正经过以后，它才属于你的收藏。" },
+    { "key": "O88-CJ-F06", "area": "caojiadu_public", "point": "CJ-D", "audience": "friends", "scenario": "small_stack", "text": "Test Cairn · See you later\u001eLater can mean another day, not another alert." },
+
+    { "key": "O88-WD-P01", "area": "wuding_station_surface", "point": "WD-A", "audience": "public", "scenario": "gps_reacquisition", "text": "Test Cairn · 回到地面\u001e先等定位和脚步都稳定，再让偶遇发生。" },
+    { "key": "O88-WD-P02", "area": "wuding_station_surface", "point": "WD-A", "audience": "public", "scenario": "revisit_new_page", "text": "Test Cairn · Surface page one\u001eThe first page begins after the station doors.", "revision_2_text": "Test Cairn · Surface page two\u001eThe next visit adds a page only after a real return." },
+    { "key": "O88-WD-P03", "area": "wuding_station_surface", "point": "WD-B", "audience": "public", "scenario": "small_stack", "text": "Test Cairn · GPS breath\u001eGive the blue dot a moment; keep your eyes on the pavement." },
+    { "key": "O88-WD-P04", "area": "wuding_station_surface", "point": "WD-B", "audience": "public", "scenario": "small_stack", "layout_case": "short_cn", "text": "Test Cairn · 到了\u001e真正走到，才算遇见。" },
+    { "key": "O88-WD-P05", "area": "wuding_station_surface", "point": "WD-C", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · Exit noise\u001eLet the station noise fade before opening the note." },
+    { "key": "O88-WD-P06", "area": "wuding_station_surface", "point": "WD-C", "audience": "public", "scenario": "dense_stack", "text": "Test Cairn · 不是雷达\u001eThe map did not reveal this before you arrived." },
+    { "key": "O88-WD-P07", "area": "wuding_station_surface", "point": "WD-C", "audience": "public", "scenario": "dense_stack", "layout_case": "long_mixed", "text": "Test Cairn · 从地下到街道\u001e定位重新稳定需要一点时间。 A truthful encounter can arrive later; it should never pretend a stale underground fix was enough." },
+    { "key": "O88-WD-P08", "area": "wuding_station_surface", "point": "WD-D", "audience": "public", "scenario": "single", "text": "Test Cairn · Continue east or west\u001eEither direction can become a memory." },
+    { "key": "O88-WD-F01", "area": "wuding_station_surface", "point": "WD-A", "audience": "friends", "scenario": "gps_reacquisition_update", "text": "Test Cairn · 地面见\u001e第一版：出站后别急着看手机，先找到安全的人行道。", "revision_2_text": "Test Cairn · 地面再见\u001e第二版：又走到这里了。今天依然先看路，再看便笺。" },
+    { "key": "O88-WD-F02", "area": "wuding_station_surface", "point": "WD-B", "audience": "friends", "scenario": "small_stack", "text": "Test Cairn · No hurry\u001eThe note has nowhere else to be." },
+    { "key": "O88-WD-F03", "area": "wuding_station_surface", "point": "WD-B", "audience": "friends", "scenario": "small_stack", "text": "Test Cairn · 口袋里的相遇\u001e锁屏提醒只是提示，真正的收录已经在服务器完成。" },
+    { "key": "O88-WD-F04", "area": "wuding_station_surface", "point": "WD-C", "audience": "friends", "scenario": "dense_stack", "text": "Test Cairn · Above ground\u001eA real fix, two real observations, then a quiet hello." },
+    { "key": "O88-WD-F05", "area": "wuding_station_surface", "point": "WD-C", "audience": "friends", "scenario": "dense_stack", "text": "Test Cairn · 不抢镜\u001e一次提示就够了，其余内容安静地留在 Memory。" },
+    { "key": "O88-WD-F06", "area": "wuding_station_surface", "point": "WD-D", "audience": "friends", "scenario": "single", "layout_case": "emoji_symbol", "text": "Test Cairn · ↗︎ 出发\u001eA small arrow, not an instruction. 方向由你决定。" }
+  ]
+}

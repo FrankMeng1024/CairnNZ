@@ -1,12 +1,60 @@
 import type { AcquiredCairnMapMarker } from '../../cairns/cairnPresentationStore';
 
+export async function loadAllClusterLeaves(
+  source: { getClusterLeaves?: (feature: unknown, limit: number, offset: number) => Promise<any> } | null,
+  feature: unknown,
+  expectedCount: number,
+  pageSize = 50,
+): Promise<any[]> {
+  if (!source?.getClusterLeaves || expectedCount <= 0) return [];
+  const result: any[] = [];
+  const seen = new Set<string>();
+  for (let offset = 0; offset < expectedCount; offset += pageSize) {
+    const requested = Math.min(pageSize, expectedCount - offset);
+    const response = await source.getClusterLeaves(feature, requested, offset);
+    const page = Array.isArray(response?.features) ? response.features : Array.isArray(response) ? response : [];
+    for (const leaf of page) {
+      const id = String(leaf?.properties?.markerId ?? leaf?.id ?? '');
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      result.push(leaf);
+    }
+    if (page.length < requested) break;
+  }
+  return result;
+}
+
+export function clusterLeavesShareLocation(leaves: any[], toleranceM = 0.75): boolean {
+  if (leaves.length < 2) return true;
+  const origin = leaves[0]?.geometry?.coordinates;
+  if (!Array.isArray(origin) || !Number.isFinite(origin[0]) || !Number.isFinite(origin[1])) return false;
+  const metresPerDegreeLat = 111_320;
+  const metresPerDegreeLng = metresPerDegreeLat * Math.max(0.01, Math.cos(Number(origin[1]) * Math.PI / 180));
+  return leaves.every(leaf => {
+    const point = leaf?.geometry?.coordinates;
+    if (!Array.isArray(point) || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false;
+    return Math.hypot(
+      (Number(point[0]) - Number(origin[0])) * metresPerDegreeLng,
+      (Number(point[1]) - Number(origin[1])) * metresPerDegreeLat,
+    ) <= toleranceM;
+  });
+}
+
 export function buildAcquiredCairnFeatureCollection(markers: AcquiredCairnMapMarker[]) {
   return {
     type: 'FeatureCollection' as const,
     features: markers.map(marker => ({
       type: 'Feature' as const,
       id: marker.markerId,
-      properties: { markerId: marker.markerId, unread: marker.unread ? 1 : 0 },
+      properties: {
+        markerId: marker.markerId,
+        unread: marker.unread ? 1 : 0,
+        friends: marker.sourceAudience === 'friends' ? 1 : 0,
+        public: marker.sourceAudience === 'public' ? 1 : 0,
+        title: marker.title ?? '',
+        preview: marker.preview ?? '',
+        revisionCount: marker.revisionCount ?? 1,
+      },
       geometry: { type: 'Point' as const, coordinates: [marker.lng, marker.lat] },
     })),
   };
