@@ -138,6 +138,12 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     expect(task.drainBackgroundLocations()).toEqual([
       expect.objectContaining({ timestamp: 3_000, clientActivityId: 'activity-a', ownerGeneration: 'generation-2' }),
     ]);
+    const durableContext = JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]);
+    expect(durableContext.latestSourceReceipt).toEqual({
+      observationTimeMs: 3_000,
+      receiptWallTimeMs: expect.any(Number),
+      source: 'background',
+    });
     const decisions = recordActivityStageEvent.mock.calls
       .map(call => call[0])
       .filter(event => event.stage === 'observation-decision');

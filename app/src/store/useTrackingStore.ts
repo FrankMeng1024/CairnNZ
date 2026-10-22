@@ -73,6 +73,7 @@ import {
   persistBackgroundContext,
   readDurableActivityContext,
   settleBackgroundLocationWrites,
+  type DurableSourceReceipt,
 } from '../services/backgroundLocationTask';
 import { reconcileActivityContinuityAfterJournal } from '../features/activity/activityContinuityReconciliation';
 import {
@@ -269,6 +270,17 @@ let realForegroundCadenceExperiment: LocationCadenceExperiment = {
 };
 let previousRealRawDiagnostic: { lat: number; lng: number; t: number } | null = null;
 let latestRealCanonicalDecisionReason: string | null = null;
+let latestRealSourceReceipt: DurableSourceReceipt | null = null;
+let committedResumeFrontier: {
+  clientActivityId: string;
+  ownerUserId: string;
+  ownerGeneration: string;
+  point: SegmentedTrackPoint;
+} | null = null;
+/** The prior 16-point policy spent most of 314–3,000 point resume time in
+ * setTimeout(0) scheduling. This bounded foreground-only slice remains small
+ * enough to yield while avoiding hundreds of empty host turns. */
+const FOREGROUND_RESUME_PROJECTION_POINTS_PER_SLICE = 128;
 
 function captureBorrowedRouteForRecovery(): ActivityRouteReference | undefined {
   try {
@@ -521,6 +533,8 @@ function resetRealGpsDiagnosticState(clientActivityId: string | null): void {
   realElevationState = createElevationQualityState();
   previousRealRawDiagnostic = null;
   latestRealCanonicalDecisionReason = null;
+  latestRealSourceReceipt = null;
+  committedResumeFrontier = null;
   resetRealProviderEfficiency();
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -534,6 +548,77 @@ function resetRealGpsDiagnosticState(clientActivityId: string | null): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../services/memorySync').resetMemorySyncMetrics();
   } catch { /* efficiency counters are diagnostic-only */ }
+}
+
+function rememberLatestRealSourceReceipt(receipt: DurableSourceReceipt | null | undefined): void {
+  if (!receipt
+    || !Number.isFinite(receipt.observationTimeMs)
+    || !Number.isFinite(receipt.receiptWallTimeMs)) return;
+  const normalized: DurableSourceReceipt = {
+    observationTimeMs: Math.floor(receipt.observationTimeMs),
+    receiptWallTimeMs: Math.floor(receipt.receiptWallTimeMs),
+    source: receipt.source,
+  };
+  if (!latestRealSourceReceipt
+    || normalized.observationTimeMs > latestRealSourceReceipt.observationTimeMs
+    || (normalized.observationTimeMs === latestRealSourceReceipt.observationTimeMs
+      && normalized.receiptWallTimeMs > latestRealSourceReceipt.receiptWallTimeMs)) {
+    latestRealSourceReceipt = normalized;
+  }
+}
+
+function resumeFrontierForOwner(state: TrackingState): SegmentedTrackPoint | null {
+  if (!committedResumeFrontier
+    || committedResumeFrontier.clientActivityId !== state.sessionId
+    || committedResumeFrontier.ownerUserId !== state.ownerUserId
+    || committedResumeFrontier.ownerGeneration !== state.liveOwnerGeneration) return null;
+  return committedResumeFrontier.point;
+}
+
+function classificationTail(state: TrackingState): SegmentedTrackPoint | null {
+  const mounted = state.trackPoints.length > 0
+    ? state.trackPoints[state.trackPoints.length - 1] as SegmentedTrackPoint
+    : null;
+  const frontier = resumeFrontierForOwner(state);
+  if (!frontier) return mounted;
+  if (!mounted) return frontier;
+  if (mounted.rawOrdinal != null && frontier.rawOrdinal != null) {
+    return mounted.rawOrdinal >= frontier.rawOrdinal ? mounted : frontier;
+  }
+  return mounted.t >= frontier.t ? mounted : frontier;
+}
+
+function rememberCommittedResumeFrontier(
+  owner: Pick<TrackingState, 'sessionId' | 'ownerUserId' | 'liveOwnerGeneration'>,
+  point: SegmentedTrackPoint | null | undefined,
+): void {
+  if (!owner.sessionId || !owner.ownerUserId || !owner.liveOwnerGeneration || !point) return;
+  const current = committedResumeFrontier;
+  if (current
+    && current.clientActivityId === owner.sessionId
+    && current.ownerUserId === owner.ownerUserId
+    && current.ownerGeneration === owner.liveOwnerGeneration) {
+    const currentOrdinal = current.point.rawOrdinal;
+    const nextOrdinal = point.rawOrdinal;
+    if (currentOrdinal != null && nextOrdinal != null && nextOrdinal < currentOrdinal) return;
+    if ((currentOrdinal == null || nextOrdinal == null) && point.t < current.point.t) return;
+  }
+  committedResumeFrontier = {
+    clientActivityId: owner.sessionId,
+    ownerUserId: owner.ownerUserId,
+    ownerGeneration: owner.liveOwnerGeneration,
+    point: { ...point },
+  };
+}
+
+function clearCommittedResumeFrontierIfPublished(state: TrackingState): void {
+  const frontier = resumeFrontierForOwner(state);
+  const mounted = state.trackPoints[state.trackPoints.length - 1] as SegmentedTrackPoint | undefined;
+  if (!frontier || !mounted) return;
+  const covered = frontier.rawOrdinal != null && mounted.rawOrdinal != null
+    ? mounted.rawOrdinal >= frontier.rawOrdinal
+    : mounted.t >= frontier.t;
+  if (covered) committedResumeFrontier = null;
 }
 
 function selectRealForegroundCadenceExperiment(): LocationCadenceExperiment {
@@ -857,6 +942,7 @@ async function persistCurrentRealBackgroundContext(): Promise<boolean> {
     continuityState: realGpsContinuityState,
     rawOrdinal: realGpsRawOrdinal,
     backgroundPermissionState: state.backgroundLocationPermission,
+    latestSourceReceipt: latestRealSourceReceipt,
   });
 }
 
@@ -4527,6 +4613,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       realGpsContinuitySessionId = resumeState.sessionId;
       realGpsContinuityState = createRealGpsContinuityState();
       realElevationState = createElevationQualityState(resumeState.elevationGainM);
+      latestRealSourceReceipt = null;
+      committedResumeFrontier = null;
       const previousRaw = resumeState.trackPointsRaw[resumeState.trackPointsRaw.length - 1];
       previousRealRawDiagnostic = previousRaw
         ? { lat: previousRaw.lat, lng: previousRaw.lng, t: previousRaw.t }
@@ -4997,6 +5085,15 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (before.liveOwnerAcceptAfterMs !== null && sampleTimestamp < before.liveOwnerAcceptAfterMs) {
         return reject('before-owner-generation');
       }
+      if (coordinateSource === 'real' && Number.isFinite(owned.receiptWallTimeMs)) {
+        rememberLatestRealSourceReceipt({
+          observationTimeMs: sampleTimestamp,
+          receiptWallTimeMs: Math.floor(owned.receiptWallTimeMs!),
+          source: owned.source === 'background' || owned.source === 'significant-change'
+            ? owned.source
+            : 'foreground',
+        });
+      }
       if (
         (isSimulatorSample || owned.continuityPreclassified)
         && before.lastFixTimestamp !== null
@@ -5011,6 +5108,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         // the map while still being rejected from canonical truth.
         set(state => state.sessionId === before.sessionId
           && state.liveOwnerGeneration === before.liveOwnerGeneration
+          && sampleTimestamp > (state.latestSourceLocationTime ?? 0)
           ? {
               latestSourceLocationTime: sampleTimestamp,
               latestSourceKind: owned.source === 'background' || owned.source === 'significant-change'
@@ -5022,6 +5120,13 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 : null,
             }
           : state);
+      }
+
+      const durableResumePredecessor = !isSimulatorSample
+        ? resumeFrontierForOwner(before)
+        : null;
+      if (durableResumePredecessor && sampleTimestamp <= durableResumePredecessor.t) {
+        return reject('non-monotonic-durable-frontier');
       }
 
       let realObservation: RealGpsObservation | null = null;
@@ -5313,9 +5418,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }
         }
 
-        const tail = s.trackPoints.length > 0
-          ? s.trackPoints[s.trackPoints.length - 1] as SegmentedTrackPoint
-          : null;
+        // A headless TaskManager realm can commit beyond the mounted store.
+        // Until full WAL playback publishes, classify against the latest
+        // identity-verified committed frontier rather than the stale UI tail.
+        const tail = classificationTail(s);
         const physicalGap = shouldStartNewSegment({
           previous: tail,
           next: { ...coord, t },
@@ -5323,7 +5429,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         });
         const provenance = resolveSegmentProvenance({
           tailSegmentId: tail?.segmentId ?? null,
-          currentSegmentId: s.currentSegmentId,
+          currentSegmentId: resumeFrontierForOwner(s)?.segmentId ?? s.currentSegmentId,
           incomingSegmentId: owned.segmentId,
           incomingStartReason: owned.segmentStartReason,
           pendingStartReason: s.pendingSegmentStartReason ?? undefined,
@@ -5776,6 +5882,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           }
           return next;
         });
+        if (!isSimulatorSample) {
+          clearCommittedResumeFrontierIfPublished(get());
+        }
         const storePublishedAt = Date.now();
         if (!isSimulatorSample || isRawGpsSimulatorSample) {
           void recordActivityStageEvent({
@@ -7355,8 +7464,10 @@ async function drainCommittedBackgroundLocations(
   await settleBackgroundLocationWrites();
   const durableContext = await readDurableActivityContext();
   const drained = drainBackgroundLocations().sort((a, b) => a.timestamp - b.timestamp);
-  // A queued raw receipt may refresh source-health immediately, but it must
-  // never move the puck before continuity projection qualifies the position.
+  // A queued raw receipt may refresh source-health immediately, but only when
+  // the native receipt wall time actually survived this realm handoff. Never
+  // infer receipt from an accepted-point timestamp or move the puck before
+  // continuity projection qualifies the position.
   // The projected live tail below restores presentation without waiting for a
   // brand-new foreground callback.
   const retained = drained[drained.length - 1];
@@ -7365,11 +7476,23 @@ async function drainCommittedBackgroundLocations(
     retained
     && retained.clientActivityId === retainedOwner.sessionId
     && retained.ownerGeneration === retainedOwner.liveOwnerGeneration
+    && Number.isFinite(retained.receiptWallTimeMs)
   ) {
-    useTrackingStore.setState({
-      latestSourceLocationTime: retained.timestamp,
-      latestSourceKind: 'background',
+    rememberLatestRealSourceReceipt({
+      observationTimeMs: retained.timestamp,
+      receiptWallTimeMs: Math.floor(retained.receiptWallTimeMs!),
+      source: 'background',
     });
+    useTrackingStore.setState(state => (
+      state.sessionId === retained.clientActivityId
+      && state.liveOwnerGeneration === retained.ownerGeneration
+      && retained.timestamp >= (state.latestSourceLocationTime ?? 0)
+        ? {
+            latestSourceLocationTime: retained.timestamp,
+            latestSourceKind: 'background',
+          }
+        : state
+    ));
   }
   const owner = useTrackingStore.getState();
   if (owner.sessionId && owner.ownerUserId && owner.liveOwnerGeneration && owner.locationProviderSource === 'real') {
@@ -7431,6 +7554,9 @@ async function drainCommittedBackgroundLocations(
           currentLive: projectionOwner.trackPointsSmoothed,
           currentDistanceAccumulator: projectionOwner.distanceAccumulator,
           currentElevationGainM: projectionOwner.elevationGainM,
+          maxPointsPerSlice: projectionAuthority === 'foreground'
+            ? FOREGROUND_RESUME_PROJECTION_POINTS_PER_SLICE
+            : undefined,
           shouldContinue: projectionAuthorityIsCurrent,
         },
       );
@@ -7457,6 +7583,9 @@ async function drainCommittedBackgroundLocations(
               currentLive: stateAtCommit.trackPointsSmoothed,
               currentDistanceAccumulator: stateAtCommit.distanceAccumulator,
               currentElevationGainM: stateAtCommit.elevationGainM,
+              maxPointsPerSlice: projectionAuthority === 'foreground'
+                ? FOREGROUND_RESUME_PROJECTION_POINTS_PER_SLICE
+                : undefined,
               shouldContinue: projectionAuthorityIsCurrent,
             },
           );
@@ -7506,6 +7635,7 @@ async function drainCommittedBackgroundLocations(
           };
         });
         if (published) {
+          clearCommittedResumeFrontierIfPublished(useTrackingStore.getState());
           const publishedAtMs = Date.now();
           const first = projection.canonical[0] as SegmentedTrackPoint | undefined;
           const last = projection.canonical[projection.canonical.length - 1] as SegmentedTrackPoint | undefined;
@@ -7644,18 +7774,32 @@ async function stopRealBackgroundSourceForHandoff(): Promise<void> {
 
 async function restoreForegroundContinuityFromDurableContext(
   owner: TrackingState,
-): Promise<'durable-context' | 'unavailable'> {
+): Promise<'durable-context' | 'journal' | 'unavailable'> {
   if (!owner.sessionId || !owner.liveOwnerGeneration) return 'unavailable';
   const durableContext = await readDurableActivityContext();
-  if (
-    durableContext?.clientActivityId !== owner.sessionId
-    || durableContext.ownerGeneration !== owner.liveOwnerGeneration
-  ) return 'unavailable';
+  const ownedContext = durableContext?.clientActivityId === owner.sessionId
+    && durableContext.userId === owner.ownerUserId
+    && durableContext.ownerGeneration === owner.liveOwnerGeneration
+    ? durableContext
+    : null;
+  let ownedTail: any[] = [];
+  try {
+    // Two canonical records are enough to restore the accepted predecessor and
+    // continuity window. The writer validates checksum/candidate recovery and
+    // waits for every admitted append; this does not scan the complete route.
+    const { readActiveHikeTail } = require('../services/hikeTrackWriter');
+    const tail = await readActiveHikeTail(owner.sessionId, 2);
+    ownedTail = tail.filter((point: any) => (
+      point.clientActivityId === owner.sessionId
+      && point.ownerGeneration === owner.liveOwnerGeneration
+    ));
+  } catch { /* durable context remains a verified post-WAL fallback */ }
+  if (!ownedContext && ownedTail.length === 0) return 'unavailable';
   const reconciled = reconcileActivityContinuityAfterJournal({
     clientActivityId: owner.sessionId,
     ownerGeneration: owner.liveOwnerGeneration,
-    journal: [],
-    durableContext,
+    journal: ownedTail,
+    durableContext: ownedContext,
     currentRawOrdinal: realGpsRawOrdinal,
   });
   const restoredTimestamp = reconciled.continuityState.latestObservationTimestamp ?? 0;
@@ -7665,8 +7809,47 @@ async function restoreForegroundContinuityFromDurableContext(
     realGpsContinuitySessionId = owner.sessionId;
   }
   realGpsRawOrdinal = Math.max(realGpsRawOrdinal, reconciled.rawOrdinal);
+  const journalPredecessor = ownedTail[ownedTail.length - 1] as SegmentedTrackPoint | undefined;
+  const trustedPredecessor = reconciled.continuityState.lastTrusted;
+  rememberCommittedResumeFrontier(owner, journalPredecessor ?? (
+    trustedPredecessor?.segmentId
+    && trustedPredecessor.rawOrdinal != null
+    && trustedPredecessor.rawOrdinal <= (Number(ownedContext?.rawOrdinal) || 0)
+      ? {
+          lat: trustedPredecessor.lat,
+          lng: trustedPredecessor.lng,
+          alt: trustedPredecessor.altitude ?? null,
+          accuracy: trustedPredecessor.accuracy ?? null,
+          verticalAccuracy: trustedPredecessor.verticalAccuracy ?? null,
+          speed: trustedPredecessor.speed ?? null,
+          speedAccuracy: trustedPredecessor.speedAccuracy ?? null,
+          course: trustedPredecessor.course ?? null,
+          courseAccuracy: trustedPredecessor.courseAccuracy ?? null,
+          t: trustedPredecessor.t,
+          rawOrdinal: trustedPredecessor.rawOrdinal,
+          source: trustedPredecessor.source,
+          segmentId: trustedPredecessor.segmentId,
+        }
+      : null
+  ));
+  const receipt = ownedContext?.latestSourceReceipt;
+  if (receipt
+    && Number.isFinite(receipt.observationTimeMs)
+    && Number.isFinite(receipt.receiptWallTimeMs)
+    && receipt.observationTimeMs >= ownedContext.acceptAfterMs) {
+    rememberLatestRealSourceReceipt(receipt);
+    useTrackingStore.setState(state => {
+      if (state.sessionId !== owner.sessionId
+        || state.liveOwnerGeneration !== owner.liveOwnerGeneration
+        || receipt.observationTimeMs < (state.latestSourceLocationTime ?? 0)) return state;
+      return {
+        latestSourceLocationTime: receipt.observationTimeMs,
+        latestSourceKind: receipt.source === 'foreground' ? 'foreground' : 'background',
+      };
+    });
+  }
   schedulePendingCandidateTimeout(owner);
-  return 'durable-context';
+  return reconciled.source;
 }
 
 async function transitionToForegroundSource(expectedIntentEpoch?: number): Promise<void> {
@@ -7695,20 +7878,26 @@ async function transitionToForegroundSource(expectedIntentEpoch?: number): Promi
   const continuityHandoff = intentIsCurrent()
     ? await restoreForegroundContinuityFromDurableContext(owner)
     : 'unavailable';
+  // Start complete-history publication as soon as the bounded committed
+  // predecessor is available. It remains independently fenced and may rebase
+  // a foreground WAL commit, so native authorization/watcher takeover does not
+  // need to serialize ahead of already-recorded route visibility.
+  const historyProjection = intentIsCurrent()
+    ? drainCommittedBackgroundLocations('foreground')
+    : Promise.resolve(0);
   if (intentIsCurrent()) await refreshRealBackgroundAuthorization(false);
   if (intentIsCurrent()) await activateForegroundSource(expectedIntentEpoch);
   const active = isCurrentLocationSourceActive();
   if (intentIsCurrent()) useTrackingStore.setState({ locationAvailable: active });
-  // Full journal projection and Memory replay can take seconds on a long
-  // Activity. The foreground provider is already active, so this work cannot
-  // create a stop-to-start capture gap. Identity checks inside the drain keep
-  // a late result from crossing Pause, Finish, logout, or another Activity.
-  void drainCommittedBackgroundLocations('foreground').then((drainedCount) => {
+  // Identity checks inside the drain keep a late result from crossing Pause,
+  // Finish, logout, or another Activity while foreground capture proceeds.
+  void historyProjection.then((drainedCount) => {
     appendSimulatorLog('PROVIDER', 'real_activity_background_drain', {
       reason: 'foreground-takeover',
       drainedCount,
       ordered: true,
-      providerActivatedFirst: true,
+      historyProjectionStartedBeforeActivation: true,
+      providerActivationParallel: true,
     }, {
       userId: owner.ownerUserId,
       clientActivityId: owner.sessionId,

@@ -375,7 +375,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // O87 (2026-10-19): continuity-first Route rendering, useful Draw matching,
 // atomic Memory presentation, synchronized Point growth, and iPhone UI polish
 // on the unchanged Build 65 / 0.2.6-o66 runtime.
-export const OTA_VERSION = 'O87';
+// O88 (2026-10-22): owner-scoped Hike/Run resume continuity, honest retained
+// GPS source health, and faster foreground publication of durable history.
+export const OTA_VERSION = 'O88';
 
 
 type OtaState =

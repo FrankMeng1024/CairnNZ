@@ -1132,9 +1132,14 @@ describe('useTrackingStore — P0 operation guards', () => {
 
     const { readActiveHikeTail } = require('../src/services/hikeTrackWriter');
     let releaseJournal: ((points: any[]) => void) | undefined;
-    readActiveHikeTail.mockImplementationOnce(() => new Promise<any[]>(resolve => {
-      releaseJournal = resolve;
-    }));
+    readActiveHikeTail
+      .mockImplementationOnce(async (_: string, limit?: number) => {
+        expect(limit).toBe(2);
+        return [prefix];
+      })
+      .mockImplementationOnce(() => new Promise<any[]>(resolve => {
+        releaseJournal = resolve;
+      }));
     const watcherCallsBeforeForeground = mockLocation.watchPositionAsync.mock.calls.length;
     require('react-native').AppState.currentState = 'active';
     mockAppStateChangeListener?.('active');

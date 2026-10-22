@@ -14,6 +14,10 @@ let mockCurrentUserId = 'owner-a';
 let mockNetworkState: 'online' | 'offline' = 'offline';
 let mockNetworkListener: ((state: { state: 'online' | 'offline' }) => void) | null = null;
 let mockAppStateListener: ((state: 'active' | 'background' | 'inactive') => void) | null = null;
+let mockAppStateCurrent: 'active' | 'background' | 'inactive' = 'active';
+let mockNativeBackgroundStarted = false;
+let mockDurableActivityContext: any = null;
+let mockBackgroundLocations: any[] = [];
 const mockAuthenticatedFetch = jest.fn();
 let mockWallTimeMs = 1_800_200_000_000;
 let mockDateNowSpy: jest.SpyInstance<number, []> | null = null;
@@ -30,7 +34,7 @@ const localStorageMock = {
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   AppState: {
-    currentState: 'active',
+    get currentState() { return mockAppStateCurrent; },
     addEventListener: jest.fn((_event: string, listener: typeof mockAppStateListener) => {
       mockAppStateListener = listener;
       return { remove: jest.fn(() => { mockAppStateListener = null; }) };
@@ -41,6 +45,7 @@ jest.mock('react-native', () => ({
 }));
 jest.mock('expo-location', () => ({
   Accuracy: { BestForNavigation: 6, Balanced: 3 },
+  ActivityType: { Fitness: 3 },
   requestForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
   getForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
   requestBackgroundPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
@@ -50,9 +55,9 @@ jest.mock('expo-location', () => ({
     coords: { latitude: -41.2865, longitude: 174.7762, accuracy: 5, speed: 1.2 },
     timestamp: Date.now(),
   })),
-  hasStartedLocationUpdatesAsync: jest.fn(async () => false),
-  startLocationUpdatesAsync: jest.fn(async () => undefined),
-  stopLocationUpdatesAsync: jest.fn(async () => undefined),
+  hasStartedLocationUpdatesAsync: jest.fn(async () => mockNativeBackgroundStarted),
+  startLocationUpdatesAsync: jest.fn(async () => { mockNativeBackgroundStarted = true; }),
+  stopLocationUpdatesAsync: jest.fn(async () => { mockNativeBackgroundStarted = false; }),
 }));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null), setItemAsync: jest.fn(async () => undefined),
@@ -101,10 +106,10 @@ jest.mock('../../../services/networkMonitor', () => {
 jest.mock('../../../services/backgroundLocationTask', () => ({
   BACKGROUND_LOCATION_TASK: 'integration-background-task',
   registerBackgroundTask: jest.fn(async () => true),
-  drainBackgroundLocations: jest.fn(() => []),
+  drainBackgroundLocations: jest.fn(() => mockBackgroundLocations.splice(0)),
   settleBackgroundLocationWrites: jest.fn(async () => undefined),
   persistBackgroundContext: jest.fn(async () => true),
-  readDurableActivityContext: jest.fn(async () => null),
+  readDurableActivityContext: jest.fn(async () => mockDurableActivityContext),
 }));
 jest.mock('../../../services/debugLogger', () => ({
   debugLogger: { startSession: jest.fn(), endSession: jest.fn(async () => null), log: jest.fn(), logError: jest.fn(), isEnabled: jest.fn(() => false) },
@@ -154,6 +159,8 @@ import { activityGeometryFingerprint } from '../activityFinalArtifact';
 import { appendHikePoint, listActiveHikes, readActiveHikeTail } from '../../../services/hikeTrackWriter';
 import { listPending } from '../../../services/pendingSyncStore';
 import { drainPending } from '../../../services/syncDaemon';
+import { buildActivityDistanceAccumulator } from '../activityContracts';
+import { deriveActivityLocationHealth } from '../activityLocationHealth';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -176,6 +183,45 @@ async function settleUntil(predicate: () => boolean, turns = 80, label = 'unspec
   throw new Error(`integration_frontier_timeout:${label}`);
 }
 
+const FIELD_RESUME_CASES = [
+  {
+    name: 'Run 1 #768→#769', mode: 'running' as const,
+    trueGapMs: 6_000, trueGapM: 6.82, staleGapMs: 500_999, staleGapM: 552.76,
+  },
+  {
+    name: 'Hike #479→#480', mode: 'hiking' as const,
+    trueGapMs: 1_000, trueGapM: 1.06, staleGapMs: 214_999, staleGapM: 210.58,
+  },
+  {
+    name: 'Run 2 #314→#315', mode: 'running' as const,
+    trueGapMs: 10_932, trueGapM: 17.96, staleGapMs: 744_811, staleGapM: 1_172.90,
+  },
+];
+
+const METERS_PER_LONGITUDE_DEGREE_AT_EQUATOR = 111_194.93;
+
+function fieldResumePoints(fieldCase: typeof FIELD_RESUME_CASES[number], newTime: number) {
+  const point = (t: number, distanceBeforeM: number, rawOrdinal: number, segmentId: string) => ({
+    t,
+    lat: 0,
+    lng: -distanceBeforeM / METERS_PER_LONGITUDE_DEGREE_AT_EQUATOR,
+    alt: 5,
+    accuracy: 5,
+    verticalAccuracy: 7,
+    speed: fieldCase.mode === 'running' ? 2.2 : 1.2,
+    rawOrdinal,
+    source: 'background' as const,
+    segmentId,
+  });
+  const segmentId = `field-resume-${fieldCase.mode}`;
+  return {
+    segmentId,
+    stale: point(newTime - fieldCase.staleGapMs, fieldCase.staleGapM, 1, segmentId),
+    predecessor: point(newTime - fieldCase.trueGapMs, fieldCase.trueGapM, 2, segmentId),
+    next: point(newTime, 0, 3, segmentId),
+  };
+}
+
 describe.each(['hiking', 'running'] as const)(
   'production-path local-first %s orchestration',
   (mode) => {
@@ -190,6 +236,10 @@ describe.each(['hiking', 'running'] as const)(
       mockNetworkState = 'offline';
       mockNetworkListener = null;
       mockAppStateListener = null;
+      mockAppStateCurrent = 'active';
+      mockNativeBackgroundStarted = false;
+      mockDurableActivityContext = null;
+      mockBackgroundLocations = [];
       mockWallTimeMs = mode === 'hiking' ? 1_800_200_000_000 : 1_800_300_000_000;
       mockDateNowSpy?.mockRestore();
       mockDateNowSpy = jest.spyOn(Date, 'now').mockImplementation(() => mockWallTimeMs);
@@ -364,10 +414,11 @@ describe.each(['hiking', 'running'] as const)(
         'foreground', 'background', 'background', 'background',
         'background', 'foreground', 'foreground',
       ] as const;
-      // The fourth observation arrives seven minutes after the third. The
+      // The fourth observation arrives 336 seconds after the third, preserving
+      // the real Run 2 unknown interval as a disconnected section. The
       // remaining observations prove background and foreground reacquisition
       // without changing the delivered evidence between network timelines.
-      const elapsedMs = [0, 5_000, 10_000, 430_000, 435_000, 440_000, 445_000];
+      const elapsedMs = [0, 5_000, 10_000, 346_000, 351_000, 356_000, 361_000];
 
       const run = async (timeline: Timeline) => {
         const active = useTrackingStore.getState();
@@ -378,6 +429,8 @@ describe.each(['hiking', 'running'] as const)(
         mockAuthenticatedFetch.mockReset();
         mockNetworkListener = null;
         mockAppStateListener = null;
+        mockAppStateCurrent = 'active';
+        mockNativeBackgroundStarted = false;
         __activityRemoteStartCoordinatorTest.reset();
         useTrackingStore.setState(useTrackingStore.getInitialState(), true);
         useSessionStore.setState({ sessions: [], currentUserId: 'owner-a' });
@@ -428,7 +481,7 @@ describe.each(['hiking', 'running'] as const)(
           const nextNetwork = timeline.connectivity[index];
           if (nextNetwork !== mockNetworkState) {
             mockNetworkState = nextNetwork;
-            mockNetworkListener?.({ state: nextNetwork });
+            (mockNetworkListener as ((state: { state: 'online' | 'offline' }) => void) | null)?.({ state: nextNetwork });
             if (nextNetwork === 'online'
               && useTrackingStore.getState().remoteSessionId === null) {
               await settleUntil(
@@ -438,8 +491,8 @@ describe.each(['hiking', 'running'] as const)(
               );
             }
           }
-          if (index === 1) mockAppStateListener?.('background');
-          if (index === 5) mockAppStateListener?.('active');
+          if (index === 1) (mockAppStateListener as ((state: 'background') => void) | null)?.('background');
+          if (index === 5) (mockAppStateListener as ((state: 'active') => void) | null)?.('active');
           const source = sources[index];
           const coordinate = {
             lat: -41.2865,
@@ -494,7 +547,7 @@ describe.each(['hiking', 'running'] as const)(
           lat: point.lat,
           lng: point.lng,
           rawOrdinal: point.rawOrdinal,
-          source: point.source,
+          source: (point as typeof point & { source?: string }).source,
         }));
         const segmentOrdinals = new Map<string, number>();
         const canonical = beforeFinish.trackPoints.map(point => {
@@ -511,7 +564,7 @@ describe.each(['hiking', 'running'] as const)(
         expect(new Set(canonical.map(point => point.segmentOrdinal)).size).toBe(2);
         expect(canonical.filter(point => point.segmentStartReason === 'gps-reacquired'))
           .toHaveLength(1);
-        mockWallTimeMs = base + 450_000;
+        mockWallTimeMs = base + 366_000;
         const finished = await useTrackingStore.getState().stopTracking(`Parity ${mode}`);
         if (!finished || finished.status !== 'saved-local') {
           throw new Error(`unexpected_parity_finish:${JSON.stringify(finished)}`);
@@ -533,7 +586,7 @@ describe.each(['hiking', 'running'] as const)(
         });
         if (finished.syncState === 'pending') {
           mockNetworkState = 'online';
-          mockNetworkListener?.({ state: 'online' });
+          (mockNetworkListener as ((state: { state: 'online' }) => void) | null)?.({ state: 'online' });
           // Finish also schedules a best-effort drain. Observe that real
           // single-flight before issuing the explicit recovery wakeup.
           for (let turn = 0; turn < 20 && (await listPending()).length > 0; turn += 1) {
@@ -606,6 +659,203 @@ describe.each(['hiking', 'running'] as const)(
     });
   },
 );
+
+describe('production-path foreground resume recovery', () => {
+  jest.setTimeout(30_000);
+
+  beforeEach(() => {
+    mockAsyncValues.clear();
+    mockStorageValues.clear();
+    mockWebValues.clear();
+    mockAuthenticatedFetch.mockReset();
+    mockCurrentUserId = 'owner-a';
+    mockNetworkState = 'offline';
+    mockNetworkListener = null;
+    mockAppStateListener = null;
+    mockAppStateCurrent = 'active';
+    mockNativeBackgroundStarted = false;
+    mockDurableActivityContext = null;
+    mockBackgroundLocations = [];
+    mockWallTimeMs = 1_802_000_000_000;
+    mockDateNowSpy?.mockRestore();
+    mockDateNowSpy = jest.spyOn(Date, 'now').mockImplementation(() => mockWallTimeMs);
+    __activityRemoteStartCoordinatorTest.reset();
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true });
+    useTrackingStore.setState(useTrackingStore.getInitialState(), true);
+    useSessionStore.setState({ sessions: [], currentUserId: 'owner-a' });
+  });
+
+  afterEach(async () => {
+    const state = useTrackingStore.getState();
+    if (state.status !== 'idle' && state.sessionId) await state.discardCurrentSession();
+    mockDateNowSpy?.mockRestore();
+    mockDateNowSpy = null;
+  });
+
+  const arrivals = FIELD_RESUME_CASES.flatMap((fieldCase, caseIndex) => ([
+    { ...fieldCase, caseIndex, arrival: 'before-playback' as const },
+    { ...fieldCase, caseIndex, arrival: 'after-playback' as const },
+  ]));
+
+  test.each(arrivals)(
+    '$name uses the committed predecessor when the first fix arrives $arrival',
+    async (fieldCase) => {
+      const clientActivityId = `90000000-0000-4000-8000-${String(
+        fieldCase.caseIndex * 2 + (fieldCase.arrival === 'before-playback' ? 1 : 2),
+      ).padStart(12, '0')}`;
+      useTrackingStore.getState().setActivityMode(fieldCase.mode);
+      await expect(useTrackingStore.getState().startTracking(clientActivityId)).resolves.toBe(true);
+      const started = useTrackingStore.getState();
+      const ownerGeneration = started.liveOwnerGeneration!;
+      const newTime = mockWallTimeMs + fieldCase.staleGapMs + 60_000;
+      const fixture = fieldResumePoints(fieldCase, newTime);
+      const stale = { ...fixture.stale, segmentStartReason: 'start' as const };
+
+      await appendHikePoint({
+        t: stale.t, lat: stale.lat, lng: stale.lng, acc: stale.accuracy,
+        alt: stale.alt, vAcc: stale.verticalAccuracy, speed: stale.speed,
+        rawOrdinal: stale.rawOrdinal, src: 'bg', clientActivityId,
+        ownerGeneration, segmentId: fixture.segmentId, segmentStartReason: 'start',
+      });
+      await appendHikePoint({
+        t: fixture.predecessor.t,
+        lat: fixture.predecessor.lat,
+        lng: fixture.predecessor.lng,
+        acc: fixture.predecessor.accuracy,
+        alt: fixture.predecessor.alt,
+        vAcc: fixture.predecessor.verticalAccuracy,
+        speed: fixture.predecessor.speed,
+        rawOrdinal: fixture.predecessor.rawOrdinal,
+        src: 'bg', clientActivityId, ownerGeneration, segmentId: fixture.segmentId,
+      });
+      useTrackingStore.setState({
+        trackPoints: [stale],
+        trackPointsSmoothed: [stale],
+        trackPointsRaw: [stale],
+        distanceAccumulator: buildActivityDistanceAccumulator([stale]),
+        distanceM: 0,
+        lastCoordinate: stale,
+        lastCoordinateTime: stale.t,
+        lastFixTimestamp: stale.t,
+        currentSegmentId: fixture.segmentId,
+        latestSourceLocationTime: null,
+        latestSourceKind: null,
+      });
+      mockDurableActivityContext = {
+        clientActivityId,
+        userId: 'owner-a',
+        ownerGeneration,
+        segmentId: fixture.segmentId,
+        activityMode: fieldCase.mode,
+        acceptAfterMs: started.liveOwnerAcceptAfterMs,
+        continuityState: null,
+        rawOrdinal: 2,
+        backgroundPermissionState: 'granted',
+        latestSourceReceipt: {
+          observationTimeMs: fixture.predecessor.t,
+          receiptWallTimeMs: newTime - 250,
+          source: 'background',
+        },
+      };
+
+      const writer = require('../../../services/hikeTrackWriter');
+      const originalRead = writer.readActiveHikeTail.bind(writer);
+      let releasePlayback: () => void = () => undefined;
+      const playbackGate = new Promise<void>(resolve => { releasePlayback = resolve; });
+      let fullPlaybackStarted = false;
+      const tailSpy = jest.spyOn(writer, 'readActiveHikeTail').mockImplementation(
+        async (...args: unknown[]) => {
+          const [sessionId, limit] = args as [string, number?];
+          const result = await originalRead(sessionId, limit);
+          if (limit == null) {
+            fullPlaybackStarted = true;
+            await playbackGate;
+          }
+          return result;
+        },
+      );
+
+      try {
+      mockWallTimeMs = newTime;
+      const location = require('expo-location');
+      location.startLocationUpdatesAsync.mockClear();
+      mockAppStateCurrent = 'background';
+      mockAppStateListener?.('background');
+      await settleUntil(
+        () => location.startLocationUpdatesAsync.mock.calls.length > 0,
+        160,
+        `${fieldCase.name}:background-owner`,
+      );
+      mockAppStateCurrent = 'active';
+      mockAppStateListener?.('active');
+      await settleUntil(() => fullPlaybackStarted, 160, `${fieldCase.name}:playback-start`);
+
+      const recovering = useTrackingStore.getState();
+      expect(recovering.trackPoints).toHaveLength(1);
+      expect(recovering.latestSourceLocationTime).toBe(fixture.predecessor.t);
+      expect(recovering.latestSourceKind).toBe('background');
+      expect(deriveActivityLocationHealth({
+        nowMs: newTime,
+        sourceActive: true,
+        latestSourceTimestamp: recovering.latestSourceLocationTime,
+        latestCanonicalTimestamp: recovering.lastCoordinateTime,
+        latestSourceKind: recovering.latestSourceKind,
+        foregroundRecoveryUntilMs: recovering.foregroundRecoveryUntilMs,
+        pendingCandidate: false,
+        latestCanonicalDecisionReason: null,
+        continuityGapOpen: false,
+      })).toMatchObject({ sourceHealth: 'fresh', userFacingIssue: 'none' });
+
+      const duplicate = await useTrackingStore.getState().addTrackPoint({
+        ...fixture.predecessor,
+        source: 'foreground',
+        clientActivityId,
+        ownerGeneration,
+        segmentId: fixture.segmentId,
+        receiptWallTimeMs: newTime,
+      }, fixture.predecessor.t);
+      expect(duplicate).toMatchObject({ accepted: false, reason: 'non-monotonic-durable-frontier' });
+      expect(useTrackingStore.getState().latestSourceLocationTime).toBe(fixture.predecessor.t);
+
+      if (fieldCase.arrival === 'after-playback') {
+        releasePlayback();
+        await settleUntil(
+          () => useTrackingStore.getState().trackPoints.some(point => point.rawOrdinal === 2),
+          160,
+          `${fieldCase.name}:playback-published`,
+        );
+      }
+      const decision = await useTrackingStore.getState().addTrackPoint({
+        ...fixture.next,
+        source: 'foreground',
+        clientActivityId,
+        ownerGeneration,
+        segmentId: fixture.segmentId,
+        receiptWallTimeMs: newTime + 50,
+      }, fixture.next.t);
+      expect(decision).toMatchObject({ accepted: true, segmentId: fixture.segmentId });
+      expect(decision.reason).not.toBe('accepted-new-segment');
+
+      releasePlayback();
+      await settleUntil(
+        () => [1, 2, 3].every(rawOrdinal => (
+          useTrackingStore.getState().trackPoints.some(point => point.rawOrdinal === rawOrdinal)
+        )),
+        160,
+        `${fieldCase.name}:foreground-published`,
+      );
+      const final = useTrackingStore.getState();
+      expect(final.trackPoints.map(point => point.rawOrdinal)).toEqual([1, 2, 3]);
+      expect(new Set(final.trackPoints.map(point => point.segmentId))).toEqual(new Set([fixture.segmentId]));
+      expect(final.trackPoints.filter(point => point.segmentStartReason === 'gps-reacquired')).toEqual([]);
+      expect(final.trackPointsSmoothed.at(-1)).toMatchObject({ rawOrdinal: 3, segmentId: fixture.segmentId });
+      } finally {
+        releasePlayback();
+        tailSpy.mockRestore();
+      }
+    },
+  );
+});
 
 describe('production-path remote Start conflict fencing', () => {
   beforeEach(() => {

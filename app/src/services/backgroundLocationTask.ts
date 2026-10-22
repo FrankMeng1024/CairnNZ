@@ -78,6 +78,16 @@ export interface DurableActivityContext {
   continuityState?: RealGpsContinuityState | null;
   rawOrdinal?: number;
   backgroundPermissionState?: 'unknown' | 'granted' | 'foreground-only' | 'not-applicable';
+  /** Exact native callback receipt paired with its original observation time.
+   * Foreground recovery may restore source health only from this evidence; an
+   * accepted-point timestamp alone does not prove that a callback was received. */
+  latestSourceReceipt?: DurableSourceReceipt | null;
+}
+
+export interface DurableSourceReceipt {
+  observationTimeMs: number;
+  receiptWallTimeMs: number;
+  source: 'foreground' | 'background' | 'significant-change';
 }
 
 // The native callback and UI lifecycle can run on interleaved promise turns.
@@ -777,11 +787,34 @@ async function appendDirectlyToHikeTrack(
         });
       }
     }
+    const latestBatchReceipt = events.reduce<DurableSourceReceipt | null>((latest, event) => {
+      if (!Number.isFinite(event.t) || !Number.isFinite(event.receiptWallTimeMs)) return latest;
+      const candidate: DurableSourceReceipt = {
+        observationTimeMs: Math.floor(event.t),
+        receiptWallTimeMs: Math.floor(event.receiptWallTimeMs),
+        source: 'background',
+      };
+      if (!latest
+        || candidate.observationTimeMs > latest.observationTimeMs
+        || (candidate.observationTimeMs === latest.observationTimeMs
+          && candidate.receiptWallTimeMs > latest.receiptWallTimeMs)) return candidate;
+      return latest;
+    }, null);
+    const previousReceipt = context.latestSourceReceipt;
+    const latestSourceReceipt = !latestBatchReceipt
+      ? previousReceipt ?? null
+      : !previousReceipt
+        || latestBatchReceipt.observationTimeMs > previousReceipt.observationTimeMs
+        || (latestBatchReceipt.observationTimeMs === previousReceipt.observationTimeMs
+          && latestBatchReceipt.receiptWallTimeMs > previousReceipt.receiptWallTimeMs)
+        ? latestBatchReceipt
+        : previousReceipt;
     await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify({
       ...context,
       segmentId: activeSegmentId,
       continuityState: continuity,
       rawOrdinal,
+      latestSourceReceipt,
     }));
     appendSimulatorLog('PROVIDER', 'real_activity_background_journal_result', {
       batchCount: events.length,
