@@ -48,6 +48,24 @@ test('Public discovery checks the authenticated viewer before loading any Public
   assert.match(candidates.slice(viewerGate, publicQuery), /updated: \[\], public: \[\]/);
 });
 
+test('independent walking evidence is authenticated, movement-qualified and acquired without a Memory upload ACK', () => {
+  const source = read('routes/cairn-memory.js');
+  const routeStart = source.indexOf("router.post('/walking-evidence'");
+  const discoverStart = source.indexOf("router.post('/discover'");
+  assert.ok(routeStart > 0, 'walking evidence endpoint exists on the authenticated router');
+  const route = source.slice(routeStart, discoverStart > routeStart ? discoverStart : undefined);
+  const validation = source.slice(
+    source.indexOf('function walkingWitnessRows'),
+    source.indexOf('async function persistWalkingWitnessRows'),
+  );
+  assert.match(validation, /MIN_WALKING_DISPLACEMENT_M/);
+  assert.match(validation, /MAX_HORIZONTAL_ACCURACY_M/);
+  assert.match(route, /persistWalkingWitnessRows/);
+  assert.match(route, /processed_witness_cids/);
+  assert.match(route, /runDiscovery/);
+  assert.doesNotMatch(route, /memory_points/);
+});
+
 test('logical revision moderation spans every audience snapshot and matching delivery', () => {
   const source = read('routes/cairn-memory.js');
   const decision = source.slice(source.indexOf("router.post('/operator/cases/:case_id/decision'"));
