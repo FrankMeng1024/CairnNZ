@@ -17,6 +17,8 @@ const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  // Keep direct MySQL evidence on the same UTC decoding boundary as the API.
+  timezone: 'Z',
 };
 if (!baseUrl || !jwtSecret) throw new Error('HARNESS_API_URL and JWT_SECRET are required');
 

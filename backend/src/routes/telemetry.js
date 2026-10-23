@@ -28,6 +28,11 @@ const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { sanitizeQaJsonl } = require('../utils/qaTelemetryPrivacy');
 const { mergeQaTelemetryJsonl } = require('../utils/qaTelemetryMerge');
+const {
+  getAutomaticDiagnosticPolicy,
+  ingestAutomaticDiagnosticBatch,
+  queryAutomaticDiagnostics,
+} = require('../services/automaticDiagnostics');
 
 const router = express.Router();
 
@@ -46,6 +51,21 @@ const uploadLimiter = rateLimit({
 const readLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const diagnosticUploadLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many diagnostic batches. Try again later.', code: 'DIAGNOSTIC_RATE_LIMIT' },
+});
+
+const diagnosticReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -76,6 +96,75 @@ function requireUploadAuth(req, res, next) {
   if (hasValidApiKey(req)) return next();
   return authenticate(req, res, next);
 }
+
+// ── Automatic owner-QA diagnostics ────────────────────────────────────────
+router.get('/diagnostics/policy', authenticate, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json(await getAutomaticDiagnosticPolicy(pool, req.user.userId));
+  } catch (error) {
+    console.error('[diagnostics/policy]', error.message);
+    return res.status(500).json({ error: 'Diagnostic policy unavailable.', code: 'DIAGNOSTIC_POLICY_UNAVAILABLE' });
+  }
+});
+
+router.post('/diagnostics/batches', diagnosticUploadLimiter, authenticate, async (req, res) => {
+  try {
+    const result = await ingestAutomaticDiagnosticBatch(pool, req.user.userId, req.body);
+    return res.status(200).json({
+      ok: true,
+      batch_id: result.batchId,
+      batch_sequence: result.batchSequence,
+      events_received: result.eventsReceived,
+      bytes: result.bytes,
+      duplicate: result.duplicate,
+      policy_tier: result.policyTier,
+      server_ingested_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    const status = Number(error.status) || 500;
+    if (status >= 500) console.error('[diagnostics/ingest]', error.code, error.message);
+    return res.status(status).json({
+      error: status >= 500 ? 'Diagnostic ingest failed.' : error.message,
+      code: error.code || 'DIAGNOSTIC_INGEST_FAILED',
+    });
+  }
+});
+
+function readOwnerId(req) {
+  const ownerUserId = Number(req.query.owner_id);
+  return Number.isSafeInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : null;
+}
+
+async function sendDiagnosticQuery(req, res, filters) {
+  const ownerUserId = readOwnerId(req);
+  if (!ownerUserId) return res.status(400).json({ error: 'owner_id is required.' });
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json(await queryAutomaticDiagnostics(pool, {
+      ownerUserId,
+      limit: req.query.limit,
+      ...filters,
+    }));
+  } catch (error) {
+    const status = Number(error.status) || 500;
+    if (status >= 500) console.error('[diagnostics/query]', error.message);
+    return res.status(status).json({ error: status >= 500 ? 'Diagnostic query failed.' : error.message });
+  }
+}
+
+router.get('/diagnostics/recent', diagnosticReadLimiter, requireReadApiKey, (req, res) => (
+  sendDiagnosticQuery(req, res, { sourceType: req.query.source_type })
+));
+router.get('/diagnostics/activity/:clientActivityId', diagnosticReadLimiter, requireReadApiKey, (req, res) => (
+  sendDiagnosticQuery(req, res, { clientActivityId: req.params.clientActivityId })
+));
+router.get('/diagnostics/route/:routeEditSessionId', diagnosticReadLimiter, requireReadApiKey, (req, res) => (
+  sendDiagnosticQuery(req, res, { routeEditSessionId: req.params.routeEditSessionId })
+));
+router.get('/diagnostics/memory/:memoryScopeId', diagnosticReadLimiter, requireReadApiKey, (req, res) => (
+  sendDiagnosticQuery(req, res, { memoryScopeId: req.params.memoryScopeId })
+));
 
 // ── POST /api/telemetry/sessions ───────────────────────────────────────────
 router.post('/sessions', uploadLimiter, requireUploadAuth, async (req, res) => {

@@ -48,6 +48,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const { normalize } = require('../constants/permission');
+const { qaFixtureEligibleSql } = require('../services/qaFixtureEligibility');
 
 router.use(authenticate);
 
@@ -120,6 +121,7 @@ router.get('/markers', async (req, res) => {
            AND collection.removed_at IS NULL AND collection.archived_at IS NULL
            AND revision.availability='available'
            AND COALESCE(moderation.state,'available')='available'
+           AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
            AND hidden.user_id IS NULL
            AND NOT EXISTS (
              SELECT 1 FROM blocked_users blocked

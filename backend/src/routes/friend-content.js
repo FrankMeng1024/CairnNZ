@@ -17,6 +17,7 @@ const {
 const { sharedContentMetadata } = require('../services/resourceRevision');
 const { eligibleSourceProvenanceSql } = require('../services/activitySourceProvenance');
 const { buildFriendDiscoveryCandidatePage } = require('../services/friendDiscoveryCandidates');
+const { qaFixtureEligibleSql, qaFixtureExpirySql } = require('../services/qaFixtureEligibility');
 
 const router = express.Router();
 router.use(authenticate);
@@ -235,6 +236,8 @@ router.get('/cairns', async (req, res) => {
                 revision.approximate,revision.content_revision,
                 revision.friend_author_name_snapshot AS author_name,
                 revision.created_at,acquisition.acquired_at AS encountered_at,
+                qa_fixture.batch_id AS qa_batch_id,
+                ${qaFixtureExpirySql('revision.marker_id')} AS qa_expires_at,
                 ROW_NUMBER() OVER (PARTITION BY acquisition.marker_id
                   ORDER BY revision.content_revision DESC,acquisition.acquired_at DESC) AS rank_in_cairn
            FROM cairn_acquisitions acquisition
@@ -246,10 +249,12 @@ router.get('/cairns', async (req, res) => {
              ON friend.user_id=acquisition.viewer_id AND friend.friend_id=revision.owner_id
            JOIN users owner ON owner.id=revision.owner_id AND owner.deleted_at IS NULL
            LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=revision.marker_id
+           LEFT JOIN cairn_qa_fixtures qa_fixture ON qa_fixture.marker_id=revision.marker_id
           WHERE acquisition.viewer_id=? AND acquisition.acquired_via='friends'
             AND acquisition.removed_at IS NULL AND collection.removed_at IS NULL
             AND revision.availability='available'
             AND COALESCE(moderation.state,'available')='available'
+            AND ${qaFixtureEligibleSql('revision.marker_id', 'acquisition.viewer_id')}
             ${friendClause}
             AND NOT EXISTS (
               SELECT 1 FROM hidden_items hidden
@@ -264,7 +269,7 @@ router.get('/cairns', async (req, res) => {
        )
        SELECT marker_id AS id,owner_id AS user_id,type,text,lat,lng,NULL AS alt,
               approximate,created_at,created_at AS updated_at,content_revision,
-              author_name,encountered_at
+              author_name,encountered_at,qa_batch_id,qa_expires_at
          FROM acquired WHERE rank_in_cairn=1
         ORDER BY encountered_at DESC LIMIT 1000`,
       params,

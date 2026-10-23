@@ -95,6 +95,11 @@ const Session = {
            VALUES (?, ?) ON DUPLICATE KEY UPDATE discarded_at = discarded_at`,
           [userId, rows[0].client_activity_id],
         );
+        await conn.execute(
+          `DELETE FROM diagnostic_streams
+            WHERE owner_user_id = ? AND client_activity_id = ?`,
+          [userId, rows[0].client_activity_id],
+        );
       }
       const [result] = await conn.execute(
         `DELETE FROM sessions WHERE id = ? AND user_id = ?`,

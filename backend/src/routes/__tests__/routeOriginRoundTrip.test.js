@@ -128,6 +128,9 @@ function createMemoryPool() {
       state.tombstones.add(`${params[0]}:${params[1]}`);
       return [{ affectedRows: 1 }];
     }
+    if (compact.startsWith('DELETE FROM diagnostic_streams WHERE owner_user_id')) {
+      return [{ affectedRows: 0 }];
+    }
     if (compact.startsWith('DELETE FROM routes WHERE user_id')) {
       const before = state.routes.length;
       state.routes = state.routes.filter(row => !(row.user_id === params[0] && row.client_route_id === params[1]));

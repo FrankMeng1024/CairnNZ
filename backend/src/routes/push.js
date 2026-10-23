@@ -87,12 +87,12 @@ router.post('/unregister', async (req, res) => {
 router.get('/preferences', async (req, res) => {
   try {
     const prefs = await PushNotification.getPreferences(req.user.userId);
-    // Null → user has no device registered; return defaults so the UI has
-    // something coherent to render.
+    // Location-derived encounter alerts are explicit opt-in. A missing row
+    // must agree with enqueue's fail-closed preference gate.
     return res.json(prefs || {
       friendRequests: true,
       markerReplies: true,
-      memoryHits: true,
+      memoryHits: false,
       announcements: true,
     });
   } catch (err) {
@@ -121,7 +121,7 @@ router.patch('/preferences', async (req, res) => {
     // but if it does, fall back to defaults so the client never sees {}.
     return res.json(updated || {
       friendRequests: true, markerReplies: true,
-      memoryHits: true, announcements: true,
+      memoryHits: false, announcements: true,
     });
   } catch (err) {
     console.error('[push/preferences PATCH]', err);

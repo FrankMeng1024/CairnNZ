@@ -550,6 +550,11 @@ router.delete('/client/:clientActivityId', authenticate, async (req, res) => {
        VALUES (?, ?) ON DUPLICATE KEY UPDATE discarded_at = discarded_at`,
       [req.user.userId, clientActivityId],
     );
+    await conn.execute(
+      `DELETE FROM diagnostic_streams
+        WHERE owner_user_id = ? AND client_activity_id = ?`,
+      [req.user.userId, clientActivityId],
+    );
     const [result] = await conn.execute(
       `DELETE FROM sessions
        WHERE user_id = ? AND client_activity_id = ?`,

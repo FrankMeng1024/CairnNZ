@@ -325,7 +325,7 @@ const Route = {
     try {
       await conn.beginTransaction();
       const [owned] = await conn.execute(
-        'SELECT id FROM routes WHERE id = ? AND user_id = ? FOR UPDATE',
+        'SELECT id, client_route_id FROM routes WHERE id = ? AND user_id = ? FOR UPDATE',
         [id, userId],
       );
       if (!owned[0]) {
@@ -334,6 +334,18 @@ const Route = {
       }
       await conn.execute('DELETE FROM shared_route_leases WHERE route_id = ?', [id]);
       await conn.execute('DELETE FROM route_audience_epochs WHERE route_id = ?', [id]);
+      if (owned[0].client_route_id) {
+        await conn.execute(
+          `INSERT INTO route_client_tombstones (user_id, client_route_id)
+           VALUES (?, ?) ON DUPLICATE KEY UPDATE deleted_at = deleted_at`,
+          [userId, owned[0].client_route_id],
+        );
+        await conn.execute(
+          `DELETE FROM diagnostic_streams
+            WHERE owner_user_id = ? AND client_route_id = ?`,
+          [userId, owned[0].client_route_id],
+        );
+      }
       const [result] = await conn.execute('DELETE FROM routes WHERE id = ? AND user_id = ?', [id, userId]);
       await conn.commit();
       return result.affectedRows;
@@ -363,6 +375,11 @@ const Route = {
         await conn.execute('DELETE FROM shared_route_leases WHERE route_id = ?', [owned[0].id]);
         await conn.execute('DELETE FROM route_audience_epochs WHERE route_id = ?', [owned[0].id]);
       }
+      await conn.execute(
+        `DELETE FROM diagnostic_streams
+          WHERE owner_user_id = ? AND client_route_id = ?`,
+        [userId, clientRouteId],
+      );
       const [result] = await conn.execute(
         'DELETE FROM routes WHERE user_id = ? AND client_route_id = ?',
         [userId, clientRouteId],

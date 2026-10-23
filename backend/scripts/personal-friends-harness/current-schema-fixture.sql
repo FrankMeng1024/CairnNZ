@@ -94,6 +94,35 @@ CREATE TABLE markers (
   CONSTRAINT fk_marker_session FOREIGN KEY (origin_session_id) REFERENCES sessions(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE marker_votes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  marker_id BIGINT UNSIGNED NOT NULL,
+  type ENUM('like','report') NOT NULL,
+  reason VARCHAR(32) NULL,
+  reporter_lat DOUBLE NULL,
+  reporter_lng DOUBLE NULL,
+  distance_m DOUBLE NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_user_marker (user_id,marker_id),
+  INDEX idx_marker (marker_id),
+  INDEX idx_user_created (user_id,created_at),
+  CONSTRAINT fk_marker_vote_marker FOREIGN KEY(marker_id) REFERENCES markers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_marker_vote_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE abuse_signals (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NULL,
+  marker_id BIGINT UNSIGNED NULL,
+  kind VARCHAR(32) NOT NULL,
+  payload JSON NULL,
+  ip_address VARCHAR(45) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_abuse_kind_created (kind,created_at),
+  INDEX idx_abuse_user_created (user_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE routes (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -195,8 +224,23 @@ CREATE TABLE telemetry_sessions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   owner_user_id BIGINT UNSIGNED NULL,
   session_id VARCHAR(64) UNIQUE NOT NULL,
+  device_model VARCHAR(64) NULL,
+  device_os VARCHAR(16) NULL,
+  os_version VARCHAR(16) NULL,
+  app_version VARCHAR(16) NULL,
+  build_number VARCHAR(16) NULL,
+  started_at BIGINT NULL,
+  ended_at BIGINT NULL,
+  duration_ms BIGINT NULL,
+  events_count INT NOT NULL DEFAULT 0,
+  raw_size_bytes INT NOT NULL DEFAULT 0,
+  activity_mode VARCHAR(16) NULL,
+  raw_jsonl LONGTEXT NULL,
   uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  upload_source VARCHAR(16) NOT NULL DEFAULT 'auto',
   INDEX idx_telemetry_owner (owner_user_id, uploaded_at),
+  INDEX idx_telemetry_started_at (started_at),
+  INDEX idx_telemetry_app_version (app_version),
   CONSTRAINT fk_telemetry_owner FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE regions (

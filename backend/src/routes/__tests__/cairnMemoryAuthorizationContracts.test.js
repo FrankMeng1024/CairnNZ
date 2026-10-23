@@ -8,6 +8,12 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
+test('the shared MySQL boundary decodes Cairn timestamps as UTC', () => {
+  assert.match(read('config/db.js'), /timezone:\s*['"]Z['"]/);
+  assert.match(read('../scripts/cairn-memory-harness/api-mysql.js'), /timezone:\s*['"]Z['"]/);
+  assert.match(read('../scripts/public-cairn-harness/api-mysql.js'), /timezone:\s*['"]Z['"]/);
+});
+
 test('Friend revision eligibility starts after the trusted mutable revision frontier', () => {
   const source = read('routes/cairn-memory.js');
   const markerSource = read('routes/markers.js');
@@ -118,6 +124,8 @@ test('presentation acknowledgement is event-watermarked while an announced group
     route.indexOf("router.get('/review-cases/mine'"),
   );
   assert.match(pending, /MAX\(event\.id\) AS event_through_id/);
+  assert.match(pending, /friends_cairn_count/);
+  assert.match(pending, /public_cairn_count/);
   assert.match(pending, /event\.announced_at IS NULL/);
   assert.doesNotMatch(pending, /merge_until<=UTC_TIMESTAMP/);
   assert.match(pending, /presentation\.merge_until>=UTC_TIMESTAMP\(3\)/);
@@ -125,6 +133,18 @@ test('presentation acknowledgement is event-watermarked while an announced group
   assert.match(acknowledged, /presentation_group_id=\? AND id<=\?/);
   assert.match(cadence, /viewer_id = \? AND merge_until >= UTC_TIMESTAMP\(3\)/);
   assert.doesNotMatch(cadence, /viewer_id = \? AND announced_at IS NULL\s+AND merge_until/);
+});
+
+test('presentation deep links retain exact acquisition revision identity', () => {
+  const route = read('routes/cairn-memory.js');
+  const items = route.slice(
+    route.indexOf("router.get('/presentation/:group_id/items'"),
+    route.indexOf("router.post('/presentation/:group_id/announced'"),
+  );
+  assert.match(items, /revision\.id AS revision_id/);
+  assert.match(items, /MAX\(event\.id\) AS event_id/);
+  assert.match(items, /items: exactItems/);
+  assert.match(items, /acquisition\.cairn_revision_id/);
 });
 
 test('presentation polling distinguishes ordinary expiry from explicit safety withdrawal and returns acquired truth', () => {

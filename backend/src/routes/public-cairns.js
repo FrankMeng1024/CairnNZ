@@ -29,6 +29,7 @@ const {
 const { closeFriendshipEpisode } = require('../services/friendAuthorization');
 
 const router = express.Router();
+const { qaFixtureEligibleSql, qaFixtureExpirySql } = require('../services/qaFixtureEligibility');
 
 const PUBLIC_SCENE_LIMIT = 3;
 const PUBLIC_SCENE_AUTHOR_LIMIT = 1;
@@ -58,7 +59,9 @@ function boundedQueryLimit(value, fallback, maximum) {
 }
 
 function authorizationRevision(row) {
-  return `public:${row.marker_id}:${row.publication_epoch}:${row.content_revision}:${row.snapshot_location_policy_version}`;
+  const fixtureAuthority = row?.qa_batch_id && row?.qa_expires_at
+    ? `:qa:${row.qa_batch_id}:${new Date(row.qa_expires_at).toISOString()}` : '';
+  return `public:${row.marker_id}:${row.publication_epoch}:${row.content_revision}:${row.snapshot_location_policy_version}${fixtureAuthority}`;
 }
 
 function resourceRevision(row) {
@@ -78,6 +81,8 @@ function publicEnvelope(row, includeText = false) {
     ? row.encountered_at.toISOString() : row.encountered_at;
   const authorizationIssuedAt = row.authorization_issued_at instanceof Date
     ? row.authorization_issued_at.toISOString() : row.authorization_issued_at;
+  const ordinaryExpiryMs = new Date(authorizationIssuedAt).getTime() + PUBLIC_CACHE_TTL_MS;
+  const fixtureExpiryMs = row?.qa_expires_at == null ? Number.POSITIVE_INFINITY : new Date(row.qa_expires_at).getTime();
   const envelope = {
     id: String(row.marker_id),
     // Public is intentionally anonymous. Keep a non-identifying stable shape
@@ -94,7 +99,8 @@ function publicEnvelope(row, includeText = false) {
     resource_revision: resourceRevision(row),
     authorization_revision: authorizationRevision(row),
     authorization_issued_at: authorizationIssuedAt,
-    authorization_expires_at: new Date(new Date(authorizationIssuedAt).getTime() + PUBLIC_CACHE_TTL_MS).toISOString(),
+    authorization_expires_at: new Date(Math.min(ordinaryExpiryMs,
+      Number.isFinite(fixtureExpiryMs) ? fixtureExpiryMs : ordinaryExpiryMs)).toISOString(),
   };
   if (includeText) {
     envelope.text = row.text;
@@ -143,11 +149,14 @@ async function loadAuthorizedPublicCairn(conn, viewerId, markerId, lock = false)
             marker.content_revision, marker.publication_epoch,
             author.name AS author_name,
             publication.id AS publication_id, publication.state AS publication_state
+            ,qa_fixture.batch_id AS qa_batch_id
+            ,${qaFixtureExpirySql('marker.id')} AS qa_expires_at
        FROM public_cairn_encounters encounter
        JOIN markers marker ON marker.id=encounter.marker_id
        JOIN users author ON author.id=encounter.author_id AND author.deleted_at IS NULL
        JOIN public_cairn_publications publication ON publication.id=encounter.publication_id
        LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
+       LEFT JOIN cairn_qa_fixtures qa_fixture ON qa_fixture.marker_id=marker.id
       WHERE encounter.viewer_id=? AND encounter.marker_id=?
         AND encounter.hidden_at IS NULL
         AND marker.user_id=encounter.author_id
@@ -160,6 +169,7 @@ async function loadAuthorizedPublicCairn(conn, viewerId, markerId, lock = false)
         AND publication.content_revision=marker.content_revision
         AND publication.snapshot_location_policy_version=?
         AND COALESCE(moderation.state,'available')='available'
+        AND ${qaFixtureEligibleSql('marker.id', 'encounter.viewer_id')}
         AND NOT EXISTS (
           SELECT 1 FROM cairn_revisions moderated_revision
            WHERE moderated_revision.marker_id=marker.id
@@ -318,6 +328,7 @@ router.post('/encounters/verify', actionLimiter, async (req, res) => {
           AND marker.content_revision=publication.content_revision
           AND publication.snapshot_location_policy_version=?
           AND publication.owner_id <> ?
+          AND ${qaFixtureEligibleSql('marker.id', '?')}
           AND NOT EXISTS (
             SELECT 1 FROM cairn_revisions moderated_revision
              WHERE moderated_revision.marker_id=marker.id
@@ -372,7 +383,7 @@ router.post('/encounters/verify', actionLimiter, async (req, res) => {
           )
         ORDER BY publication.published_at DESC, publication.id DESC
         LIMIT ${PUBLIC_CANDIDATE_SCAN_LIMIT} FOR SHARE`,
-      [locationPolicyVersion(), viewerId, viewerId, viewerId, viewerId,
+      [locationPolicyVersion(), viewerId, viewerId, viewerId, viewerId, viewerId,
         viewerId, sourceActivityClientId, MAX_HORIZONTAL_ACCURACY_M,
         viewerId, sourceActivityClientId, MAX_HORIZONTAL_ACCURACY_M,
         viewerId, sourceActivityClientId, PUBLIC_ENCOUNTER_RADIUS_M],
@@ -474,6 +485,8 @@ router.get('/scene', async (req, res) => {
                 marker.created_at AS marker_created_at,
                 marker.content_revision, marker.publication_epoch, author.name AS author_name,
                 publication.id AS publication_id,
+                qa_fixture.batch_id AS qa_batch_id,
+                ${qaFixtureExpirySql('marker.id')} AS qa_expires_at,
                 ST_Distance_Sphere(POINT(publication.snapshot_lng,publication.snapshot_lat),
                   POINT(witness.lng,witness.lat)) AS local_distance_m,
                 ROW_NUMBER() OVER (
@@ -486,6 +499,7 @@ router.get('/scene', async (req, res) => {
            JOIN public_cairn_publications publication ON publication.id=encounter.publication_id
            LEFT JOIN memory_presence_witnesses witness ON witness.id=encounter.evidence_witness_id
            LEFT JOIN cairn_source_moderation moderation ON moderation.marker_id=marker.id
+           LEFT JOIN cairn_qa_fixtures qa_fixture ON qa_fixture.marker_id=marker.id
           WHERE encounter.viewer_id=? AND encounter.hidden_at IS NULL
             AND marker.permission='public' AND marker.public_intent=1
             AND marker.public_state='published' AND marker.status <> 'hidden'
@@ -496,6 +510,7 @@ router.get('/scene', async (req, res) => {
             AND publication.content_revision=marker.content_revision
             AND publication.snapshot_location_policy_version=?
             AND COALESCE(moderation.state,'available')='available'
+            AND ${qaFixtureEligibleSql('marker.id', 'encounter.viewer_id')}
             AND NOT EXISTS (
               SELECT 1 FROM cairn_revisions moderated_revision
                WHERE moderated_revision.marker_id=marker.id
