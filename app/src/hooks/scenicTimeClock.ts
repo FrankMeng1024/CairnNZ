@@ -52,6 +52,15 @@ export function subscribeScenicTimeClock(listener: Listener): () => void {
 }
 
 export function scenicTimeClockSnapshot(): number {
+  // useSyncExternalStore reads the snapshot before it subscribes. When Home
+  // was not mounted overnight, the module value still described yesterday's
+  // last visible minute and produced one morning frame before startClock()
+  // corrected it. Refresh only while there are no consumers, and quantize to
+  // the minute so repeated reads during one render remain stable.
+  if (listeners.size === 0) {
+    const currentMinute = Math.floor(Date.now() / 60_000) * 60_000;
+    if (Math.floor(nowMs / 60_000) * 60_000 !== currentMinute) nowMs = currentMinute;
+  }
   return nowMs;
 }
 

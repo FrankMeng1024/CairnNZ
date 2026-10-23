@@ -55,7 +55,6 @@ import {
   installAuthenticatedSession,
   releaseAuthScreenAuthorityOnUnmount,
 } from '../services/authSessionInstallation';
-import { OtaBadge } from '../components/OtaBadge';
 import { OTP_LENGTH, applyOtpCellInput, normalizeOtpInput } from '../utils/authOtp';
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
 
@@ -1581,11 +1580,6 @@ export function AuthScreen() {
                 so thumb sees it first; social auth methods rank by likelihood
                 (Google > Apple for NZ market). */}
             <View style={styles.splashActions}>
-              {/* OTA version badge — shows update group + auto-update trigger.
-                  Positioned above Continue with Email so it's easily reachable
-                  for confirming the running version. */}
-              <OtaBadge inline />
-
               {/* Continue with Email — deep green primary CTA.
                   R22 iter-9 (2026-08-17 user request): route to 'login'
                   (Sign In), not 'register'. Sign In is the default action

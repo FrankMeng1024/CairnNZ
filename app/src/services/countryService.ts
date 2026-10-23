@@ -24,9 +24,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // of countryName from country-level ("China", "New Zealand") to city-level
 // ("Guiyang", "Auckland"). Old v1 cache holds country-only strings; using
 // a new key makes every existing device re-resolve fresh on first load.
-const CACHE_KEY = 'cairn.current_country.v3';
+// v1 is intentionally city-only. The former current_country.v3 cache could
+// contain a country/province after localized reverse geocoding failed, which
+// made Home claim the user had explored "of China".
+const CACHE_KEY = 'cairn.current_city.v1';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
-const CACHE_DISTANCE_M = 50_000;           // 50 km → same country
+const CACHE_DISTANCE_M = 20_000;           // city display must refresh across cities
 
 export type CountryCache = {
   /** Display name — prefers city, falls back to region, then country. */
@@ -79,11 +82,14 @@ function englishRegionName(countryCode: string): string {
   }
 }
 
-function englishOnlyName(name: string, countryCode: string): string {
+function englishOnlyName(name: string): string {
   const normalized = String(name || '').trim();
-  return normalized && !/[^\u0000-\u007F]/.test(normalized)
-    ? normalized
-    : englishRegionName(countryCode);
+  return normalized && !/[^\u0000-\u007F]/.test(normalized) ? normalized : '';
+}
+
+function isCountryOnlyName(name: string, countryCode: string): boolean {
+  const country = englishRegionName(countryCode);
+  return Boolean(country && name.localeCompare(country, 'en', { sensitivity: 'base' }) === 0);
 }
 
 /**
@@ -95,11 +101,11 @@ export function normalizeCachedCountry(value: unknown): CountryCache | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<CountryCache>;
   const countryCode = String(candidate.countryCode ?? '').trim().toUpperCase();
-  const countryName = englishOnlyName(String(candidate.countryName ?? ''), countryCode);
+  const countryName = englishOnlyName(String(candidate.countryName ?? ''));
   const lat = Number(candidate.lat);
   const lng = Number(candidate.lng);
   const resolvedAt = Number(candidate.resolvedAt);
-  if (!countryName
+  if (!countryName || isCountryOnlyName(countryName, countryCode)
     || !Number.isFinite(lat) || lat < -90 || lat > 90
     || !Number.isFinite(lng) || lng < -180 || lng > 180
     || !Number.isFinite(resolvedAt) || resolvedAt <= 0) return null;
@@ -159,7 +165,9 @@ export async function resolveCurrentCountry(): Promise<CountryCache | null> {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
         });
-        displayName = place?.city ?? place?.subregion ?? place?.region ?? place?.country ?? '';
+        // Home's qualifier is a city/locality, never a country label. A
+        // province/country result is too broad and falls back to neutral copy.
+        displayName = place?.city ?? place?.district ?? place?.subregion ?? '';
         countryCode = (place?.isoCountryCode ?? countryCode).toUpperCase();
         // R21 fix (2026-08-17 user "出现了中文 系统必须纯英语"): expo-location
         // reverseGeocodeAsync returns locale-specific names on device (Chinese
@@ -175,7 +183,7 @@ export async function resolveCurrentCountry(): Promise<CountryCache | null> {
             clearTimeout(timeout);
             if (res.ok) {
               const j = await res.json();
-              const eng = j.city ?? j.locality ?? j.principalSubdivision ?? j.countryName ?? '';
+              const eng = j.city ?? j.locality ?? '';
               if (eng) displayName = eng;
               if (j.countryCode) countryCode = (j.countryCode as string).toUpperCase();
             }
@@ -194,21 +202,19 @@ export async function resolveCurrentCountry(): Promise<CountryCache | null> {
         clearTimeout(timeout);
         if (res.ok) {
           const j = await res.json();
-          // Prefer city (Guiyang, Auckland), fall back to locality
-          // (district), then principalSubdivision (state/province), then
-          // country as final fallback.
-          displayName =
-            j.city ?? j.locality ?? j.principalSubdivision ?? j.countryName ?? '';
+          // A province or country is not a truthful city qualifier.
+          displayName = j.city ?? j.locality ?? '';
           countryCode = (j.countryCode ?? countryCode).toUpperCase();
         }
       }
     } catch { /* silent — displayName stays empty, will fall through to cache */ }
 
-    displayName = englishOnlyName(displayName, countryCode);
+    displayName = englishOnlyName(displayName);
     if (!displayName) {
       displayName = cached?.countryName ?? '';
     }
-    displayName = englishOnlyName(displayName, countryCode || cached?.countryCode || '');
+    displayName = englishOnlyName(displayName);
+    if (isCountryOnlyName(displayName, countryCode || cached?.countryCode || '')) return cached;
     if (!displayName) return cached;
 
     const next: CountryCache = {

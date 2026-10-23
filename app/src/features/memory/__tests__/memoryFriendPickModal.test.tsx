@@ -96,7 +96,8 @@ describe('Memory friend picker interaction owner', () => {
     expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-accessory-11').props.style)).toMatchObject({ width: 32, minHeight: 44 });
 
     fireEvent.press(screen.getByTestId('memory-friend-row-11'));
-    await waitFor(() => expect(screen.getByText('Loading shared places…')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('memory-friend-row-accessory-11')).toBeTruthy());
+    expect(screen.queryByText('Loading shared places…')).toBeNull();
     expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-status-slot-11').props.style)).toMatchObject({ minHeight: 18 });
     expect(StyleSheet.flatten(screen.getByTestId('memory-friend-row-accessory-11').props.style)).toMatchObject({ width: 32, minHeight: 44 });
     expect(screen.getByTestId('memory-friend-pick-modal')).toBeTruthy();

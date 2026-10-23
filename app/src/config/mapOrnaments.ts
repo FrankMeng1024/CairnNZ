@@ -29,3 +29,10 @@ export function groupedMapOrnamentsAbove(bottomClearance: number) {
 }
 
 export const MAP_ORNAMENTS_EDGE = groupedMapOrnamentsAbove(8);
+
+/** Memory has persistent controls above the map, so its legal marks can use
+ * the actual exposed bottom edge: logo left, attribution/info right. */
+export const MEMORY_MAP_ORNAMENTS = {
+  logoPosition: { bottom: 8, left: 8 } satisfies MapOrnamentPosition,
+  attributionPosition: { bottom: 8, right: 8 } satisfies MapOrnamentPosition,
+};

@@ -33,7 +33,7 @@ import { haversineM } from '../../../utils/geo';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useMapTheme } from '../../../hooks/useMapTheme';
 import { getMapStyleForTheme, themeToStandardPreset, buildStandardConfig } from '../../../config/mapbox';
-import { mapOrnamentsAbove } from '../../../config/mapOrnaments';
+import { MEMORY_MAP_ORNAMENTS } from '../../../config/mapOrnaments';
 import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
 import { useAppStore } from '../../../store/useAppStore';
 import { AcquiredCairnClusterLayer } from './AcquiredCairnClusterLayer';
@@ -42,9 +42,9 @@ import { excludeAcquiredFriendMarkers } from '../services/cairnMapPresentation';
 import { memoryCoverageViewport, type MemoryCoverageViewport } from '../services/memoryCoverageViewport';
 import { memoryFogPaintEvidenceReady } from '../services/memoryFogReadiness';
 import { memoryMinePreviewCanCapture } from '../services/memoryEntryPresentation';
+import { memoryCameraAtTarget } from '../services/memoryCameraTransition';
 
 let memoryMapHasRendered = false;
-const MEMORY_MAP_ORNAMENTS = mapOrnamentsAbove(76);
 
 interface Props {
   centerLat: number;
@@ -110,6 +110,9 @@ interface Props {
   /** Parent owns the one stable entry veil for both map and Fog readiness. */
   presentationOwnedByParent?: boolean;
   onPresentationState?: (state: MapLoadState) => void;
+  /** Readiness for an in-place cross-region camera move. Null means the
+   * destination has produced a fully rendered frame. */
+  onCameraTransitionState?: (state: MapLoadState | null) => void;
 }
 
 const INITIAL_ZOOM = 16.5;
@@ -129,7 +132,7 @@ export type MemoryMapHandle = {
 };
 
 export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
-  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false, onOpenAcquiredCairn, onOpenAcquiredGroup, onAcquiredClusterError, presentationOwnedByParent = false, onPresentationState },
+  { centerLat, centerLng, showUserLocation = true, recenterToken = 0, onMapMoved, onCameraCenter, onMapFullyReady, onMapUnavailable, onFogPreparing, onFogReady, onFogUnavailable, strangerMarks, flyToTarget, qaWorkspaceActive = false, onOpenAcquiredCairn, onOpenAcquiredGroup, onAcquiredClusterError, presentationOwnedByParent = false, onPresentationState, onCameraTransitionState },
   ref,
 ) {
   const theme = useVisualTheme();
@@ -269,10 +272,22 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const idleFireCountRef = useRef(0);
   const lastIdleAtRef = useRef(0);
   const idleThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingFlyRef = useRef<{ token: number; center: [number, number]; atTarget: boolean } | null>(null);
+  const pendingFlySlowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onMapSettle = useCallback((feature: any) => {
     const center = feature?.properties?.center;
     const zoom = feature?.properties?.zoom;
     if (!Array.isArray(center) || center.length < 2 || typeof zoom !== 'number') return;
+    const pendingFly = pendingFlyRef.current;
+    if (pendingFly && memoryCameraAtTarget(
+      pendingFly.center,
+      [Number(center[0]), Number(center[1])],
+    )) {
+      pendingFly.atTarget = true;
+      // Require one fully-rendered frame after the destination camera settles;
+      // an idle event alone does not prove remote-region tiles are visible.
+      mapViewRef.current?.requestRender?.();
+    }
     // v386: propagate zoom to shared value so pin components can animate
     // transform:scale on the UI thread (reanimated). This is the
     // OTA-friendly zoom-responsive scaling for PointAnnotation, since
@@ -495,9 +510,17 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   // even if center didn't change. 800ms 动画略慢让用户感知空间过渡.
   const lastFlyTokenRef = useRef<number>(0);
   useEffect(() => {
+    if (!Mapbox.available) return;
     if (!flyToTarget) return;
     if (flyToTarget.token === lastFlyTokenRef.current) return;
     lastFlyTokenRef.current = flyToTarget.token;
+    pendingFlyRef.current = { token: flyToTarget.token, center: flyToTarget.center, atTarget: false };
+    if (pendingFlySlowTimerRef.current) clearTimeout(pendingFlySlowTimerRef.current);
+    onCameraTransitionState?.('loading');
+    const expectedToken = flyToTarget.token;
+    pendingFlySlowTimerRef.current = setTimeout(() => {
+      if (pendingFlyRef.current?.token === expectedToken) onCameraTransitionState?.('slow');
+    }, 2_500);
     // 更新 anchor 到目标 center, 防止 flyTo 触发 pan-detected → 弹回 recenter pill
     anchorRef.current = { lat: flyToTarget.center[1], lng: flyToTarget.center[0] };
     setHasPannedAway(true);  // 已经不在自己 GPS 位置了, recenter pill 应该出现
@@ -509,6 +532,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyToTarget?.token]);
+
+  useEffect(() => () => {
+    if (pendingFlySlowTimerRef.current) clearTimeout(pendingFlySlowTimerRef.current);
+  }, []);
 
   const onRecenter = useCallback(() => {
     log('memory.map_recenter_btn');
@@ -645,10 +672,19 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // have already painted. Do not hold the blocking entry veil once
           // this exact-authority frame exists.
           confirmCurrentFogPaint(true);
+          const pendingFly = pendingFlyRef.current;
+          if (pendingFly?.atTarget) {
+            if (pendingFlySlowTimerRef.current) clearTimeout(pendingFlySlowTimerRef.current);
+            pendingFlySlowTimerRef.current = null;
+            pendingFlyRef.current = null;
+            onCameraTransitionState?.(null);
+            log('memory.camera_destination_visible', { token: pendingFly.token });
+          }
         }}
         onMapLoadingError={(event: unknown) => {
           log('memory.map_loading_error', { event: (() => { try { return JSON.stringify(event).slice(0, 500); } catch { return String(event); } })() });
           setMapLoadState('error');
+          if (pendingFlyRef.current) onCameraTransitionState?.('error');
         }}
         onRegionIsChanging={(feature: any) => {
           // v340: suppress pan-detect for 1s after a programmatic

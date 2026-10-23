@@ -21,7 +21,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeStore';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
@@ -34,12 +34,9 @@ interface Props {
    *  Pressing it calls onPickPress. When scope=mine, the slot is
    *  collapsed (width 0, opacity 0) and unmounted from layout. */
   onPickPress?: () => void;
-  /** Exact requested-scene preparation. Delayed locally so sub-180 ms work
-   * never produces a distracting spinner flash. */
-  pending?: boolean;
 }
 
-export function MemoryScopeToggle({ onPickPress, pending = false }: Props) {
+export function MemoryScopeToggle({ onPickPress }: Props) {
   const theme = useVisualTheme();
   const scope = useMemoryScopeStore((s) => s.scope);
   const setScope = useMemoryScopeStore((s) => s.setScope);
@@ -48,7 +45,6 @@ export function MemoryScopeToggle({ onPickPress, pending = false }: Props) {
   // v376: third-segment expand animation. Width grows from 0→44 and
   // opacity 0→1 when scope flips to friends. Reverses on flip back.
   const expand = useRef(new Animated.Value(scope === 'self' ? 0 : 1)).current;
-  const [showPending, setShowPending] = React.useState(false);
 
   useEffect(() => {
     Animated.timing(expand, {
@@ -59,15 +55,6 @@ export function MemoryScopeToggle({ onPickPress, pending = false }: Props) {
       useNativeDriver: false,
     }).start();
   }, [scope]);
-
-  useEffect(() => {
-    if (!pending) {
-      setShowPending(false);
-      return undefined;
-    }
-    const timer = setTimeout(() => setShowPending(true), 180);
-    return () => clearTimeout(timer);
-  }, [pending]);
 
   const expandWidth = expand.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
   const expandOpacity = expand;
@@ -96,20 +83,13 @@ export function MemoryScopeToggle({ onPickPress, pending = false }: Props) {
             activeOpacity={0.7}
             testID={`memory-scope-${o.id}`}
             accessibilityRole="button"
-            accessibilityState={{ selected: active, busy: o.id === 'combined' && pending }}
+            accessibilityState={{ selected: active }}
           >
             <View style={styles.labelRow}>
               <Text style={[styles.label, active && styles.labelActive, { color: active ? theme.primary : theme.foregroundSecondary }]}>{o.label}</Text>
               {o.id === 'combined' && active && subscriptions.length > 0 ? (
                 <View style={[styles.countBadge, { backgroundColor: active ? theme.primary : theme.borderStrong }]}>
                   <Text style={[styles.countText, { color: theme.onPrimary }]}>{subscriptions.length}</Text>
-                </View>
-              ) : null}
-              {o.id === 'combined' && active ? (
-                <View style={styles.pendingSlot} testID="memory-scope-pending-slot">
-                  {showPending ? (
-                    <ActivityIndicator testID="memory-scope-pending" size="small" color={theme.primary} />
-                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -173,7 +153,6 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   countBadge: { minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   countText: { fontSize: 10, fontWeight: '700' },
-  pendingSlot: { width: 12, height: 16, alignItems: 'center', justifyContent: 'center' },
   // v376: Pick segment — same vertical metrics as Mine/Friends so the
   // pill height is unchanged. The visible 40pt cluster uses hitSlop for a
   // 44pt target, keeping the action close to its Friends label.

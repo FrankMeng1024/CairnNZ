@@ -20,6 +20,7 @@ jest.mock('react-native', () => ({
 
 import {
   __scenicTimeClockTest,
+  scenicTimeClockSnapshot,
   subscribeScenicTimeClock,
 } from '../scenicTimeClock';
 
@@ -65,5 +66,16 @@ describe('shared Scenic clock ownership', () => {
     mockAppStateListener?.('active');
     expect(jest.getTimerCount()).toBe(1);
     unsubscribe();
+  });
+
+  test('a cold subscriber never receives a stale daypart snapshot', () => {
+    jest.setSystemTime(new Date('2026-10-23T08:00:00.000Z'));
+    __scenicTimeClockTest.reset();
+    expect(scenicTimeClockSnapshot()).toBe(new Date('2026-10-23T08:00:00.000Z').getTime());
+
+    // No Home subscriber is mounted while time advances. Its first render
+    // must still use the current minute rather than the old module snapshot.
+    jest.setSystemTime(new Date('2026-10-23T20:30:00.000Z'));
+    expect(scenicTimeClockSnapshot()).toBe(new Date('2026-10-23T20:30:00.000Z').getTime());
   });
 });

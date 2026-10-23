@@ -76,6 +76,7 @@ import {
   memoryMinePreviewCanRender,
 } from '../services/memoryEntryPresentation';
 import { memoryUserLocationShouldMount } from '../services/memoryLocationOwnership';
+import { claimMemoryGuidance } from '../services/memoryGuidance';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
 // v427: hierarchy migrated to async /api/hierarchy — legacy static store deleted.
@@ -249,6 +250,7 @@ export function MemoryScreen() {
   const [entryVeilMounted, setEntryVeilMounted] = useState(true);
   const entryVeilOpacity = useRef(new Animated.Value(1)).current;
   const [entryMapLoadState, setEntryMapLoadState] = useState<MapLoadState>('loading');
+  const [cameraTransitionState, setCameraTransitionState] = useState<MapLoadState | null>(null);
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
@@ -436,6 +438,7 @@ export function MemoryScreen() {
     setFogReady(false);
     setFogScenePending(false);
     setFogUnavailable(false);
+    setCameraTransitionState(null);
     setRefetchToken((n) => n + 1);
     setMountKey((n) => {
       const next = n + 1;
@@ -509,9 +512,18 @@ export function MemoryScreen() {
   // S3 fix: separate debounce for the EXPENSIVE map remount.
   const lastMountAtRef = useRef(0);
   useEffect(() => {
-    if (!settingsHydrated) return;
-    if (!firstVisitDone) setShowHint(true);
-  }, [settingsHydrated, firstVisitDone]);
+    if (!settingsHydrated || !activeOwnerId) return undefined;
+    if (localHydration.ownerUserId !== activeOwnerId || localHydration.status !== 'ready') return undefined;
+    let cancelled = false;
+    void claimMemoryGuidance({
+      ownerId: activeOwnerId,
+      hasExploredEvidence: memoryPoints.length > 0 || presenceWitnesses.length > 0,
+      legacyDone: firstVisitDone,
+    }).then(shouldShow => {
+      if (!cancelled) setShowHint(shouldShow);
+    });
+    return () => { cancelled = true; };
+  }, [activeOwnerId, firstVisitDone, localHydration.ownerUserId, localHydration.status, memoryPoints.length, presenceWitnesses.length, settingsHydrated]);
 
   // v326: hydrate persisted last-fix immediately on mount. If watcherFix
   // is already populated (warm reopen during the same session), do
@@ -1039,7 +1051,6 @@ export function MemoryScreen() {
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
         <MemoryScopeToggle
           onPickPress={openFriendPicker}
-          pending={fogScenePending && friendProjectionError == null}
         />
       </View>
       <TouchableOpacity
@@ -1154,6 +1165,7 @@ export function MemoryScreen() {
           qaWorkspaceActive={syntheticQaAuthority}
           presentationOwnedByParent
           onPresentationState={setEntryMapLoadState}
+          onCameraTransitionState={setCameraTransitionState}
           key={`map-${mountKey}`}
         />
       ) : failReason === 'permission' ? (
@@ -1357,29 +1369,54 @@ export function MemoryScreen() {
         </TouchableOpacity>
       ) : null}
 
-      {friendProjectionError && memoryScope !== 'self' ? (
-        <View style={[styles.slowBanner, { top: insets.top + 8, left: 80, right: 12 }]}>
-          <Icon name="CloudOff" size={13} color={theme.iconInactive} strokeWidth={2.2} />
-          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={1}>
-            {friendProjectionError === 'offline'
-              ? 'Connect to refresh shared content'
-              : 'Shared content couldn’t refresh'}
-          </Text>
-        </View>
-      ) : null}
-
-      {fogUnavailable ? (
-        <TouchableOpacity
-          style={[styles.slowBanner, { top: insets.top + 212, left: 80, right: 12, zIndex: 14 }]}
-          onPress={handleRetryLoad}
-          accessibilityRole="button"
-          accessibilityLabel="Retry Memory map details"
+      {memoryEntryUsable && (cameraTransitionState
+        || (memoryScope !== 'self' && (friendProjectionError || fogUnavailable || fogScenePending))) ? (
+        <View
+          style={[styles.mapStatusRegion, { top: insets.top + 116, bottom: insets.bottom + 92 }]}
+          pointerEvents="box-none"
+          testID="memory-map-status-region"
         >
-          <Icon name="RotateCcw" size={13} color={theme.iconInactive} strokeWidth={2.2} />
-          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={1}>
-            Map details unavailable · Tap to retry
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mapStatusCard, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+            disabled={!friendProjectionError && !fogUnavailable && cameraTransitionState !== 'error' && cameraTransitionState !== 'slow'}
+            onPress={() => {
+              if (cameraTransitionState === 'error' || cameraTransitionState === 'slow') {
+                handleRetryLoad();
+                return;
+              }
+              if (friendProjectionError) {
+                const viewport = mapRef.current?.getCoverageViewport();
+                if (viewport) void useFriendMemoryStore.getState().loadSelectedProjections(undefined, viewport);
+                return;
+              }
+              handleRetryLoad();
+            }}
+            accessibilityRole={friendProjectionError || fogUnavailable || cameraTransitionState === 'error' || cameraTransitionState === 'slow' ? 'button' : undefined}
+            accessibilityLabel={friendProjectionError || fogUnavailable || cameraTransitionState === 'error' || cameraTransitionState === 'slow' ? 'Retry loading map' : 'Loading map'}
+            testID="memory-map-status"
+          >
+            {friendProjectionError || fogUnavailable || cameraTransitionState === 'error' ? (
+              <Icon name={friendProjectionError === 'offline' ? 'CloudOff' : 'RotateCcw'} size={15} color={theme.iconInactive} strokeWidth={2.2} />
+            ) : (
+              <ActivityIndicator color={theme.primary} size="small" />
+            )}
+            <Text style={[styles.mapStatusText, { color: theme.foreground }]} numberOfLines={2}>
+              {cameraTransitionState === 'error'
+                ? 'Map tiles couldn’t load · Tap to retry'
+                : cameraTransitionState === 'slow'
+                  ? 'This map is taking longer · Tap to retry'
+                  : cameraTransitionState === 'loading'
+                    ? 'Loading this place…'
+                    : friendProjectionError === 'offline'
+                ? 'Connect to load shared places · Tap to retry'
+                : friendProjectionError === 'unauthorized'
+                  ? 'Shared places are no longer available · Tap to refresh'
+                  : friendProjectionError || fogUnavailable
+                    ? 'Shared map couldn’t load · Tap to retry'
+                    : 'Loading shared map…'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       <PublicWalkingDiscoveryCard
@@ -1817,6 +1854,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 8,
   },
+  mapStatusRegion: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 14,
+  },
+  mapStatusCard: {
+    minHeight: 44,
+    maxWidth: 280,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapStatusText: { fontSize: 12, lineHeight: 16, fontWeight: '600', flexShrink: 1 },
   slowBannerSpinner: {
     marginRight: 8,
     transform: [{ scale: 0.7 }],

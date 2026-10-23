@@ -1,4 +1,4 @@
-import { MAP_ORNAMENTS_EDGE, groupedMapOrnamentsAbove, mapOrnamentsAbove } from '../mapOrnaments';
+import { MAP_ORNAMENTS_EDGE, MEMORY_MAP_ORNAMENTS, groupedMapOrnamentsAbove, mapOrnamentsAbove } from '../mapOrnaments';
 
 describe('Mapbox ornament placement', () => {
   test('keeps genuine legal controls together at the exposed lower-left edge', () => {
@@ -16,6 +16,13 @@ describe('Mapbox ornament placement', () => {
     expect(groupedMapOrnamentsAbove(246)).toEqual({
       logoPosition: { bottom: 246, left: 8 },
       attributionPosition: { bottom: 246, left: 92 },
+    });
+  });
+
+  test('Memory keeps legal controls at opposite bottom edges and clear of map controls', () => {
+    expect(MEMORY_MAP_ORNAMENTS).toEqual({
+      logoPosition: { bottom: 8, left: 8 },
+      attributionPosition: { bottom: 8, right: 8 },
     });
   });
 });

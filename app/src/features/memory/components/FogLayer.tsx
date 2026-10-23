@@ -1736,11 +1736,24 @@ export function FogLayer({
   }, [accountId, authorizedSourceVersions, combinedPreparationFailed, publishScene, reusableCachedSelf, safeFallbackPresentationKey, selectedFriendIds]);
   useEffect(() => {
     if (!combinedPreparationFailed) return;
-    // The safe scene above commits in layout before this callback lets the
-    // parent retire its cold-entry veil. A warm authorized scene stays mounted;
-    // neither path claims the incomplete combined selection is ready.
+    const currentScene = publishedSceneRef.current;
+    const retainedSceneAuthorized = currentScene.friendSources.length > 0
+      && Boolean(currentScene.presentationKey)
+      && memoryFogSceneRemainsAuthorized({
+        sceneAccountId: currentScene.accountId,
+        currentAccountId: accountId,
+        friendSources: currentScene.friendSources,
+        selectedFriendIds,
+        authorizedSourceVersions,
+      });
+    // Optional Friend coverage refresh failure must not turn a complete,
+    // still-authorized rendered scene into "Map details unavailable". The
+    // screen presents the scoped retry while this exact scene remains usable.
+    if (retainedSceneAuthorized) return;
+    // A genuinely cold failure has no coherent borrowed scene. The safe Mine
+    // fallback commits in layout before the parent retires its entry veil.
     onFogUnavailableRef.current?.(presentationKey);
-  }, [combinedPreparationFailed, presentationKey]);
+  }, [accountId, authorizedSourceVersions, combinedPreparationFailed, presentationKey, selectedFriendIds]);
   useEffect(() => {
     if (syntheticQaAuthority || !viewport || preparedMemoryStatus !== 'error') return;
     setGeometryReady(false);

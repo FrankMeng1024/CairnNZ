@@ -221,6 +221,7 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
     // a still-authorized warm scene or pretending the partial selection is a
     // newly completed combined render.
     await act(async () => {
+      unavailable.mockClear();
       useFriendMemoryStore.setState(state => ({
         error: 'unavailable',
         sourceStates: {
@@ -230,7 +231,7 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
         version: state.version + 1,
       }));
     });
-    await waitFor(() => expect(unavailable).toHaveBeenCalled());
+    expect(unavailable).not.toHaveBeenCalled();
     expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeTruthy();
     await act(async () => {
       useFriendMemoryStore.setState(state => ({

@@ -199,14 +199,14 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
                 const stateCopy: string | null = unavailable
                   ? 'Not shared with you'
                   : pending || projectionState?.status === 'loading'
-                    ? 'Loading shared places…'
+                    ? null
                     : projectionState?.status === 'error'
                       ? 'Couldn’t load shared places · Retry'
                       : projectionState?.status === 'empty' || item.sharing_status === 'shared_empty'
                         ? 'No shared places yet'
                         : subscribed && projectionState?.status === 'loaded'
                           ? null
-                          : subscribed ? 'Loading shared places…' : 'Shared with you';
+                          : subscribed ? null : 'Shared with you';
                 return (
                   <View>
                     <TouchableOpacity

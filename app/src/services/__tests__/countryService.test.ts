@@ -19,16 +19,17 @@ describe('country cache presentation authority', () => {
     jest.clearAllMocks();
   });
 
-  test('legacy localized cache is converted before any early cache return', () => {
+  test('a localized or country-only cache is rejected rather than mislabeled as a city', () => {
     expect(normalizeCachedCountry({
       ...base,
       countryName: '贵阳市',
       countryCode: 'cn',
-    })).toEqual({
+    })).toBeNull();
+    expect(normalizeCachedCountry({
       ...base,
       countryName: 'China',
       countryCode: 'CN',
-    });
+    })).toBeNull();
   });
 
   test('an untranslatable localized cache is rejected rather than displayed', () => {
@@ -53,8 +54,8 @@ describe('country cache presentation authority', () => {
     })).toBeNull();
   });
 
-  test('the real cache return path rewrites a localized legacy value before returning it', async () => {
-    const key = 'cairn.current_country.v3';
+  test('the real cache return path does not present a country as the current city', async () => {
+    const key = 'cairn.current_city.v1';
     mockCountryCache.set(key, JSON.stringify({
       ...base,
       resolvedAt: Date.now(),
@@ -62,10 +63,7 @@ describe('country cache presentation authority', () => {
       countryCode: 'CN',
     }));
     const result = await resolveCurrentCountry();
-    expect(result).toMatchObject({ countryName: 'China', countryCode: 'CN' });
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      key,
-      expect.stringContaining('"countryName":"China"'),
-    );
+    expect(result).toBeNull();
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
   });
 });

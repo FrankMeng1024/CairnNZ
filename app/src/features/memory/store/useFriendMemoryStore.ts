@@ -4,6 +4,7 @@ import { storage } from '../../../store/storage';
 import type { MultiPolygon } from 'geojson';
 import type { MemoryCoverageViewport } from '../services/memoryCoverageViewport';
 import { log } from '../../../services/appLog';
+import { classifyFriendMemoryFailure, type FriendMemoryFailure } from '../services/friendMemoryFailure';
 
 export interface FriendProjectionCell {
   id: string;
@@ -45,7 +46,7 @@ interface FriendMemoryState {
   projections: Record<string, FriendProjection>;
   version: number;
   loading: boolean;
-  error: 'offline' | 'unavailable' | null;
+  error: FriendMemoryFailure | null;
   sourceStates: Record<string, FriendProjectionSourceState>;
   /** Current-session authorization proof, separate from viewport geometry.
    * A viewport refresh may retain a previously painted authorized scene;
@@ -391,7 +392,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         }])),
       },
     });
-    let hadNetworkError = false;
+    let aggregateError: FriendMemoryState['error'] = null;
     try {
       let nextRequestIndex = 0;
       const runNext = async (): Promise<void> => {
@@ -414,7 +415,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           expectedUserId: userId,
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          const httpError = new Error(`HTTP ${response.status}`) as Error & { httpStatus?: number };
+          httpError.httpStatus = response.status;
+          throw httpError;
+        }
         const body = await response.json();
         if (String(useAppStore.getState().user?.id ?? '') !== userId
           || get().userId !== userId
@@ -480,7 +485,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           || requestAccountGeneration !== accountGeneration
           || request.generation !== sourceGeneration(request.id)
           || latestSourceRequests.get(request.id) !== request.sequence) return;
-        hadNetworkError = true;
+        const httpStatus = Number(error?.httpStatus);
+        const errorCategory = classifyFriendMemoryFailure({ httpStatus, timedOut });
+        if (errorCategory === 'unauthorized'
+          || (errorCategory === 'unavailable' && aggregateError !== 'unauthorized')
+          || aggregateError == null) aggregateError = errorCategory;
         log('o86.memory.friend_coverage_failed', {
           selected_source_index: requestIndex,
           request_ms: Date.now() - requestStartedAtMs,
@@ -489,12 +498,17 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         const currentTime = Date.now();
         const retained = Object.fromEntries(Object.entries(get().projections)
           .filter(([, projection]) => validProjection(projection, currentTime)));
+        if (errorCategory === 'unauthorized') {
+          invalidateSource(request.id);
+          verifiedSourceVersions.delete(request.id);
+          delete retained[request.id];
+        }
         set({
           projections: retained,
           sourceStates: {
             ...get().sourceStates,
             [request.id]: {
-              status: 'error',
+              status: errorCategory === 'unauthorized' ? 'unauthorized' : 'error',
               cellCount: retained[request.id]?.geometry?.coordinates.length
                 ?? retained[request.id]?.cells.length
                 ?? 0,
@@ -519,7 +533,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           .map((subscription: { friend_id: number }) => String(subscription.friend_id)));
         const next = Object.fromEntries(Object.entries(get().projections)
           .filter(([id, projection]) => currentlySelected.has(id) && validProjection(projection, Date.now())));
-        set({ projections: next, version: get().version + 1, error: hadNetworkError ? 'offline' : null });
+        set({ projections: next, version: get().version + 1, error: aggregateError });
       }
     } finally {
       const remainingLoads = Math.max(
