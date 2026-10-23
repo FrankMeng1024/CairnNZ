@@ -14,6 +14,7 @@ const productionSchedules = [
   { name: 'pushPurge', expression: '30 3 * * *' },
   { name: 'exportBuild', expression: '*/2 * * * *' },
   { name: 'exportPurge', expression: '0 4 * * *' },
+  { name: 'automaticDiagnosticsPurge', expression: '20 4 * * *' },
 ];
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
