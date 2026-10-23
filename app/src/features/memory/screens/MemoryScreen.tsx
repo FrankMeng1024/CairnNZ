@@ -43,6 +43,7 @@ import { Icon } from '../../../components/Icon';
 import { CairnIcon } from '../../../components/CairnIcon';
 import { Colors, FontSize, Spacing } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { useAppIsActive } from '../../../hooks/useAppIsActive';
 import { log, flushNow as flushLogsNow } from '../../../services/appLog';
 // v322: ForegroundUnlockManager moved here from App root. Mounts only
 // when MemoryScreen mounts, unmounts when user leaves. This means H3 +
@@ -74,6 +75,7 @@ import {
   MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS,
   memoryMinePreviewCanRender,
 } from '../services/memoryEntryPresentation';
+import { memoryUserLocationShouldMount } from '../services/memoryLocationOwnership';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
 // v427: hierarchy migrated to async /api/hierarchy — legacy static store deleted.
@@ -196,6 +198,7 @@ export function MemoryScreen() {
   // leaks over Settings/Friends/Map when user navigates away with the hint
   // still open. Gate Modal `visible={showHint && isFocused}`.
   const isMemoryFocused = useIsFocused();
+  const appIsActive = useAppIsActive();
   const acquiredMarkers = useCairnPresentationStore(state => state.acquiredMarkers);
   const acquiredUnreadCount = useCairnPresentationStore(state => state.unreadCount);
   const [acquiredGroupIds, setAcquiredGroupIds] = useState<string[] | null>(null);
@@ -1132,7 +1135,14 @@ export function MemoryScreen() {
           ref={mapRef}
           centerLat={persistentCoord.lat}
           centerLng={persistentCoord.lng}
-          showUserLocation={Boolean(stableCoord)}
+          // Keep the map/camera/Fog mounted across navigation, but release
+          // RNMapbox UserLocation (and its native location/heading owners)
+          // whenever this retained screen cannot actually show the puck.
+          showUserLocation={memoryUserLocationShouldMount({
+            coordinateAvailable: Boolean(stableCoord),
+            screenFocused: isMemoryFocused,
+            appActive: appIsActive,
+          })}
           recenterToken={recenterToken}
           flyToTarget={flyToTarget}
           onOpenAcquiredCairn={markerId => nav.navigate('AcquiredCairnDetail', { markerId })}

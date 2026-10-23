@@ -43,6 +43,13 @@ describe('Mapbox attribution contracts', () => {
     expect(text).toContain('physical iPhone proves Standard labels');
   });
 
+  test('offline pack polling and native progress subscriptions are focus-owned', () => {
+    const text = source('features/offlineMaps/OfflineMapsScreen.tsx');
+    expect(text).toContain('useFocusEffect(useCallback(() => {');
+    expect(text).toContain('clearInterval(timer);');
+    expect(text).toContain('offlineMapService.release(name)');
+  });
+
   test('Activity-start download handoff is default-off, fire-and-forget and after tracking publication', () => {
     const tracking = source('store/useTrackingStore.ts');
     const trackingPublished = tracking.indexOf("status: 'tracking'");

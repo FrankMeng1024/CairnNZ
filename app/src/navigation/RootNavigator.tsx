@@ -60,6 +60,10 @@ import {
 } from '../features/friends/services/friendContent';
 import { usePublicCairnStore } from '../features/public/services/publicCairns';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
+import {
+  createCairnPresentationPoller,
+  type CairnPresentationPoller,
+} from '../features/cairns/cairnPresentationPolling';
 import networkMonitor from '../services/networkMonitor';
 import {
   configureCairnNotificationPresentation,
@@ -166,6 +170,7 @@ export function RootNavigator() {
   const pendingNotificationOpen = React.useRef<CairnNotificationDestination[]>([]);
   const pendingNotificationResponse = React.useRef<unknown[]>([]);
   const notificationOwnerRef = React.useRef('');
+  const cairnPresentationPollerRef = React.useRef<CairnPresentationPoller | null>(null);
   const [notificationRetryTargets, setNotificationRetryTargets] = React.useState<CairnNotificationDestination[]>([]);
   const [notificationRetryBusy, setNotificationRetryBusy] = React.useState(false);
   const queueNotificationRetry = React.useCallback((destination: CairnNotificationDestination) => {
@@ -281,28 +286,34 @@ export function RootNavigator() {
         // activation path for an already-installed client after server-side
         // canary enablement; requiring `enabled` here made it unreachable.
         void usePublicCairnStore.getState().initialize(viewerId, { preservePresentation: true });
-        void useCairnPresentationStore.getState().refresh();
+        cairnPresentationPollerRef.current?.kick();
       }
     }
   }), []);
   React.useEffect(() => {
     if (!isLoggedIn || !user?.id) return undefined;
-    let timer: ReturnType<typeof setInterval> | null = null;
+    const poller = createCairnPresentationPoller({
+      refresh: () => useCairnPresentationStore.getState().refresh(),
+      failure: () => useCairnPresentationStore.getState().error,
+      connectivity: () => networkMonitor.getState()?.state ?? 'unknown',
+    });
+    cairnPresentationPollerRef.current = poller;
     const start = () => {
-      if (timer) return;
-      void useCairnPresentationStore.getState().refresh();
-      timer = setInterval(() => { void useCairnPresentationStore.getState().refresh(); }, 5_000);
+      poller.start();
     };
     const stop = () => {
-      if (timer) clearInterval(timer);
-      timer = null;
+      poller.stop();
     };
     if (AppState.currentState === 'active') start();
     const subscription = AppState.addEventListener('change', state => {
       if (state === 'active') start();
       else stop();
     });
-    return () => { stop(); subscription.remove(); };
+    return () => {
+      stop();
+      subscription.remove();
+      if (cairnPresentationPollerRef.current === poller) cairnPresentationPollerRef.current = null;
+    };
   }, [isLoggedIn, user?.id]);
   markBootPhase('navigator_body_running', { isLoggedIn: !!isLoggedIn });
 

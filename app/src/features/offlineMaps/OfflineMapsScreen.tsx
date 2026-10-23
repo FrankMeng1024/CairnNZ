@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { BackButton } from '../../components/BackButton';
 import { ContentSurface } from '../../components/ContentSurface';
 import { Icon } from '../../components/Icon';
@@ -58,7 +59,7 @@ export function OfflineMapsScreen() {
     }
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void refreshList();
     const timer = setInterval(() => void refreshList(), 3_000);
     return () => {
@@ -66,7 +67,7 @@ export function OfflineMapsScreen() {
       for (const name of subscribedPackNames.current) offlineMapService.release(name);
       subscribedPackNames.current.clear();
     };
-  }, [refreshList]);
+  }, [refreshList]));
 
   const useLastLocation = useCallback(async () => {
     setError('');

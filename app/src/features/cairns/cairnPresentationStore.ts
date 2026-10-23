@@ -67,7 +67,7 @@ interface CairnPresentationState {
   acquiredMarkers: AcquiredCairnMapMarker[];
   presentationBlocked: boolean;
   loading: boolean;
-  error: 'offline' | null;
+  error: 'offline' | 'authorization' | 'server' | null;
   initialize: (viewerId: string) => Promise<void>;
   refresh: () => Promise<void>;
   refreshAcquiredMap: () => Promise<void>;
@@ -87,6 +87,23 @@ let observedViewerId = '';
 let refreshPromise: Promise<void> | null = null;
 let mapRefreshPromise: Promise<void> | null = null;
 const presentationBlockers = new Set<string>();
+
+class PresentationRequestError extends Error {
+  constructor(readonly kind: 'authorization' | 'server', readonly status: number) {
+    super(`cairn_presentation_${kind}_${status}`);
+  }
+}
+
+function samePresentationSnapshot(
+  snapshot: Snapshot,
+  groups: CairnPresentationGroup[],
+  unreadCount: number,
+  acquiredCount: number,
+): boolean {
+  return snapshot.unreadCount === unreadCount
+    && snapshot.acquiredCount === acquiredCount
+    && JSON.stringify(snapshot.groups) === JSON.stringify(groups);
+}
 
 function emptySnapshot(viewerId: string): Snapshot {
   return { version: 1, viewerId, groups: [], principalDisplayed: {}, acknowledged: {}, pendingAcks: {}, unreadCount: 0, acquiredCount: 0, acquiredMarkers: [] };
@@ -414,14 +431,31 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
           skipLogoutOn401: true,
         });
         if (!current(viewerId, generation)) return;
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          throw new PresentationRequestError(
+            response.status === 401 || response.status === 403 ? 'authorization' : 'server',
+            response.status,
+          );
+        }
         const body = await response.json();
         if (!current(viewerId, generation)) return;
-        snapshot.groups = (Array.isArray(body?.groups) ? body.groups : [])
+        const nextGroups = (Array.isArray(body?.groups) ? body.groups : [])
           .map(normalizeGroup).filter(Boolean) as CairnPresentationGroup[];
-        snapshot.unreadCount = Math.max(0, Number(body?.unread_count) || 0);
-        snapshot.acquiredCount = Math.max(0, Number(body?.acquired_cairn_count) || 0);
-        await persist(snapshot, generation);
+        const nextUnreadCount = Math.max(0, Number(body?.unread_count) || 0);
+        const nextAcquiredCount = Math.max(0, Number(body?.acquired_cairn_count) || 0);
+        const snapshotChanged = !samePresentationSnapshot(
+          snapshot,
+          nextGroups,
+          nextUnreadCount,
+          nextAcquiredCount,
+        );
+        snapshot.groups = nextGroups;
+        snapshot.unreadCount = nextUnreadCount;
+        snapshot.acquiredCount = nextAcquiredCount;
+        // Five-second foreground polling is also the safety/revocation
+        // channel. Keep the request cadence online, but do not rewrite the
+        // exact same durable snapshot on every unchanged response.
+        if (snapshotChanged) await persist(snapshot, generation);
         if (!current(viewerId, generation)) return;
         const activeMembers = get().activeGroupMembers;
         const hasWithdrawalAuthority = Array.isArray(body?.withdrawn_group_ids);
@@ -457,12 +491,36 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
           loading: false,
           error: null,
         });
-      } catch {
+      } catch (error) {
         if (!current(viewerId, generation)) return;
+        if (error instanceof PresentationRequestError && error.kind === 'authorization') {
+          const snapshotChanged = snapshot.groups.length > 0
+            || snapshot.unreadCount !== 0
+            || snapshot.acquiredCount !== 0
+            || snapshot.acquiredMarkers.length > 0;
+          snapshot.groups = [];
+          snapshot.unreadCount = 0;
+          snapshot.acquiredCount = 0;
+          snapshot.acquiredMarkers = [];
+          if (snapshotChanged) await persist(snapshot, generation).catch(() => undefined);
+          if (!current(viewerId, generation)) return;
+          // An authenticated endpoint explicitly rejected this viewer. Do
+          // not present it as a connectivity problem or retain coordinates.
+          set({
+            pendingGroups: [], activeGroup: null, activeGroupMembers: [], activeSurface: null,
+            activePrincipalAttention: false, unreadCount: 0, acquiredCount: 0,
+            acquiredMarkers: [], loading: false, error: 'authorization',
+          });
+          return;
+        }
         // Transient transport loss cannot revoke already-authorized visible
         // content or consume its destination. Keep presentation state and
-        // expose only the retryable offline signal.
-        set({ loading: false, error: 'offline' });
+        // expose only the retryable failure class. HTTP failures are not
+        // mislabeled as offline and therefore do not trigger offline backoff.
+        set({
+          loading: false,
+          error: error instanceof PresentationRequestError ? 'server' : 'offline',
+        });
       }
     })();
     const finalPromise = work.finally(() => { if (refreshPromise === finalPromise) refreshPromise = null; });

@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AppState } from 'react-native';
+import { useMemo, useSyncExternalStore } from 'react';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useWeatherStore } from '../store/useWeatherStore';
 import {
@@ -7,6 +6,7 @@ import {
   type ScenicTimeOfDay,
   type EffectiveScenicTimeResolution,
 } from '../utils/scenicTime';
+import { scenicTimeClockSnapshot, subscribeScenicTimeClock } from './scenicTimeClock';
 
 export interface ScenicTimeState extends EffectiveScenicTimeResolution {
   userPreference: 'auto' | ScenicTimeOfDay;
@@ -29,19 +29,11 @@ export function useScenicTimeState(): ScenicTimeState {
   const sunriseMs = useWeatherStore(state => state.sunriseMs);
   const sunsetMs = useWeatherStore(state => state.sunsetMs);
   const solarTimezone = useWeatherStore(state => state.solarTimezone);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
-  useEffect(() => {
-    const refresh = () => setNowMs(Date.now());
-    const timer = setInterval(refresh, 60_000);
-    const subscription = AppState.addEventListener('change', next => {
-      if (next === 'active') refresh();
-    });
-    return () => {
-      clearInterval(timer);
-      subscription.remove();
-    };
-  }, []);
+  const nowMs = useSyncExternalStore(
+    subscribeScenicTimeClock,
+    scenicTimeClockSnapshot,
+    scenicTimeClockSnapshot,
+  );
 
   const resolution = useMemo(() => resolveEffectiveScenicTime({
     nowMs,

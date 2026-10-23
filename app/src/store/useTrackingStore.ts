@@ -1669,8 +1669,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // idempotent without changing local geometry or lifecycle truth.
     if (!startAuthorityIsCurrent()) return false;
 
-    // Start debug logger session (no-op if disabled)
-    if (locationProviderSource === 'real') {
+    // Diagnostic sessions own timers and native battery listeners. Keep them
+    // entirely absent in ordinary production use when Debug Mode is off.
+    if (locationProviderSource === 'real' && useSettingsStore.getState().debugMode) {
       debugLogger.startSession({ activity_mode: get().activityMode });
       sessionRecorder.start();
     }
@@ -1754,7 +1755,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
 
     // Start battery + network monitors (non-blocking)
-    if (locationProviderSource === 'real') batteryMonitor.start().catch(() => {});
+    if (locationProviderSource === 'real' && useSettingsStore.getState().debugMode) {
+      batteryMonitor.start().catch(() => {});
+    }
     networkMonitor.start().catch(() => {});
 
     // Defensive: clear any stale intervals before starting new ones.
@@ -1819,6 +1822,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // 弹一次教育对话框引导升级到 "Always Allow"。已弹过 (SecureStore flag)
       // 就不再弹。用户后续 hike 结束路径断了会知道原因。
       if (!backgroundGrantedCached) {
+        let educationLifecycleInvalid = false;
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const SecureStore = require('expo-secure-store');
@@ -1832,33 +1836,76 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           if (!hasSeenBackgroundEducation && AppState.currentState === 'active') {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { Alert, Linking } = require('react-native');
-            await new Promise<void>((resolve) => {
-              Alert.alert(
-                'Keep recording when screen is off?',
-                'Cairn keeps recording your hike when your screen is off or you switch apps. Set Location permission to "Always Allow" in Settings.',
-                [
-                  {
-                    text: 'Later',
-                    style: 'cancel',
-                    onPress: async () => {
-                      try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
-                      resolve();
+            const educationOutcome = await new Promise<'action' | 'lifecycle-invalid'>((resolve) => {
+              let settled = false;
+              let educationAppStateSubscription: { remove: () => void } | null = null;
+              let unsubscribeTracking: (() => void) | null = null;
+              let unsubscribeApp: (() => void) | null = null;
+              const cleanup = () => {
+                try { educationAppStateSubscription?.remove(); } catch { /* no-op */ }
+                try { unsubscribeTracking?.(); } catch { /* no-op */ }
+                try { unsubscribeApp?.(); } catch { /* no-op */ }
+              };
+              const claim = () => {
+                if (settled) return false;
+                settled = true;
+                cleanup();
+                return true;
+              };
+              const cancelIfInvalid = () => {
+                if (AppState.currentState === 'active' && startAuthorityIsCurrent()) return;
+                if (claim()) resolve('lifecycle-invalid');
+              };
+              educationAppStateSubscription = AppState.addEventListener('change', cancelIfInvalid);
+              unsubscribeTracking = useTrackingStore.subscribe(cancelIfInvalid);
+              const subscribableAppStore = useAppStore as unknown as {
+                subscribe?: (listener: () => void) => () => void;
+              };
+              unsubscribeApp = subscribableAppStore.subscribe?.(cancelIfInvalid) ?? null;
+              // Close the check-to-subscribe gap: AppState or ownership may
+              // already have changed before the listeners were installed.
+              cancelIfInvalid();
+              if (settled) return;
+              try {
+                Alert.alert(
+                  'Keep recording when screen is off?',
+                  'Cairn keeps recording your hike when your screen is off or you switch apps. Set Location permission to "Always Allow" in Settings.',
+                  [
+                    {
+                      text: 'Later',
+                      style: 'cancel',
+                      onPress: async () => {
+                        if (!claim()) return;
+                        try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
+                        resolve('action');
+                      },
                     },
-                  },
-                  {
-                    text: 'Open Settings',
-                    onPress: async () => {
-                      try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
-                      try { Linking.openSettings(); } catch { /* silent */ }
-                      resolve();
+                    {
+                      text: 'Open Settings',
+                      onPress: async () => {
+                        if (!claim()) return;
+                        try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
+                        try { Linking.openSettings(); } catch { /* silent */ }
+                        resolve('action');
+                      },
                     },
-                  },
-                ],
-                { cancelable: false }
-              );
+                  ],
+                  { cancelable: false }
+                );
+              } catch {
+                // Education is advisory. A renderer failure must neither
+                // block Start nor leak the temporary lifecycle observers.
+                if (claim()) resolve('action');
+              }
             });
+            if (educationOutcome === 'lifecycle-invalid' || !startAuthorityIsCurrent()) {
+              educationLifecycleInvalid = true;
+            }
           }
         } catch { /* silent — 教育弹窗失败不影响主流程 */ }
+        if (educationLifecycleInvalid) {
+          throw new Error('background-education-interrupted');
+        }
       }
 
       // Pre-register the background task so we can quickly start/stop it
@@ -4808,9 +4855,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     // The next accepted point proves the first valid interval after Resume.
 
     if (rebuildingAfterProcessDeath) {
-      void batteryMonitor.start().catch(() => {});
+      if (useSettingsStore.getState().debugMode) {
+        void batteryMonitor.start().catch(() => {});
+        sessionRecorder.start();
+      }
       void networkMonitor.start().catch(() => {});
-      sessionRecorder.start();
 
       appStateSubscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
         if (get().status !== 'tracking') return;
@@ -6919,7 +6968,7 @@ function startActivityLifecycleTimer(clientActivityId: string): void {
   tick();
   // Recompute from the provider clock instead of incrementing a counter, so
   // JS timer suspension in background cannot lose Activity time.
-  activityLifecycleInterval = setInterval(tick, 250);
+  activityLifecycleInterval = setInterval(tick, 1_000);
 }
 
 function recentAutoPausePoints(cutoffMs: number) {

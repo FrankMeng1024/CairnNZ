@@ -13,12 +13,17 @@ const mockWebValues = new Map<string, string>();
 let mockCurrentUserId = 'owner-a';
 let mockNetworkState: 'online' | 'offline' = 'offline';
 let mockNetworkListener: ((state: { state: 'online' | 'offline' }) => void) | null = null;
+let mockAppStoreListener: (() => void) | null = null;
 let mockAppStateListener: ((state: 'active' | 'background' | 'inactive') => void) | null = null;
 let mockAppStateCurrent: 'active' | 'background' | 'inactive' = 'active';
 let mockNativeBackgroundStarted = false;
 let mockDurableActivityContext: any = null;
 let mockDurableActivityContextReader = async () => mockDurableActivityContext;
 let mockBackgroundLocations: any[] = [];
+let mockAlertInvocation: {
+  title: string;
+  buttons: Array<{ text: string; onPress?: () => unknown }>;
+} | null = null;
 const mockAuthenticatedFetch = jest.fn();
 let mockWallTimeMs = 1_800_200_000_000;
 let mockDateNowSpy: jest.SpyInstance<number, []> | null = null;
@@ -41,7 +46,15 @@ jest.mock('react-native', () => ({
       return { remove: jest.fn(() => { mockAppStateListener = null; }) };
     }),
   },
-  Alert: { alert: jest.fn() },
+  Alert: {
+    alert: jest.fn((
+      title: string,
+      _message: string,
+      buttons: Array<{ text: string; onPress?: () => unknown }>,
+    ) => {
+      mockAlertInvocation = { title, buttons };
+    }),
+  },
   Linking: { openSettings: jest.fn() },
 }));
 jest.mock('expo-location', () => ({
@@ -83,7 +96,13 @@ jest.mock('../../../store/storage', () => ({
   },
 }));
 jest.mock('../../../store/useAppStore', () => ({
-  useAppStore: { getState: () => ({ isLoggedIn: true, user: { id: mockCurrentUserId } }) },
+  useAppStore: {
+    getState: () => ({ isLoggedIn: true, user: { id: mockCurrentUserId } }),
+    subscribe: jest.fn((listener: () => void) => {
+      mockAppStoreListener = listener;
+      return () => { if (mockAppStoreListener === listener) mockAppStoreListener = null; };
+    }),
+  },
 }));
 jest.mock('../../../store/useSettingsStore', () => ({
   useSettingsStore: { getState: () => ({ debugMode: false, activityGpsDistanceFilterM: 5 }) },
@@ -685,15 +704,26 @@ describe('production-path foreground resume recovery', () => {
     mockCurrentUserId = 'owner-a';
     mockNetworkState = 'offline';
     mockNetworkListener = null;
+    mockAppStoreListener = null;
     mockAppStateListener = null;
     mockAppStateCurrent = 'active';
     mockNativeBackgroundStarted = false;
     mockDurableActivityContext = null;
     mockDurableActivityContextReader = async () => mockDurableActivityContext;
     mockBackgroundLocations = [];
+    mockAlertInvocation = null;
     mockWallTimeMs = 1_802_000_000_000;
     mockDateNowSpy?.mockRestore();
     mockDateNowSpy = jest.spyOn(Date, 'now').mockImplementation(() => mockWallTimeMs);
+    const secureStore = require('expo-secure-store');
+    secureStore.getItemAsync.mockReset().mockResolvedValue(null);
+    secureStore.setItemAsync.mockReset().mockResolvedValue(undefined);
+    const reactNative = require('react-native');
+    reactNative.Alert.alert.mockClear();
+    reactNative.Linking.openSettings.mockClear();
+    require('../../../services/debugLogger').debugLogger.startSession.mockClear();
+    require('../../../services/batteryMonitor').batteryMonitor.start.mockClear();
+    require('../../../services/sessionRecorder').sessionRecorder.start.mockClear();
     __activityRemoteStartCoordinatorTest.reset();
     Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true });
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
@@ -1086,12 +1116,14 @@ describe('production-path Start to immediate background handoff', () => {
     mockCurrentUserId = 'owner-a';
     mockNetworkState = 'offline';
     mockNetworkListener = null;
+    mockAppStoreListener = null;
     mockAppStateListener = null;
     mockAppStateCurrent = 'active';
     mockNativeBackgroundStarted = false;
     mockDurableActivityContext = null;
     mockDurableActivityContextReader = async () => mockDurableActivityContext;
     mockBackgroundLocations = [];
+    mockAlertInvocation = null;
     mockWallTimeMs = 1_803_000_000_000;
     mockDateNowSpy?.mockRestore();
     mockDateNowSpy = jest.spyOn(Date, 'now').mockImplementation(() => mockWallTimeMs);
@@ -1118,7 +1150,17 @@ describe('production-path Start to immediate background handoff', () => {
     location.stopLocationUpdatesAsync.mockImplementation(async () => { mockNativeBackgroundStarted = false; });
     location.hasStartedLocationUpdatesAsync.mockClear();
 
+    const secureStore = require('expo-secure-store');
+    secureStore.getItemAsync.mockReset().mockResolvedValue(null);
+    secureStore.setItemAsync.mockReset().mockResolvedValue(undefined);
+    const reactNative = require('react-native');
+    reactNative.Alert.alert.mockClear();
+    reactNative.Linking.openSettings.mockClear();
+
     const backgroundTask = require('../../../services/backgroundLocationTask');
+    require('../../../services/debugLogger').debugLogger.startSession.mockClear();
+    require('../../../services/batteryMonitor').batteryMonitor.start.mockClear();
+    require('../../../services/sessionRecorder').sessionRecorder.start.mockClear();
     backgroundTask.registerBackgroundTask.mockReset();
     backgroundTask.registerBackgroundTask.mockResolvedValue(true);
     backgroundTask.persistBackgroundContext.mockClear();
@@ -1268,6 +1310,99 @@ describe('production-path Start to immediate background handoff', () => {
       });
       expect(location.startLocationUpdatesAsync).not.toHaveBeenCalled();
       expect(mockNativeBackgroundStarted).toBe(false);
+    },
+  );
+
+  test.each(['hiking', 'running'] as const)(
+    '%s cancels an already-visible permission education Alert on lock without accepting a late action',
+    async (mode) => {
+      const location = require('expo-location');
+      const secureStore = require('expo-secure-store');
+      const linking = require('react-native').Linking;
+      location.getBackgroundPermissionsAsync.mockResolvedValue({
+        status: 'denied', granted: false, canAskAgain: false,
+      });
+      useTrackingStore.getState().setActivityMode(mode);
+      const starting = useTrackingStore.getState().startTracking();
+      await settleUntil(() => mockAlertInvocation !== null, 160, `${mode}:education-visible`);
+      const lateOpenSettings = mockAlertInvocation!.buttons.find(button => button.text === 'Open Settings')?.onPress;
+
+      mockAppStateCurrent = 'background';
+      mockAppStateListener?.('background');
+      mockCurrentUserId = 'owner-b';
+      mockAppStoreListener?.();
+      mockAppStateCurrent = 'active';
+      mockAppStateListener?.('active');
+      let outcome: boolean | 'pending' = 'pending';
+      void starting.then(value => { outcome = value; });
+      await settleUntil(() => outcome !== 'pending', 40, `${mode}:education-cancelled`);
+
+      expect(outcome).toBe(false);
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'idle', activityMode: mode, sessionId: null, liveOwnerGeneration: null,
+      });
+      expect(location.watchPositionAsync).not.toHaveBeenCalled();
+      expect(location.startLocationUpdatesAsync).not.toHaveBeenCalled();
+      expect(mockNativeBackgroundStarted).toBe(false);
+      await lateOpenSettings?.();
+      expect(secureStore.setItemAsync).not.toHaveBeenCalled();
+      expect(linking.openSettings).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(['hiking', 'running'] as const)(
+    '%s preserves normal foreground permission education settlement',
+    async (mode) => {
+      const location = require('expo-location');
+      const secureStore = require('expo-secure-store');
+      location.getBackgroundPermissionsAsync.mockResolvedValue({
+        status: 'denied', granted: false, canAskAgain: false,
+      });
+      useTrackingStore.getState().setActivityMode(mode);
+      const starting = useTrackingStore.getState().startTracking();
+      await settleUntil(() => mockAlertInvocation !== null, 160, `${mode}:education-visible-active`);
+      await mockAlertInvocation!.buttons.find(button => button.text === 'Later')?.onPress?.();
+
+      await expect(starting).resolves.toBe(true);
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'tracking', activityMode: mode, locationProviderSource: 'real',
+      });
+      expect(secureStore.setItemAsync).toHaveBeenCalledWith(
+        'cairn_has_seen_always_allow_education',
+        '1',
+      );
+      expect(location.watchPositionAsync).toHaveBeenCalledTimes(1);
+      expect(location.startLocationUpdatesAsync).not.toHaveBeenCalled();
+      expect(require('../../../services/debugLogger').debugLogger.startSession).not.toHaveBeenCalled();
+      expect(require('../../../services/batteryMonitor').batteryMonitor.start).not.toHaveBeenCalled();
+      expect(require('../../../services/sessionRecorder').sessionRecorder.start).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(['hiking', 'running'] as const)(
+    '%s cancels permission education when the signed-in owner changes while still active',
+    async (mode) => {
+      const location = require('expo-location');
+      const secureStore = require('expo-secure-store');
+      location.getBackgroundPermissionsAsync.mockResolvedValue({
+        status: 'denied', granted: false, canAskAgain: false,
+      });
+      useTrackingStore.getState().setActivityMode(mode);
+      const starting = useTrackingStore.getState().startTracking();
+      await settleUntil(() => mockAlertInvocation !== null, 160, `${mode}:education-owner-visible`);
+      const lateLater = mockAlertInvocation!.buttons.find(button => button.text === 'Later')?.onPress;
+
+      mockCurrentUserId = 'owner-b';
+      mockAppStoreListener?.();
+
+      await expect(starting).resolves.toBe(false);
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'idle', activityMode: mode, sessionId: null, liveOwnerGeneration: null,
+      });
+      expect(location.watchPositionAsync).not.toHaveBeenCalled();
+      expect(location.startLocationUpdatesAsync).not.toHaveBeenCalled();
+      await lateLater?.();
+      expect(secureStore.setItemAsync).not.toHaveBeenCalled();
     },
   );
 

@@ -405,6 +405,50 @@ describe('Cairn presentation coordinator', () => {
     });
   });
 
+  test('unchanged online polling performs HTTP checks without redundant durable writes', async () => {
+    mockFetch.mockResolvedValue(pending());
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    expect(mockSetItem).toHaveBeenCalledTimes(1);
+    mockSetItem.mockClear();
+    mockFetch.mockClear();
+
+    for (let callback = 0; callback < 120; callback += 1) {
+      await useCairnPresentationStore.getState().refresh();
+    }
+
+    expect(mockFetch).toHaveBeenCalledTimes(120);
+    expect(mockSetItem).not.toHaveBeenCalled();
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      viewerId: 'viewer-a', unreadCount: 1, error: null,
+    });
+  });
+
+  test('transport, server and authorization failures remain distinct and authorization fails closed', async () => {
+    mockFetch.mockResolvedValueOnce(pending());
+    await useCairnPresentationStore.getState().initialize('viewer-a');
+    useCairnPresentationStore.getState().claim('home');
+
+    mockFetch.mockRejectedValueOnce(new TypeError('Network request failed'));
+    await useCairnPresentationStore.getState().refresh();
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      error: 'offline', activeSurface: 'home', unreadCount: 1,
+    });
+
+    mockFetch.mockResolvedValueOnce(response(503));
+    await useCairnPresentationStore.getState().refresh();
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      error: 'server', activeSurface: 'home', unreadCount: 1,
+    });
+
+    mockFetch.mockResolvedValueOnce(response(403));
+    await useCairnPresentationStore.getState().refresh();
+    expect(useCairnPresentationStore.getState()).toMatchObject({
+      error: 'authorization', activeSurface: null, activeGroup: null,
+      pendingGroups: [], unreadCount: 0, acquiredMarkers: [],
+    });
+    expect(mockValues.get(`${__cairnPresentationTest.cachePrefix}viewer-a`)).not.toContain('visit:alpha');
+  });
+
   test('account deletion clears durable and in-process presentation evidence without touching another owner', async () => {
     mockValues.set(`${__cairnPresentationTest.cachePrefix}viewer-a`, JSON.stringify({ version: 1, viewerId: 'viewer-a' }));
     mockValues.set(`${__cairnPresentationTest.cachePrefix}viewer-b`, JSON.stringify({ version: 1, viewerId: 'viewer-b' }));

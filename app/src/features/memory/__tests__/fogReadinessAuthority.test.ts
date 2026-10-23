@@ -53,8 +53,11 @@ describe('Memory fog readiness authority', () => {
     expect(screen).toContain('const cachedMemoryCenter = useMemo(');
     expect(screen).toContain('const nextMapCenter = resolveMemoryInitialMapCenter({');
     expect(screen).toContain('cachedMemoryCenter,');
-    expect(screen).toContain('showUserLocation={Boolean(stableCoord)}');
+    expect(screen).toContain('showUserLocation={memoryUserLocationShouldMount({');
+    expect(screen).toContain('screenFocused: isMemoryFocused');
+    expect(screen).toContain('appActive: appIsActive');
     expect(map).toContain('{showUserLocation ? <UserLocation');
+    expect(screen).toContain('const appIsActive = useAppIsActive();');
   });
 
   test('same-authority rebuilds retain prior fog and web emits the correlated paint callback', () => {

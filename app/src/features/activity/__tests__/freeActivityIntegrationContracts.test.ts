@@ -150,6 +150,13 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain('startActivityLifecycleTimer(localSessionId)');
     expect(source).toContain('const finalDurationS = Math.max(0, Math.floor(s.durationS))');
     expect(ingest).not.toMatch(/durationS:\s*s\.durationS\s*\+/);
+    expect(source).toContain('activityLifecycleInterval = setInterval(tick, 1_000)');
+  });
+
+  test('debug-off Activity does not own diagnostic battery or minute timers', () => {
+    const source = read('src/store/useTrackingStore.ts');
+    expect(source).toContain("locationProviderSource === 'real' && useSettingsStore.getState().debugMode");
+    expect(source).toContain('if (useSettingsStore.getState().debugMode) {\n        void batteryMonitor.start()');
   });
 
   test('Finish commits locally before a bounded immediate server acknowledgement wait', () => {
