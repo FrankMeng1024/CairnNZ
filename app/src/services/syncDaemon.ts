@@ -58,6 +58,7 @@ import {
   clearActivityRemoteStartConflict,
   persistActivityRemoteStartConflict,
 } from '../features/activity/activityRemoteConflictStore';
+import { flushWalkingEncounterEvidence } from '../features/public/services/walkingEncounterEvidence';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -771,6 +772,10 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     // Leave A's acknowledged server entity in its idempotent pending state;
     // A's later retry will reconcile it without touching B's local stores.
     if (!isCurrentActivityOwner(hike.userId)) return 'skipped';
+    // Final route authority is now durable on the server. The independent
+    // encounter queue may have been waiting offline for this exact ACK; its
+    // result never changes the Activity Save disposition.
+    void flushWalkingEncounterEvidence(hike.userId);
     // The user may delete while the server has committed but the HTTP ACK is
     // still in flight. Re-check the durable identity tombstone at the first
     // post-response boundary and clean up the just-acknowledged server row.

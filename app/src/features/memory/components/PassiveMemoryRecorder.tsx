@@ -1,7 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import * as Location from 'expo-location';
-import { useMemorySettingsStore, PASSIVE_BACKGROUND_CONSENT_VERSION } from '../store/useMemorySettingsStore';
+import {
+  AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION,
+  PASSIVE_BACKGROUND_CONSENT_VERSION,
+  useMemorySettingsStore,
+} from '../store/useMemorySettingsStore';
 import { useAppStore } from '../../../store/useAppStore';
 import { useTrackingStore } from '../../../store/useTrackingStore';
 import { useSettingsStore } from '../../../store/useSettingsStore';
@@ -27,6 +31,7 @@ import {
   startPassiveMemoryBackgroundUpdates,
   stopPassiveMemoryBackgroundUpdates,
 } from '../../../services/passiveMemoryBackgroundTask';
+import { recordWalkingEncounterObservations } from '../../public/services/walkingEncounterEvidence';
 
 const OPTIONS: Location.LocationOptions = {
   accuracy: Location.Accuracy.Balanced,
@@ -48,7 +53,12 @@ interface PassiveContinuityAuthority {
  * supplies its own Memory evidence, so there is never a second native watcher
  * or duplicate passive write while Hike/Run is actively recording. */
 export function PassiveMemoryRecorder() {
-  const enabled = useMemorySettingsStore(state => state.passiveExplorationEnabled);
+  const passivePreferenceEnabled = useMemorySettingsStore(state => state.passiveExplorationEnabled);
+  const transitionRequired = useMemorySettingsStore(state => state.memoryLocationTransitionRequired);
+  const disclosureVersion = useMemorySettingsStore(state => state.automaticExplorationDisclosureVersion);
+  const enabled = passivePreferenceEnabled
+    && !transitionRequired
+    && disclosureVersion >= AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION;
   const backgroundConsent = useMemorySettingsStore(state => state.passiveBackgroundConsent);
   const backgroundConsentVersion = useMemorySettingsStore(state => state.passiveBackgroundConsentVersion);
   const isLoggedIn = useAppStore(state => state.isLoggedIn);
@@ -106,6 +116,9 @@ export function PassiveMemoryRecorder() {
         && auth.isLoggedIn === true
         && String(auth.user?.id ?? '') === ownerUserId
         && useMemorySettingsStore.getState().passiveExplorationEnabled
+        && !useMemorySettingsStore.getState().memoryLocationTransitionRequired
+        && useMemorySettingsStore.getState().automaticExplorationDisclosureVersion
+          >= AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION
         && selectedActivityLocationSource() === acquisitionSource;
     };
     const passiveMayProduce = () => {
@@ -144,19 +157,36 @@ export function PassiveMemoryRecorder() {
     ) => {
       if (!transitionIsCurrent(transitionGeneration, 'foreground')
         || activeForegroundGeneration !== foregroundGeneration) return;
-      await recordMemoryEvidence({
-        lat: observation.lat,
-        lng: observation.lng,
-        atMs: observation.t,
-        source: 'passive_real',
-        ownerUserId,
-        // Projection-only provenance preserves acquisition continuity for
-        // delayed eligibility and audit. It is never used to join points into
-        // canonical Activity geometry or exposed as a raw observation.
-        sourceSegmentId: foregroundGeneration,
-        horizontalAccuracyM: observation.accuracy ?? undefined,
-        continuityState: 'accepted',
-      });
+      // Both consumers receive the same already-qualified observation. Their
+      // durable writes settle independently: a full/corrupt Memory store must
+      // not suppress encounter evidence, and encounter queue failure must not
+      // suppress personal exploration.
+      await Promise.allSettled([
+        recordMemoryEvidence({
+          lat: observation.lat,
+          lng: observation.lng,
+          atMs: observation.t,
+          source: 'passive_real',
+          ownerUserId,
+          // Projection-only provenance preserves acquisition continuity for
+          // delayed eligibility and audit. It is never used to join points into
+          // canonical Activity geometry or exposed as a raw observation.
+          sourceSegmentId: foregroundGeneration,
+          horizontalAccuracyM: observation.accuracy ?? undefined,
+          continuityState: 'accepted',
+        }),
+        recordWalkingEncounterObservations({
+          ownerUserId,
+          source: 'passive_real',
+          observations: [{
+            lat: observation.lat,
+            lng: observation.lng,
+            t: observation.t,
+            accuracy: observation.accuracy,
+            sourceSegmentId: foregroundGeneration,
+          }],
+        }),
+      ]);
     };
     const consumeRealObservation = async (
       location: Location.LocationObject,

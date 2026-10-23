@@ -5,6 +5,8 @@ const mockAppState = { currentState: 'active' };
 const mockAppStateListeners = new Set<(state: string) => void>();
 const mockSettings = {
   passiveExplorationEnabled: true,
+  memoryLocationTransitionRequired: false,
+  automaticExplorationDisclosureVersion: 1,
   passiveBackgroundConsent: 'granted',
   passiveBackgroundConsentVersion: 1,
 };
@@ -33,6 +35,7 @@ jest.mock('expo-location', () => ({
   getForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
 }));
 jest.mock('../store/useMemorySettingsStore', () => ({
+  AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION: 1,
   PASSIVE_BACKGROUND_CONSENT_VERSION: 1,
   useMemorySettingsStore: Object.assign(
     jest.fn((selector: any) => selector(mockSettings)),
@@ -62,6 +65,9 @@ jest.mock('../store/useMemoryStore', () => ({
 }));
 jest.mock('../services/recordMemoryEvidence', () => ({
   recordMemoryEvidence: jest.fn(async () => ({ committed: true, deduplicated: false })),
+}));
+jest.mock('../../public/services/walkingEncounterEvidence', () => ({
+  recordWalkingEncounterObservations: jest.fn(async () => 1),
 }));
 jest.mock('../services/memoryPersistence', () => ({
   flushMemoryNow: jest.fn(async () => undefined),

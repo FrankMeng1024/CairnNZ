@@ -2,8 +2,9 @@
  * Memory settings store — user preferences for memory unlocking.
  *
  * Keys:
- *   - passiveExplorationEnabled (default: false)
- *       Permits exploration outside an explicit Activity.
+ *   - passiveExplorationEnabled (default: true for a fresh install)
+ *       Permits automatic exploration and encounter scanning outside an
+ *       explicit Activity after the current disclosure and OS permission.
  *       Hike/Run Memory capture is always active and ignores this setting.
  *   - firstVisitDone (default: false)
  *       Set to true after the user dismisses the first-time hint.
@@ -17,11 +18,13 @@ import { storage } from '../../../store/storage';
 const STORAGE_KEY = 'cairn:memorySettings:v2';
 
 export const PASSIVE_BACKGROUND_CONSENT_VERSION = 1;
+export const AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION = 1;
 export type PassiveBackgroundConsent = 'not-asked' | 'granted' | 'declined';
 
 interface MemorySettings {
   passiveExplorationEnabled: boolean;
   memoryLocationTransitionRequired: boolean;
+  automaticExplorationDisclosureVersion: number;
   passiveBackgroundConsent: PassiveBackgroundConsent;
   passiveBackgroundConsentVersion: number;
   passiveBackgroundEducationDismissed: boolean;
@@ -36,12 +39,12 @@ interface MemorySettingsState extends MemorySettings {
 }
 
 const DEFAULTS: MemorySettings = {
-  // This controls only passive exploration outside an explicit Activity.
-  // Activity Memory capture is unconditional and lives in the recorder.
-  passiveExplorationEnabled: false,
-  // The unified Memory lifecycle is never silently enabled for a device that
-  // previously chose or inherited Off. One explicit transition is required.
-  memoryLocationTransitionRequired: true,
+  // A fresh install starts with ordinary foreground exploration/encounters
+  // enabled under the sign-up privacy disclosure. Actual capture still needs
+  // foreground OS authorization. Hike/Run never consult this preference.
+  passiveExplorationEnabled: true,
+  memoryLocationTransitionRequired: false,
+  automaticExplorationDisclosureVersion: AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION,
   passiveBackgroundConsent: 'not-asked',
   passiveBackgroundConsentVersion: 0,
   passiveBackgroundEducationDismissed: false,
@@ -51,7 +54,7 @@ const DEFAULTS: MemorySettings = {
 function persist(state: MemorySettings): void {
   void storage.setItem(STORAGE_KEY, JSON.stringify({
     ...state,
-    passiveExplorationContractVersion: 5,
+    passiveExplorationContractVersion: 6,
   }));
 }
 
@@ -74,11 +77,19 @@ async function tryLoad(): Promise<MemorySettings | null> {
         ?? parsed.foregroundAutoUnlockEnabled
         ?? DEFAULTS.passiveExplorationEnabled)
       : false;
+    const disclosureVersion = Number(parsed.automaticExplorationDisclosureVersion || 0)
+      >= AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION
+      ? AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION
+      : 0;
     return {
       passiveExplorationEnabled: passiveEnabled,
+      // A prior Memory-only ON is not informed consent for automatic Cairn
+      // encounters. Keep its desired ON value, but fail closed until Settings
+      // presents the broader disclosure. Existing explicit OFF remains OFF.
       memoryLocationTransitionRequired: passiveEnabled
-        ? false
+        ? disclosureVersion < AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION
         : Boolean(parsed.memoryLocationTransitionRequired ?? true),
+      automaticExplorationDisclosureVersion: disclosureVersion,
       // A prior foreground-only true is preserved for foreground use, but is
       // never treated as consent for lock/background collection.
       passiveBackgroundConsent: expandedBackgroundConsent ? 'granted' : 'not-asked',
@@ -114,6 +125,7 @@ export const useMemorySettingsStore = create<MemorySettingsState>((set, get) => 
     const {
       passiveExplorationEnabled,
       memoryLocationTransitionRequired,
+      automaticExplorationDisclosureVersion,
       passiveBackgroundConsent,
       passiveBackgroundConsentVersion,
       passiveBackgroundEducationDismissed,
@@ -122,6 +134,7 @@ export const useMemorySettingsStore = create<MemorySettingsState>((set, get) => 
     persist({
       passiveExplorationEnabled,
       memoryLocationTransitionRequired,
+      automaticExplorationDisclosureVersion,
       passiveBackgroundConsent,
       passiveBackgroundConsentVersion,
       passiveBackgroundEducationDismissed,

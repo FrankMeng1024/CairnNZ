@@ -494,16 +494,16 @@ describe('Free Activity integration contracts', () => {
     expect(passive).toContain("status === 'idle' || status === 'paused'");
   });
 
-  test('passive exploration defaults off and is independent from Activity capture', () => {
+  test('fresh-user automatic exploration defaults on while Activity capture remains independent', () => {
     const settings = read('src/features/memory/store/useMemorySettingsStore.ts');
     const ui = read('src/screens/SettingsScreen.tsx');
-    expect(settings).toMatch(/passiveExplorationEnabled:\s*false/);
-    expect(settings).toContain('passiveExplorationContractVersion: 5');
-    expect(settings).toContain('memoryLocationTransitionRequired: true');
+    expect(settings).toMatch(/passiveExplorationEnabled:\s*true/);
+    expect(settings).toContain('passiveExplorationContractVersion: 6');
+    expect(settings).toContain('automaticExplorationDisclosureVersion');
     expect(settings).not.toContain('recordMode:');
     expect(settings).not.toContain('showFriendOverlay:');
     expect(settings).not.toContain('useH3Fog:');
-    expect(ui).toContain('Explore beyond Activities');
+    expect(ui).toContain('Automatic exploration & encounters');
   });
 
   test('background task publishes activation last, clears it first, and requires exact owner identity', () => {

@@ -47,6 +47,9 @@ jest.mock('../../services/debugLogger', () => ({
 jest.mock('../../features/memory/services/memoryEvidenceJournal', () => ({
   purgeDurableMemoryEvidence: jest.fn(async () => undefined),
 }));
+jest.mock('../../features/public/services/walkingEncounterEvidence', () => ({
+  purgeWalkingEncounterEvidenceForOwner: jest.fn(async () => undefined),
+}));
 jest.mock('../../features/activity/activityFinalRefinementQueue', () => ({
   cancelAllActivityFinalRefinementsForOwner: jest.fn(async () => undefined),
 }));

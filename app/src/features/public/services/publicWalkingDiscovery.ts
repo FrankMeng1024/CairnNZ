@@ -1,6 +1,5 @@
-import { pushMemoryForActivityNow } from '../../../services/memorySync';
 import { flushActivityRoutePrefix } from '../../activity/activityRouteFlushAuthority';
-import { usePublicCairnStore } from './publicCairns';
+import { flushWalkingEncounterEvidence } from './walkingEncounterEvidence';
 
 const MIN_EVIDENCE_SPAN_MS = 10_000;
 const PROBE_INTERVAL_MS = 60_000;
@@ -35,9 +34,8 @@ export async function maybeVerifyPublicWalkingDiscovery(input: {
   nowMs?: number;
   isCurrent: () => boolean;
 }): Promise<'skipped' | 'attempted'> {
-  const publicState = usePublicCairnStore.getState();
   const nowMs = input.nowMs ?? Date.now();
-  if (!publicState.enabled || !input.sourceActivityClientId || !input.serverActivityId
+  if (!input.sourceActivityClientId || !input.serverActivityId
     || input.points.length < 2 || !input.isCurrent()) return 'skipped';
   const firstAt = Number(input.points[0]?.t);
   const lastAt = Number(input.points[input.points.length - 1]?.t);
@@ -61,13 +59,10 @@ export async function maybeVerifyPublicWalkingDiscovery(input: {
       isCurrent: input.isCurrent,
     });
     if (!route.acknowledged || !input.isCurrent()) return 'attempted';
-    const memory = await pushMemoryForActivityNow({
-      ownerUserId: input.ownerUserId,
-      sourceActivityClientId: input.sourceActivityClientId,
-    });
-    if (!memory.acknowledged || !input.isCurrent()) return 'attempted';
-    const verified = await usePublicCairnStore.getState().verifyCompletedActivity(input.sourceActivityClientId);
-    void verified;
+    // The encounter queue was written from the same accepted observations as
+    // the Activity WAL, but it has no dependency on Personal Memory upload or
+    // ACK. Server policy independently gates Friends and Public categories.
+    await flushWalkingEncounterEvidence(input.ownerUserId);
     return 'attempted';
   } finally {
     const current = attempts.get(input.sourceActivityClientId);

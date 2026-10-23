@@ -10,7 +10,7 @@ const HEADLESS_POINT_LIMIT = 500;
 const HEADLESS_RESPONSE_LIMIT_BYTES = 512 * 1024;
 
 export type HeadlessMemoryDeliveryResult = {
-  status: 'acknowledged_and_discovered' | 'nothing_to_push' | 'auth_unavailable' | 'authority_changed' | 'failed';
+  status: 'acknowledged' | 'nothing_to_push' | 'auth_unavailable' | 'authority_changed' | 'failed';
   pointCount: number;
   presenceCount: number;
   acquiredCount: number;
@@ -136,12 +136,10 @@ export async function deliverHeadlessPassiveMemory(args: {
     if (!acknowledged) return result('failed', points.length, presence.length);
     if (!await args.authorityIsCurrent()) return result('authority_changed', points.length, presence.length);
 
-    const discovery = await headlessFetch('/api/cairn-memory/discover', token, {});
-    if (!await args.authorityIsCurrent()) return result('authority_changed', points.length, presence.length);
-    if (!discovery.ok) return result('failed', points.length, presence.length);
-    const discoveryBody = discovery.body;
-    const acquiredCount = Array.isArray(discoveryBody?.acquired) ? discoveryBody.acquired.length : 0;
-    return result('acknowledged_and_discovered', points.length, presence.length, acquiredCount);
+    // Encounter delivery owns a separate durable queue and network request.
+    // A Cairn API failure can therefore never turn a successful Memory ACK
+    // into a retry (and a Memory failure cannot suppress encounter delivery).
+    return result('acknowledged', points.length, presence.length, 0);
   } catch {
     return result('failed');
   }

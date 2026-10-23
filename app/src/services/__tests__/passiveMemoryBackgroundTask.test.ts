@@ -25,7 +25,13 @@ jest.mock('../../features/memory/services/recordMemoryEvidence', () => ({
 }));
 jest.mock('../../features/memory/services/headlessMemoryDelivery', () => ({
   deliverHeadlessPassiveMemory: jest.fn(async () => ({
-    status: 'acknowledged_and_discovered', pointCount: 1, presenceCount: 1, acquiredCount: 0,
+    status: 'acknowledged', pointCount: 1, presenceCount: 1, acquiredCount: 0,
+  })),
+}));
+jest.mock('../../features/public/services/walkingEncounterEvidence', () => ({
+  recordWalkingEncounterObservations: jest.fn(async () => 1),
+  deliverHeadlessWalkingEncounters: jest.fn(async () => ({
+    status: 'acknowledged', processedWitnessCount: 1, acquiredCount: 0,
   })),
 }));
 jest.mock('../../features/activitySimulator/simulatorLog', () => ({
@@ -100,7 +106,7 @@ describe('passive Memory headless task', () => {
   test('a later callback retries durable delivery without requiring new accepted movement', async () => {
     mockDeliverHeadless
       .mockResolvedValueOnce({ status: 'failed', pointCount: 1, presenceCount: 1, acquiredCount: 0 })
-      .mockResolvedValueOnce({ status: 'acknowledged_and_discovered', pointCount: 1, presenceCount: 1, acquiredCount: 1 });
+      .mockResolvedValueOnce({ status: 'acknowledged', pointCount: 1, presenceCount: 1, acquiredCount: 0 });
     await acquirePassiveMemoryLease({
       ownerUserId: 'owner-a', epoch: 'epoch-retry', source: 'real', acceptAfterMs: 1_000,
     });

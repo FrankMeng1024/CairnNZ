@@ -150,9 +150,9 @@ describe('Memory server reconciliation', () => {
       evidence_source: 'passive_real',
     });
     expect(state.markPresenceWitnessesSynced).toHaveBeenCalledWith([witness], [witness.cid]);
-    expect(authenticatedFetch).toHaveBeenCalledWith(
+    expect(authenticatedFetch).not.toHaveBeenCalledWith(
       '/api/cairn-memory/discover',
-      expect.objectContaining({ method: 'POST', expectedUserId: 'account-a' }),
+      expect.anything(),
     );
     expect(memorySync.getMemorySyncMetrics()).toMatchObject({
       pushedPoints: 0,

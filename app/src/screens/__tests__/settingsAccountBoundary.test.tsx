@@ -177,8 +177,11 @@ jest.mock('../../store/useSettingsStore', () => ({
   }),
 }));
 jest.mock('../../features/memory/store/useMemorySettingsStore', () => ({
+  AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION: 1,
   useMemorySettingsStore: (selector: (state: any) => unknown) => selector({
     passiveExplorationEnabled: false,
+    memoryLocationTransitionRequired: false,
+    automaticExplorationDisclosureVersion: 1,
     passiveBackgroundConsent: 'not-asked',
     passiveBackgroundConsentVersion: 0,
     passiveBackgroundEducationDismissed: false,

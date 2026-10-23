@@ -616,17 +616,6 @@ async function pushPendingPoints(options?: { sourceActivityClientId?: string }):
       if (completeEcho) {
         result = { status: 'acknowledged', acceptedPointCids, acceptedPresenceCids };
         backoffUntil = 0;
-        // Discovery is an independent online projection of already-ACKed
-        // accepted evidence. Never await it here: a slow/unavailable content
-        // service must not hold the Memory durability ACK or its retry queue.
-        // The server owns visit limits, proximity, version dedupe, and durable
-        // presentation grouping, so repeated fire-and-forget calls are safe.
-        const discoveryController = new AbortController();
-        void fetchWithTimeout('/api/cairn-memory/discover', {
-          method: 'POST',
-          expectedUserId: myUserId,
-          body: JSON.stringify({}),
-        }, discoveryController).catch(() => {});
         const hasMore = pending.length > MAX_BATCH || pendingPresence.length > MAX_BATCH;
         pendingBurstStartedAt = hasMore ? Date.now() : null;
         if (hasMore) schedulePush(0);

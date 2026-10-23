@@ -342,6 +342,12 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('../features/routeDrawing/routeDrawingTrace').clearRouteDrawingTracesForOwner(owner);
   await purgeDurableMemoryEvidence(owner);
+  // Encounter evidence is a separate owner-scoped durable consumer of the
+  // same real-walking source. Account deletion must fence and remove it
+  // independently of Personal Memory cleanup.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  await require('../features/public/services/walkingEncounterEvidence')
+    .purgeWalkingEncounterEvidenceForOwner(owner);
   // Newly introduced presentation coordinates/unread state also have an
   // in-process snapshot. Fence and clear that authority before the key sweep.
   const { purgeCairnPresentationForOwner } = require('../features/cairns/cairnPresentationStore');

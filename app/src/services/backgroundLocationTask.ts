@@ -750,6 +750,27 @@ async function appendDirectlyToHikeTrack(
         coordinateSource: 'none',
         force: true,
       });
+      // The Activity WAL is the shared source receipt. Encounter and Memory
+      // receive separate durable intents from that receipt; either consumer
+      // may fail without suppressing the other.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const encounter = require('../features/public/services/walkingEncounterEvidence');
+        await encounter.recordWalkingEncounterObservations({
+          ownerUserId: context.userId,
+          source: 'activity_real',
+          sourceActivityClientId: context.clientActivityId,
+          observations: accepted.map(point => ({
+            lat: point.lat,
+            lng: point.lng,
+            t: point.t,
+            accuracy: point.acc ?? 25,
+            sourceSegmentId: point.segmentId ?? 'legacy-0',
+          })),
+        });
+      } catch (encounterError) {
+        crashLogger.breadcrumb(`activity:bg_encounter_deferred ${String(encounterError).slice(0, 80)}`);
+      }
       // Persist downstream responsibility immediately after the Activity WAL.
       // The projector owns Memory work independently, so this TaskManager
       // ingestion mutex is never held across Memory I/O.

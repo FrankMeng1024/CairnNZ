@@ -10,6 +10,10 @@ import { passiveBackgroundMemoryCapability } from '../features/memory/services/p
 import { recordMemoryEvidence } from '../features/memory/services/recordMemoryEvidence';
 import { passiveMemoryRevocationKey } from '../features/memory/services/passiveMemoryAuthority';
 import { deliverHeadlessPassiveMemory } from '../features/memory/services/headlessMemoryDelivery';
+import {
+  deliverHeadlessWalkingEncounters,
+  recordWalkingEncounterObservations,
+} from '../features/public/services/walkingEncounterEvidence';
 import type { RealGpsContinuityState, RealGpsObservation } from '../features/activity/realGpsContinuity';
 
 export const PASSIVE_MEMORY_BACKGROUND_TASK = 'cairn-passive-memory-location-v1';
@@ -266,20 +270,33 @@ export async function handlePassiveMemoryBackgroundTask({ data, error }: { data:
         const stillCurrent = await currentContext();
         if (!stillCurrent || stillCurrent.epoch !== context.epoch
           || stillCurrent.ownerUserId !== context.ownerUserId) return;
-        await recordMemoryEvidence({
-          lat: point.lat,
-          lng: point.lng,
-          atMs: point.t,
-          source: 'passive_real',
-          ownerUserId: context.ownerUserId,
-          // The durable lease epoch survives headless callbacks and changes
-          // only when a new authorized background lifecycle begins.
-          sourceSegmentId: context.epoch,
-          horizontalAccuracyM: point.accuracy ?? undefined,
-          continuityState: 'accepted',
-          ownerAuthority: 'durable_passive_lease',
-          ownerAuthorityEpoch: context.epoch,
-        });
+        await Promise.allSettled([
+          recordMemoryEvidence({
+            lat: point.lat,
+            lng: point.lng,
+            atMs: point.t,
+            source: 'passive_real',
+            ownerUserId: context.ownerUserId,
+            // The durable lease epoch survives headless callbacks and changes
+            // only when a new authorized background lifecycle begins.
+            sourceSegmentId: context.epoch,
+            horizontalAccuracyM: point.accuracy ?? undefined,
+            continuityState: 'accepted',
+            ownerAuthority: 'durable_passive_lease',
+            ownerAuthorityEpoch: context.epoch,
+          }),
+          recordWalkingEncounterObservations({
+            ownerUserId: context.ownerUserId,
+            source: 'passive_real',
+            observations: [{
+              lat: point.lat,
+              lng: point.lng,
+              t: point.t,
+              accuracy: point.accuracy,
+              sourceSegmentId: context.epoch,
+            }],
+          }),
+        ]);
         acceptedCount += 1;
       }
     }
@@ -298,18 +315,31 @@ export async function handlePassiveMemoryBackgroundTask({ data, error }: { data:
     // therefore a bounded retry opportunity, even when it contributes no new
     // accepted movement. The delivery worker caps each replay at 500 records.
     if (locations.length > 0 || acceptedCount > 0) {
-      const delivery = await deliverHeadlessPassiveMemory({
-        ownerUserId: context.ownerUserId,
-        passiveEpoch: context.epoch,
-        authorityIsCurrent: async () => {
-          const authority = await currentContext();
-          return authority?.ownerUserId === context.ownerUserId
-            && authority?.epoch === context.epoch
-            && authority.source === 'real';
-        },
-      });
-      deliveryStatus = delivery.status;
-      deliveredAcquisitions = delivery.acquiredCount;
+      const authorityIsCurrent = async () => {
+        const authority = await currentContext();
+        return authority?.ownerUserId === context.ownerUserId
+          && authority?.epoch === context.epoch
+          && authority.source === 'real';
+      };
+      const [memoryDelivery, encounterDelivery] = await Promise.allSettled([
+        deliverHeadlessPassiveMemory({
+          ownerUserId: context.ownerUserId,
+          passiveEpoch: context.epoch,
+          authorityIsCurrent,
+        }),
+        deliverHeadlessWalkingEncounters({
+          ownerUserId: context.ownerUserId,
+          passiveEpoch: context.epoch,
+          authorityIsCurrent,
+        }),
+      ]);
+      deliveryStatus = [
+        memoryDelivery.status === 'fulfilled' ? `memory:${memoryDelivery.value.status}` : 'memory:failed',
+        encounterDelivery.status === 'fulfilled' ? `encounter:${encounterDelivery.value.status}` : 'encounter:failed',
+      ].join(',');
+      deliveredAcquisitions = encounterDelivery.status === 'fulfilled'
+        ? encounterDelivery.value.acquiredCount
+        : 0;
     }
     appendSimulatorLog('MEMORY_EVIDENCE', 'passive_memory_background_batch_v1', {
       batchCount: locations.length,

@@ -601,18 +601,20 @@ function FieldInput({ icon, placeholder, value, onChangeText, error, onBlur, key
 
 // ── Privacy Policy content ─────────────────────────────────────────────────
 const PRIVACY_POLICY = `Cairn Privacy Policy
-Effective date: 14 September 2026
+Effective date: 23 October 2026
 
 1. What we collect
 • Account data: name, email, sign-in provider, and a hashed password for Cairn password accounts
 • Activity data: GPS observations, routes, distance, duration, Cairns and Memory associated with your account
-• Optional exploration data: foreground location while Cairn is open, only when you enable it
+• Automatic exploration & encounters: on by default for new users after this disclosure, but active only with OS foreground location authorization. Eligible real walking while Cairn is open can independently update personal Memory and check for nearby Friends or authorized Public Cairns. You can turn both off in Settings. Hike and Run still work either way
+• Optional background walking: requires separate in-app consent, background OS permission and OS delivery
 • Reliability data: limited app, device, crash and event information; precise real-location coordinates and credentials are removed from diagnostic uploads
 • Feedback: messages you choose to send from Cairn
 
 2. Why we collect it
 • Location: to record an Activity, calculate your journey and update Memory
-• Optional foreground location: to update exploration while the app is open outside an Activity
+• Optional ordinary-walk location: to update personal exploration and check authorized nearby Cairns while the app is open outside an Activity
+• Encounter notifications control alerts, not discovery eligibility
 • Reliability information: to diagnose crashes, sync and Activity failures
 • Account data: to identify you and protect your saved data
 
@@ -630,7 +632,7 @@ Effective date: 14 September 2026
 5. Your rights
 • Access: request and download a JSON copy from Settings → Privacy & Data
 • Correction: update your display name and Cairn password in Settings; contact support about an incorrect email
-• Exploration: delete Memory points and explored regions without deleting Activities, Routes or Cairns
+• Exploration & encounters: turn automatic ordinary-use recording/scanning off, or delete Memory points, walking presence witnesses and explored regions without deleting Activities, Routes or Cairns already acquired under their own retention rules
 • Account deletion: disable the account now, restore within seven days, or let Cairn permanently delete account-owned data after the recovery window
 
 6. Contact

@@ -59,6 +59,7 @@ import {
   retryPendingFriendContentActions,
 } from '../features/friends/services/friendContent';
 import { usePublicCairnStore } from '../features/public/services/publicCairns';
+import { flushWalkingEncounterEvidence } from '../features/public/services/walkingEncounterEvidence';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import {
   createCairnPresentationPoller,
@@ -253,6 +254,7 @@ export function RootNavigator() {
     void drainBorrowedRouteTerminalOutbox();
     void usePublicCairnStore.getState().initialize(String(user.id));
     void useCairnPresentationStore.getState().initialize(String(user.id));
+    void flushWalkingEncounterEvidence(currentOwner);
     void resumeEncounterNotifications(String(user.id));
     void pendingCairnNotificationResponses(currentOwner, { recoverProcessing: true }).then(destinations => {
       if (String(useAppStore.getState().user?.id ?? '') !== currentOwner) return;
@@ -286,6 +288,7 @@ export function RootNavigator() {
         // activation path for an already-installed client after server-side
         // canary enablement; requiring `enabled` here made it unreachable.
         void usePublicCairnStore.getState().initialize(viewerId, { preservePresentation: true });
+        void flushWalkingEncounterEvidence(viewerId);
         cairnPresentationPollerRef.current?.kick();
       }
     }
@@ -300,6 +303,7 @@ export function RootNavigator() {
     cairnPresentationPollerRef.current = poller;
     const start = () => {
       poller.start();
+      void flushWalkingEncounterEvidence(String(user.id));
     };
     const stop = () => {
       poller.stop();

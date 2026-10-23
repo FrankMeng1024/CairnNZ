@@ -39,7 +39,7 @@ describe('headless passive Memory delivery', () => {
     ]);
   });
 
-  test('proves upload echo before invoking durable server discovery', async () => {
+  test('proves the Memory upload echo without invoking encounter discovery', async () => {
     const calls: string[] = [];
     global.fetch = jest.fn(async (url: any, init: any) => {
       calls.push(String(url));
@@ -50,16 +50,16 @@ describe('headless passive Memory delivery', () => {
           presence_witnesses: body.presence_witnesses.map((item: any) => ({ cid: item.cid, observed_at_ms: item.observed_at_ms })),
         });
       }
-      return response(true, { acquired: [{ marker_id: '41' }] });
+      throw new Error(`unexpected request: ${url}`);
     }) as any;
 
     await expect(deliverHeadlessPassiveMemory({
       ownerUserId: 'owner-a', passiveEpoch: 'epoch-a', authorityIsCurrent: async () => true,
     })).resolves.toMatchObject({
-      status: 'acknowledged_and_discovered', pointCount: 1, presenceCount: 1, acquiredCount: 1,
+      status: 'acknowledged', pointCount: 1, presenceCount: 1, acquiredCount: 0,
     });
     expect(calls[0]).toContain('/api/memory/points');
-    expect(calls[1]).toContain('/api/cairn-memory/discover');
+    expect(calls).toHaveLength(1);
     expect((global.fetch as jest.Mock).mock.calls[0][1].headers.Authorization).toBe('Bearer owner-token');
   });
 
@@ -72,7 +72,7 @@ describe('headless passive Memory delivery', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  test('never discovers after an incomplete upload acknowledgement', async () => {
+  test('keeps Memory retryable after an incomplete upload acknowledgement', async () => {
     global.fetch = jest.fn(async () => response(true, { points: [], presence_witnesses: [] })) as any;
     await expect(deliverHeadlessPassiveMemory({
       ownerUserId: 'owner-a', passiveEpoch: 'epoch-a', authorityIsCurrent: async () => true,
@@ -98,7 +98,7 @@ describe('headless passive Memory delivery', () => {
     }
   });
 
-  test('account authority changing after upload prevents discovery', async () => {
+  test('account authority changing after upload prevents acknowledgement', async () => {
     let authorityChecks = 0;
     global.fetch = jest.fn(async (_url: any, init: any) => {
       const body = JSON.parse(init.body);
@@ -135,6 +135,6 @@ describe('headless passive Memory delivery', () => {
     }) as any;
     await expect(deliverHeadlessPassiveMemory({
       ownerUserId: 'owner-a', passiveEpoch: 'epoch-a', authorityIsCurrent: async () => true,
-    })).resolves.toMatchObject({ status: 'acknowledged_and_discovered' });
+    })).resolves.toMatchObject({ status: 'acknowledged' });
   });
 });

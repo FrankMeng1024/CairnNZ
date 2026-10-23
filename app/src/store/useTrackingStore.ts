@@ -125,6 +125,12 @@ import {
   recordMemoryEvidence,
 } from '../features/memory/services/recordMemoryEvidence';
 import {
+  flushWalkingEncounterEvidence,
+  purgeWalkingEncounterEvidenceForActivity,
+  recordWalkingEncounterObservations,
+} from '../features/public/services/walkingEncounterEvidence';
+import { maybeVerifyPublicWalkingDiscovery } from '../features/public/services/publicWalkingDiscovery';
+import {
   activateSimulatorProvider,
   endSimulatorProvider,
   isSimulatorProviderBound,
@@ -1339,6 +1345,24 @@ function scheduleRemoteSessionStart(
         || (current.status === 'idle' && !current.isFinishing)) return;
       setState({ remoteSessionId: serverActivityId });
       crashLogger.breadcrumb(`session:start:server-id=${serverActivityId}`);
+      const mapped = getState();
+      if (mapped.trackPoints.length >= 2) {
+        void maybeVerifyPublicWalkingDiscovery({
+          sourceActivityClientId: identity.clientActivityId,
+          serverActivityId,
+          ownerUserId: identity.ownerUserId,
+          ownerGeneration: identity.ownerGeneration,
+          points: mapped.trackPoints.map(point => ({ ...point, segment_id: point.segmentId })),
+          isCurrent: () => {
+            const latest = getState();
+            return String(useAppStore.getState().user?.id ?? '') === identity.ownerUserId
+              && latest.ownerUserId === identity.ownerUserId
+              && latest.sessionId === identity.clientActivityId
+              && latest.liveOwnerGeneration === identity.ownerGeneration
+              && latest.remoteSessionId === serverActivityId;
+          },
+        });
+      }
     },
     observe: event => {
       crashLogger.breadcrumb(
@@ -2915,6 +2939,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           const qaActivityDurableMonotonicAt = monotonicNow();
           durableSaveCommitted = true;
           serverSaveAcknowledged = true;
+          void flushWalkingEncounterEvidence(ownerUserId);
           stopReason = 'saved';
           // Snap Lab remains storage-isolated, but its actual completion UI
           // consumes the same in-memory TrackingSession authority as a real
@@ -5834,7 +5859,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           for (const point of acceptedPoints) {
             const promoted = point.t !== sampleTimestamp || point.rawOrdinal !== rawOrdinal;
             void recordActivityStageEvent({
-              ownerUserId: before.ownerUserId,
+              ownerUserId: before.ownerUserId!,
               clientActivityId: before.sessionId!,
               stage: 'canonical-accepted',
               evidenceId: point.rawOrdinal == null ? receiptEvidenceId : `${before.sessionId!.slice(-8)}:${point.rawOrdinal}`,
@@ -5932,6 +5957,45 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             coordinateSource: 'none',
           });
         }
+        const encounterResponsibility = !isSimulatorSample
+          ? recordWalkingEncounterObservations({
+              ownerUserId: before.ownerUserId!,
+              source: 'activity_real',
+              sourceActivityClientId: before.sessionId!,
+              observations: acceptedPoints.map(point => ({
+                lat: point.lat,
+                lng: point.lng,
+                t: point.t,
+                accuracy: point.accuracy ?? MAX_ACCEPTABLE_HORIZONTAL_ACCURACY_M,
+                sourceSegmentId: point.segmentId ?? 'legacy-0',
+              })),
+            })
+          : Promise.resolve(0);
+        void encounterResponsibility.then(() => {
+          const discoveryState = get();
+          if (discoveryState.ownerUserId !== before.ownerUserId
+            || discoveryState.sessionId !== before.sessionId
+            || discoveryState.liveOwnerGeneration !== before.liveOwnerGeneration
+            || !discoveryState.remoteSessionId) return;
+          void maybeVerifyPublicWalkingDiscovery({
+            sourceActivityClientId: before.sessionId!,
+            serverActivityId: discoveryState.remoteSessionId,
+            ownerUserId: before.ownerUserId!,
+            ownerGeneration: before.liveOwnerGeneration!,
+            points: discoveryState.trackPoints.map(point => ({
+              ...point,
+              segment_id: point.segmentId,
+            })),
+            isCurrent: () => {
+              const state = get();
+              return state.ownerUserId === before.ownerUserId
+                && state.sessionId === before.sessionId
+                && state.liveOwnerGeneration === before.liveOwnerGeneration;
+            },
+          });
+        }).catch(error => {
+          crashLogger.breadcrumb(`activity:encounter_intent_deferred ${String(error).slice(0, 80)}`);
+        });
         const current = get();
         if (
           (current.status !== 'tracking' && current.status !== 'paused')
@@ -6908,6 +6972,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (!cancelled && s.remoteSessionId) {
         await deleteRemoteSession(s.remoteSessionId).catch(() => false);
       }
+      await purgeWalkingEncounterEvidenceForActivity(ownerUserId, s.sessionId).catch(() => undefined);
     }
     // Tear down writer state and journal after tombstoning. Waiting for its
     // serialized write tail prevents an already-entered point commit from

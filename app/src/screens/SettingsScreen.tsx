@@ -39,6 +39,7 @@ import { useScenicTimeState } from '../hooks/useScenicTimeState';
 import { useAppStore } from '../store/useAppStore';
 import { useSettingsStore, type AppearancePref, type UnitsPref } from '../store/useSettingsStore';
 import {
+  AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION,
   PASSIVE_BACKGROUND_CONSENT_VERSION,
   useMemorySettingsStore,
 } from '../features/memory/store/useMemorySettingsStore';
@@ -288,12 +289,18 @@ export function SettingsScreen() {
   const updateSetting = useSettingsStore((state) => state.updateSetting);
   const exploreEnabled = useMemorySettingsStore((state) => state.passiveExplorationEnabled);
   const memoryLocationTransitionRequired = useMemorySettingsStore((state) => state.memoryLocationTransitionRequired);
+  const automaticExplorationDisclosureVersion = useMemorySettingsStore(
+    (state) => state.automaticExplorationDisclosureVersion,
+  );
   const passiveBackgroundConsent = useMemorySettingsStore((state) => state.passiveBackgroundConsent);
   const passiveBackgroundEducationDismissed = useMemorySettingsStore(
     (state) => state.passiveBackgroundEducationDismissed,
   );
   const setMemorySetting = useMemorySettingsStore((state) => state.set);
   const passiveBackgroundCapability = passiveBackgroundMemoryCapability();
+  const automaticExplorationEnabled = exploreEnabled
+    && !memoryLocationTransitionRequired
+    && automaticExplorationDisclosureVersion >= AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION;
 
   const [page, setPage] = useState<Page>('root');
   const [permissionStatus, setPermissionStatus] = useState<string>('unknown');
@@ -566,7 +573,7 @@ export function SettingsScreen() {
     if (next === 'account') void refreshProfile();
   };
 
-  const enableUnifiedMemoryLocation = async () => {
+  const enableAutomaticExplorationAndEncounters = async () => {
     setPermissionLoading(true);
     try {
       let result = await Location.getForegroundPermissionsAsync();
@@ -576,6 +583,10 @@ export function SettingsScreen() {
       setPermissionStatus(result.status);
       setPermissionCanAskAgain(result.canAskAgain !== false);
       if (result.status === Location.PermissionStatus.GRANTED) {
+        setMemorySetting(
+          'automaticExplorationDisclosureVersion',
+          AUTOMATIC_EXPLORATION_DISCLOSURE_VERSION,
+        );
         setMemorySetting('passiveExplorationEnabled', true);
         setMemorySetting('memoryLocationTransitionRequired', false);
         haptic.selection();
@@ -583,8 +594,8 @@ export function SettingsScreen() {
           && passiveBackgroundConsent !== 'granted'
           && !passiveBackgroundEducationDismissed) {
           Alert.alert(
-            'Continue Memory while you walk?',
-            'If you choose Continue, Cairn can add explored places during ordinary walks when the screen is locked or you use another app. It uses a lower-frequency walking location service. Hike and Run recording remains separate.',
+            'Continue in the background?',
+            'Automatic exploration and encounters work in the foreground. Separately, Cairn can use a lower-frequency walking location service during normal screen lock or background use. Hike and Run recording remains separate.',
             [
               { text: 'Not now', style: 'cancel' },
               {
@@ -614,9 +625,10 @@ export function SettingsScreen() {
         }
       } else {
         setMemorySetting('passiveExplorationEnabled', false);
+        setMemorySetting('memoryLocationTransitionRequired', false);
         Alert.alert(
           'Location permission is off',
-          'Cairn needs location permission to update Memory outside an Activity. Hike and Run permissions are handled separately when you record.',
+          'Cairn needs foreground location permission for automatic exploration and nearby encounters outside an Activity. Hike and Run permissions are handled separately when you record.',
           [
             { text: 'Not now', style: 'cancel' },
             ...(!result.canAskAgain ? [{ text: 'Open Settings', onPress: () => void Linking.openSettings() }] : []),
@@ -626,6 +638,30 @@ export function SettingsScreen() {
     } finally {
       setPermissionLoading(false);
     }
+  };
+
+  const requestAutomaticExplorationChange = (next: boolean) => {
+    const ownerId = currentOwnerId();
+    if (!ownerId || permissionLoading) return;
+    if (!next) {
+      setMemorySetting('passiveExplorationEnabled', false);
+      setMemorySetting('memoryLocationTransitionRequired', false);
+      // Turning this preference off must not replay an earlier ordinary-walk
+      // scan later. Activity evidence is retained because Hike/Run is
+      // explicitly independent of this switch.
+      void import('../features/public/services/walkingEncounterEvidence').then(service => (
+        service.dropPassiveWalkingEncounterEvidence(ownerId)
+      )).catch(() => undefined);
+      return;
+    }
+    Alert.alert(
+      'Automatic exploration & encounters',
+      'When this is On, eligible real walking while Cairn is open can add places to your personal Memory and independently discover nearby Friends or Public Cairns. Hike and Run work either way. Encounter notifications only control alerts. Background walking stays off unless separately allowed.',
+      [
+        { text: 'Keep off', style: 'cancel' },
+        { text: 'Continue', onPress: () => void enableAutomaticExplorationAndEncounters() },
+      ],
+    );
   };
 
   const copyActivityDiagnostics = async () => {
@@ -776,20 +812,25 @@ export function SettingsScreen() {
             testID="settings-haptics"
           />
           <Divider color={background.settingsCardBorderColor} />
-          <Row
+          <ToggleRow
             icon="Compass"
-            title="Memory location"
-            detail={permissionStatus === 'granted'
+            title="Automatic exploration & encounters"
+            detail={!automaticExplorationEnabled
+              ? memoryLocationTransitionRequired
+                ? 'Review how ordinary eligible walking feeds Memory and nearby Cairn discovery independently'
+                : 'Off · ordinary app use does not record exploration or scan for encounters; Hike and Run still work'
+              : permissionStatus === 'granted'
               ? passiveBackgroundCapability.supported
                 && passiveBackgroundConsent === 'granted'
                 && backgroundPermissionStatus === 'granted'
-                ? 'Updates Memory during ordinary walks, including normal lock and background use'
+                ? 'Eligible walks update Memory and scan for encounters; separately allowed through normal lock/background use'
                 : passiveBackgroundCapability.supported
-                  ? 'Updates while Cairn is open; background access is optional'
-                  : 'Updates while Cairn is open on this installed build'
-              : 'Needs foreground location permission; Hike and Run use the same accepted evidence lifecycle'}
-            value={permissionLoading ? 'Checking…' : exploreEnabled ? 'On' : memoryLocationTransitionRequired ? 'Review' : 'Off'}
-            onPress={exploreEnabled ? () => openPage('privacy') : () => void enableUnifiedMemoryLocation()}
+                  ? 'Eligible walks update Memory and scan for encounters while Cairn is open; background is separate'
+                  : 'Eligible walks update Memory and scan for encounters while Cairn is open on this build'
+              : 'On, but waiting for foreground location permission; Hike and Run remain available'}
+            value={automaticExplorationEnabled}
+            disabled={permissionLoading}
+            onChange={requestAutomaticExplorationChange}
             testID="settings-explore-open"
           />
           <Divider color={background.settingsCardBorderColor} />
@@ -1006,22 +1047,26 @@ export function SettingsScreen() {
             </>
           ) : null}
           <Divider color={background.settingsCardBorderColor} />
-          <Row
+          <ToggleRow
             icon="Compass"
-            title="Memory location"
-            detail={exploreEnabled && permissionStatus === 'granted'
+            title="Automatic exploration & encounters"
+            detail={automaticExplorationEnabled && permissionStatus === 'granted'
               ? passiveBackgroundCapability.supported
                 && passiveBackgroundConsent === 'granted'
                 && backgroundPermissionStatus === 'granted'
-                ? 'On · ordinary walks continue through normal background and screen lock; active Activities supply their own Memory evidence'
+                ? 'On · ordinary eligible walks feed Memory and nearby Cairn discovery; background use is separately allowed'
                 : passiveBackgroundCapability.supported
-                  ? 'On in foreground · background permission was not granted'
-                  : `On in foreground · background Memory requires a newer native build than ${passiveBackgroundCapability.nativeBuild ?? 'this build'}`
-              : exploreEnabled
-                ? 'On in Cairn · unavailable until foreground location is allowed in iOS'
-                : 'Needs your one-time review · existing Off choices stay Off'}
-            value={exploreEnabled ? 'On' : 'Review'}
-            onPress={exploreEnabled ? undefined : () => void enableUnifiedMemoryLocation()}
+                  ? 'On in foreground · background walking was not separately allowed'
+                  : `On in foreground · background walking needs a newer native build than ${passiveBackgroundCapability.nativeBuild ?? 'this build'}`
+              : automaticExplorationEnabled
+                ? 'On in Cairn · waiting for foreground location permission in iOS'
+                : memoryLocationTransitionRequired
+                  ? 'Review required · existing Off choices stay Off'
+                  : 'Off · no ordinary-use exploration or encounter scanning; Activities still work'}
+            value={automaticExplorationEnabled}
+            disabled={permissionLoading}
+            onChange={requestAutomaticExplorationChange}
+            testID="settings-privacy-automatic-exploration"
           />
         </ContentSurface>
 
@@ -1107,7 +1152,7 @@ export function SettingsScreen() {
           <Row
             icon="Info"
             title="How Cairn uses data"
-            detail="Activities use location while recording. Optional exploration can use lower-frequency walking location in foreground and, only after separate consent, during normal background or screen lock. Limited operational diagnostics support reliability; internal QA telemetry is separately gated."
+            detail="Activities use location while recording. Automatic exploration & encounters lets eligible ordinary walking independently update personal Memory and scan for authorized nearby Cairns in foreground; normal background or screen-lock use requires separate consent and OS permission. Encounter notifications control alerts, not discovery."
           />
           <Divider color={background.settingsCardBorderColor} />
           <Row icon="Shield" title="Privacy Policy" detail="Read the full current policy" external onPress={() => void Linking.openURL(PRIVACY_URL)} testID="settings-privacy-policy" />
