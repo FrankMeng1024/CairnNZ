@@ -41,6 +41,7 @@ import {
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
 import { useDistance } from '../utils/distanceFormat';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
+import { OtaBadge } from '../components/OtaBadge';
 import {
   buildDiscoveryHomeCopy,
   hasPersonalMemoryEvidence,
@@ -524,6 +525,9 @@ export function HomeScreen() {
             hikingIconCandidate={debugMode ? hikingIconCandidate : null}
             runningIconCandidate={debugMode ? runningIconCandidate : null}
           />
+          <View style={styles.otaBadge} pointerEvents="box-none">
+            <OtaBadge inline />
+          </View>
           {qaToolsAvailable && debugMode && (
             <View style={{ position: 'absolute', right: 20, top: 56 }}>
               <TouchableOpacity
@@ -684,5 +688,6 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
   canvas: { overflow: 'hidden' },
+  otaBadge: { position: 'absolute', right: 12, top: 52, zIndex: 1000 },
   sunnyFallback: { backgroundColor: '#79A8BE' },
 });

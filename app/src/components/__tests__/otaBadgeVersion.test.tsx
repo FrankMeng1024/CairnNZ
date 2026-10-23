@@ -1,4 +1,6 @@
 import React from 'react';
+import fs from 'fs';
+import path from 'path';
 import { render } from '@testing-library/react-native';
 import { OTA_VERSION, OtaBadge } from '../OtaBadge';
 
@@ -15,5 +17,11 @@ describe('OTA candidate marker', () => {
     expect(screen.getAllByText('O90 · Checking for update')).toHaveLength(1);
     expect(screen.queryByText(/O88/)).toBeNull();
     screen.unmount();
+  });
+
+  it('is mounted visibly by the active Home rendering path', () => {
+    const homeSource = fs.readFileSync(path.resolve(__dirname, '../../screens/HomeScreen.tsx'), 'utf8');
+    expect(homeSource).toContain("import { OtaBadge } from '../components/OtaBadge';");
+    expect(homeSource).toContain('<OtaBadge inline />');
   });
 });
