@@ -202,6 +202,8 @@ function NativeTrackMap({
   plannedRouteGeometry?: CanonicalRouteGeometry;
   ornamentBottomClearance: number;
 }) {
+  const ownerUserId = useSessionStore(state => state.currentUserId);
+  const clientActivityId = session.clientActivityId ?? session.id;
   const pts = useMemo(() => plannedRouteGeometry
     ? plannedRouteGeometry.parts.flatMap(part => part.points.map((point, index) => ({
         ...point,
@@ -239,6 +241,39 @@ function NativeTrackMap({
   );
   const mapBindingIdentity = activityDetailMapBindingIdentity(geometryIdentity, detailStyleGeneration);
   const historyMapOrnaments = mapOrnamentsAbove(ornamentBottomClearance);
+  const presentationEvidenceRef = useRef(new Set<string>());
+  const recordMapMilestone = useCallback((
+    eventCode: string,
+    details: Record<string, unknown> = {},
+  ) => {
+    if (!ownerUserId || !clientActivityId) return;
+    const key = `${mapEpoch}:${mapBindingIdentity}:${eventCode}`;
+    if (presentationEvidenceRef.current.has(key)) return;
+    presentationEvidenceRef.current.add(key);
+    void recordActivityStageEvent({
+      ownerUserId,
+      clientActivityId,
+      stage: 'presentation',
+      details: {
+        eventCode,
+        consumer: 'activity-detail-map',
+        mapEpoch,
+        geometryFingerprint: geometryIdentity,
+        pointCount: pts.length,
+        measurement: 'JS_OR_MAPBOX_CALLBACK_PROXY',
+        visiblePixelsProven: false,
+        ...details,
+      },
+    });
+  }, [clientActivityId, geometryIdentity, mapBindingIdentity, mapEpoch, ownerUserId, pts.length]);
+
+  useEffect(() => {
+    if (pts.length < 2) return;
+    recordMapMilestone('ACTIVITY_DETAIL_GEOMETRY_COMMITTED', {
+      milestone: 'T3-react-source-props-committed',
+      plannedRouteSelected: Boolean(plannedRouteGeometry),
+    });
+  }, [plannedRouteGeometry, pts.length, recordMapMilestone]);
 
   useEffect(() => {
     if (mapReady || !MapView || pts.length < 2) return undefined;
@@ -297,13 +332,26 @@ function NativeTrackMap({
       onWillStartLoadingMap={() => {
         setMapReady(false);
         setMapLoadState('loading');
+        recordMapMilestone('ACTIVITY_DETAIL_MAP_LOAD_STARTED');
       }}
       onDidFinishLoadingStyle={() => {
+        recordMapMilestone('ACTIVITY_DETAIL_MAP_STYLE_LOADED');
         setDetailStyleGeneration(generation => generation + 1);
       }}
-      onDidFinishLoadingMap={() => { setMapReady(true); setMapLoadState('loading'); }}
-      onDidFinishRenderingMapFully={() => { setMapReady(true); setMapLoadState('loading'); }}
-      onMapLoadingError={() => setMapLoadState('error')}
+      onDidFinishLoadingMap={() => {
+        setMapReady(true);
+        setMapLoadState('loading');
+        recordMapMilestone('ACTIVITY_DETAIL_MAP_LOADED');
+      }}
+      onDidFinishRenderingMapFully={() => {
+        setMapReady(true);
+        setMapLoadState('loading');
+        recordMapMilestone('ACTIVITY_DETAIL_MAP_RENDER_FULL');
+      }}
+      onMapLoadingError={() => {
+        setMapLoadState('error');
+        recordMapMilestone('ACTIVITY_DETAIL_MAP_LOAD_ERROR', { status: 'error-callback' });
+      }}
       onRegionDidChange={(e: any) => {
         // v198 Bug 5: any user-initiated pan/zoom flips hasPanned=true
         // so the recenter button surfaces. isUserInteraction is true

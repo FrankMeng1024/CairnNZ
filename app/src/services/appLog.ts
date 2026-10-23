@@ -4,7 +4,10 @@
  * **One method for the whole app.** Call `log(tag, payload?)` from any
  * feature; no per-feature setup, no service-of-the-month.
  *
- * Backed by the existing `/api/edit-diag` endpoint (originally built
+ * Ordinary best-effort events remain backed by `/api/edit-diag`. A small,
+ * explicit set of Memory/Fog/Mapbox lifecycle transitions is routed into the
+ * owner-scoped durable automatic-diagnostics outbox instead, so those events
+ * survive offline execution without a second caller-facing logging API.
  * for v6.3 brush-edit, but the server schema is generic — `kind`
  * (varchar) + `payload` (JSON), with TTL cleanup + rate limit). We
  * piggyback so there is no migration / new table to maintain.
@@ -68,6 +71,72 @@ const MAX_HEAD_FAILURES = 3;
 const SESSION_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const DEVICE = { platform: Platform.OS, version: String(Platform.Version) };
 
+const DURABLE_OWNER_EVENTS = new Set([
+  'memory.tab_focus',
+  'memory.tab_blur',
+  'memory.last_fix_hydrated',
+  'memory.permission_denied',
+  'memory.gps_fix_unqualified',
+  'memory.gps_fix_ok',
+  'memory.gps_fix_failed',
+  'memory.watcher_started',
+  'memory.map_renderer_unavailable',
+  'memory.map_loading_error',
+  'memory.entry_visible_state',
+  'memory_sync.attach_epoch_bump',
+  'v357.tab_focus_entry',
+  'v357.mapbox_willStartLoadingMap',
+  'v357.mapbox_didFinishLoadingMap',
+  'v357.mapbox_didFinishRenderingMapFully',
+  'v357.fog_layer_mount',
+  'v357.fog_layer_unmount',
+  'fog.shape_built',
+  'fog.shape_unavailable',
+  'fog.shape_build_failed',
+  'fog.buffer_failed',
+  'fog.difference_failed',
+  'fog.prepared_difference_failed',
+  'fog.display_cache_read_failed',
+  'fog.display_cache_write_failed',
+  'plant.commit_attempt',
+  'plant.commit_failed',
+  'plant.commit_ok',
+  'plant.post_commit_effect_failed',
+  'plant.cancel',
+  'plant.gps_window_start',
+  'plant.gps_window_end',
+  'plant.gps_permission_denied',
+  'plant.gps_watcher_subscribe_error',
+  'plant.gps_fusion_ok',
+  'plant.gps_decision',
+]);
+
+function queueDurableOwnerEvent(tag: string, ctx: Record<string, unknown> | undefined): boolean {
+  if (!DURABLE_OWNER_EVENTS.has(tag)) return false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const owner = String(require('../store/useAppStore').useAppStore.getState().user?.id ?? '');
+    if (!owner || owner === 'guest' || owner === 'unknown') return true;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { captureAutomaticDiagnosticEvent } = require('./automaticDiagnosticOutbox');
+    void captureAutomaticDiagnosticEvent({
+      ownerUserId: owner,
+      stream: {
+        streamId: tag.startsWith('plant.') ? `app:plant:${SESSION_ID}` : `memory:${SESSION_ID}`,
+        sourceType: tag.startsWith('plant.') ? 'app' : 'memory',
+        ...(tag.startsWith('plant.') ? {} : { memoryScopeId: SESSION_ID }),
+      },
+      eventCode: tag.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+      sourceModule: tag.startsWith('plant.')
+        ? 'Plant'
+        : tag.startsWith('fog.') || tag.startsWith('v357.fog') ? 'FogLayer' : 'Memory',
+      severity: /failed|error|denied|unavailable|unqualified/.test(tag) ? 'warn' : 'info',
+      details: { tag, ...(ctx ?? {}) },
+    });
+  } catch { /* durable diagnostics are fail-soft for product behavior */ }
+  return true;
+}
+
 function ensureAppStateListener() {
   if (appStateAttached) return;
   appStateAttached = true;
@@ -103,11 +172,12 @@ export function log(tag: string, ctx?: Record<string, any>): void {
   // export path for anything that happened in that process. Production builds
   // have the capability compiled off and retain their existing diagnostics.
   if (activitySimulatorBuildCapable) return;
-  ensureAppStateListener();
   // Universal operational logs are never a synthetic-GPS export surface.
   // Fail private before data enters the in-memory queue: coordinates,
   // credentials, email addresses, and account identifiers are stripped.
   const safe = sanitizeTelemetryEventForUpload({ ctx });
+  if (queueDurableOwnerEvent(tag, safe.ctx as Record<string, unknown> | undefined)) return;
+  ensureAppStateListener();
   queue.push({
     tag,
     ts: Date.now(),

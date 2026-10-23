@@ -88,6 +88,28 @@ let refreshPromise: Promise<void> | null = null;
 let mapRefreshPromise: Promise<void> | null = null;
 const presentationBlockers = new Set<string>();
 
+function recordPresentationDiagnostic(
+  viewerId: string,
+  generation: number,
+  eventCode: string,
+  details: Record<string, unknown>,
+): void {
+  Promise.resolve().then(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('../../services/automaticDiagnosticOutbox').captureAutomaticDiagnosticEvent({
+      ownerUserId: viewerId,
+      stream: {
+        streamId: `app:presentation:${generation}`,
+        sourceType: 'app',
+      },
+      eventCode,
+      sourceModule: 'cairnPresentationStore',
+      severity: eventCode.includes('FAILED') || eventCode.includes('REJECTED') ? 'warn' : 'info',
+      details,
+    });
+  }).catch(() => undefined);
+}
+
 class PresentationRequestError extends Error {
   constructor(readonly kind: 'authorization' | 'server', readonly status: number) {
     super(`cairn_presentation_${kind}_${status}`);
@@ -456,6 +478,17 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
         // channel. Keep the request cadence online, but do not rewrite the
         // exact same durable snapshot on every unchanged response.
         if (snapshotChanged) await persist(snapshot, generation);
+        if (snapshotChanged) recordPresentationDiagnostic(
+          viewerId,
+          generation,
+          'CAIRN_PRESENTATION_SNAPSHOT_CHANGED',
+          {
+            groupCount: nextGroups.length,
+            unreadCount: nextUnreadCount,
+            acquiredCount: nextAcquiredCount,
+            withdrawnCount: Array.isArray(body?.withdrawn_group_ids) ? body.withdrawn_group_ids.length : null,
+          },
+        );
         if (!current(viewerId, generation)) return;
         const activeMembers = get().activeGroupMembers;
         const hasWithdrawalAuthority = Array.isArray(body?.withdrawn_group_ids);
@@ -494,6 +527,7 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
       } catch (error) {
         if (!current(viewerId, generation)) return;
         if (error instanceof PresentationRequestError && error.kind === 'authorization') {
+          const priorError = get().error;
           const snapshotChanged = snapshot.groups.length > 0
             || snapshot.unreadCount !== 0
             || snapshot.acquiredCount !== 0
@@ -511,16 +545,32 @@ export const useCairnPresentationStore = create<CairnPresentationState>((set, ge
             activePrincipalAttention: false, unreadCount: 0, acquiredCount: 0,
             acquiredMarkers: [], loading: false, error: 'authorization',
           });
+          if (priorError !== 'authorization') recordPresentationDiagnostic(
+            viewerId,
+            generation,
+            'CAIRN_PRESENTATION_AUTHORIZATION_REJECTED',
+            { status: error.status, failClosed: true },
+          );
           return;
         }
         // Transient transport loss cannot revoke already-authorized visible
         // content or consume its destination. Keep presentation state and
         // expose only the retryable failure class. HTTP failures are not
         // mislabeled as offline and therefore do not trigger offline backoff.
+        const nextError = error instanceof PresentationRequestError ? 'server' : 'offline';
+        const priorError = get().error;
         set({
           loading: false,
-          error: error instanceof PresentationRequestError ? 'server' : 'offline',
+          error: nextError,
         });
+        if (priorError !== nextError) recordPresentationDiagnostic(
+          viewerId,
+          generation,
+          nextError === 'offline'
+            ? 'CAIRN_PRESENTATION_NETWORK_FAILED'
+            : 'CAIRN_PRESENTATION_SERVER_FAILED',
+          { failureKind: nextError },
+        );
       }
     })();
     const finalPromise = work.finally(() => { if (refreshPromise === finalPromise) refreshPromise = null; });

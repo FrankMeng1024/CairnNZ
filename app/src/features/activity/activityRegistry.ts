@@ -464,6 +464,11 @@ export async function tombstoneActivity(args: {
       tombstones: [tombstone, ...snapshot.tombstones.filter((item) => item.clientActivityId !== args.clientActivityId)],
     };
   }, realmForClientActivityId(args.clientActivityId));
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const diagnostics = require('../../services/automaticDiagnosticOutbox');
+    await diagnostics.purgeAutomaticDiagnosticsForActivity(args.userId, args.clientActivityId);
+  } catch { /* durable tombstone still fences a later uploader pass */ }
 }
 
 /** Retain the tombstone for late-ACK suppression while recording that the

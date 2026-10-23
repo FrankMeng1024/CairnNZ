@@ -890,8 +890,13 @@ async function emitRealTelemetryHealth(reason: string): Promise<void> {
       rawPointCount: state.trackPointsRaw.length,
       canonicalPointCount: state.trackPoints.length,
       livePublishedPointCount: state.trackPointsSmoothed.length,
+      retainedObservationDeficit: Math.max(0, realGpsRawOrdinal - health.retainedObservationCount),
+      retainedDecisionDeficit: Math.max(0, realGpsRawOrdinal - health.retainedDecisionCount),
+      sourceHealth: locationHealth.sourceHealth,
+      canonicalHealth: locationHealth.canonicalHealth,
       sourceAgeMs: locationHealth.sourceAgeMs,
       canonicalAgeMs: locationHealth.canonicalAgeMs,
+      canonicalDegradationReason: locationHealth.canonicalDegradationReason,
       latestSourceKind: state.latestSourceKind,
       latestCanonicalDecisionReason: latestRealCanonicalDecisionReason,
       pendingCandidate: Boolean(realGpsContinuityState.pending),
@@ -901,6 +906,8 @@ async function emitRealTelemetryHealth(reason: string): Promise<void> {
       appState: AppState.currentState,
       segmentCount: segmentIds.size,
       gapCount: gaps.length,
+      ...efficiency,
+      ...health,
     },
   });
   appendSimulatorLog('SYNC_STATE', 'activity_telemetry_health_v2', {
@@ -5536,6 +5543,19 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             qaSessionId: realActivityQaSessionId,
             coordinateSource,
           });
+          void recordActivityStageEvent({
+            ownerUserId: s.ownerUserId!,
+            clientActivityId: s.sessionId!,
+            stage: 'segment-transition',
+            details: {
+              eventCode: 'ACTIVITY_STALE_SEGMENT_PROVENANCE_IGNORED',
+              decision: 'ignored-stale-provenance',
+              source: owned.source ?? 'foreground',
+              incomingStartReason: owned.segmentStartReason ?? null,
+              acceptedSegmentId: segmentId,
+              ownerGenerationSuffix: s.liveOwnerGeneration?.slice(-8) ?? null,
+            },
+          });
         }
         if (classifiedGap) {
           acceptance.gapDecision = {
@@ -6030,6 +6050,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             clientActivityId: before.sessionId,
             qaSessionId: isSimulatorSample ? undefined : realActivityQaSessionId,
             coordinateSource: isSimulatorSample ? 'simulator' : 'none',
+          });
+          void recordActivityStageEvent({
+            ownerUserId: before.ownerUserId,
+            clientActivityId: before.sessionId!,
+            stage: 'segment-transition',
+            details: {
+              eventCode: 'ACTIVITY_SEGMENT_STARTED',
+              decision: 'new-segment',
+              reason: owned.segmentStartReason ?? 'canonical-continuity-classifier',
+              source: owned.source ?? 'foreground',
+              ...acceptance.gapDecision,
+              ownerGenerationSuffix: before.liveOwnerGeneration.slice(-8),
+              continuityAllowed: false,
+              distanceContributionM: 0,
+            },
           });
         }
 
@@ -7410,6 +7445,21 @@ async function markRecordingContinuityUncertain(reason: string): Promise<void> {
     clientActivityId: state.sessionId,
     qaSessionId: realActivityQaSessionId,
     coordinateSource: 'none',
+  });
+  void recordActivityStageEvent({
+    ownerUserId: state.ownerUserId,
+    clientActivityId: state.sessionId,
+    stage: 'segment-transition',
+    details: {
+      eventCode: 'ACTIVITY_SEGMENT_DECISION_DEFERRED',
+      decision: 'deferred',
+      reason,
+      source: state.latestSourceKind ?? 'unknown',
+      previousSegmentId: tail.segmentId,
+      ownerGenerationSuffix: state.liveOwnerGeneration?.slice(-8) ?? null,
+      continuityAllowed: 'pending-physical-classification',
+      distanceContributionM: 0,
+    },
   });
 }
 

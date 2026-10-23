@@ -97,7 +97,7 @@ export function DebugScreen() {
       });
       setBufferSize(debugLogger.getBufferSize());
       setSnapLabActivities(ownerUserId ? await listSnapLabActivities(ownerUserId) : []);
-      setRouteDrawingTraces(listRouteDrawingTraces());
+      setRouteDrawingTraces(ownerUserId ? listRouteDrawingTraces(ownerUserId) : []);
     } finally {
       setLoading(false);
     }
@@ -109,12 +109,12 @@ export function DebugScreen() {
   }, []);
 
   const exportLatestRouteDrawing = useCallback(async () => {
-    const latest = listRouteDrawingTraces()[0];
+    const latest = listRouteDrawingTraces(ownerUserId)[0];
     if (!latest) {
       Alert.alert('No Route drawing trace', 'Arm capture, reproduce one drawing operation, then return here.');
       return;
     }
-    const body = exportRouteDrawingTrace(latest.sessionId);
+    const body = exportRouteDrawingTrace(latest.sessionId, ownerUserId);
     if (!body || !FileSystem.documentDirectory) {
       Alert.alert('Export unavailable', 'The local trace file could not be created on this device.');
       return;
@@ -140,7 +140,7 @@ export function DebugScreen() {
       setBusyId(null);
       void refresh();
     }
-  }, [refresh]);
+  }, [ownerUserId, refresh]);
 
   const openSnapLabRecorder = useCallback((mode: 'Hiking' | 'Running') => {
     if (!debugMode || simulatorContinuity.locked) return;
@@ -357,7 +357,7 @@ export function DebugScreen() {
                 <ActionPill
                   label="Replay latest"
                   onPress={() => {
-                    const latest = listRouteDrawingTraces()[0];
+                    const latest = listRouteDrawingTraces(ownerUserId)[0];
                     (nav as any).navigate('RouteDrawingReplay', latest ? { sessionId: latest.sessionId } : { fixtureId: 'flattenV' });
                   }}
                 />

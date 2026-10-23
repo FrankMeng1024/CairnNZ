@@ -1012,7 +1012,7 @@ export function OrderedRouteEditorScreen() {
   const traceDraftId = draft?.draftId ?? null;
   useEffect(() => {
     const current = historyRef.current;
-    if (!traceDraftId || !current || !isRouteDrawingDiagnosticsEnabled()) return undefined;
+    if (!traceDraftId || !current) return undefined;
     const sessionId = `route-edit:${traceDraftId}:${Date.now()}`;
     traceDraftIdRef.current = traceDraftId;
     beginRouteDrawingTrace({

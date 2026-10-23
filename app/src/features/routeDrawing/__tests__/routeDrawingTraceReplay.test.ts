@@ -1,9 +1,15 @@
+const mockAutomaticCapture = jest.fn(async (_input: unknown) => undefined);
+jest.mock('../../../services/automaticDiagnosticOutbox', () => ({
+  captureAutomaticDiagnosticEvent: (input: unknown) => mockAutomaticCapture(input),
+}));
+
 import {
   _resetRouteDrawingTraceForTesting,
   beginRouteDrawingTrace,
   endRouteDrawingTrace,
   exportRouteDrawingTrace,
   getLatestRouteDrawingTrace,
+  listRouteDrawingTraces,
   listRouteDrawingOperationIds,
   parseRouteDrawingTrace,
   recordRouteDrawingTrace,
@@ -22,6 +28,7 @@ const original = [
 
 describe('bounded multi-operation Route trace round-trip', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     _resetRouteDrawingTraceForTesting();
     setRouteDrawingDiagnosticsEnabled(true);
     beginRouteDrawingTrace({
@@ -135,13 +142,57 @@ describe('bounded multi-operation Route trace round-trip', () => {
       strokeId: 'trim-one', outcome: 'committed', finalGeometry: trimmed,
     }, 'state');
 
-    const trace = parseRouteDrawingTrace(exportRouteDrawingTrace('owner-session-a')!);
-    expect(trace?.accountId).toBe('owner-a');
+    expect(exportRouteDrawingTrace('owner-session-a', 'owner-b')).toBeNull();
+    const serialized = exportRouteDrawingTrace('owner-session-a', 'owner-a')!;
+    expect(serialized).not.toContain('owner-a');
+    const trace = parseRouteDrawingTrace(serialized);
+    expect(trace?.accountId).toBe('current-owner');
     expect(replayRouteOperationEvidence(trace!, cancelledDraw)).toMatchObject({
       kind: 'draw', outcome: 'cancelled', reason: 'gesture-interrupted', finalGeometry: original,
     });
     expect(replayRouteOperationEvidence(trace!, trimOperation)).toMatchObject({
       kind: 'trim', outcome: 'committed', finalGeometry: trimmed,
     });
+  });
+
+  test('keeps a coordinate-free owner-scoped summary when precise capture is off', async () => {
+    _resetRouteDrawingTraceForTesting();
+    setRouteDrawingDiagnosticsEnabled(false);
+    beginRouteDrawingTrace({
+      sessionId: 'summary-a', routeId: 'route-private-a', accountId: 'owner-a',
+      source: { kind: 'activity', id: 'activity-private-a' },
+      originalRoute: original, initialUndoDepth: 0,
+    });
+    recordRouteDrawingTrace('route_point_provider_request', {
+      strokeId: 'stroke-private', target: original[1], pointCount: 2, provider: 'mapbox',
+    }, 'provider-request');
+    recordRouteDrawingTrace('route_operation_terminal', {
+      strokeId: 'stroke-private', outcome: 'rejected', reason: 'provider-timeout',
+      finalGeometry: original,
+    }, 'state');
+    recordRouteDrawingTrace('route_point_animation_frame', { head: original[0] }, 'state');
+    endRouteDrawingTrace('cancelled');
+
+    expect(listRouteDrawingTraces('owner-b')).toEqual([]);
+    const exported = exportRouteDrawingTrace('summary-a', 'owner-a');
+    expect(exported).not.toBeNull();
+    expect(exported).not.toContain('174.764');
+    expect(exported).not.toContain('route-private-a');
+    expect(exported).not.toContain('activity-private-a');
+    const parsed = JSON.parse(exported!);
+    expect(parsed).toMatchObject({
+      captureMode: 'summary-default',
+      accountId: 'current-owner',
+      privacy: { preciseGeometryIncluded: false, automaticUpload: false },
+    });
+    expect(parsed.suppressedEvents).toBeGreaterThan(0);
+    expect(parsed.events.map((event: any) => event.kind)).toEqual(expect.arrayContaining([
+      'route_session_started', 'route_point_provider_request', 'route_operation_terminal', 'route_session_ended',
+    ]));
+    await Promise.resolve();
+    expect(mockAutomaticCapture).toHaveBeenCalledWith(expect.objectContaining({
+      ownerUserId: 'owner-a',
+      stream: expect.objectContaining({ sourceType: 'route', routeEditSessionId: 'summary-a' }),
+    }));
   });
 });

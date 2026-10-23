@@ -645,6 +645,26 @@ async function appendDirectlyToHikeTrack(
             coordinateSource: 'none',
             force: true,
           });
+          void recordActivityStageEvent({
+            ownerUserId: context.userId,
+            clientActivityId: context.clientActivityId,
+            stage: 'segment-transition',
+            wallTimeMs: Date.now(),
+            details: {
+              eventCode: 'ACTIVITY_SEGMENT_STARTED',
+              decision: 'new-segment',
+              reason: 'headless-continuity-classifier',
+              source: 'background',
+              activityMode: context.activityMode,
+              intervalMs: previousTimestamp == null ? null : canonicalObservation.t - previousTimestamp,
+              displacementM: previousDistanceM,
+              previousSegmentId,
+              nextSegmentId: activeSegmentId,
+              ownerGenerationSuffix: context.ownerGeneration.slice(-8),
+              continuityAllowed: false,
+              distanceContributionM: 0,
+            },
+          });
         }
         const point: any = {
           ...sourceEvent,

@@ -13,6 +13,7 @@ export type ActivityStage =
   | 'canonical-accepted'
   | 'wal-committed'
   | 'store-published'
+  | 'segment-transition'
   | 'presentation'
   | 'memory-responsibility'
   | 'memory-local-commit'
@@ -106,6 +107,7 @@ export interface ActivityStageLedgerExport {
     localOnly: true;
     coordinatesIncluded: false;
     automaticUpload: false;
+    automaticTierASummaryMirror: true;
   };
   presentationMeasurement: 'REACT_COMMIT_NOT_NATIVE_FRAME';
   diagnosticCompleteness: {
@@ -121,7 +123,38 @@ export interface ActivityStageLedgerExport {
   };
   phaseSummary: ActivityStagePhaseSummary | null;
   observability: ActivityObservabilitySummary;
+  resourceSummary: ActivityResourceSummary;
   events: ActivityStageLedgerEvent[];
+}
+
+export interface ActivityResourceSummary {
+  semantics: 'JS_OBSERVED_RESOURCE_PROXY_NOT_BATTERY_MEASUREMENT';
+  coverage: { startWallTimeMs: number | null; endWallTimeMs: number | null };
+  counters: {
+    jsLocationReceipts: number;
+    acceptanceDecisions: number;
+    canonicalAccepts: number;
+    walCommitEvents: number;
+    storePublicationEvents: number;
+    segmentTransitions: number;
+    providerTransitions: number;
+    lifecycleTransitions: number;
+    syncEvents: number;
+    presentationMilestones: number;
+  };
+  logging: {
+    logicalStageFacts: number;
+    persistedEventRecords: number;
+    coalescedFacts: number;
+    approximateEventBytes: number;
+  };
+  latestHeartbeat: Record<string, unknown> | null;
+  instrumentation: {
+    nativeEnergyMeasured: false;
+    visibleMapPixelsMeasured: false;
+    nativeLocationReleaseVerified: false;
+    notes: string[];
+  };
 }
 
 export interface ActivityStagePhaseSummary {
@@ -144,6 +177,7 @@ const MAX_BUFFERED_EVENTS_PER_OWNER = 512;
 const WRITE_BATCH_SIZE = 32;
 const QA_WRITE_BATCH_SIZE = 1;
 const EXPORT_WAIT_MS = 750;
+const ROUTINE_WINDOW_SIZE = 32;
 const META_ROOT = '@cairn:activity-stage-ledger-meta:v1:';
 const QA_META_ROOT = '@cairn:snap_lab:activity-stage-ledger-meta:v1:';
 export type ActivityStageLedgerRealm = 'production' | 'snap-lab';
@@ -153,6 +187,38 @@ const processMonotonicOrigin = typeof globalThis.performance?.now === 'function'
 const processId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 let eventSequence = 0;
 const trimTails = new Map<string, Promise<void>>();
+
+interface RoutineStageBucket {
+  ownerUserId: string;
+  clientActivityId: string;
+  stage: ActivityStage;
+  count: number;
+  firstWallTimeMs: number | null;
+  lastWallTimeMs: number | null;
+  firstMonotonicTimeMs: number | null;
+  lastMonotonicTimeMs: number | null;
+  firstEvidenceId: string | null;
+  lastEvidenceId: string | null;
+  latestDetails: Record<string, unknown>;
+  numericTotals: Record<string, number>;
+  numericMaxima: Record<string, number>;
+}
+
+const routineBuckets = new Map<string, RoutineStageBucket>();
+const ROUTINE_STAGES = new Set<ActivityStage>([
+  'observation-received',
+  'canonical-accepted',
+  'wal-committed',
+  'store-published',
+  'memory-responsibility',
+  'memory-local-commit',
+]);
+const ROUTINE_TOTAL_FIELDS = new Set([
+  'acceptedCount', 'inputCount', 'rejectedCount', 'deduplicatedCount', 'writeCount', 'bytes',
+]);
+const ROUTINE_MAX_FIELDS = new Set([
+  'journalCommitLatencyMs', 'walToStoreLatencyMs', 'responsibilityToCommitLatencyMs', 'durationMs',
+]);
 
 interface BufferedLedgerEvent {
   key: string;
@@ -307,6 +373,46 @@ function privacySafeDetails(value: unknown): unknown {
   return result;
 }
 
+function logicalFactCount(event: ActivityStageLedgerEvent): number {
+  const count = Number(event.details.logicalEventCount ?? 1);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
+}
+
+function routineBucketKey(ownerUserId: string, clientActivityId: string, stage: ActivityStage): string {
+  return `${ownerUserId}\u0000${clientActivityId}\u0000${stage}`;
+}
+
+function shouldCoalesceRoutine(input: {
+  clientActivityId: string;
+  stage: ActivityStage;
+  details?: Record<string, unknown>;
+}): boolean {
+  if (realmForActivity(input.clientActivityId) !== 'production') return false;
+  if (ROUTINE_STAGES.has(input.stage)) {
+    if (input.stage === 'canonical-accepted' && input.details?.promotedCandidate === true) return false;
+    if (input.stage === 'memory-responsibility') {
+      const status = String(input.details?.status ?? '');
+      return status !== 'wal-discovery-required';
+    }
+    return true;
+  }
+  if (input.stage !== 'observation-decision') return false;
+  const decision = String(input.details?.decision ?? '').toUpperCase();
+  return decision === 'ACCEPT' || decision === 'ACCEPTED';
+}
+
+function summarizeRoutineNumbers(bucket: RoutineStageBucket, details: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(details)) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    if (ROUTINE_TOTAL_FIELDS.has(key)) {
+      bucket.numericTotals[key] = (bucket.numericTotals[key] ?? 0) + value;
+    }
+    if (ROUTINE_MAX_FIELDS.has(key)) {
+      bucket.numericMaxima[key] = Math.max(bucket.numericMaxima[key] ?? Number.NEGATIVE_INFINITY, value);
+    }
+  }
+}
+
 async function ledgerGetItem(key: string, realm: ActivityStageLedgerRealm): Promise<string | null> {
   void realm;
   return storage.getItemStrict(key);
@@ -378,6 +484,7 @@ async function ensureOwnerMetaLoaded(ownerUserId: string, state: OwnerWriterStat
 }
 
 function summarizeCapturedEvent(state: OwnerWriterState, event: ActivityStageLedgerEvent): void {
+  const logicalCount = logicalFactCount(event);
   let summary = state.summaries.find(item => item.clientActivityId === event.clientActivityId);
   if (!summary) {
     summary = {
@@ -389,16 +496,16 @@ function summarizeCapturedEvent(state: OwnerWriterState, event: ActivityStageLed
     };
     state.summaries.push(summary);
   }
-  summary.capturedEventCount += 1;
+  summary.capturedEventCount += logicalCount;
   summary.firstWallTimeMs = Math.min(summary.firstWallTimeMs, event.wallTimeMs);
   summary.lastWallTimeMs = Math.max(summary.lastWallTimeMs, event.wallTimeMs);
   const stage = summary.stages[event.stage];
   summary.stages[event.stage] = stage ? {
-    count: stage.count + 1,
+    count: stage.count + logicalCount,
     firstWallTimeMs: Math.min(stage.firstWallTimeMs, event.wallTimeMs),
     lastWallTimeMs: Math.max(stage.lastWallTimeMs, event.wallTimeMs),
   } : {
-    count: 1,
+    count: logicalCount,
     firstWallTimeMs: event.wallTimeMs,
     lastWallTimeMs: event.wallTimeMs,
   };
@@ -819,7 +926,7 @@ export function summarizeActivityObservability(
   const stageCounts: Partial<Record<ActivityStage, number>> = {};
   const frontiers: ActivityObservabilitySummary['frontiers'] = {};
   for (const event of ordered) {
-    stageCounts[event.stage] = (stageCounts[event.stage] ?? 0) + 1;
+    stageCounts[event.stage] = (stageCounts[event.stage] ?? 0) + logicalFactCount(event);
     frontiers[event.stage] = {
       count: stageCounts[event.stage]!,
       lastWallTimeMs: event.wallTimeMs,
@@ -937,6 +1044,7 @@ export function summarizeActivityObservability(
       'This installed binary cannot observe CLLocation callback receipt before Expo delivers it to JavaScript.',
       'Missing JavaScript observations alone do not prove an iOS, hardware, permission, or native-provider cause.',
       'JavaScript receipt gaps and original GPS observation-timestamp gaps are reported separately.',
+      'Routine healthy stages may be represented by counted first/last windows; suppressedCount is not a native-callback count.',
       'Native callback conclusions require the separately exported owner-correlated collector coverage report.',
     ],
   };
@@ -946,7 +1054,7 @@ export function summarizeActivityObservability(
  * Persist one privacy-safe stage fact without joining the GPS ingest mutex.
  * Coordinates and credential-shaped fields are removed at this boundary.
  */
-export function recordActivityStageEvent(input: {
+interface RecordActivityStageInput {
   ownerUserId: string;
   clientActivityId: string;
   stage: ActivityStage;
@@ -954,7 +1062,9 @@ export function recordActivityStageEvent(input: {
   wallTimeMs?: number;
   monotonicTimeMs?: number | null;
   details?: Record<string, unknown>;
-}): Promise<void> {
+}
+
+function enqueueActivityStageEvent(input: RecordActivityStageInput): Promise<void> {
   if (!input.ownerUserId || !input.clientActivityId) return Promise.resolve();
   const decisionWallTimeMs = input.details?.decisionWallTimeMs;
   const wallTimeMs = Math.floor(
@@ -968,7 +1078,7 @@ export function recordActivityStageEvent(input: {
     : input.monotonicTimeMs;
   if ([
     'activity-start', 'lifecycle', 'provider-state', 'final-job', 'final-selected',
-    'completion-presented', 'detail-selected', 'sync-state',
+    'completion-presented', 'detail-selected', 'sync-state', 'segment-transition',
   ].includes(input.stage)) {
     void recordActivityDiagnosticReplayEvent({
       ownerUserId: input.ownerUserId,
@@ -1000,6 +1110,44 @@ export function recordActivityStageEvent(input: {
     details: privacySafeDetails(input.details ?? {}) as Record<string, unknown>,
   };
   const realm = realmForActivity(input.clientActivityId);
+  if (realm === 'production'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.clientActivityId)) {
+    // The existing owner ledger remains the capture authority. Its persisted
+    // physical events are mirrored into the bounded automatic outbox without
+    // awaiting storage or network on the Activity/WAL critical path.
+    Promise.resolve().then(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { captureAutomaticDiagnosticEvent } = require('../../services/automaticDiagnosticOutbox');
+      const identity = installedIdentity();
+      const activityMode = event.details.activityMode === 'hiking' || event.details.activityMode === 'running'
+        ? event.details.activityMode
+        : undefined;
+      return captureAutomaticDiagnosticEvent({
+        ownerUserId: input.ownerUserId,
+        eventId: event.eventId,
+        stream: {
+          streamId: `activity:${input.clientActivityId}`,
+          sourceType: 'activity',
+          clientActivityId: input.clientActivityId,
+          ...(activityMode ? { activityMode } : {}),
+          runtimeVersion: identity.runtimeVersion,
+          updateId: identity.updateId,
+        },
+        eventCode: typeof event.details.eventCode === 'string'
+          ? event.details.eventCode
+          : `ACTIVITY_${input.stage.replace(/-/g, '_').toUpperCase()}`,
+        sourceModule: 'activityStageLedger',
+        severity: event.details.phase === 'failed' || event.details.status === 'error' ? 'error' : 'info',
+        eventAt: event.wallTimeMs,
+        monotonicMs: event.monotonicTimeMs,
+        details: {
+          stage: event.stage,
+          evidenceId: event.evidenceId,
+          ...event.details,
+        },
+      });
+    }).catch(() => undefined);
+  }
   // Snap Lab accelerates hours of evidence through one foreground runtime.
   // A fixed per-Activity slot ring keeps the owner-local diagnostic boundary
   // bounded without periodic full-key scans that can stall the app. The event
@@ -1028,8 +1176,111 @@ export function recordActivityStageEvent(input: {
   return Promise.resolve();
 }
 
+function flushRoutineBucket(bucket: RoutineStageBucket): void {
+  if (bucket.count <= 0 || bucket.firstWallTimeMs === null || bucket.lastWallTimeMs === null) return;
+  void enqueueActivityStageEvent({
+    ownerUserId: bucket.ownerUserId,
+    clientActivityId: bucket.clientActivityId,
+    stage: bucket.stage,
+    evidenceId: bucket.lastEvidenceId,
+    wallTimeMs: bucket.lastWallTimeMs,
+    monotonicTimeMs: bucket.lastMonotonicTimeMs,
+    details: {
+      ...bucket.latestDetails,
+      eventCode: 'ACTIVITY_ROUTINE_WINDOW',
+      aggregation: 'routine-window',
+      logicalEventCount: bucket.count,
+      suppressedCount: bucket.count,
+      firstWallTimeMs: bucket.firstWallTimeMs,
+      lastWallTimeMs: bucket.lastWallTimeMs,
+      firstMonotonicTimeMs: bucket.firstMonotonicTimeMs,
+      lastMonotonicTimeMs: bucket.lastMonotonicTimeMs,
+      firstEvidenceId: bucket.firstEvidenceId,
+      lastEvidenceId: bucket.lastEvidenceId,
+      numericTotals: bucket.numericTotals,
+      numericMaxima: bucket.numericMaxima,
+    },
+  });
+  bucket.count = 0;
+  bucket.firstWallTimeMs = null;
+  bucket.lastWallTimeMs = null;
+  bucket.firstMonotonicTimeMs = null;
+  bucket.lastMonotonicTimeMs = null;
+  bucket.firstEvidenceId = null;
+  bucket.lastEvidenceId = null;
+  bucket.latestDetails = {};
+  bucket.numericTotals = {};
+  bucket.numericMaxima = {};
+}
+
+function flushRoutineBuckets(ownerUserId?: string, clientActivityId?: string, remove = false): void {
+  for (const [key, bucket] of routineBuckets) {
+    if (ownerUserId && bucket.ownerUserId !== ownerUserId) continue;
+    if (clientActivityId && bucket.clientActivityId !== clientActivityId) continue;
+    flushRoutineBucket(bucket);
+    if (remove) routineBuckets.delete(key);
+  }
+}
+
+export function recordActivityStageEvent(input: RecordActivityStageInput): Promise<void> {
+  if (!input.ownerUserId || !input.clientActivityId) return Promise.resolve();
+  if (!shouldCoalesceRoutine(input)) {
+    flushRoutineBuckets(input.ownerUserId, input.clientActivityId);
+    const result = enqueueActivityStageEvent(input);
+    if (input.stage === 'completion-presented') {
+      flushRoutineBuckets(input.ownerUserId, input.clientActivityId, true);
+    }
+    return result;
+  }
+
+  const key = routineBucketKey(input.ownerUserId, input.clientActivityId, input.stage);
+  let bucket = routineBuckets.get(key);
+  if (!bucket) {
+    bucket = {
+      ownerUserId: input.ownerUserId,
+      clientActivityId: input.clientActivityId,
+      stage: input.stage,
+      count: 0,
+      firstWallTimeMs: null,
+      lastWallTimeMs: null,
+      firstMonotonicTimeMs: null,
+      lastMonotonicTimeMs: null,
+      firstEvidenceId: null,
+      lastEvidenceId: null,
+      latestDetails: {},
+      numericTotals: {},
+      numericMaxima: {},
+    };
+    routineBuckets.set(key, bucket);
+    // The first JS receipt/accept/WAL/store fact remains an exact durable
+    // milestone. Later healthy repeats are represented by counted windows.
+    return enqueueActivityStageEvent(input);
+  }
+
+  const decisionWallTimeMs = input.details?.decisionWallTimeMs;
+  const wallTimeMs = Math.floor(input.wallTimeMs
+    ?? (typeof decisionWallTimeMs === 'number' && Number.isFinite(decisionWallTimeMs)
+      ? decisionWallTimeMs
+      : Date.now()));
+  const monotonicTimeMs = input.monotonicTimeMs === undefined
+    ? activityStageMonotonicNow()
+    : input.monotonicTimeMs;
+  bucket.count += 1;
+  bucket.firstWallTimeMs ??= wallTimeMs;
+  bucket.lastWallTimeMs = wallTimeMs;
+  bucket.firstMonotonicTimeMs ??= monotonicTimeMs;
+  bucket.lastMonotonicTimeMs = monotonicTimeMs;
+  bucket.firstEvidenceId ??= input.evidenceId ?? null;
+  bucket.lastEvidenceId = input.evidenceId ?? null;
+  bucket.latestDetails = privacySafeDetails(input.details ?? {}) as Record<string, unknown>;
+  summarizeRoutineNumbers(bucket, bucket.latestDetails);
+  if (bucket.count >= ROUTINE_WINDOW_SIZE) flushRoutineBucket(bucket);
+  return Promise.resolve();
+}
+
 /** Test/privacy boundary. Production ingest and Finish deliberately do not await this. */
 export async function flushActivityStageLedger(ownerUserId?: string): Promise<void> {
+  flushRoutineBuckets(ownerUserId);
   const targets = ownerUserId
     ? (['production', 'snap-lab'] as ActivityStageLedgerRealm[]).map(realm => ({ ownerUserId, realm }))
     : [...ownerWriters.keys()].map(key => {
@@ -1046,11 +1297,78 @@ export async function flushActivityStageLedger(ownerUserId?: string): Promise<vo
   else await Promise.allSettled([...trimTails.values()]);
 }
 
+const RESOURCE_HEARTBEAT_FIELDS = [
+  'reason', 'appState', 'foregroundWatcherActive', 'backgroundTaskActive',
+  'backgroundPermissionState', 'sourceAgeMs', 'canonicalAgeMs', 'sourceHealth', 'canonicalHealth',
+  'rawPointCount', 'canonicalPointCount', 'livePublishedPointCount', 'segmentCount', 'gapCount',
+  'providerStartCount', 'providerStopCount', 'providerActiveDurationMs',
+  'journalAppendCount', 'journalAppendOperationCount', 'journalLogicalBytes', 'journalActualAppendBytes',
+  'journalCheckpointCount', 'journalCheckpointBytes', 'journalTotalCommitMs', 'journalMaxCommitMs',
+  'memoryEvidenceCalls', 'memoryEvidenceMutations', 'memoryEvidenceDeduplicated', 'memoryBatchFlushes',
+  'memoryPersistenceWrites', 'memoryPersistenceBytes', 'h3PersistenceWrites', 'h3PersistenceBytes',
+  'memoryNetworkSyncRequests', 'memoryNetworkSyncedPointAttempts',
+] as const;
+
+function buildActivityResourceSummary(
+  events: ActivityStageLedgerEvent[],
+  phaseSummary: ActivityStagePhaseSummary | null,
+): ActivityResourceSummary {
+  const stageCount = (stage: ActivityStage): number => (
+    phaseSummary?.stages[stage]?.count
+    ?? events.filter(event => event.stage === stage).reduce((sum, event) => sum + logicalFactCount(event), 0)
+  );
+  const logicalStageFacts = phaseSummary?.capturedEventCount
+    ?? events.reduce((sum, event) => sum + logicalFactCount(event), 0);
+  const latestHeartbeatEvent = [...events].reverse().find(event => event.stage === 'health-heartbeat') ?? null;
+  const latestHeartbeat = latestHeartbeatEvent
+    ? Object.fromEntries(RESOURCE_HEARTBEAT_FIELDS.flatMap(field => (
+        latestHeartbeatEvent.details[field] === undefined ? [] : [[field, latestHeartbeatEvent.details[field]]]
+      )))
+    : null;
+  return {
+    semantics: 'JS_OBSERVED_RESOURCE_PROXY_NOT_BATTERY_MEASUREMENT',
+    coverage: {
+      startWallTimeMs: phaseSummary?.firstWallTimeMs ?? events[0]?.wallTimeMs ?? null,
+      endWallTimeMs: phaseSummary?.lastWallTimeMs ?? events[events.length - 1]?.wallTimeMs ?? null,
+    },
+    counters: {
+      jsLocationReceipts: stageCount('observation-received'),
+      acceptanceDecisions: stageCount('observation-decision'),
+      canonicalAccepts: stageCount('canonical-accepted'),
+      walCommitEvents: stageCount('wal-committed'),
+      storePublicationEvents: stageCount('store-published'),
+      segmentTransitions: stageCount('segment-transition'),
+      providerTransitions: stageCount('provider-state'),
+      lifecycleTransitions: stageCount('lifecycle'),
+      syncEvents: stageCount('sync-state'),
+      presentationMilestones: stageCount('presentation') + stageCount('detail-selected'),
+    },
+    logging: {
+      logicalStageFacts,
+      persistedEventRecords: events.length,
+      coalescedFacts: Math.max(0, logicalStageFacts - events.length),
+      approximateEventBytes: events.reduce((sum, event) => sum + JSON.stringify(event).length, 0),
+    },
+    latestHeartbeat,
+    instrumentation: {
+      nativeEnergyMeasured: false,
+      visibleMapPixelsMeasured: false,
+      nativeLocationReleaseVerified: false,
+      notes: [
+        'Counts and durations are JavaScript-observed work proxies, not watts or battery attribution.',
+        'A requested native location stop does not prove Core Location released its observer.',
+        'Mapbox callbacks do not prove final track pixels were visible on the iPhone display.',
+      ],
+    },
+  };
+}
+
 export async function exportLatestActivityStageLedger(
   ownerUserId: string,
   realm: ActivityStageLedgerRealm = 'production',
   requestedClientActivityId?: string,
 ): Promise<ActivityStageLedgerExport> {
+  flushRoutineBuckets(ownerUserId, requestedClientActivityId);
   const state = writerState(ownerUserId, realm);
   const waitStartedAt = Date.now();
   const settled = await waitBounded(settleOwnerWriter(ownerUserId, realm), EXPORT_WAIT_MS);
@@ -1139,7 +1457,12 @@ export async function exportLatestActivityStageLedger(
     ownerUserId: 'current-owner',
     clientActivityId: latestActivityId,
     installedIdentity: installedIdentity(),
-    privacy: { localOnly: true, coordinatesIncluded: false, automaticUpload: false },
+    privacy: {
+      localOnly: true,
+      coordinatesIncluded: false,
+      automaticUpload: false,
+      automaticTierASummaryMirror: true,
+    },
     presentationMeasurement: 'REACT_COMMIT_NOT_NATIVE_FRAME',
     diagnosticCompleteness: {
       persistence: partial ? 'partial' : 'complete',
@@ -1154,6 +1477,7 @@ export async function exportLatestActivityStageLedger(
     },
     phaseSummary,
     observability: summarizeActivityObservability(events, { retentionTruncated }),
+    resourceSummary: buildActivityResourceSummary(events, phaseSummary),
     events: events.map(event => ({ ...event, ownerUserId: 'current-owner' })),
   };
 }
@@ -1174,6 +1498,11 @@ export async function purgeActivityStageLedgerRealmForOwner(
   ownerUserId: string,
   realm: ActivityStageLedgerRealm,
 ): Promise<void> {
+    for (const [key, bucket] of routineBuckets) {
+      if (bucket.ownerUserId === ownerUserId && realmForActivity(bucket.clientActivityId) === realm) {
+        routineBuckets.delete(key);
+      }
+    }
     const state = writerState(ownerUserId, realm);
     state.purging = true;
     try {

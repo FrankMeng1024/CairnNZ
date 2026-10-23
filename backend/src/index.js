@@ -19,6 +19,7 @@ const { run: cleanHiddenOrphans } = require('./cron/cleanHiddenItemsOrphans');
 const { run: authSweep } = require('./cron/authSweep');
 const { runDrain: pushDrain, runPurge: pushPurge } = require('./cron/pushDrain');
 const { runBuild: exportBuild, runPurge: exportPurge } = require('./cron/exportWorker');
+const { run: automaticDiagnosticsPurge } = require('./cron/automaticDiagnosticsPurge');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -339,6 +340,13 @@ async function start() {
     }, { timezone: 'UTC' });
     console.log('✓ Cron registered: exportPurge (0 4 * * * UTC)');
 
+    cron.schedule('20 4 * * *', () => {
+      automaticDiagnosticsPurge({ verbose: true }).catch((err) => {
+        console.error('[cron/scheduler] automaticDiagnosticsPurge failed:', err.message);
+      });
+    }, { timezone: 'UTC' });
+    console.log('✓ Cron registered: automaticDiagnosticsPurge (20 4 * * * UTC)');
+
     // Sprint 6 round-4 R4B6 + round-12 R12B4: boot-time catch-up with
     // DB-ready gate. Pre-fix, setTimeout(30s) hard-coded — on fresh
     // docker-compose boot where mysql init takes 45-90s, all three
@@ -378,6 +386,11 @@ async function start() {
         await exportPurge({ verbose: true });
       } catch (err) {
         console.error('[boot/catch-up] exportPurge failed:', err.message);
+      }
+      try {
+        await automaticDiagnosticsPurge({ verbose: true });
+      } catch (err) {
+        console.error('[boot/catch-up] automaticDiagnosticsPurge failed:', err.message);
       }
     })().catch(err => console.error('[boot/catch-up] outer:', err.message));
     console.log('✓ Boot catch-up scheduled (DB-ready gated)');

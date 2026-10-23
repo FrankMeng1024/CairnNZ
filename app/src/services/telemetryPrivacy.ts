@@ -1,6 +1,19 @@
 const FORBIDDEN_FIELD = /(access|refresh)?token|password|passcode|reset.?code|email|authorization|cookie|secret|api.?key|user.?id|owner.?id|author.?id/i;
 const COORDINATE_FIELD = /^(lat|lng|lon|latitude|longitude|coordinate|coordinates|location|position|centerCoordinate|cameraTarget|displayedPosition)$/i;
 
+function coordinateShapedField(key: string): boolean {
+  if (COORDINATE_FIELD.test(key)) return true;
+  const tokens = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return tokens.some(token => (
+    token === 'lat' || token === 'lng' || token === 'lon'
+    || token === 'latitude' || token === 'longitude'
+  ));
+}
+
 function scrubString(value: string): string {
   return value
     .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [redacted]')
@@ -41,7 +54,7 @@ function removeCoordinateFields(value: unknown, depth = 0): unknown {
   }
   const out: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (COORDINATE_FIELD.test(key)) continue;
+    if (coordinateShapedField(key)) continue;
     out[key] = removeCoordinateFields(nested, depth + 1);
   }
   return out;

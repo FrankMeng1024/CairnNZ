@@ -7,6 +7,7 @@ import { BackButton } from '../components/BackButton';
 import { FontSize, Radius, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useAppStore } from '../store/useAppStore';
 import type { LngLat } from '../services/routing/corridor/PolylineSampler';
 import {
   getRouteDrawingTrace,
@@ -134,11 +135,12 @@ export function RouteDrawingReplayScreen() {
   const route = useRoute<any>();
   const theme = useVisualTheme();
   const debugMode = useSettingsStore(state => state.debugMode);
+  const ownerUserId = String(useAppStore(state => state.user?.id) ?? '');
   const fixtureIds = Object.keys(HUMAN_ROUTE_DRAWING_FIXTURES);
   const [fixtureId, setFixtureId] = useState<string>(route.params?.fixtureId ?? 'flattenV');
   const capturedTrace = useMemo(() => route.params?.sessionId
-    ? getRouteDrawingTrace(route.params.sessionId)
-    : null, [route.params?.sessionId]);
+    ? getRouteDrawingTrace(route.params.sessionId, ownerUserId)
+    : null, [ownerUserId, route.params?.sessionId]);
   const operationIds = useMemo(() => capturedTrace ? listRouteDrawingOperationIds(capturedTrace) : [], [capturedTrace]);
   const [operationId, setOperationId] = useState<string | undefined>(route.params?.operationId);
   useEffect(() => {

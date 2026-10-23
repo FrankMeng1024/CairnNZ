@@ -1205,6 +1205,12 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     beginRouteDrawingTrace({
       sessionId,
       routeId,
+      accountId: (() => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          return String(require('./useAppStore').useAppStore.getState().user?.id ?? '') || null;
+        } catch { return null; }
+      })(),
       source: args.source ?? { kind: routeId.startsWith('draft_') ? 'draft' : 'route', id: routeId },
       initialGeometryRevision: routeUpdatedAt ?? null,
       originalRoute: originalPoints,

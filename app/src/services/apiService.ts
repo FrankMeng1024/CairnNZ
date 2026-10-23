@@ -74,7 +74,7 @@ export async function authenticatedFetch(
   // device where breadcrumbs are lost on crash. Guard against log module
   // being unavailable / recursing on itself (log endpoint is same base URL).
   const logAliyun = (event: string, data: any) => {
-    if (path.startsWith('/api/edit-diag')) return; // don't self-log the log endpoint
+    if (path.startsWith('/api/edit-diag') || path.startsWith('/api/telemetry/diagnostics')) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { log } = require('./appLog');

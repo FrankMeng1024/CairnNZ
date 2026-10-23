@@ -336,6 +336,11 @@ export async function purgeDeletedAccountLocalData(userId: string): Promise<void
   await purgeActivityStageLedgerForOwner(owner);
   await purgeActivityDiagnosticReplayForOwner(owner);
   await purgeNativeGpsEvidenceScopesForOwner(owner);
+  // Lazy imports keep account bootstrap free of telemetry/API/store cycles.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  await require('./automaticDiagnosticOutbox').purgeAutomaticDiagnosticsForOwner(owner);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../features/routeDrawing/routeDrawingTrace').clearRouteDrawingTracesForOwner(owner);
   await purgeDurableMemoryEvidence(owner);
   // Newly introduced presentation coordinates/unread state also have an
   // in-process snapshot. Fence and clear that authority before the key sweep.

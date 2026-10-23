@@ -321,6 +321,24 @@ export async function drainPending(opts?: {
   isDraining = true;
   try {
     crashLogger.breadcrumb(`activity:sync_wake reason=${opts?.wakeReason ?? 'unspecified'}`);
+    try {
+      // Reuse the established hydrate/network/foreground sync opportunities.
+      // This has its own mutex and never delays product-data reconciliation.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ownerId = String(require('../store/useSessionStore').useSessionStore.getState().currentUserId ?? '');
+      if (ownerId && ownerId !== 'guest') {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { drainAutomaticDiagnosticOutbox } = require('./automaticDiagnosticOutbox');
+        const reason = opts?.wakeReason === 'network_online'
+          ? 'network_online' as const
+          : opts?.wakeReason === 'foreground'
+            ? 'foreground' as const
+            : opts?.wakeReason === 'hydrate'
+              ? 'hydrate' as const
+              : 'sync' as const;
+        void drainAutomaticDiagnosticOutbox(ownerId, { reason }).catch(() => undefined);
+      }
+    } catch { /* diagnostics never own product sync */ }
     do {
       pendingSignal = false;
       await reconcileDurableTombstones();

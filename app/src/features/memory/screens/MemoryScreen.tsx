@@ -114,11 +114,6 @@ let _authorizedMemoryPreview: {
 } | null = null;
 const MAX_MEMORY_PREVIEW_BYTES = 4 * 1024 * 1024;
 
-// v357 diagnostic: module-scope counter for MemoryScreen render invocations.
-// Counts across mount/unmount within the same JS session so we can tell
-// apart "1st cold render" vs "Nth re-render after tab switch".
-let _memoryScreenRenderCount = 0;
-
 function MemoryStateMark({ label }: { label: string }) {
   const theme = useVisualTheme();
   return (
@@ -148,13 +143,6 @@ export function MemoryScreen() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../../../services/bootDiagnostics').markBootPhase('memory_screen_render_start');
   } catch {/* ignore */}
-  // v357 diagnostic: log every MemoryScreen render. persistentCoord and
-  // points.length are populated lower in the function body — we just
-  // increment the module counter here and log later (after both refs are
-  // assigned) so the ctx is accurate. See `v357.memory_screen_render` log
-  // at end of body.
-  _memoryScreenRenderCount += 1;
-  const _v357RenderN = _memoryScreenRenderCount;
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const watcherFix = useMemoryStore((s) => s.lastWatcherFix);
@@ -631,23 +619,13 @@ export function MemoryScreen() {
         setRefetchToken((n) => n + 1);
       }
       void useCairnPresentationStore.getState().refreshAcquiredMap();
-      // v303 OTA 三修:JS heartbeat — 500ms 一次的 log,证明 JS thread alive
-      // (用户报"卡 15s 期间 log 也没上传" → heartbeat 帮我们看到 freeze 区间)。
-      // 用 setInterval,失败时 GC 自动停。tab_blur cleanup 时 clearInterval。
-      // O17 P-MEM-08: gate heartbeat behind __DEV__ — prod builds don't need
-      // 500ms interval firing forever (JS wake keeps radio warm on cellular).
-      const heartbeatStart = Date.now();
-      const heartbeat = __DEV__ ? setInterval(() => {
-        const elapsed = Date.now() - heartbeatStart;
-        log('memory.js_heartbeat', { elapsed_ms: elapsed });
-      }, 500) : null;
+      const focusStartedAt = Date.now();
       return () => {
         // An authorization refresh may still be in flight when the user opens
         // Route. Never let the blurred Memory task reclaim the two shared
         // coverage viewports or overwrite Route's active request generation.
         focusActive = false;
-        if (heartbeat) clearInterval(heartbeat);
-        log('memory.tab_blur', { total_focus_ms: Date.now() - heartbeatStart });
+        log('memory.tab_blur', { total_focus_ms: Date.now() - focusStartedAt });
         // v327: force-flush logs on tab blur. Without this, all the
         // memory.* / fog.* / gps.* logs sit in the in-memory queue
         // until the app goes to background. User reported issues
@@ -960,19 +938,6 @@ export function MemoryScreen() {
     refetchToken,
     stableCoord,
   ]);
-
-  // v357 diagnostic: log every render of MemoryScreen body. ctx tells us
-  // (a) which render index this is, (b) whether we have a coord to draw
-  // the map with, (c) how many points exist in store at this instant.
-  // Combined with v357.tab_focus_entry / v357.mountKey_bumped / v357.fog_*
-  // / v357.mapbox_* this is the canonical timestamp ladder used to map
-  // each visible flicker frame to a specific React/Mapbox event.
-  log('v357.memory_screen_render', {
-    render_n: _v357RenderN,
-    persistentCoord_set: !!persistentCoord,
-    points_n: useMemoryStore.getState().points.length,
-    mountKey,
-  });
 
   // v327 debug: track WHY the "Looking for your position" UI appears.
   // User reports it shows up briefly during zoom — but zoom should not

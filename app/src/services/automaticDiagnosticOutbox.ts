@@ -1,0 +1,700 @@
+import { storage } from '../store/storage';
+import networkMonitor from './networkMonitor';
+import { sanitizeTelemetryEventForUpload } from './telemetryPrivacy';
+
+const ROOT = '@cairn:automatic-diagnostics:v1:';
+const MAX_EVENTS_PER_OWNER = 600;
+const MAX_BYTES_PER_OWNER = 512 * 1024;
+const MAX_EVENTS_PER_BATCH = 50;
+const MAX_BATCH_BYTES = 60 * 1024;
+const POLICY_CACHE_MS = 6 * 60 * 60 * 1000;
+const TIER_A_FREE_TEXT_FIELD = /(?:message|msg|stack|body|text|title|name|note|description|content|diagnostic|url|uri)$/i;
+
+export type AutomaticDiagnosticSourceType = 'activity' | 'memory' | 'route' | 'app';
+
+export interface AutomaticDiagnosticStream {
+  streamId: string;
+  sourceType: AutomaticDiagnosticSourceType;
+  ownerEpoch?: string;
+  clientActivityId?: string;
+  clientRouteId?: string;
+  routeEditSessionId?: string;
+  memoryScopeId?: string;
+  activityMode?: 'hiking' | 'running';
+  runtimeVersion?: string | null;
+  updateId?: string | null;
+}
+
+export interface AutomaticDiagnosticInput {
+  ownerUserId: string;
+  stream: AutomaticDiagnosticStream;
+  eventId?: string;
+  eventCode: string;
+  sourceModule: string;
+  severity?: 'info' | 'warn' | 'error';
+  eventAt?: number;
+  monotonicMs?: number | null;
+  details?: Record<string, unknown>;
+}
+
+interface QueuedAutomaticDiagnostic {
+  schema: 'cairn-auto-diagnostic-event';
+  version: 1;
+  eventId: string;
+  queueSequence: number;
+  streamSequence: number;
+  stream: AutomaticDiagnosticStream;
+  eventCode: string;
+  sourceModule: string;
+  severity: 'info' | 'warn' | 'error';
+  eventAt: number;
+  monotonicMs: number | null;
+  details: Record<string, unknown>;
+  capturedAt: number;
+  approximateBytes: number;
+}
+
+interface StreamStatus {
+  lastCapturedAt: number | null;
+  lastDurablyQueuedAt: number | null;
+  lastAttemptAt: number | null;
+  lastServerAckAt: number | null;
+  coverageStart: number | null;
+  coverageEnd: number | null;
+  sourceTypesAvailable: AutomaticDiagnosticSourceType[];
+  droppedCount: number;
+  failedWriteCount: number;
+  lastFailure: string | null;
+  nextSequence: number;
+  consecutiveUploadFailures: number;
+  nextAttemptAt: number | null;
+}
+
+interface OwnerMeta {
+  schema: 'cairn-auto-diagnostic-owner-meta';
+  version: 1;
+  ownerEpoch: string;
+  policy: 'unknown' | 'tier_a' | 'tier_b' | 'disabled';
+  policyCheckedAt: number | null;
+  pendingCount: number;
+  pendingBytes: number;
+  streams: Record<string, StreamStatus>;
+}
+
+export interface AutomaticDiagnosticStatus extends StreamStatus {
+  pendingCount: number;
+  pendingBytes: number;
+  quality:
+    | 'NOT_CAPTURED'
+    | 'CAPTURED_NOT_UPLOADED'
+    | 'UPLOAD_PENDING'
+    | 'SERVER_ACKED'
+    | 'RETENTION_TRUNCATED'
+    | 'POLICY_DISABLED'
+    | 'UNKNOWN';
+}
+
+const tails = new Map<string, Promise<unknown>>();
+let eventCounter = 0;
+const processSalt = Math.floor(Math.random() * 1_000);
+
+function diagnosticAuthenticatedFetch(path: string, init: Record<string, unknown>): Promise<Response> {
+  // Keep durable capture and privacy deletion storage-only. Loading the auth/
+  // crash stack is deferred until an existing sync opportunity actually sends.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('./apiService').authenticatedFetch(path, init);
+}
+
+function ownerPart(ownerUserId: string): string {
+  return encodeURIComponent(String(ownerUserId));
+}
+
+function ownerPrefix(ownerUserId: string): string {
+  return `${ROOT}${ownerPart(ownerUserId)}:`;
+}
+
+function eventPrefix(ownerUserId: string): string {
+  return `${ownerPrefix(ownerUserId)}event:`;
+}
+
+function metaKey(ownerUserId: string): string {
+  return `${ownerPrefix(ownerUserId)}meta`;
+}
+
+function emptyStatus(): StreamStatus {
+  return {
+    lastCapturedAt: null,
+    lastDurablyQueuedAt: null,
+    lastAttemptAt: null,
+    lastServerAckAt: null,
+    coverageStart: null,
+    coverageEnd: null,
+    sourceTypesAvailable: [],
+    droppedCount: 0,
+    failedWriteCount: 0,
+    lastFailure: null,
+    nextSequence: 1,
+    consecutiveUploadFailures: 0,
+    nextAttemptAt: null,
+  };
+}
+
+function emptyMeta(): OwnerMeta {
+  return {
+    schema: 'cairn-auto-diagnostic-owner-meta',
+    version: 1,
+    ownerEpoch: `oe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    policy: 'unknown',
+    policyCheckedAt: null,
+    pendingCount: 0,
+    pendingBytes: 0,
+    streams: {},
+  };
+}
+
+async function readMeta(ownerUserId: string): Promise<OwnerMeta> {
+  const raw = await storage.getItemStrict(metaKey(ownerUserId));
+  if (!raw) return emptyMeta();
+  try {
+    const parsed = JSON.parse(raw) as OwnerMeta;
+    if (parsed?.schema === 'cairn-auto-diagnostic-owner-meta' && parsed.version === 1) {
+      parsed.pendingCount = Math.max(0, Number(parsed.pendingCount) || 0);
+      parsed.pendingBytes = Math.max(0, Number(parsed.pendingBytes) || 0);
+      parsed.ownerEpoch = safeIdentifier(parsed.ownerEpoch || emptyMeta().ownerEpoch, 64);
+      for (const status of Object.values(parsed.streams ?? {})) {
+        status.coverageStart = status.coverageStart == null
+          ? null : Number.isFinite(Number(status.coverageStart)) ? Number(status.coverageStart) : null;
+        status.coverageEnd = status.coverageEnd == null
+          ? null : Number.isFinite(Number(status.coverageEnd)) ? Number(status.coverageEnd) : null;
+        status.sourceTypesAvailable = Array.isArray(status.sourceTypesAvailable)
+          ? status.sourceTypesAvailable.filter(source => ['activity', 'memory', 'route', 'app'].includes(source))
+          : [];
+        status.nextSequence = Math.max(1, Number(status.nextSequence) || 1);
+        status.consecutiveUploadFailures = Math.max(0, Number(status.consecutiveUploadFailures) || 0);
+        status.nextAttemptAt = status.nextAttemptAt == null
+          ? null : Number.isFinite(Number(status.nextAttemptAt)) ? Number(status.nextAttemptAt) : null;
+      }
+      return parsed;
+    }
+  } catch { /* corruption is repaired by a new bounded metadata snapshot */ }
+  return emptyMeta();
+}
+
+async function writeMeta(ownerUserId: string, meta: OwnerMeta): Promise<void> {
+  await storage.setItem(metaKey(ownerUserId), JSON.stringify(meta), { strict: true });
+}
+
+function serializeOwnerWork<T>(ownerUserId: string, work: () => Promise<T>): Promise<T> {
+  const previous = tails.get(ownerUserId)?.catch(() => undefined) ?? Promise.resolve();
+  const next = previous.then(work);
+  tails.set(ownerUserId, next);
+  void next.finally(() => {
+    if (tails.get(ownerUserId) === next) tails.delete(ownerUserId);
+  }).catch(() => undefined);
+  return next;
+}
+
+function eventStorageKey(ownerUserId: string, eventId: string, streamId?: string): string {
+  return `${eventPrefix(ownerUserId)}${streamId ? `${encodeURIComponent(streamId)}:` : ''}${eventId}`;
+}
+
+async function readOwnerEvents(ownerUserId: string): Promise<Array<{ key: string; event: QueuedAutomaticDiagnostic }>> {
+  const keys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(eventPrefix(ownerUserId))).sort();
+  const values = await Promise.all(keys.map(key => storage.getItemStrict(key)));
+  return values.flatMap((raw, index) => {
+    if (!raw) return [];
+    try {
+      const event = JSON.parse(raw) as QueuedAutomaticDiagnostic;
+      return event?.schema === 'cairn-auto-diagnostic-event' && event.version === 1
+        ? [{ key: keys[index], event }]
+        : [];
+    } catch { return []; }
+  }).sort((left, right) => (
+    left.event.queueSequence - right.event.queueSequence
+    || left.event.eventId.localeCompare(right.event.eventId)
+  ));
+}
+
+async function repairCorruptedOwnerEvents(ownerUserId: string, meta: OwnerMeta): Promise<void> {
+  const keys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(eventPrefix(ownerUserId))).sort();
+  if (keys.length === 0) return;
+  const values = await Promise.all(keys.map(key => storage.getItemStrict(key)));
+  const corrupted: string[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const raw = values[index];
+    try {
+      const event = raw ? JSON.parse(raw) as QueuedAutomaticDiagnostic : null;
+      if (event?.schema === 'cairn-auto-diagnostic-event' && event.version === 1) continue;
+    } catch { /* handled below */ }
+    corrupted.push(keys[index]);
+    const suffix = keys[index].slice(eventPrefix(ownerUserId).length);
+    const separator = suffix.indexOf(':');
+    let recoveredStreamId = '__owner_corrupt__';
+    if (separator > 0) {
+      try { recoveredStreamId = decodeURIComponent(suffix.slice(0, separator)); } catch { /* malformed key */ }
+    }
+    const status = meta.streams[recoveredStreamId] ?? emptyStatus();
+    status.droppedCount += 1;
+    status.lastFailure = 'LOCAL_DIAGNOSTIC_EVENT_CORRUPT';
+    meta.streams[recoveredStreamId] = status;
+  }
+  if (corrupted.length === 0) return;
+  await storage.removeItemsStrict(corrupted);
+  const valid = await readOwnerEvents(ownerUserId);
+  meta.pendingCount = valid.length;
+  meta.pendingBytes = valid.reduce((sum, item) => sum + item.event.approximateBytes, 0);
+  await writeMeta(ownerUserId, meta);
+}
+
+function safeIdentifier(value: string, max: number): string {
+  return String(value).replace(/[^A-Za-z0-9:._-]/g, '_').slice(0, max);
+}
+
+function tierASafeDetails(value: unknown, depth = 0): unknown {
+  if (depth > 6 || value == null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return /^[A-Za-z0-9_.:+-]{1,160}$/.test(value) ? value : '[redacted-free-text]';
+  }
+  if (Array.isArray(value)) return value.slice(0, 64).map(item => tierASafeDetails(item, depth + 1));
+  if (typeof value !== 'object') return null;
+  const output: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (TIER_A_FREE_TEXT_FIELD.test(key)) continue;
+    output[key] = tierASafeDetails(nested, depth + 1);
+  }
+  return output;
+}
+
+function makeEvent(
+  input: AutomaticDiagnosticInput,
+  streamSequence: number,
+  ownerEpoch: string,
+): QueuedAutomaticDiagnostic {
+  const eventAt = Math.max(0, Math.floor(input.eventAt ?? Date.now()));
+  eventCounter = (eventCounter + 1) % 1_000;
+  const queueSequence = eventAt * 1_000 + ((processSalt + eventCounter) % 1_000);
+  const eventId = input.eventId
+    ? safeIdentifier(input.eventId, 96)
+    : `${eventAt.toString(36)}-${queueSequence.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const safe = sanitizeTelemetryEventForUpload({ fields: tierASafeDetails(input.details ?? {}) });
+  const base = {
+    schema: 'cairn-auto-diagnostic-event' as const,
+    version: 1 as const,
+    eventId,
+    queueSequence,
+    streamSequence,
+    stream: {
+      ...input.stream,
+      streamId: safeIdentifier(input.stream.streamId, 96),
+      ownerEpoch: safeIdentifier(ownerEpoch, 64),
+      ...(input.stream.routeEditSessionId
+        ? { routeEditSessionId: safeIdentifier(input.stream.routeEditSessionId, 96) } : {}),
+      ...(input.stream.memoryScopeId
+        ? { memoryScopeId: safeIdentifier(input.stream.memoryScopeId, 96) } : {}),
+    },
+    eventCode: safeIdentifier(input.eventCode, 64),
+    sourceModule: safeIdentifier(input.sourceModule, 64),
+    severity: input.severity ?? 'info',
+    eventAt,
+    monotonicMs: input.monotonicMs == null ? null : Math.max(0, Number(input.monotonicMs)),
+    details: (safe.fields ?? {}) as Record<string, unknown>,
+    capturedAt: Date.now(),
+  };
+  const approximateBytes = JSON.stringify(base).length;
+  return { ...base, approximateBytes };
+}
+
+async function enforceOwnerBounds(ownerUserId: string, meta: OwnerMeta): Promise<void> {
+  if (meta.pendingCount <= MAX_EVENTS_PER_OWNER && meta.pendingBytes <= MAX_BYTES_PER_OWNER) return;
+  const events = await readOwnerEvents(ownerUserId);
+  let bytes = events.reduce((sum, item) => sum + item.event.approximateBytes, 0);
+  const remove: string[] = [];
+  for (const item of events) {
+    if (events.length - remove.length <= MAX_EVENTS_PER_OWNER && bytes <= MAX_BYTES_PER_OWNER) break;
+    remove.push(item.key);
+    bytes -= item.event.approximateBytes;
+    meta.pendingCount = Math.max(0, meta.pendingCount - 1);
+    meta.pendingBytes = Math.max(0, meta.pendingBytes - item.event.approximateBytes);
+    const status = meta.streams[item.event.stream.streamId] ?? emptyStatus();
+    status.droppedCount += 1;
+    meta.streams[item.event.stream.streamId] = status;
+  }
+  if (remove.length > 0) await storage.removeItemsStrict(remove);
+}
+
+/** Capture is non-throwing to product callers; diagnostic storage never owns product truth. */
+export function captureAutomaticDiagnosticEvent(input: AutomaticDiagnosticInput): Promise<void> {
+  if (!input.ownerUserId || !input.stream?.streamId) return Promise.resolve();
+  return serializeOwnerWork(input.ownerUserId, async () => {
+    let meta: OwnerMeta;
+    let reservedBytes = 0;
+    try {
+      meta = await readMeta(input.ownerUserId);
+      if (meta.policy === 'disabled') return;
+      const streamId = safeIdentifier(input.stream.streamId, 96);
+      const status = meta.streams[streamId] ?? emptyStatus();
+      const event = makeEvent(input, status.nextSequence, meta.ownerEpoch);
+      if (await storage.getItemStrict(eventStorageKey(input.ownerUserId, event.eventId, event.stream.streamId))) return;
+      status.lastCapturedAt = event.eventAt;
+      status.coverageStart = status.coverageStart == null
+        ? event.eventAt : Math.min(status.coverageStart, event.eventAt);
+      status.coverageEnd = status.coverageEnd == null
+        ? event.eventAt : Math.max(status.coverageEnd, event.eventAt);
+      if (!status.sourceTypesAvailable.includes(event.stream.sourceType)) {
+        status.sourceTypesAvailable.push(event.stream.sourceType);
+      }
+      status.nextSequence += 1;
+      meta.streams[event.stream.streamId] = status;
+      meta.pendingCount += 1;
+      meta.pendingBytes += event.approximateBytes;
+      reservedBytes = event.approximateBytes;
+      // Reserve the per-stream sequence before the event write. A metadata
+      // failure therefore writes no event; an event-write failure becomes an
+      // explicit sequence gap instead of reusing a sequence after restart.
+      await writeMeta(input.ownerUserId, meta);
+      await storage.setItem(
+        eventStorageKey(input.ownerUserId, event.eventId, event.stream.streamId),
+        JSON.stringify(event),
+        { strict: true },
+      );
+      reservedBytes = 0;
+      status.lastDurablyQueuedAt = Date.now();
+      if (status.nextSequence % 32 === 0) {
+        const persisted = await readOwnerEvents(input.ownerUserId);
+        meta.pendingCount = persisted.length;
+        meta.pendingBytes = persisted.reduce((sum, item) => sum + item.event.approximateBytes, 0);
+      }
+      await enforceOwnerBounds(input.ownerUserId, meta);
+      await writeMeta(input.ownerUserId, meta);
+    } catch {
+      // Preserve an in-process failure count when metadata is still writable.
+      try {
+        meta = await readMeta(input.ownerUserId);
+        const streamId = safeIdentifier(input.stream.streamId, 96);
+        const status = meta.streams[streamId] ?? emptyStatus();
+        status.lastCapturedAt = Math.max(0, Math.floor(input.eventAt ?? Date.now()));
+        status.failedWriteCount += 1;
+        status.lastFailure = 'LOCAL_DIAGNOSTIC_WRITE_FAILED';
+        if (reservedBytes > 0) {
+          meta.pendingCount = Math.max(0, meta.pendingCount - 1);
+          meta.pendingBytes = Math.max(0, meta.pendingBytes - reservedBytes);
+        }
+        meta.streams[streamId] = status;
+        await writeMeta(input.ownerUserId, meta);
+      } catch { /* storage is unavailable; recording must continue */ }
+    }
+  }).then(() => undefined, () => undefined);
+}
+
+function fnv1a(value: string, seed = 0x811c9dc5): string {
+  let hash = seed >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+function retryBackoffMs(failures: number, identity: string, retryAfterHeader?: string | null): number {
+  const serverMs = retryAfterHeader && /^\d+$/.test(retryAfterHeader)
+    ? Number(retryAfterHeader) * 1_000
+    : 0;
+  const base = Math.min(5_000 * Math.pow(2, Math.max(0, failures - 1)), 30 * 60_000);
+  const jitter = parseInt(fnv1a(identity).slice(-2), 16) / 255 * base * 0.2;
+  return Math.max(serverMs, Math.round(base + jitter));
+}
+
+function batchFor(items: Array<{ key: string; event: QueuedAutomaticDiagnostic }>, droppedCount: number) {
+  const chosen: typeof items = [];
+  let bytes = 0;
+  for (const item of items) {
+    const nextBytes = bytes + item.event.approximateBytes;
+    if (chosen.length > 0
+      && item.event.streamSequence !== chosen[chosen.length - 1].event.streamSequence + 1) break;
+    if (chosen.length >= MAX_EVENTS_PER_BATCH || (chosen.length > 0 && nextBytes > MAX_BATCH_BYTES)) break;
+    chosen.push(item);
+    bytes = nextBytes;
+  }
+  const identity = chosen.map(item => item.event.eventId).join('|');
+  const first = chosen[0].event;
+  const batchId = `diag-v1-${fnv1a(identity)}-${fnv1a(identity, 0x9e3779b9)}-${first.eventId.slice(-12)}`;
+  return {
+    chosen,
+    body: {
+      schema: 'cairn-auto-diagnostics-batch',
+      version: 1,
+      batchId,
+      batchSequence: first.streamSequence,
+      stream: first.stream,
+      droppedCount,
+      events: chosen.map(item => ({
+        eventId: item.event.eventId,
+        eventSequence: item.event.streamSequence,
+        eventCode: item.event.eventCode,
+        sourceModule: item.event.sourceModule,
+        severity: item.event.severity,
+        eventAt: item.event.eventAt,
+        monotonicMs: item.event.monotonicMs,
+        details: item.event.details,
+      })),
+    },
+  };
+}
+
+async function currentOwnerMatches(ownerUserId: string): Promise<boolean> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const current = require('../store/useAppStore').useAppStore.getState().user?.id;
+    return current != null && String(current) === String(ownerUserId);
+  } catch { return false; }
+}
+
+async function refreshPolicy(ownerUserId: string, meta: OwnerMeta): Promise<boolean> {
+  if (meta.policyCheckedAt && Date.now() - meta.policyCheckedAt < POLICY_CACHE_MS) {
+    return meta.policy === 'tier_a' || meta.policy === 'tier_b';
+  }
+  const response = await diagnosticAuthenticatedFetch('/api/telemetry/diagnostics/policy', {
+    method: 'GET', expectedUserId: ownerUserId, skipLogoutOn401: true,
+  });
+  if (!response.ok) return false;
+  const policy = await response.json() as {
+    enabled?: boolean;
+    tier?: 'tier_a' | 'tier_b' | 'disabled';
+  };
+  meta.policyCheckedAt = Date.now();
+  meta.policy = policy?.enabled && (policy.tier === 'tier_a' || policy.tier === 'tier_b')
+    ? policy.tier
+    : 'disabled';
+  await writeMeta(ownerUserId, meta);
+  if (meta.policy === 'disabled') {
+    const keys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(eventPrefix(ownerUserId)));
+    await storage.removeItemsStrict(keys);
+    meta.pendingCount = 0;
+    meta.pendingBytes = 0;
+    return false;
+  }
+  return true;
+}
+
+export async function drainAutomaticDiagnosticOutbox(
+  ownerUserId: string,
+  options: { reason: 'hydrate' | 'network_online' | 'foreground' | 'finish' | 'sync' },
+): Promise<{ acknowledgedEvents: number; failedBatches: number; skipped: boolean }> {
+  if (!ownerUserId || !networkMonitor.isOnline() || !await currentOwnerMatches(ownerUserId)) {
+    return { acknowledgedEvents: 0, failedBatches: 0, skipped: true };
+  }
+  return serializeOwnerWork(ownerUserId, async () => {
+    let acknowledgedEvents = 0;
+    let failedBatches = 0;
+    const meta = await readMeta(ownerUserId);
+    await repairCorruptedOwnerEvents(ownerUserId, meta);
+    try {
+      if (!await refreshPolicy(ownerUserId, meta)) {
+        return { acknowledgedEvents, failedBatches, skipped: true };
+      }
+    } catch {
+      return { acknowledgedEvents, failedBatches: 1, skipped: true };
+    }
+    while (networkMonitor.isOnline() && await currentOwnerMatches(ownerUserId)) {
+      const pending = await readOwnerEvents(ownerUserId);
+      if (pending.length === 0) break;
+      const streamId = pending[0].event.stream.streamId;
+      const sameStream = pending
+        .filter(item => item.event.stream.streamId === streamId)
+        .sort((left, right) => left.event.streamSequence - right.event.streamSequence);
+      const status = meta.streams[streamId] ?? emptyStatus();
+      if (status.nextAttemptAt && status.nextAttemptAt > Date.now()) break;
+      const { chosen, body } = batchFor(sameStream, status.droppedCount);
+      if (chosen.length === 0) break;
+      if (body.stream.clientActivityId) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const registry = require('../features/activity/activityRegistry');
+          if (await registry.isActivityTombstoned(ownerUserId, body.stream.clientActivityId)) {
+            await purgeActivityUnlocked(ownerUserId, body.stream.clientActivityId);
+            continue;
+          }
+        } catch {
+          // A missing/corrupt deletion authority is not permission to upload.
+          status.lastFailure = 'LOCAL_TOMBSTONE_AUTHORITY_UNAVAILABLE';
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
+          break;
+        }
+      }
+      if (body.stream.clientRouteId) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const routeTombstones = require('./routeTombstones');
+          if (await routeTombstones.isRouteTombstoned(ownerUserId, body.stream.clientRouteId)) {
+            await purgeRouteUnlocked(ownerUserId, body.stream.clientRouteId);
+            continue;
+          }
+        } catch {
+          status.lastFailure = 'LOCAL_ROUTE_TOMBSTONE_AUTHORITY_UNAVAILABLE';
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
+          break;
+        }
+      }
+      status.lastAttemptAt = Date.now();
+      status.lastFailure = null;
+      meta.streams[streamId] = status;
+      await writeMeta(ownerUserId, meta).catch(() => undefined);
+      let response: Response;
+      try {
+        response = await diagnosticAuthenticatedFetch('/api/telemetry/diagnostics/batches', {
+          method: 'POST',
+          body: JSON.stringify(body),
+          expectedUserId: ownerUserId,
+          skipLogoutOn401: true,
+          headers: { 'X-Cairn-Diagnostic-Wake': options.reason },
+        });
+      } catch {
+        status.lastFailure = 'NETWORK_UNAVAILABLE';
+        status.consecutiveUploadFailures += 1;
+        status.nextAttemptAt = Date.now() + retryBackoffMs(status.consecutiveUploadFailures, body.batchId);
+        failedBatches += 1;
+        await writeMeta(ownerUserId, meta).catch(() => undefined);
+        break;
+      }
+      if (!response.ok) {
+        let code = '';
+        try { code = String((await response.clone().json())?.code ?? ''); } catch { /* no body */ }
+        status.lastFailure = code || `HTTP_${response.status}`;
+        status.consecutiveUploadFailures += 1;
+        status.nextAttemptAt = Date.now() + retryBackoffMs(
+          status.consecutiveUploadFailures,
+          body.batchId,
+          response.headers.get('Retry-After'),
+        );
+        failedBatches += 1;
+        if (response.status === 403) {
+          meta.policy = 'disabled';
+          meta.policyCheckedAt = Date.now();
+          await storage.removeItemsStrict(pending.map(item => item.key));
+          meta.pendingCount = 0;
+          meta.pendingBytes = 0;
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
+        } else if (response.status === 410 && body.stream.clientActivityId) {
+          await purgeActivityUnlocked(ownerUserId, body.stream.clientActivityId);
+        } else if (response.status === 410 && body.stream.clientRouteId) {
+          await purgeRouteUnlocked(ownerUserId, body.stream.clientRouteId);
+        } else {
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
+        }
+        break;
+      }
+      // Server commit is idempotent by owner+batchId. If local removal fails,
+      // the exact same batch is replayed and acknowledged without duplication.
+      try {
+        await storage.removeItemsStrict(chosen.map(item => item.key));
+      } catch {
+        status.lastFailure = 'LOCAL_ACK_PERSIST_FAILED';
+        status.consecutiveUploadFailures += 1;
+        status.nextAttemptAt = Date.now() + retryBackoffMs(status.consecutiveUploadFailures, body.batchId);
+        failedBatches += 1;
+        await writeMeta(ownerUserId, meta).catch(() => undefined);
+        break;
+      }
+      meta.pendingCount = Math.max(0, meta.pendingCount - chosen.length);
+      meta.pendingBytes = Math.max(
+        0,
+        meta.pendingBytes - chosen.reduce((sum, item) => sum + item.event.approximateBytes, 0),
+      );
+      status.lastServerAckAt = Date.now();
+      status.lastFailure = null;
+      status.consecutiveUploadFailures = 0;
+      status.nextAttemptAt = null;
+      acknowledgedEvents += chosen.length;
+      await writeMeta(ownerUserId, meta).catch(() => undefined);
+    }
+    return { acknowledgedEvents, failedBatches, skipped: false };
+  });
+}
+
+export async function getAutomaticDiagnosticStatus(
+  ownerUserId: string,
+  streamId: string,
+): Promise<AutomaticDiagnosticStatus> {
+  await tails.get(ownerUserId)?.catch(() => undefined);
+  const meta = await readMeta(ownerUserId);
+  await repairCorruptedOwnerEvents(ownerUserId, meta);
+  const all = await readOwnerEvents(ownerUserId);
+  const events = all.filter(item => item.event.stream.streamId === streamId).map(item => item.event);
+  const status = meta.streams[streamId] ?? emptyStatus();
+  const pendingBytes = events.reduce((sum, event) => sum + event.approximateBytes, 0);
+  let quality: AutomaticDiagnosticStatus['quality'];
+  if (meta.policy === 'disabled') quality = 'POLICY_DISABLED';
+  else if (status.droppedCount > 0) quality = 'RETENTION_TRUNCATED';
+  else if (events.length > 0 && status.lastDurablyQueuedAt) quality = 'UPLOAD_PENDING';
+  else if (events.length > 0) quality = 'CAPTURED_NOT_UPLOADED';
+  else if (status.lastServerAckAt) quality = 'SERVER_ACKED';
+  else if (status.failedWriteCount > 0) quality = 'UNKNOWN';
+  else quality = 'NOT_CAPTURED';
+  return {
+    ...status,
+    pendingCount: events.length,
+    pendingBytes,
+    coverageStart: status.coverageStart ?? events[0]?.eventAt ?? status.lastCapturedAt,
+    coverageEnd: status.coverageEnd ?? events[events.length - 1]?.eventAt ?? status.lastCapturedAt,
+    sourceTypesAvailable: [...new Set([
+      ...status.sourceTypesAvailable,
+      ...events.map(event => event.stream.sourceType),
+    ])],
+    quality,
+  };
+}
+
+export async function purgeAutomaticDiagnosticsForActivity(
+  ownerUserId: string,
+  clientActivityId: string,
+): Promise<void> {
+  await serializeOwnerWork(ownerUserId, () => purgeActivityUnlocked(ownerUserId, clientActivityId));
+}
+
+export async function purgeAutomaticDiagnosticsForRoute(
+  ownerUserId: string,
+  clientRouteId: string,
+): Promise<void> {
+  await serializeOwnerWork(ownerUserId, () => purgeRouteUnlocked(ownerUserId, clientRouteId));
+}
+
+async function purgeActivityUnlocked(ownerUserId: string, clientActivityId: string): Promise<void> {
+  const events = await readOwnerEvents(ownerUserId);
+  const matching = events.filter(item => item.event.stream.clientActivityId === clientActivityId);
+  await storage.removeItemsStrict(matching.map(item => item.key));
+  const meta = await readMeta(ownerUserId);
+  meta.pendingCount = Math.max(0, meta.pendingCount - matching.length);
+  meta.pendingBytes = Math.max(
+    0,
+    meta.pendingBytes - matching.reduce((sum, item) => sum + item.event.approximateBytes, 0),
+  );
+  for (const streamId of new Set(matching.map(item => item.event.stream.streamId))) delete meta.streams[streamId];
+  await writeMeta(ownerUserId, meta);
+}
+
+async function purgeRouteUnlocked(ownerUserId: string, clientRouteId: string): Promise<void> {
+  const events = await readOwnerEvents(ownerUserId);
+  const matching = events.filter(item => item.event.stream.clientRouteId === clientRouteId);
+  await storage.removeItemsStrict(matching.map(item => item.key));
+  const meta = await readMeta(ownerUserId);
+  meta.pendingCount = Math.max(0, meta.pendingCount - matching.length);
+  meta.pendingBytes = Math.max(
+    0,
+    meta.pendingBytes - matching.reduce((sum, item) => sum + item.event.approximateBytes, 0),
+  );
+  for (const streamId of new Set(matching.map(item => item.event.stream.streamId))) delete meta.streams[streamId];
+  await writeMeta(ownerUserId, meta);
+}
+
+export async function purgeAutomaticDiagnosticsForOwner(ownerUserId: string): Promise<void> {
+  await serializeOwnerWork(ownerUserId, async () => {
+    const keys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(ownerPrefix(ownerUserId)));
+    await storage.removeItemsStrict(keys);
+  });
+}
+
+export async function _resetAutomaticDiagnosticOutboxForTesting(): Promise<void> {
+  await Promise.allSettled([...tails.values()]);
+  tails.clear();
+  eventCounter = 0;
+}

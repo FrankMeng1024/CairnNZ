@@ -8,6 +8,7 @@ import { BackButton } from '../components/BackButton';
 import { FontSize, RadiusRole, Spacing } from '../components/tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useAppStore } from '../store/useAppStore';
 import {
   clearRouteDrawingTraces,
   exportRouteDrawingTrace,
@@ -26,11 +27,12 @@ export function RouteDrawingDiagnosticsScreen() {
   const nav = useNavigation<any>();
   const theme = useVisualTheme();
   const debugMode = useSettingsStore(state => state.debugMode);
+  const ownerUserId = String(useAppStore(state => state.user?.id) ?? '');
   const [armed, setArmed] = useState(isRouteDrawingDiagnosticsEnabled());
-  const [traces, setTraces] = useState<RouteDrawingTrace[]>(listRouteDrawingTraces());
+  const [traces, setTraces] = useState<RouteDrawingTrace[]>(() => ownerUserId ? listRouteDrawingTraces(ownerUserId) : []);
   const [exporting, setExporting] = useState(false);
 
-  const refresh = useCallback(() => setTraces(listRouteDrawingTraces()), []);
+  const refresh = useCallback(() => setTraces(ownerUserId ? listRouteDrawingTraces(ownerUserId) : []), [ownerUserId]);
   useFocusEffect(useCallback(() => {
     refresh();
     return undefined;
@@ -43,12 +45,12 @@ export function RouteDrawingDiagnosticsScreen() {
   }, [refresh]);
 
   const exportLatest = useCallback(async () => {
-    const latest = listRouteDrawingTraces()[0];
+    const latest = listRouteDrawingTraces(ownerUserId)[0];
     if (!latest) {
       Alert.alert('No Route trace yet', 'Arm capture, reproduce the Route issue, then return here.');
       return;
     }
-    const body = exportRouteDrawingTrace(latest.sessionId);
+    const body = exportRouteDrawingTrace(latest.sessionId, ownerUserId);
     if (!body || !FileSystem.documentDirectory) {
       Alert.alert('Export unavailable', 'Cairn could not create the local trace file.');
       return;
@@ -76,7 +78,7 @@ export function RouteDrawingDiagnosticsScreen() {
       setExporting(false);
       refresh();
     }
-  }, [refresh]);
+  }, [ownerUserId, refresh]);
 
   if (!debugMode) {
     return (

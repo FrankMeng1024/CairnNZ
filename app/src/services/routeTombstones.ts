@@ -49,6 +49,10 @@ export async function tombstoneRoute(
   });
   mutationTail = operation;
   await operation;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    await require('./automaticDiagnosticOutbox').purgeAutomaticDiagnosticsForRoute(userId, clientRouteId);
+  } catch { /* the durable tombstone remains the upload fence */ }
   return committed;
 }
 

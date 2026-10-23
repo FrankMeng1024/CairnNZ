@@ -20,6 +20,21 @@ describe('Internal QA telemetry privacy boundary', () => {
     });
   });
 
+  test('removes camelCase and snake_case coordinate aliases used by Memory camera logs', () => {
+    const result = sanitizeTelemetryEventForUpload({
+      event: 'memory.camera_command',
+      ctx: {
+        center_lat: -45.0312,
+        center_lng: 168.6626,
+        flyLat: -45.0313,
+        flyLng: 168.6627,
+        destination_longitude: 168.6628,
+        zoom: 14,
+      },
+    });
+    expect(result).toEqual({ event: 'memory.camera_command', ctx: { zoom: 14 } });
+  });
+
   test('redacts coordinate pairs hidden in arrays and diagnostic strings', () => {
     const result = sanitizeTelemetryEventForUpload({
       event: 'breadcrumb',

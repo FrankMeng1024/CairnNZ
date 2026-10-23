@@ -6,7 +6,7 @@ import {
   type RouteDrawingDecision,
 } from './routeDrawingIntent';
 
-const TRACE_VERSION = 2;
+const TRACE_VERSION = 3;
 const MAX_TRACES = 8;
 const MAX_EVENTS_PER_TRACE = 600;
 const MAX_TRACE_BYTES = 2 * 1024 * 1024;
@@ -52,6 +52,13 @@ export interface RouteDrawingTrace {
   droppedEvents: number;
   approximateBytes: number;
   captureError: 'original-route-too-large' | 'event-budget-exceeded' | null;
+  captureMode: 'summary-default' | 'precise-owner-opt-in';
+  suppressedEvents: number;
+  privacy: {
+    preciseGeometryIncluded: boolean;
+    automaticUpload: false;
+    automaticTierASummaryQueued: true;
+  };
 }
 
 export interface RouteDrawingReplayFixture {
@@ -98,6 +105,70 @@ let activeSessionId: string | null = null;
 let selectedOperationId: string | null = null;
 let operationByStrokeId = new Map<string, string>();
 const traces = new Map<string, RouteDrawingTrace>();
+
+const SUMMARY_EVENT_KINDS = new Set([
+  'route_session_started', 'route_session_ended', 'route_session_hydrated',
+  'route_tool_selected', 'route_creation_abandoned', 'route_creation_abandon_failed',
+  'route_draw_transaction_intent', 'route_draw_ambiguous', 'route_draw_rejected', 'route_draw_failed',
+  'route_draw_provider_request', 'route_draw_provider_response', 'route_draw_commit',
+  'route_point_provider_request', 'route_point_provider_response', 'route_point_candidate_selected',
+  'route_point_rejected', 'route_point_failed', 'route_point_target_confirmed',
+  'route_trim_started', 'route_edit_undo', 'route_operation_terminal',
+  'route_save_succeeded', 'route_save_failed', 'brush_gate_failure', 'brush_mapbox_error',
+  'brush_mapbox_attempt', 'brush_mapbox_response', 'brush_preview_completed',
+  'brush_save_committed', 'route_draft_committed', 'route_persisted', 'route_persist_failed',
+]);
+
+const SUMMARY_SAFE_FIELDS = new Set([
+  'reason', 'outcome', 'operation', 'tool', 'mode', 'status', 'provider', 'source',
+  'revision', 'initialGeometryRevision', 'initialUndoDepth', 'undoDepth',
+  'pointCount', 'originalRoutePointCount', 'candidateCount', 'alternativeCount',
+  'confidence', 'durationMs', 'elapsedMs', 'requestDurationMs', 'projectionFailures',
+  'captureError', 'committed', 'saved', 'offline', 'deduplicated', 'intent',
+  'selectionSource', 'divergenceStage', 'ambiguityReason', 'errorCode', 'errorCategory',
+]);
+
+function summarySafePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (!SUMMARY_SAFE_FIELDS.has(key)) continue;
+    if (value === null || typeof value === 'boolean' || typeof value === 'number') {
+      output[key] = value;
+    } else if (typeof value === 'string') {
+      output[key] = value.slice(0, 120);
+    } else if (key === 'source' && value && typeof value === 'object') {
+      const kind = (value as Record<string, unknown>).kind;
+      if (typeof kind === 'string') output.source = { kind: kind.slice(0, 32) };
+    }
+  }
+  return output;
+}
+
+function queueAutomaticRouteSummary(trace: RouteDrawingTrace, event: RouteDrawingTraceEvent): void {
+  if (!trace.accountId) return;
+  const clientRouteId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trace.routeId)
+    ? trace.routeId
+    : undefined;
+  Promise.resolve().then(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { captureAutomaticDiagnosticEvent } = require('../../services/automaticDiagnosticOutbox');
+    return captureAutomaticDiagnosticEvent({
+      ownerUserId: trace.accountId,
+      eventId: `${trace.sessionId}:${event.sequence}`,
+      stream: {
+        streamId: `route:${trace.sessionId}`,
+        sourceType: 'route',
+        routeEditSessionId: trace.sessionId,
+        ...(clientRouteId ? { clientRouteId } : {}),
+      },
+      eventCode: event.kind.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+      sourceModule: 'routeDrawingTrace',
+      severity: /failed|error|rejected|ambiguous/.test(event.kind) ? 'warn' : 'info',
+      eventAt: event.timestampMs,
+      details: { stage: event.stage, ...summarySafePayload(event.payload) },
+    });
+  }).catch(() => undefined);
+}
 
 function clonePoints(value: unknown): LngLat[] {
   if (!Array.isArray(value)) return [];
@@ -151,7 +222,9 @@ function currentTrace(): RouteDrawingTrace | null {
 }
 
 export function setRouteDrawingDiagnosticsEnabled(next: boolean): void {
-  if (!next && enabled && activeSessionId) endRouteDrawingTrace('detached');
+  if (!next && enabled && currentTrace()?.captureMode === 'precise-owner-opt-in') {
+    endRouteDrawingTrace('detached');
+  }
   enabled = next;
   if (!next) {
     activeSessionId = null;
@@ -173,14 +246,16 @@ export function beginRouteDrawingTrace(input: {
   originalRoute: LngLat[];
   initialUndoDepth: number;
 }): void {
-  if (!enabled) return;
   if (activeSessionId) endRouteDrawingTrace('replaced');
   activeSessionId = input.sessionId;
   selectedOperationId = `${input.sessionId}:session`;
   operationByStrokeId = new Map();
-  const originalRoute = input.originalRoute.map(point => ({ ...point }));
+  const captureMode = enabled ? 'precise-owner-opt-in' as const : 'summary-default' as const;
+  const originalRoute = captureMode === 'precise-owner-opt-in'
+    ? input.originalRoute.map(point => ({ ...point }))
+    : [];
   const originalRouteBytes = JSON.stringify(originalRoute).length;
-  const captureError = originalRouteBytes > MAX_ORIGINAL_ROUTE_BYTES
+  const captureError = captureMode === 'precise-owner-opt-in' && originalRouteBytes > MAX_ORIGINAL_ROUTE_BYTES
     ? 'original-route-too-large'
     : null;
   const trace: RouteDrawingTrace = {
@@ -201,6 +276,13 @@ export function beginRouteDrawingTrace(input: {
     droppedEvents: 0,
     approximateBytes: captureError ? 0 : originalRouteBytes,
     captureError,
+    captureMode,
+    suppressedEvents: 0,
+    privacy: {
+      preciseGeometryIncluded: captureMode === 'precise-owner-opt-in' && !captureError,
+      automaticUpload: false,
+      automaticTierASummaryQueued: true,
+    },
   };
   traces.set(input.sessionId, trace);
   while (traces.size > MAX_TRACES) {
@@ -220,7 +302,6 @@ export function beginRouteDrawingTrace(input: {
 }
 
 export function endRouteDrawingTrace(reason: 'saved' | 'cancelled' | 'detached' | 'replaced'): void {
-  if (!enabled) return;
   const trace = currentTrace();
   if (!trace) return;
   recordRouteDrawingTrace('route_session_ended', { reason }, 'session');
@@ -255,9 +336,12 @@ export function recordRouteDrawingTrace(
   payload: Record<string, unknown>,
   explicitStage?: RouteDrawingTraceStage,
 ): void {
-  if (!enabled) return;
   const trace = currentTrace();
   if (!trace) return;
+  if (trace.captureMode === 'summary-default' && !SUMMARY_EVENT_KINDS.has(kind)) {
+    trace.suppressedEvents += 1;
+    return;
+  }
   const strokeId = typeof payload.strokeId === 'string' ? payload.strokeId : null;
   const operationId = strokeId
     ? selectRouteDrawingOperation(strokeId)
@@ -269,28 +353,48 @@ export function recordRouteDrawingTrace(
     operationId,
     stage: explicitStage ?? stageForKind(kind),
     kind,
-    payload,
+    payload: trace.captureMode === 'summary-default' ? summarySafePayload(payload) : payload,
   };
   trace.events.push(event);
   trace.approximateBytes += JSON.stringify(event).length;
   trimTrace(trace);
+  if (SUMMARY_EVENT_KINDS.has(kind)) queueAutomaticRouteSummary(trace, event);
 }
 
-export function listRouteDrawingTraces(): RouteDrawingTrace[] {
-  return [...traces.values()].sort((a, b) => b.startedAtMs - a.startedAtMs);
+export function listRouteDrawingTraces(ownerUserId?: string): RouteDrawingTrace[] {
+  return [...traces.values()]
+    .filter(trace => ownerUserId == null || trace.accountId === ownerUserId)
+    .sort((a, b) => b.startedAtMs - a.startedAtMs);
 }
 
-export function getRouteDrawingTrace(sessionId: string): RouteDrawingTrace | null {
-  return traces.get(sessionId) ?? null;
+export function getRouteDrawingTrace(sessionId: string, ownerUserId?: string): RouteDrawingTrace | null {
+  const trace = traces.get(sessionId) ?? null;
+  return trace && (ownerUserId == null || trace.accountId === ownerUserId) ? trace : null;
 }
 
-export function getLatestRouteDrawingTrace(): RouteDrawingTrace | null {
-  return listRouteDrawingTraces()[0] ?? null;
+export function getLatestRouteDrawingTrace(ownerUserId?: string): RouteDrawingTrace | null {
+  return listRouteDrawingTraces(ownerUserId)[0] ?? null;
 }
 
-export function exportRouteDrawingTrace(sessionId?: string): string | null {
-  const trace = sessionId ? getRouteDrawingTrace(sessionId) : getLatestRouteDrawingTrace();
-  return trace ? JSON.stringify(trace, null, 2) : null;
+function redactRouteTraceIdentity(trace: RouteDrawingTrace): RouteDrawingTrace {
+  const copy = JSON.parse(JSON.stringify(trace)) as RouteDrawingTrace;
+  copy.accountId = trace.accountId ? 'current-owner' : null;
+  copy.routeId = trace.routeId ? 'current-route' : '';
+  copy.source = { kind: trace.source.kind, id: null };
+  for (const event of copy.events) {
+    for (const key of ['accountId', 'ownerUserId', 'userId', 'routeId', 'clientRouteId']) {
+      if (key in event.payload) event.payload[key] = key.toLowerCase().includes('route') ? 'current-route' : 'current-owner';
+    }
+    if (event.payload.source && typeof event.payload.source === 'object') {
+      event.payload.source = { kind: String((event.payload.source as Record<string, unknown>).kind ?? 'unknown') };
+    }
+  }
+  return copy;
+}
+
+export function exportRouteDrawingTrace(sessionId?: string, ownerUserId?: string): string | null {
+  const trace = sessionId ? getRouteDrawingTrace(sessionId, ownerUserId) : getLatestRouteDrawingTrace(ownerUserId);
+  return trace ? JSON.stringify(redactRouteTraceIdentity(trace), null, 2) : null;
 }
 
 /** Parse an explicitly imported local export without adding it to live capture. */
@@ -313,6 +417,17 @@ export function clearRouteDrawingTraces(): void {
   activeSessionId = null;
   selectedOperationId = null;
   operationByStrokeId = new Map();
+}
+
+export function clearRouteDrawingTracesForOwner(ownerUserId: string): void {
+  for (const [sessionId, trace] of traces.entries()) {
+    if (trace.accountId === ownerUserId) traces.delete(sessionId);
+  }
+  if (activeSessionId && !traces.has(activeSessionId)) {
+    activeSessionId = null;
+    selectedOperationId = null;
+    operationByStrokeId = new Map();
+  }
 }
 
 function eventFor(trace: RouteDrawingTrace, kind: string, operationId?: string): RouteDrawingTraceEvent | null {

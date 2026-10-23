@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const mockAutomaticCapture = jest.fn(async (_input: unknown) => undefined);
+jest.mock('../../../services/automaticDiagnosticOutbox', () => ({
+  captureAutomaticDiagnosticEvent: (input: unknown) => mockAutomaticCapture(input),
+}));
+
 jest.mock('expo-application', () => ({
   nativeApplicationVersion: '0.2.6',
   nativeBuildVersion: '63',
@@ -124,6 +129,23 @@ describe('local owner-exportable Activity stage ledger', () => {
     expect(event.details.decisionWallTimeMs).toBe(event.wallTimeMs);
   });
 
+  test('mirrors coordinate-free Tier A lifecycle evidence without requiring Debug mode', async () => {
+    const clientActivityId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await recordActivityStageEvent({
+      ownerUserId: 'owner-a',
+      clientActivityId,
+      stage: 'activity-start',
+      details: { eventCode: 'ACTIVITY_START_COMMITTED', activityMode: 'running', latitude: -41.2 },
+    });
+    await Promise.resolve();
+    expect(mockAutomaticCapture).toHaveBeenCalledWith(expect.objectContaining({
+      ownerUserId: 'owner-a',
+      stream: expect.objectContaining({ sourceType: 'activity', clientActivityId, activityMode: 'running' }),
+      eventCode: 'ACTIVITY_START_COMMITTED',
+      details: expect.not.objectContaining({ latitude: expect.anything() }),
+    }));
+  });
+
   test('latest export is owner-isolated and chooses recency rather than activity name', async () => {
     await recordActivityStageEvent({
       ownerUserId: 'owner-a', clientActivityId: 'z-old', stage: 'activity-start', wallTimeMs: 1_000,
@@ -239,7 +261,7 @@ describe('local owner-exportable Activity stage ledger', () => {
     for (let ordinal = 1; ordinal <= 1_201; ordinal += 1) {
       await recordActivityStageEvent({
         ownerUserId: 'owner-retention',
-        clientActivityId: 'activity-retention',
+        clientActivityId: 'qa-snap-retention',
         stage: 'observation-received',
         wallTimeMs: 100_000 + ordinal,
         details: { ordinal },
@@ -247,7 +269,7 @@ describe('local owner-exportable Activity stage ledger', () => {
       if (ordinal % 64 === 0) await flushActivityStageLedger('owner-retention');
     }
     await flushActivityStageLedger('owner-retention');
-    const exported = await exportLatestActivityStageLedger('owner-retention');
+    const exported = await exportLatestActivityStageLedger('owner-retention', 'snap-lab');
     expect(exported.events).toHaveLength(1_200);
     expect(exported.diagnosticCompleteness).toMatchObject({
       persistence: 'partial',
@@ -255,12 +277,89 @@ describe('local owner-exportable Activity stage ledger', () => {
       retentionTruncated: true,
     });
     expect(exported.phaseSummary).toMatchObject({
-      clientActivityId: 'activity-retention',
+      clientActivityId: 'qa-snap-retention',
       capturedEventCount: 1_201,
       stages: {
         'observation-received': expect.objectContaining({ count: 1_201 }),
       },
     });
+  });
+
+  test('coalesces healthy per-point stages while preserving logical counts and a resource proxy summary', async () => {
+    const callDurationsMs: number[] = [];
+    const benchmarkStartedAt = performance.now();
+    for (let ordinal = 1; ordinal <= 1_000; ordinal += 1) {
+      const callStartedAt = performance.now();
+      await recordActivityStageEvent({
+        ownerUserId: 'owner-a',
+        clientActivityId: 'activity-volume',
+        stage: 'observation-received',
+        wallTimeMs: 100_000 + ordinal,
+        evidenceId: `receipt:${ordinal}`,
+        details: { observationTimeMs: 90_000 + ordinal, rawOrdinal: ordinal },
+      });
+      await recordActivityStageEvent({
+        ownerUserId: 'owner-a',
+        clientActivityId: 'activity-volume',
+        stage: 'canonical-accepted',
+        wallTimeMs: 100_500 + ordinal,
+        evidenceId: `receipt:${ordinal}`,
+        details: { decision: 'ACCEPT', rawOrdinal: ordinal },
+      });
+      await recordActivityStageEvent({
+        ownerUserId: 'owner-a',
+        clientActivityId: 'activity-volume',
+        stage: 'wal-committed',
+        wallTimeMs: 101_000 + ordinal,
+        evidenceId: `receipt:${ordinal}`,
+        details: { acceptedCount: 1, journalCommitLatencyMs: ordinal % 11 },
+      });
+      await recordActivityStageEvent({
+        ownerUserId: 'owner-a',
+        clientActivityId: 'activity-volume',
+        stage: 'store-published',
+        wallTimeMs: 101_500 + ordinal,
+        evidenceId: `receipt:${ordinal}`,
+        details: { walToStoreLatencyMs: ordinal % 7 },
+      });
+      callDurationsMs.push(performance.now() - callStartedAt);
+    }
+    const exported = await exportActivityStageLedger('owner-a', 'activity-volume');
+    expect(exported.events.length).toBeLessThan(150);
+    expect(exported.phaseSummary?.stages['observation-received']?.count).toBe(1_000);
+    expect(exported.phaseSummary?.stages['wal-committed']?.count).toBe(1_000);
+    expect(exported.diagnosticCompleteness.retentionTruncated).toBe(false);
+    expect(exported.resourceSummary).toMatchObject({
+      semantics: 'JS_OBSERVED_RESOURCE_PROXY_NOT_BATTERY_MEASUREMENT',
+      counters: {
+        jsLocationReceipts: 1_000,
+        canonicalAccepts: 1_000,
+        walCommitEvents: 1_000,
+        storePublicationEvents: 1_000,
+      },
+      instrumentation: { nativeEnergyMeasured: false, visibleMapPixelsMeasured: false },
+    });
+    expect(exported.events.some(event => event.details.suppressedCount === 32)).toBe(true);
+    if (process.env.CAIRN_OBSERVABILITY_BENCH_OUTPUT) {
+      const sorted = callDurationsMs.slice().sort((left, right) => left - right);
+      require('node:fs').writeFileSync(process.env.CAIRN_OBSERVABILITY_BENCH_OUTPUT, `${JSON.stringify({
+        schema: 'cairn-stage-ledger-overhead-benchmark',
+        runtime: 'node-v8-not-iphone-hermes',
+        logicalStageFacts: exported.resourceSummary.logging.logicalStageFacts,
+        previousPhysicalRecordModel: 4_000,
+        persistedEventRecords: exported.resourceSummary.logging.persistedEventRecords,
+        coalescedFacts: exported.resourceSummary.logging.coalescedFacts,
+        approximateEventBytes: exported.resourceSummary.logging.approximateEventBytes,
+        storageSetCalls: (AsyncStorage.setItem as jest.Mock).mock.calls.length,
+        totalWallMs: Number((performance.now() - benchmarkStartedAt).toFixed(3)),
+        perObservationGroupP50Ms: Number(sorted[Math.floor(sorted.length * 0.50)].toFixed(4)),
+        perObservationGroupP95Ms: Number(sorted[Math.floor(sorted.length * 0.95)].toFixed(4)),
+        perObservationGroupMaxMs: Number(Math.max(...sorted).toFixed(4)),
+        longTasksOver50Ms: sorted.filter(value => value > 50).length,
+        geometryChanged: false,
+        nativeBatteryMeasured: false,
+      }, null, 2)}\n`);
+    }
   });
 
   test('summarizes correlated JS/WAL/presentation and exact completed upload frontiers', () => {
