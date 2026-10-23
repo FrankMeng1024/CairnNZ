@@ -25,6 +25,11 @@ case "$HARNESS_MODE" in
     PUBLIC_CAIRN_FLAG="1"
     PUBLIC_ZONE_POLICY='[]'
     ;;
+  dual-track)
+    HARNESS_SCRIPT="api-mysql.js"
+    PUBLIC_CAIRN_FLAG="1"
+    PUBLIC_ZONE_POLICY='[]'
+    ;;
   endurance)
     HARNESS_SCRIPT="endurance.js"
     PUBLIC_CAIRN_FLAG="1"
@@ -179,6 +184,7 @@ apply_sql_file "$BACKEND_DIR/src/migrations/053_cairn_qa_fixture_cohorts.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/054_memory_hit_push_explicit_opt_in.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/055_notification_delivery_outbox.sql"
 apply_sql_file "$BACKEND_DIR/src/migrations/056_notification_target_receipt_reliability.sql"
+apply_sql_file "$BACKEND_DIR/src/migrations/057_automatic_diagnostics.sql"
 
 MYSQL_DOCKER_CONTAINER="$CONTAINER" DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" \
   DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
@@ -221,6 +227,15 @@ export NODE_ENV="$API_NODE_ENV" PUBLIC_CAIRN_PILOT_ENABLED="$PUBLIC_CAIRN_FLAG"
 export HARNESS_EXPECT_PRE046_ROUTE=1
 export PUBLIC_CAIRN_PILOT_USER_IDS="$PUBLIC_USER_IDS"
 export PUBLIC_CAIRN_SENSITIVE_ZONES_JSON="$PUBLIC_ZONE_POLICY"
+if [ "$HARNESS_MODE" = "dual-track" ]; then
+  if [ -n "${EVIDENCE_DIR:-}" ]; then
+    mkdir -p "$EVIDENCE_DIR"
+    node "$SCRIPT_DIR/cairn-o90-dual-track-harness/$HARNESS_SCRIPT" | tee "$EVIDENCE_DIR/result.json"
+  else
+    node "$SCRIPT_DIR/cairn-o90-dual-track-harness/$HARNESS_SCRIPT"
+  fi
+  exit 0
+fi
 if [ "$HARNESS_MODE" = "memory-public-gate" ]; then
   if [ -n "${EVIDENCE_DIR:-}" ]; then
     mkdir -p "$EVIDENCE_DIR"

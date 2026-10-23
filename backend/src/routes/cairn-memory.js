@@ -41,6 +41,12 @@ const router = express.Router();
 router.use(authenticate);
 
 const FRESH_ONLINE_EVIDENCE_MS = 2 * 60 * 1000;
+const ACTIVITY_RECONCILIATION_EVIDENCE_MS = 7 * 24 * 60 * 60 * 1000;
+const MIN_WALKING_DISPLACEMENT_M = 0.75;
+const MIN_WALKING_SPAN_MS = 10_000;
+const MAX_WALKING_SPAN_MS = 30 * 60 * 1000;
+const MAX_WALKING_SPEED_MPS = 15;
+const MAX_WALKING_WITNESSES = 100;
 
 const mutationLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -72,7 +78,7 @@ async function loadFreshAcceptedEvidence(conn, viewerId) {
   const [rows] = await conn.execute(
     `SELECT evidence.*
        FROM (
-         SELECT witness.id,witness.first_lat AS lat,witness.first_lng AS lng,
+         SELECT witness.id,witness.client_id,witness.first_lat AS lat,witness.first_lng AS lng,
                 witness.first_observed_at_ms AS ts,witness.evidence_source,
                 witness.source_activity_client_id,witness.source_segment_id,
                 witness.horizontal_accuracy_m,witness.continuity_state,
@@ -80,7 +86,7 @@ async function loadFreshAcceptedEvidence(conn, viewerId) {
            FROM memory_presence_witnesses witness
           WHERE witness.user_id=?
          UNION ALL
-         SELECT witness.id,witness.lat,witness.lng,witness.observed_at_ms AS ts,
+         SELECT witness.id,witness.client_id,witness.lat,witness.lng,witness.observed_at_ms AS ts,
                 witness.evidence_source,witness.source_activity_client_id,
                 witness.source_segment_id,witness.horizontal_accuracy_m,
                 witness.continuity_state,witness.updated_at AS receipt_at
@@ -107,15 +113,106 @@ async function loadFreshAcceptedEvidence(conn, viewerId) {
         AND COALESCE(canonical.segment_id,'legacy-0')=COALESCE(evidence.source_segment_id,'legacy-0')
       WHERE evidence.continuity_state='accepted'
         AND evidence.horizontal_accuracy_m<=?
-        AND evidence.receipt_at>=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE)
-        AND evidence.ts>=(UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000)-?
+        AND (
+          (evidence.evidence_source='passive_real'
+            AND evidence.receipt_at>=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 2 MINUTE)
+            AND evidence.ts>=(UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000)-?)
+          OR
+          (evidence.evidence_source='activity_real'
+            AND evidence.receipt_at>=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 7 DAY)
+            AND evidence.ts>=(UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000)-?)
+        )
         AND evidence.ts<=(UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000)+300000
         AND (evidence.evidence_source='passive_real' OR canonical.observed_ms IS NOT NULL)
       ORDER BY evidence.ts ASC,evidence.id ASC
       LIMIT 400`,
-    [viewerId, viewerId, viewerId, MAX_HORIZONTAL_ACCURACY_M, FRESH_ONLINE_EVIDENCE_MS],
+    [viewerId, viewerId, viewerId, MAX_HORIZONTAL_ACCURACY_M,
+      FRESH_ONLINE_EVIDENCE_MS, ACTIVITY_RECONCILIATION_EVIDENCE_MS],
   );
   return rows;
+}
+
+function walkingWitnessRows(viewerId, body, nowMs = Date.now()) {
+  const witnesses = Array.isArray(body?.witnesses) ? body.witnesses : [];
+  if (witnesses.length > MAX_WALKING_WITNESSES) return { error: 'batch too large', rows: [], cids: [] };
+  const rows = [];
+  const cids = [];
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  for (const witness of witnesses) {
+    const cid = typeof witness?.cid === 'string' ? witness.cid : '';
+    const source = witness?.evidence_source;
+    const activityId = source === 'activity_real'
+      && typeof witness?.source_activity_client_id === 'string'
+      ? witness.source_activity_client_id
+      : null;
+    const segmentId = typeof witness?.source_segment_id === 'string'
+      ? witness.source_segment_id.slice(0, 80)
+      : '';
+    const firstLat = Number(witness?.first_lat);
+    const firstLng = Number(witness?.first_lng);
+    const lat = Number(witness?.lat);
+    const lng = Number(witness?.lng);
+    const firstAt = Number(witness?.first_observed_at_ms);
+    const observedAt = Number(witness?.observed_at_ms);
+    const accuracyM = Number(witness?.horizontal_accuracy_m);
+    const spanMs = observedAt - firstAt;
+    const displacementM = distanceMeters(
+      { lat: firstLat, lng: firstLng },
+      { lat, lng },
+    );
+    const speedMps = spanMs > 0 ? displacementM / (spanMs / 1000) : Number.POSITIVE_INFINITY;
+    const oldestAllowed = source === 'activity_real'
+      ? nowMs - ACTIVITY_RECONCILIATION_EVIDENCE_MS
+      : nowMs - FRESH_ONLINE_EVIDENCE_MS;
+    if (!uuid.test(cid)
+      || !['activity_real', 'passive_real'].includes(source)
+      || (source === 'activity_real' && !uuid.test(activityId || ''))
+      || !segmentId
+      || !Number.isFinite(firstLat) || !Number.isFinite(firstLng)
+      || !Number.isFinite(lat) || !Number.isFinite(lng)
+      || Math.abs(firstLat) > 90 || Math.abs(lat) > 90
+      || Math.abs(firstLng) > 180 || Math.abs(lng) > 180
+      || !Number.isSafeInteger(firstAt) || !Number.isSafeInteger(observedAt)
+      || firstAt < oldestAllowed || observedAt > nowMs + 5 * 60_000
+      || spanMs < MIN_WALKING_SPAN_MS || spanMs > MAX_WALKING_SPAN_MS
+      || !Number.isFinite(displacementM) || displacementM < MIN_WALKING_DISPLACEMENT_M
+      || speedMps > MAX_WALKING_SPEED_MPS
+      || !Number.isFinite(accuracyM) || accuracyM <= 0 || accuracyM > MAX_HORIZONTAL_ACCURACY_M
+      || witness?.continuity_state !== 'accepted') {
+      continue;
+    }
+    rows.push([
+      viewerId, cid, firstLat, firstLng, firstAt, lat, lng, observedAt,
+      source, activityId, segmentId, accuracyM, 'accepted',
+    ]);
+    cids.push(cid);
+  }
+  return { error: null, rows, cids };
+}
+
+async function persistWalkingWitnessRows(conn, rows) {
+  if (rows.length === 0) return;
+  await conn.query(
+    `INSERT INTO memory_presence_witnesses
+       (user_id,client_id,first_lat,first_lng,first_observed_at_ms,
+        lat,lng,observed_at_ms,evidence_source,source_activity_client_id,
+        source_segment_id,horizontal_accuracy_m,continuity_state)
+     VALUES ?
+     ON DUPLICATE KEY UPDATE
+       first_lat=IF(VALUES(first_observed_at_ms)<first_observed_at_ms,VALUES(first_lat),first_lat),
+       first_lng=IF(VALUES(first_observed_at_ms)<first_observed_at_ms,VALUES(first_lng),first_lng),
+       first_observed_at_ms=LEAST(first_observed_at_ms,VALUES(first_observed_at_ms)),
+       lat=IF(VALUES(observed_at_ms)>observed_at_ms,VALUES(lat),lat),
+       lng=IF(VALUES(observed_at_ms)>observed_at_ms,VALUES(lng),lng),
+       observed_at_ms=GREATEST(observed_at_ms,VALUES(observed_at_ms)),
+       horizontal_accuracy_m=IF(
+         VALUES(observed_at_ms)>observed_at_ms,
+         VALUES(horizontal_accuracy_m),horizontal_accuracy_m
+       ),
+       source_segment_id=VALUES(source_segment_id),
+       continuity_state='accepted'`,
+    [rows],
+  );
 }
 
 async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
@@ -305,31 +402,11 @@ async function loadDiscoveryCandidates(conn, viewerId, visit, point) {
   };
 }
 
-router.post('/discover', mutationLimiter, async (req, res) => {
-  const viewerId = req.user.userId;
-  const requestStartedAt = performance.now();
-  const timing = {};
-  let stageStartedAt = requestStartedAt;
-  const finishStage = (name) => {
-    const now = performance.now();
-    timing[name] = now - stageStartedAt;
-    stageStartedAt = now;
-  };
-  const conn = await pool.getConnection();
-  finishStage('pool');
-  try {
-    await conn.beginTransaction();
-    await conn.execute('SELECT id FROM users WHERE id=? FOR UPDATE', [viewerId]);
-    finishStage('lock');
-    const evidenceRows = await loadFreshAcceptedEvidence(conn, viewerId);
+async function runDiscovery(conn, viewerId, evidenceRows, finishStage = () => {}) {
     const latestEvidence = selectQualifyingEncounterEvidence(evidenceRows);
     finishStage('evidence');
     if (!latestEvidence) {
-      await conn.commit();
-      finishStage('commit');
-      timing.total = performance.now() - requestStartedAt;
-      setDiscoveryTiming(res, timing);
-      return res.json({ acquired: [], reason: 'fresh_continuous_presence_required' });
+      return { acquired: [], reason: 'fresh_continuous_presence_required' };
     }
     const observation = { lat: Number(latestEvidence.lat), lng: Number(latestEvidence.lng) };
     const visit = await ensureLocalVisit(conn, viewerId, observation);
@@ -354,11 +431,7 @@ router.post('/discover', mutationLimiter, async (req, res) => {
     const selected = selectDiscoveryCandidates(candidates, capacity);
     finishStage('candidates');
     if (selected.length === 0 && capacity <= 0) {
-      await conn.commit();
-      finishStage('commit');
-      timing.total = performance.now() - requestStartedAt;
-      setDiscoveryTiming(res, timing);
-      return res.json({ acquired: [], reason: 'local_visit_limit', visit_id: String(visit.id) });
+      return { acquired: [], reason: 'local_visit_limit', visit_id: String(visit.id) };
     }
     const acquired = [];
     let batchPresentationGroupId = null;
@@ -406,16 +479,12 @@ router.post('/discover', mutationLimiter, async (req, res) => {
         kind: 'memory_hit',
         relatedId: batchPresentationGroupId,
         title,
-        body: 'Saved in Memory. Open Cairn when you are ready.',
+        body: 'Saved in your Cairn collection. Open it when you are ready.',
         connection: conn,
       });
     }
     finishStage('outbox');
-    await conn.commit();
-    finishStage('commit');
-    timing.total = performance.now() - requestStartedAt;
-    setDiscoveryTiming(res, timing);
-    const responseBody = {
+    return {
       acquired,
       visit_id: String(visit.id),
       local_visit_limit: MAX_CAIRNS_PER_LOCAL_VISIT,
@@ -424,8 +493,80 @@ router.post('/discover', mutationLimiter, async (req, res) => {
       presentation_merge_window_seconds: PRESENTATION_MERGE_WINDOW_SECONDS,
       haptic_min_interval_seconds: HAPTIC_MIN_INTERVAL_SECONDS,
     };
-    res.json(responseBody);
-    return undefined;
+}
+
+router.post('/walking-evidence', mutationLimiter, async (req, res) => {
+  const viewerId = req.user.userId;
+  const parsed = walkingWitnessRows(viewerId, req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  if (parsed.rows.length === 0) {
+    return res.json({ acquired: [], processed_witness_cids: [], reason: 'no_valid_walking_evidence' });
+  }
+  const requestStartedAt = performance.now();
+  const timing = {};
+  let stageStartedAt = requestStartedAt;
+  const finishStage = name => {
+    const now = performance.now();
+    timing[name] = now - stageStartedAt;
+    stageStartedAt = now;
+  };
+  const conn = await pool.getConnection();
+  finishStage('pool');
+  try {
+    await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id=? FOR UPDATE', [viewerId]);
+    finishStage('lock');
+    await persistWalkingWitnessRows(conn, parsed.rows);
+    finishStage('persist');
+    const evidenceRows = await loadFreshAcceptedEvidence(conn, viewerId);
+    const processedWitnessCids = parsed.cids.filter(cid => {
+      const rows = evidenceRows.filter(row => row.client_id === cid);
+      return Boolean(selectQualifyingEncounterEvidence(rows));
+    });
+    const discovery = await runDiscovery(conn, viewerId, evidenceRows, finishStage);
+    await conn.commit();
+    finishStage('commit');
+    timing.total = performance.now() - requestStartedAt;
+    setDiscoveryTiming(res, timing);
+    const activityRoutePending = processedWitnessCids.length === 0
+      && parsed.rows.some(row => row[8] === 'activity_real');
+    return res.json({
+      ...discovery,
+      ...(activityRoutePending ? { reason: 'activity_route_pending' } : {}),
+      processed_witness_cids: processedWitnessCids,
+    });
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* noop */ }
+    console.error('[cairn-memory/walking-evidence]', error.message);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+router.post('/discover', mutationLimiter, async (req, res) => {
+  const viewerId = req.user.userId;
+  const requestStartedAt = performance.now();
+  const timing = {};
+  let stageStartedAt = requestStartedAt;
+  const finishStage = name => {
+    const now = performance.now();
+    timing[name] = now - stageStartedAt;
+    stageStartedAt = now;
+  };
+  const conn = await pool.getConnection();
+  finishStage('pool');
+  try {
+    await conn.beginTransaction();
+    await conn.execute('SELECT id FROM users WHERE id=? FOR UPDATE', [viewerId]);
+    finishStage('lock');
+    const evidenceRows = await loadFreshAcceptedEvidence(conn, viewerId);
+    const responseBody = await runDiscovery(conn, viewerId, evidenceRows, finishStage);
+    await conn.commit();
+    finishStage('commit');
+    timing.total = performance.now() - requestStartedAt;
+    setDiscoveryTiming(res, timing);
+    return res.json(responseBody);
   } catch (error) {
     try { await conn.rollback(); } catch { /* noop */ }
     console.error('[cairn-memory/discover]', error.message);
