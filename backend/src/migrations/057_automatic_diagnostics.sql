@@ -64,6 +64,7 @@ CREATE TABLE diagnostic_batches (
   payload_sha256 CHAR(64) NOT NULL,
   payload_bytes INT UNSIGNED NOT NULL,
   payload_json MEDIUMTEXT NOT NULL,
+  -- Retention anchor: trusted server receipt time, never client event time.
   received_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   expires_at DATETIME(3) NOT NULL,
   PRIMARY KEY (id),

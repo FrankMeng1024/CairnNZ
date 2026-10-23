@@ -55,3 +55,14 @@ test('server-side one-time QA enrollment records consent and erases diagnostics 
   assert.match(admin, /setAutomaticDiagnosticEnrollment/);
   assert.match(service, /DELETE FROM diagnostic_streams WHERE owner_user_id = \?/);
 });
+
+test('retention deletes expired batches before empty streams and reads only retained evidence', () => {
+  const service = read('services/automaticDiagnostics.js');
+  const route = read('routes/telemetry.js');
+  assert.match(service, /SELECT id FROM diagnostic_batches[\s\S]*expires_at < UTC_TIMESTAMP/);
+  assert.match(service, /DELETE FROM diagnostic_batches WHERE id IN/);
+  assert.match(service, /NOT EXISTS \([\s\S]*diagnostic_batches b WHERE b\.stream_fk/);
+  assert.match(service, /retained\.expires_at >= UTC_TIMESTAMP/);
+  assert.match(service, /FROM diagnostic_batches WHERE stream_fk = \? AND expires_at >= UTC_TIMESTAMP/);
+  assert.doesNotMatch(route, /setImmediate\([\s\S]*purgeExpiredAutomaticDiagnostics/);
+});

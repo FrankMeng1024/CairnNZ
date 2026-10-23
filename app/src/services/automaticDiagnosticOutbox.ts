@@ -7,6 +7,8 @@ const MAX_EVENTS_PER_OWNER = 600;
 const MAX_BYTES_PER_OWNER = 512 * 1024;
 const MAX_EVENTS_PER_BATCH = 50;
 const MAX_BATCH_BYTES = 60 * 1024;
+const MAX_EVENT_DETAILS_BYTES = 8 * 1024;
+const MAX_RECENT_ACKED_STREAMS = 128;
 const POLICY_CACHE_MS = 6 * 60 * 60 * 1000;
 const TIER_A_FREE_TEXT_FIELD = /(?:message|msg|stack|body|text|title|name|note|description|content|diagnostic|url|uri)$/i;
 
@@ -55,6 +57,8 @@ interface QueuedAutomaticDiagnostic {
 }
 
 interface StreamStatus {
+  clientActivityId: string | null;
+  clientRouteId: string | null;
   lastCapturedAt: number | null;
   lastDurablyQueuedAt: number | null;
   lastAttemptAt: number | null;
@@ -68,6 +72,8 @@ interface StreamStatus {
   nextSequence: number;
   consecutiveUploadFailures: number;
   nextAttemptAt: number | null;
+  quarantinedCount: number;
+  quarantinedThroughSequence: number;
 }
 
 interface OwnerMeta {
@@ -76,6 +82,7 @@ interface OwnerMeta {
   ownerEpoch: string;
   policy: 'unknown' | 'tier_a' | 'tier_b' | 'disabled';
   policyCheckedAt: number | null;
+  policyExpiresAt: number | null;
   pendingCount: number;
   pendingBytes: number;
   streams: Record<string, StreamStatus>;
@@ -90,6 +97,7 @@ export interface AutomaticDiagnosticStatus extends StreamStatus {
     | 'UPLOAD_PENDING'
     | 'SERVER_ACKED'
     | 'RETENTION_TRUNCATED'
+    | 'UPLOAD_INCOMPLETE'
     | 'POLICY_DISABLED'
     | 'UNKNOWN';
 }
@@ -123,6 +131,8 @@ function metaKey(ownerUserId: string): string {
 
 function emptyStatus(): StreamStatus {
   return {
+    clientActivityId: null,
+    clientRouteId: null,
     lastCapturedAt: null,
     lastDurablyQueuedAt: null,
     lastAttemptAt: null,
@@ -136,6 +146,8 @@ function emptyStatus(): StreamStatus {
     nextSequence: 1,
     consecutiveUploadFailures: 0,
     nextAttemptAt: null,
+    quarantinedCount: 0,
+    quarantinedThroughSequence: 0,
   };
 }
 
@@ -146,6 +158,7 @@ function emptyMeta(): OwnerMeta {
     ownerEpoch: `oe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
     policy: 'unknown',
     policyCheckedAt: null,
+    policyExpiresAt: null,
     pendingCount: 0,
     pendingBytes: 0,
     streams: {},
@@ -161,7 +174,11 @@ async function readMeta(ownerUserId: string): Promise<OwnerMeta> {
       parsed.pendingCount = Math.max(0, Number(parsed.pendingCount) || 0);
       parsed.pendingBytes = Math.max(0, Number(parsed.pendingBytes) || 0);
       parsed.ownerEpoch = safeIdentifier(parsed.ownerEpoch || emptyMeta().ownerEpoch, 64);
+      parsed.policyExpiresAt = parsed.policyExpiresAt == null
+        ? null : Number.isFinite(Number(parsed.policyExpiresAt)) ? Number(parsed.policyExpiresAt) : null;
       for (const status of Object.values(parsed.streams ?? {})) {
+        status.clientActivityId = status.clientActivityId == null ? null : String(status.clientActivityId);
+        status.clientRouteId = status.clientRouteId == null ? null : String(status.clientRouteId);
         status.coverageStart = status.coverageStart == null
           ? null : Number.isFinite(Number(status.coverageStart)) ? Number(status.coverageStart) : null;
         status.coverageEnd = status.coverageEnd == null
@@ -173,6 +190,8 @@ async function readMeta(ownerUserId: string): Promise<OwnerMeta> {
         status.consecutiveUploadFailures = Math.max(0, Number(status.consecutiveUploadFailures) || 0);
         status.nextAttemptAt = status.nextAttemptAt == null
           ? null : Number.isFinite(Number(status.nextAttemptAt)) ? Number(status.nextAttemptAt) : null;
+        status.quarantinedCount = Math.max(0, Number(status.quarantinedCount) || 0);
+        status.quarantinedThroughSequence = Math.max(0, Number(status.quarantinedThroughSequence) || 0);
       }
       return parsed;
     }
@@ -265,6 +284,35 @@ function tierASafeDetails(value: unknown, depth = 0): unknown {
   return output;
 }
 
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xD800 && code <= 0xDBFF
+      && index + 1 < value.length
+      && value.charCodeAt(index + 1) >= 0xDC00
+      && value.charCodeAt(index + 1) <= 0xDFFF) {
+      bytes += 4;
+      index += 1;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+function policyCacheIsFresh(meta: OwnerMeta, now = Date.now()): boolean {
+  if (meta.policyCheckedAt == null) return false;
+  const age = now - meta.policyCheckedAt;
+  return age >= 0 && age < POLICY_CACHE_MS;
+}
+
+function policyAuthorizesCapture(meta: OwnerMeta, now = Date.now()): boolean {
+  return policyCacheIsFresh(meta, now)
+    && (meta.policy === 'tier_a' || meta.policy === 'tier_b')
+    && (meta.policyExpiresAt == null || meta.policyExpiresAt > now);
+}
+
 function makeEvent(
   input: AutomaticDiagnosticInput,
   streamSequence: number,
@@ -277,6 +325,14 @@ function makeEvent(
     ? safeIdentifier(input.eventId, 96)
     : `${eventAt.toString(36)}-${queueSequence.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const safe = sanitizeTelemetryEventForUpload({ fields: tierASafeDetails(input.details ?? {}) });
+  const sanitizedDetails = (safe.fields ?? {}) as Record<string, unknown>;
+  const detailsBytes = utf8ByteLength(JSON.stringify(sanitizedDetails));
+  const boundedDetails = detailsBytes <= MAX_EVENT_DETAILS_BYTES
+    ? sanitizedDetails
+    : {
+      diagnosticDetailsTruncated: true,
+      originalApproximateBytes: detailsBytes,
+    };
   const base = {
     schema: 'cairn-auto-diagnostic-event' as const,
     version: 1 as const,
@@ -297,7 +353,7 @@ function makeEvent(
     severity: input.severity ?? 'info',
     eventAt,
     monotonicMs: input.monotonicMs == null ? null : Math.max(0, Number(input.monotonicMs)),
-    details: (safe.fields ?? {}) as Record<string, unknown>,
+    details: boundedDetails,
     capturedAt: Date.now(),
   };
   const approximateBytes = JSON.stringify(base).length;
@@ -319,7 +375,35 @@ async function enforceOwnerBounds(ownerUserId: string, meta: OwnerMeta): Promise
     status.droppedCount += 1;
     meta.streams[item.event.stream.streamId] = status;
   }
-  if (remove.length > 0) await storage.removeItemsStrict(remove);
+  if (remove.length > 0) {
+    await storage.removeItemsStrict(remove);
+    const removed = new Set(remove);
+    compactAcknowledgedStreamMetadata(meta, events.filter(item => !removed.has(item.key)));
+  }
+}
+
+function compactAcknowledgedStreamMetadata(
+  meta: OwnerMeta,
+  pending: Array<{ event: QueuedAutomaticDiagnostic }>,
+): boolean {
+  const pendingStreamIds = new Set(pending.map(item => item.event.stream.streamId));
+  const removable = Object.entries(meta.streams)
+    .filter(([streamId]) => !pendingStreamIds.has(streamId))
+    .sort((left, right) => {
+      const latest = (status: StreamStatus) => Math.max(
+        status.lastServerAckAt ?? 0,
+        status.lastCapturedAt ?? 0,
+        status.lastDurablyQueuedAt ?? 0,
+        status.lastAttemptAt ?? 0,
+      );
+      return latest(right[1]) - latest(left[1]) || right[0].localeCompare(left[0]);
+    });
+  let changed = false;
+  for (const [streamId] of removable.slice(MAX_RECENT_ACKED_STREAMS)) {
+    delete meta.streams[streamId];
+    changed = true;
+  }
+  return changed;
 }
 
 /** Capture is non-throwing to product callers; diagnostic storage never owns product truth. */
@@ -330,7 +414,7 @@ export function captureAutomaticDiagnosticEvent(input: AutomaticDiagnosticInput)
     let reservedBytes = 0;
     try {
       meta = await readMeta(input.ownerUserId);
-      if (meta.policy === 'disabled') return;
+      if (!policyAuthorizesCapture(meta) || !await currentOwnerMatches(input.ownerUserId)) return;
       const streamId = safeIdentifier(input.stream.streamId, 96);
       const status = meta.streams[streamId] ?? emptyStatus();
       const event = makeEvent(input, status.nextSequence, meta.ownerEpoch);
@@ -343,6 +427,8 @@ export function captureAutomaticDiagnosticEvent(input: AutomaticDiagnosticInput)
       if (!status.sourceTypesAvailable.includes(event.stream.sourceType)) {
         status.sourceTypesAvailable.push(event.stream.sourceType);
       }
+      status.clientActivityId = event.stream.clientActivityId ?? null;
+      status.clientRouteId = event.stream.clientRouteId ?? null;
       status.nextSequence += 1;
       meta.streams[event.stream.streamId] = status;
       meta.pendingCount += 1;
@@ -450,29 +536,43 @@ async function currentOwnerMatches(ownerUserId: string): Promise<boolean> {
 }
 
 async function refreshPolicy(ownerUserId: string, meta: OwnerMeta): Promise<boolean> {
-  if (meta.policyCheckedAt && Date.now() - meta.policyCheckedAt < POLICY_CACHE_MS) {
-    return meta.policy === 'tier_a' || meta.policy === 'tier_b';
+  const now = Date.now();
+  if (policyCacheIsFresh(meta, now)
+    && (meta.policy === 'unknown' || meta.policy === 'disabled' || policyAuthorizesCapture(meta, now))) {
+    return policyAuthorizesCapture(meta, now);
   }
   const response = await diagnosticAuthenticatedFetch('/api/telemetry/diagnostics/policy', {
     method: 'GET', expectedUserId: ownerUserId, skipLogoutOn401: true,
   });
-  if (!response.ok) return false;
+  if (!response.ok) {
+    meta.policy = 'unknown';
+    meta.policyCheckedAt = now;
+    meta.policyExpiresAt = null;
+    await writeMeta(ownerUserId, meta);
+    return false;
+  }
   const policy = await response.json() as {
     enabled?: boolean;
     tier?: 'tier_a' | 'tier_b' | 'disabled';
+    expiresAt?: string | null;
   };
-  meta.policyCheckedAt = Date.now();
-  meta.policy = policy?.enabled && (policy.tier === 'tier_a' || policy.tier === 'tier_b')
+  const parsedExpiry = policy.expiresAt == null ? null : Date.parse(String(policy.expiresAt));
+  const validExpiry = parsedExpiry == null || (Number.isFinite(parsedExpiry) && parsedExpiry > now);
+  meta.policyCheckedAt = now;
+  meta.policyExpiresAt = validExpiry ? parsedExpiry : null;
+  meta.policy = policy?.enabled && validExpiry && (policy.tier === 'tier_a' || policy.tier === 'tier_b')
     ? policy.tier
     : 'disabled';
-  await writeMeta(ownerUserId, meta);
   if (meta.policy === 'disabled') {
     const keys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(eventPrefix(ownerUserId)));
     await storage.removeItemsStrict(keys);
     meta.pendingCount = 0;
     meta.pendingBytes = 0;
+    meta.streams = {};
+    await writeMeta(ownerUserId, meta);
     return false;
   }
+  await writeMeta(ownerUserId, meta);
   return true;
 }
 
@@ -495,17 +595,39 @@ export async function drainAutomaticDiagnosticOutbox(
     } catch {
       return { acknowledgedEvents, failedBatches: 1, skipped: true };
     }
+    const failedThisPass = new Set<string>();
     while (networkMonitor.isOnline() && await currentOwnerMatches(ownerUserId)) {
       const pending = await readOwnerEvents(ownerUserId);
-      if (pending.length === 0) break;
-      const streamId = pending[0].event.stream.streamId;
+      if (pending.length === 0) {
+        if (compactAcknowledgedStreamMetadata(meta, pending)) {
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
+        }
+        break;
+      }
+      const now = Date.now();
+      const streamId = pending.find(item => {
+        const candidateId = item.event.stream.streamId;
+        const candidate = meta.streams[candidateId] ?? emptyStatus();
+        return !failedThisPass.has(candidateId)
+          && (!candidate.nextAttemptAt || candidate.nextAttemptAt <= now)
+          && item.event.streamSequence > candidate.quarantinedThroughSequence;
+      })?.event.stream.streamId;
+      if (!streamId) {
+        if (compactAcknowledgedStreamMetadata(meta, pending)) {
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
+        }
+        break;
+      }
       const sameStream = pending
-        .filter(item => item.event.stream.streamId === streamId)
+        .filter(item => item.event.stream.streamId === streamId
+          && item.event.streamSequence > (meta.streams[streamId]?.quarantinedThroughSequence ?? 0))
         .sort((left, right) => left.event.streamSequence - right.event.streamSequence);
       const status = meta.streams[streamId] ?? emptyStatus();
-      if (status.nextAttemptAt && status.nextAttemptAt > Date.now()) break;
       const { chosen, body } = batchFor(sameStream, status.droppedCount);
-      if (chosen.length === 0) break;
+      if (chosen.length === 0) {
+        failedThisPass.add(streamId);
+        continue;
+      }
       if (body.stream.clientActivityId) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -518,7 +640,8 @@ export async function drainAutomaticDiagnosticOutbox(
           // A missing/corrupt deletion authority is not permission to upload.
           status.lastFailure = 'LOCAL_TOMBSTONE_AUTHORITY_UNAVAILABLE';
           await writeMeta(ownerUserId, meta).catch(() => undefined);
-          break;
+          failedThisPass.add(streamId);
+          continue;
         }
       }
       if (body.stream.clientRouteId) {
@@ -532,7 +655,8 @@ export async function drainAutomaticDiagnosticOutbox(
         } catch {
           status.lastFailure = 'LOCAL_ROUTE_TOMBSTONE_AUTHORITY_UNAVAILABLE';
           await writeMeta(ownerUserId, meta).catch(() => undefined);
-          break;
+          failedThisPass.add(streamId);
+          continue;
         }
       }
       status.lastAttemptAt = Date.now();
@@ -570,18 +694,32 @@ export async function drainAutomaticDiagnosticOutbox(
         if (response.status === 403) {
           meta.policy = 'disabled';
           meta.policyCheckedAt = Date.now();
+          meta.policyExpiresAt = null;
           await storage.removeItemsStrict(pending.map(item => item.key));
           meta.pendingCount = 0;
           meta.pendingBytes = 0;
+          meta.streams = {};
           await writeMeta(ownerUserId, meta).catch(() => undefined);
         } else if (response.status === 410 && body.stream.clientActivityId) {
           await purgeActivityUnlocked(ownerUserId, body.stream.clientActivityId);
         } else if (response.status === 410 && body.stream.clientRouteId) {
           await purgeRouteUnlocked(ownerUserId, body.stream.clientRouteId);
+        } else if (response.status >= 400 && response.status < 500
+          && ![401, 408, 425, 429].includes(response.status)) {
+          status.quarantinedThroughSequence = Math.max(
+            status.quarantinedThroughSequence,
+            chosen[chosen.length - 1].event.streamSequence,
+          );
+          status.quarantinedCount += chosen.length;
+          status.nextAttemptAt = null;
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
         } else {
           await writeMeta(ownerUserId, meta).catch(() => undefined);
         }
-        break;
+        if (response.status === 401 || response.status === 403) break;
+        if (response.status === 410) continue;
+        failedThisPass.add(streamId);
+        continue;
       }
       // Server commit is idempotent by owner+batchId. If local removal fails,
       // the exact same batch is replayed and acknowledged without duplication.
@@ -605,6 +743,8 @@ export async function drainAutomaticDiagnosticOutbox(
       status.consecutiveUploadFailures = 0;
       status.nextAttemptAt = null;
       acknowledgedEvents += chosen.length;
+      const chosenKeys = new Set(chosen.map(item => item.key));
+      compactAcknowledgedStreamMetadata(meta, pending.filter(item => !chosenKeys.has(item.key)));
       await writeMeta(ownerUserId, meta).catch(() => undefined);
     }
     return { acknowledgedEvents, failedBatches, skipped: false };
@@ -624,11 +764,13 @@ export async function getAutomaticDiagnosticStatus(
   const pendingBytes = events.reduce((sum, event) => sum + event.approximateBytes, 0);
   let quality: AutomaticDiagnosticStatus['quality'];
   if (meta.policy === 'disabled') quality = 'POLICY_DISABLED';
+  else if (status.quarantinedCount > 0) quality = 'UPLOAD_INCOMPLETE';
   else if (status.droppedCount > 0) quality = 'RETENTION_TRUNCATED';
   else if (events.length > 0 && status.lastDurablyQueuedAt) quality = 'UPLOAD_PENDING';
   else if (events.length > 0) quality = 'CAPTURED_NOT_UPLOADED';
   else if (status.lastServerAckAt) quality = 'SERVER_ACKED';
   else if (status.failedWriteCount > 0) quality = 'UNKNOWN';
+  else if (!policyAuthorizesCapture(meta)) quality = 'UNKNOWN';
   else quality = 'NOT_CAPTURED';
   return {
     ...status,
@@ -668,7 +810,12 @@ async function purgeActivityUnlocked(ownerUserId: string, clientActivityId: stri
     0,
     meta.pendingBytes - matching.reduce((sum, item) => sum + item.event.approximateBytes, 0),
   );
-  for (const streamId of new Set(matching.map(item => item.event.stream.streamId))) delete meta.streams[streamId];
+  const matchingStreamIds = new Set(matching.map(item => item.event.stream.streamId));
+  for (const [streamId, status] of Object.entries(meta.streams)) {
+    if (matchingStreamIds.has(streamId) || status.clientActivityId === clientActivityId) {
+      delete meta.streams[streamId];
+    }
+  }
   await writeMeta(ownerUserId, meta);
 }
 
@@ -682,7 +829,12 @@ async function purgeRouteUnlocked(ownerUserId: string, clientRouteId: string): P
     0,
     meta.pendingBytes - matching.reduce((sum, item) => sum + item.event.approximateBytes, 0),
   );
-  for (const streamId of new Set(matching.map(item => item.event.stream.streamId))) delete meta.streams[streamId];
+  const matchingStreamIds = new Set(matching.map(item => item.event.stream.streamId));
+  for (const [streamId, status] of Object.entries(meta.streams)) {
+    if (matchingStreamIds.has(streamId) || status.clientRouteId === clientRouteId) {
+      delete meta.streams[streamId];
+    }
+  }
   await writeMeta(ownerUserId, meta);
 }
 

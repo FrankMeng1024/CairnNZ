@@ -10,6 +10,9 @@ const MAX_BATCH_BYTES = 64 * 1024;
 const MAX_OWNER_BYTES_24H = 5 * 1024 * 1024;
 const TIER_A_RETENTION_DAYS = 30;
 const TIER_B_RETENTION_DAYS = 14;
+// Retention is anchored to server receipt, not client eventAt. eventAt is
+// useful forensic context but is client-controlled and may arrive after an
+// offline delay; every accepted batch receives its full stated server TTL.
 const SAFE_ID = /^[A-Za-z0-9:._-]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TIER_A_FREE_TEXT_FIELD = /(?:message|msg|stack|body|text|title|name|note|description|content|diagnostic|url|uri)$/i;
@@ -275,7 +278,8 @@ async function ingestAutomaticDiagnosticBatch(pool, ownerUserId, body) {
     );
     let stream = streams[0];
     const retentionDays = policy.policy_tier === 'tier_b' ? TIER_B_RETENTION_DAYS : TIER_A_RETENTION_DAYS;
-    const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
+    const receivedAt = new Date();
+    const expiresAt = new Date(receivedAt.getTime() + retentionDays * 24 * 60 * 60 * 1000);
     if (stream && !sameStreamIdentity(stream, batch.stream)) {
       throw diagnosticError(409, 'DIAGNOSTIC_STREAM_IDENTITY_CONFLICT', 'streamId identity changed.');
     }
@@ -314,12 +318,12 @@ async function ingestAutomaticDiagnosticBatch(pool, ownerUserId, body) {
         `INSERT INTO diagnostic_batches
           (owner_user_id, stream_fk, batch_id, batch_sequence, last_sequence, schema_version,
            first_event_at, last_event_at, event_count, client_dropped_count,
-           payload_sha256, payload_bytes, payload_json, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           payload_sha256, payload_bytes, payload_json, received_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ownerUserId, stream.id, batch.batchId, batch.batchSequence, batch.lastSequence, DIAGNOSTIC_VERSION,
           new Date(batch.firstEventAt), new Date(batch.lastEventAt), batch.events.length,
-          batch.droppedCount, batch.payloadSha256, batch.payloadBytes, batch.payloadJson, expiresAt,
+          batch.droppedCount, batch.payloadSha256, batch.payloadBytes, batch.payloadJson, receivedAt, expiresAt,
         ],
       );
     } catch (error) {
@@ -426,10 +430,40 @@ async function setAutomaticDiagnosticEnrollment(pool, input) {
 
 async function purgeExpiredAutomaticDiagnostics(pool, limit = 500) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2_000));
-  const [result] = await pool.execute(
-    `DELETE FROM diagnostic_streams WHERE expires_at < UTC_TIMESTAMP(3) LIMIT ${safeLimit}`,
-  );
-  return Number(result.affectedRows || 0);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [expired] = await conn.execute(
+      `SELECT id FROM diagnostic_batches
+        WHERE expires_at < UTC_TIMESTAMP(3)
+        ORDER BY expires_at ASC, id ASC LIMIT ${safeLimit} FOR UPDATE`,
+    );
+    let batchesPurged = 0;
+    if (expired.length > 0) {
+      const ids = expired.map(row => Number(row.id));
+      const placeholders = ids.map(() => '?').join(',');
+      const [deleted] = await conn.execute(
+        `DELETE FROM diagnostic_batches WHERE id IN (${placeholders})`,
+        ids,
+      );
+      batchesPurged = Number(deleted.affectedRows || 0);
+    }
+    const [emptyStreams] = await conn.execute(
+      `DELETE FROM diagnostic_streams
+        WHERE expires_at < UTC_TIMESTAMP(3)
+          AND NOT EXISTS (
+            SELECT 1 FROM diagnostic_batches b WHERE b.stream_fk = diagnostic_streams.id
+          )
+        LIMIT ${safeLimit}`,
+    );
+    await conn.commit();
+    return batchesPurged + Number(emptyStreams.affectedRows || 0);
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* ignore */ }
+    throw error;
+  } finally {
+    conn.release();
+  }
 }
 
 async function queryAutomaticDiagnostics(pool, filters) {
@@ -437,7 +471,13 @@ async function queryAutomaticDiagnostics(pool, filters) {
   if (!Number.isSafeInteger(ownerUserId) || ownerUserId <= 0) {
     throw diagnosticError(400, 'DIAGNOSTIC_OWNER_REQUIRED', 'Valid ownerUserId is required.');
   }
-  const clauses = ['s.owner_user_id = ?'];
+  const clauses = [
+    's.owner_user_id = ?',
+    `EXISTS (
+      SELECT 1 FROM diagnostic_batches retained
+       WHERE retained.stream_fk = s.id AND retained.expires_at >= UTC_TIMESTAMP(3)
+    )`,
+  ];
   const params = [ownerUserId];
   if (filters.clientActivityId) { clauses.push('s.client_activity_id = ?'); params.push(filters.clientActivityId); }
   if (filters.routeEditSessionId) { clauses.push('s.route_edit_session_id = ?'); params.push(filters.routeEditSessionId); }
@@ -455,15 +495,18 @@ async function queryAutomaticDiagnostics(pool, filters) {
                 AND a.client_activity_id = s.client_activity_id LIMIT 1) AS server_activity_id
        FROM diagnostic_streams s
       WHERE ${clauses.join(' AND ')}
-      ORDER BY s.last_event_at DESC LIMIT ${limit}`,
+      ORDER BY (
+        SELECT MAX(recent.last_event_at) FROM diagnostic_batches recent
+         WHERE recent.stream_fk = s.id AND recent.expires_at >= UTC_TIMESTAMP(3)
+      ) DESC LIMIT ${limit}`,
     params,
   );
   const output = [];
   for (const stream of streams) {
     const [batches] = await pool.execute(
       `SELECT batch_id, batch_sequence, last_sequence, first_event_at, last_event_at, event_count,
-              client_dropped_count, payload_bytes, payload_json, received_at
-         FROM diagnostic_batches WHERE stream_fk = ?
+              client_dropped_count, payload_bytes, payload_json, received_at, expires_at
+         FROM diagnostic_batches WHERE stream_fk = ? AND expires_at >= UTC_TIMESTAMP(3)
         ORDER BY batch_sequence ASC, id ASC`,
       [stream.id],
     );
@@ -481,8 +524,38 @@ async function queryAutomaticDiagnostics(pool, filters) {
     const events = batches.flatMap(row => {
       try { return JSON.parse(row.payload_json).events ?? []; } catch { return []; }
     }).sort((left, right) => left.eventAt - right.eventAt || left.eventId.localeCompare(right.eventId));
+    const retainedSummary = batches.reduce((summary, row) => ({
+      firstEventAt: !summary.firstEventAt || new Date(row.first_event_at) < new Date(summary.firstEventAt)
+        ? row.first_event_at : summary.firstEventAt,
+      lastEventAt: !summary.lastEventAt || new Date(row.last_event_at) > new Date(summary.lastEventAt)
+        ? row.last_event_at : summary.lastEventAt,
+      lastBatchSequence: Math.max(summary.lastBatchSequence, Number(row.last_sequence)),
+      totalBatches: summary.totalBatches + 1,
+      totalEvents: summary.totalEvents + Number(row.event_count),
+      totalBytes: summary.totalBytes + Number(row.payload_bytes),
+      clientDroppedCount: summary.clientDroppedCount + Number(row.client_dropped_count),
+      expiresAt: !summary.expiresAt || new Date(row.expires_at) > new Date(summary.expiresAt)
+        ? row.expires_at : summary.expiresAt,
+    }), {
+      firstEventAt: null,
+      lastEventAt: null,
+      lastBatchSequence: 0,
+      totalBatches: 0,
+      totalEvents: 0,
+      totalBytes: 0,
+      clientDroppedCount: 0,
+      expiresAt: null,
+    });
     output.push({
       ...stream,
+      first_event_at: retainedSummary.firstEventAt,
+      last_event_at: retainedSummary.lastEventAt,
+      last_batch_sequence: retainedSummary.lastBatchSequence,
+      total_batches: retainedSummary.totalBatches,
+      total_events: retainedSummary.totalEvents,
+      total_bytes: retainedSummary.totalBytes,
+      client_dropped_count: retainedSummary.clientDroppedCount,
+      expires_at: retainedSummary.expiresAt,
       uploadStatus: 'SERVER_ACKED',
       sequenceGaps,
       batches: batches.map(({ payload_json, ...row }) => row),

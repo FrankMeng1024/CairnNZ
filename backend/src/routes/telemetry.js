@@ -31,7 +31,6 @@ const { mergeQaTelemetryJsonl } = require('../utils/qaTelemetryMerge');
 const {
   getAutomaticDiagnosticPolicy,
   ingestAutomaticDiagnosticBatch,
-  purgeExpiredAutomaticDiagnostics,
   queryAutomaticDiagnostics,
 } = require('../services/automaticDiagnostics');
 
@@ -112,9 +111,6 @@ router.get('/diagnostics/policy', authenticate, async (req, res) => {
 router.post('/diagnostics/batches', diagnosticUploadLimiter, authenticate, async (req, res) => {
   try {
     const result = await ingestAutomaticDiagnosticBatch(pool, req.user.userId, req.body);
-    setImmediate(() => { void purgeExpiredAutomaticDiagnostics(pool).catch(error => {
-      console.warn('[diagnostics/retention]', error.message);
-    }); });
     return res.status(200).json({
       ok: true,
       batch_id: result.batchId,

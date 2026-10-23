@@ -39,6 +39,17 @@ const event = (ordinal: number, ownerUserId = 'owner-a') => ({
   details: { ordinal, acceptedCount: 1 },
 });
 
+async function authorizeTestOwner(ownerUserId: string) {
+  mockCurrentOwner.value = ownerUserId;
+  mockOnline.value = true;
+  mockAuthenticatedFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+    enabled: true, tier: 'tier_a', consentVersion: 'owner-qa-v1', expiresAt: null,
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  await drainAutomaticDiagnosticOutbox(ownerUserId, { reason: 'hydrate' });
+  mockAuthenticatedFetch.mockClear();
+  mockOnline.value = false;
+}
+
 describe('automatic owner-scoped diagnostic outbox', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -46,6 +57,7 @@ describe('automatic owner-scoped diagnostic outbox', () => {
     mockCurrentOwner.value = 'owner-a';
     await AsyncStorage.clear();
     await _resetAutomaticDiagnosticOutboxForTesting();
+    await authorizeTestOwner('owner-a');
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -68,16 +80,13 @@ describe('automatic owner-scoped diagnostic outbox', () => {
     });
 
     mockOnline.value = true;
-    mockAuthenticatedFetch.mockResolvedValueOnce(new Response(JSON.stringify({
-      enabled: true, tier: 'tier_a', consentVersion: 'owner-qa-v1',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     mockAuthenticatedFetch.mockResolvedValue(new Response(JSON.stringify({
       ok: true, batch_id: 'ack', duplicate: false, server_ingested_at: '2026-10-23T00:00:00.000Z',
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     const drained = await drainAutomaticDiagnosticOutbox('owner-a', { reason: 'network_online' });
     expect(drained).toMatchObject({ acknowledgedEvents: 75, failedBatches: 0 });
-    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(3);
-    for (const [, request] of mockAuthenticatedFetch.mock.calls.slice(1)) {
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+    for (const [, request] of mockAuthenticatedFetch.mock.calls) {
       const body = JSON.parse(request.body);
       expect(body.events.length).toBeLessThanOrEqual(50);
       expect(body.batchId).toMatch(/^diag-v1-/);
@@ -94,7 +103,7 @@ describe('automatic owner-scoped diagnostic outbox', () => {
     });
     if (process.env.CAIRN_OUTBOX_BENCH_OUTPUT) {
       const sorted = captureDurationsMs.slice().sort((left, right) => left - right);
-      const uploadBodies = mockAuthenticatedFetch.mock.calls.slice(1).map(([, request]) => request.body as string);
+      const uploadBodies = mockAuthenticatedFetch.mock.calls.map(([, request]) => request.body as string);
       require('node:fs').writeFileSync(process.env.CAIRN_OUTBOX_BENCH_OUTPUT, `${JSON.stringify({
         schema: 'cairn-automatic-outbox-overhead-benchmark',
         runtime: 'jest-node-v8-with-asyncstorage-mock-not-iphone-hermes',
@@ -114,20 +123,20 @@ describe('automatic owner-scoped diagnostic outbox', () => {
   });
 
   test('keeps a stable idempotent batch after server failure and never crosses owners', async () => {
-    const now = jest.spyOn(Date, 'now').mockReturnValue(10_000_000);
+    const baseNow = Date.now();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(baseNow);
     await captureAutomaticDiagnosticEvent(event(1, 'owner-a'));
+    await authorizeTestOwner('owner-b');
     await captureAutomaticDiagnosticEvent(event(2, 'owner-b'));
+    mockCurrentOwner.value = 'owner-a';
     mockOnline.value = true;
-    mockAuthenticatedFetch.mockResolvedValueOnce(new Response(JSON.stringify({
-      enabled: true, tier: 'tier_a', consentVersion: 'owner-qa-v1',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     mockAuthenticatedFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
     await drainAutomaticDiagnosticOutbox('owner-a', { reason: 'foreground' });
-    const firstBody = JSON.parse(mockAuthenticatedFetch.mock.calls[1][1].body);
-    now.mockReturnValue(10_100_000);
+    const firstBody = JSON.parse(mockAuthenticatedFetch.mock.calls[0][1].body);
+    now.mockReturnValue(baseNow + 100_000);
     mockAuthenticatedFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     await drainAutomaticDiagnosticOutbox('owner-a', { reason: 'foreground' });
-    const retryBody = JSON.parse(mockAuthenticatedFetch.mock.calls[2][1].body);
+    const retryBody = JSON.parse(mockAuthenticatedFetch.mock.calls[1][1].body);
     expect(retryBody.batchId).toBe(firstBody.batchId);
     expect(retryBody.events.map((item: any) => item.details.ordinal)).toEqual([1]);
     expect(await getAutomaticDiagnosticStatus('owner-b', event(0).stream.streamId)).toMatchObject({ pendingCount: 1 });
@@ -200,22 +209,20 @@ describe('automatic owner-scoped diagnostic outbox', () => {
   });
 
   test('replays the same server-committed batch after local ACK persistence fails', async () => {
-    const now = jest.spyOn(Date, 'now').mockReturnValue(20_000_000);
+    const baseNow = Date.now();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(baseNow);
     await captureAutomaticDiagnosticEvent(event(1));
     mockOnline.value = true;
-    mockAuthenticatedFetch.mockResolvedValueOnce(new Response(JSON.stringify({
-      enabled: true, tier: 'tier_a', consentVersion: 'owner-qa-v1',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     mockAuthenticatedFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     (AsyncStorage.multiRemove as jest.Mock).mockRejectedValueOnce(new Error('ack-write-loss'));
     await expect(drainAutomaticDiagnosticOutbox('owner-a', { reason: 'sync' })).resolves.toMatchObject({
       acknowledgedEvents: 0, failedBatches: 1,
     });
-    const committed = JSON.parse(mockAuthenticatedFetch.mock.calls[1][1].body);
-    now.mockReturnValue(20_100_000);
+    const committed = JSON.parse(mockAuthenticatedFetch.mock.calls[0][1].body);
+    now.mockReturnValue(baseNow + 100_000);
     await _resetAutomaticDiagnosticOutboxForTesting();
     await drainAutomaticDiagnosticOutbox('owner-a', { reason: 'foreground' });
-    const replayed = JSON.parse(mockAuthenticatedFetch.mock.calls[2][1].body);
+    const replayed = JSON.parse(mockAuthenticatedFetch.mock.calls[1][1].body);
     expect(replayed.batchId).toBe(committed.batchId);
     expect(replayed.events).toEqual(committed.events);
     expect(await getAutomaticDiagnosticStatus('owner-a', event(0).stream.streamId)).toMatchObject({
@@ -226,9 +233,6 @@ describe('automatic owner-scoped diagnostic outbox', () => {
   test('fails closed and erases queued evidence when the server revokes enrollment', async () => {
     await captureAutomaticDiagnosticEvent(event(1));
     mockOnline.value = true;
-    mockAuthenticatedFetch.mockResolvedValueOnce(new Response(JSON.stringify({
-      enabled: true, tier: 'tier_a', consentVersion: 'owner-qa-v1',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     mockAuthenticatedFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       code: 'DIAGNOSTIC_POLICY_DISABLED',
     }), { status: 403, headers: { 'Content-Type': 'application/json' } }));

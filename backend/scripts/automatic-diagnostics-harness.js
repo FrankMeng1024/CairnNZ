@@ -150,7 +150,9 @@ async function main() {
 
   const pool = require('../src/config/db');
   const {
+    ingestAutomaticDiagnosticBatch,
     purgeExpiredAutomaticDiagnostics,
+    queryAutomaticDiagnostics,
     setAutomaticDiagnosticEnrollment,
   } = require('../src/services/automaticDiagnostics');
   await setAutomaticDiagnosticEnrollment(pool, {
@@ -282,6 +284,120 @@ async function main() {
       checks[`${kind}Query`] = { status: result.status, streams: result.json.count };
     }
 
+    // Retention is anchored to the server's received_at clock. Model Day 31
+    // with a Day 0 batch and a Day 29 batch on the same continuing stream.
+    // The old batch must expire without removing the new batch or stream.
+    await setAutomaticDiagnosticEnrollment(pool, {
+      ownerUserId: 2, enabled: true, tier: 'tier_b', consentVersion: 'owner-qa-tier-b-v1',
+    });
+    for (const input of [
+      { ownerUserId: 1, tier: 'tier-a', retentionDays: 30 },
+      { ownerUserId: 2, tier: 'tier-b', retentionDays: 14 },
+    ]) {
+      await ingestAutomaticDiagnosticBatch(pool, input.ownerUserId, batch({
+        batchId: `retention-${input.tier}-day-0`,
+        streamId: `app:retention-${input.tier}`,
+        sourceType: 'app',
+        ownerEpoch: `epoch-${input.tier}`,
+        sequence: 1,
+      }));
+      await ingestAutomaticDiagnosticBatch(pool, input.ownerUserId, batch({
+        batchId: `retention-${input.tier}-day-29`,
+        streamId: `app:retention-${input.tier}`,
+        sourceType: 'app',
+        ownerEpoch: `epoch-${input.tier}`,
+        sequence: 2,
+      }));
+      await pool.execute(
+        `UPDATE diagnostic_batches
+            SET received_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY),
+                expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND)
+          WHERE owner_user_id = ? AND batch_id = ?`,
+        [input.retentionDays + 1, input.ownerUserId, `retention-${input.tier}-day-0`],
+      );
+      await pool.execute(
+        `UPDATE diagnostic_batches
+            SET received_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 2 DAY),
+                expires_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? DAY)
+          WHERE owner_user_id = ? AND batch_id = ?`,
+        [input.retentionDays - 2, input.ownerUserId, `retention-${input.tier}-day-29`],
+      );
+      await pool.execute(
+        `UPDATE diagnostic_streams
+            SET expires_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? DAY)
+          WHERE owner_user_id = ? AND stream_id = ?`,
+        [input.retentionDays - 2, input.ownerUserId, `app:retention-${input.tier}`],
+      );
+    }
+
+    await ingestAutomaticDiagnosticBatch(pool, 1, batch({
+      batchId: 'retention-fully-expired',
+      streamId: 'app:retention-fully-expired',
+      sourceType: 'app',
+      ownerEpoch: 'epoch-fully-expired',
+      sequence: 1,
+    }));
+    await pool.execute(
+      `UPDATE diagnostic_batches b
+         JOIN diagnostic_streams s ON s.id = b.stream_fk
+          SET b.received_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 31 DAY),
+              b.expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND),
+              s.expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND)
+        WHERE b.owner_user_id = 1 AND b.batch_id = 'retention-fully-expired'`,
+    );
+
+    checks.retentionRowsPurged = await purgeExpiredAutomaticDiagnostics(pool, 500);
+    const [retentionRows] = await pool.execute(
+      `SELECT owner_user_id, batch_id FROM diagnostic_batches
+        WHERE batch_id LIKE 'retention-%' ORDER BY owner_user_id, batch_id`,
+    );
+    checks.retentionRemainingBatches = retentionRows;
+    assert.deepEqual(retentionRows.map(row => row.batch_id), [
+      'retention-tier-a-day-29',
+      'retention-tier-b-day-29',
+    ]);
+    const [expiredStreams] = await pool.execute(
+      "SELECT COUNT(*) AS count FROM diagnostic_streams WHERE stream_id = 'app:retention-fully-expired'",
+    );
+    assert.equal(Number(expiredStreams[0].count), 0);
+    const tierAQuery = await queryAutomaticDiagnostics(pool, { ownerUserId: 1, sourceType: 'app', limit: 20 });
+    const tierAStream = tierAQuery.streams.find(stream => stream.stream_id === 'app:retention-tier-a');
+    assert.ok(tierAStream);
+    assert.deepEqual(tierAStream.batches.map(item => item.batch_id), ['retention-tier-a-day-29']);
+    assert.deepEqual(tierAStream.sequenceGaps, [{ after: 0, before: 2 }]);
+    assert.equal(Number(tierAStream.total_batches), 1);
+    assert.equal(Number(tierAStream.total_events), 1);
+    const tierBQuery = await queryAutomaticDiagnostics(pool, { ownerUserId: 2, sourceType: 'app', limit: 20 });
+    const tierBStream = tierBQuery.streams.find(stream => stream.stream_id === 'app:retention-tier-b');
+    assert.ok(tierBStream);
+    assert.deepEqual(tierBStream.batches.map(item => item.batch_id), ['retention-tier-b-day-29']);
+    checks.retentionCounterexample = {
+      anchor: 'server_received_at',
+      tierAOldGoneNewIntact: true,
+      tierBOldGoneNewIntact: true,
+      fullyExpiredStreamGone: true,
+      tierASequenceGaps: tierAStream.sequenceGaps,
+      crossOwnerStreamsIntact: true,
+    };
+    checks.retentionIdempotentRepeat = await purgeExpiredAutomaticDiagnostics(pool, 500);
+    assert.equal(checks.retentionIdempotentRepeat, 0);
+
+    await ingestAutomaticDiagnosticBatch(pool, 1, batch({
+      batchId: 'retention-fk-cascade',
+      streamId: 'app:retention-fk-cascade',
+      sourceType: 'app',
+      ownerEpoch: 'epoch-fk-cascade',
+      sequence: 1,
+    }));
+    await pool.execute(
+      "DELETE FROM diagnostic_streams WHERE owner_user_id = 1 AND stream_id = 'app:retention-fk-cascade'",
+    );
+    const [cascadeRows] = await pool.execute(
+      "SELECT COUNT(*) AS count FROM diagnostic_batches WHERE owner_user_id = 1 AND batch_id = 'retention-fk-cascade'",
+    );
+    checks.retentionForeignKeyCascade = Number(cascadeRows[0].count) === 0;
+    assert.equal(checks.retentionForeignKeyCascade, true);
+
     const [[streamRows], [batchRows]] = await Promise.all([
       pool.execute('SELECT COUNT(*) AS count FROM diagnostic_streams'),
       pool.execute('SELECT COUNT(*) AS count, COALESCE(SUM(payload_bytes), 0) AS bytes FROM diagnostic_batches'),
@@ -302,9 +418,10 @@ async function main() {
     )).status;
     assert.equal(checks.lateAfterDelete, 410);
 
+    await pool.execute("UPDATE diagnostic_batches SET expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE owner_user_id = 2");
     await pool.execute("UPDATE diagnostic_streams SET expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE owner_user_id = 2");
-    checks.ttlPurgedStreams = await purgeExpiredAutomaticDiagnostics(pool, 500);
-    assert.equal(checks.ttlPurgedStreams, 1);
+    checks.ttlPurgedRows = await purgeExpiredAutomaticDiagnostics(pool, 500);
+    assert.equal(checks.ttlPurgedRows, 4);
 
     const disabled = await setAutomaticDiagnosticEnrollment(pool, {
       ownerUserId: 1, enabled: false, tier: 'tier_a', consentVersion: 'owner-qa-v1-revoked',
