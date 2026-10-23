@@ -377,7 +377,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // on the unchanged Build 65 / 0.2.6-o66 runtime.
 // O88 (2026-10-22): owner-scoped Hike/Run resume continuity, honest retained
 // GPS source health, and faster foreground publication of durable history.
-export const OTA_VERSION = 'O88';
+// O90 (2026-10-23): integrated automatic diagnostics and production backend
+// compatibility candidate on the unchanged Build 65 / 0.2.6-o66 runtime.
+export const OTA_VERSION = 'O90';
 
 
 type OtaState =
