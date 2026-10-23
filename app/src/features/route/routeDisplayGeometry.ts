@@ -24,6 +24,8 @@ export interface RouteRepeatLabel {
 
 export interface RouteDisplayGeometry {
   baseLines: RouteDisplayLine[];
+  /** Display-only non-retraced intervals. Canonical geometry remains in baseLines. */
+  ordinaryLines: RouteDisplayLine[];
   repeatLanes: RouteRepeatLane[];
   repeatLabels: RouteRepeatLabel[];
 }
@@ -42,6 +44,8 @@ const RETRACE_CORRIDOR_M = 3.25;
 const RETRACE_HEADING_DEG = 28;
 const RETRACE_TURN_BRIDGE_M = 18;
 const RETRACE_LABEL_MIN_M = 40;
+const RETRACE_MIN_SUSTAINED_OVERLAP_M = 18;
+const RETRACE_LANE_OFFSET_PX = 3.5;
 
 function clone(point: RoutePoint): RoutePoint {
   return { ...point };
@@ -76,6 +80,13 @@ function headingCompatible(a: DisplaySegment, b: DisplaySegment): boolean {
   if (length <= Number.EPSILON) return false;
   const absoluteCosine = Math.abs((ax * bx + ay * by) / length);
   return absoluteCosine >= Math.cos(RETRACE_HEADING_DEG * Math.PI / 180);
+}
+
+function headingDot(a: DisplaySegment, b: DisplaySegment): number {
+  const [ax, ay] = localMetres(a.b, a.a);
+  const [bx, by] = localMetres(b.b, b.a);
+  const length = Math.hypot(ax, ay) * Math.hypot(bx, by);
+  return length <= Number.EPSILON ? 0 : (ax * bx + ay * by) / length;
 }
 
 function segmentsShareCorridor(a: DisplaySegment, b: DisplaySegment): boolean {
@@ -118,23 +129,99 @@ function traversalMultiplicity(matches: number[]): number {
   return Math.max(2, groups + 1);
 }
 
+function canStep(segments: DisplaySegment[], from: number, to: number): boolean {
+  if (to < 0 || to >= segments.length || Math.abs(to - from) !== 1) return false;
+  return to > from ? !segments[to].breakBefore : !segments[from].breakBefore;
+}
+
+/**
+ * A repeat must persist as ordered travel, not just touch the same corridor in
+ * a few dense/noisy samples. Both sides are already normalized to six-metre
+ * display segments, so this remains stable across provider vertex densities.
+ */
+function sustainedCorridorOverlapM(segments: DisplaySegment[], left: number, right: number): number {
+  const peerDirection = headingDot(segments[left], segments[right]) >= 0 ? 1 : -1;
+  const sourceHeading = segments[left];
+  const peerHeading = segments[right];
+  const localDirectionFloor = Math.cos(40 * Math.PI / 180);
+  let total = routePointDistanceM(segments[left].a, segments[left].b);
+
+  const extend = (sourceDirection: -1 | 1) => {
+    let sourceIndex = left;
+    let peerIndex = right;
+    while (true) {
+      const nextSource = sourceIndex + sourceDirection;
+      if (!canStep(segments, sourceIndex, nextSource)) break;
+      if (headingDot(sourceHeading, segments[nextSource]) < localDirectionFloor) break;
+      let selectedPeer = -1;
+      let cursor = peerIndex;
+      // Subdivision already normalizes both occurrences to six-metre samples.
+      // Advancing exactly one ordered sample prevents a noisy zig-zag from
+      // hopping across several short oscillations and manufacturing one long
+      // apparent traversal.
+      for (let step = 1; step <= 1; step += 1) {
+        const candidate = peerIndex + sourceDirection * peerDirection * step;
+        if (!canStep(segments, cursor, candidate)) break;
+        cursor = candidate;
+        if (Math.abs(candidate - nextSource) <= 2) break;
+        if (headingDot(peerHeading, segments[candidate]) < localDirectionFloor) break;
+        if (segmentsShareCorridor(segments[nextSource], segments[candidate])) {
+          selectedPeer = candidate;
+          break;
+        }
+      }
+      if (selectedPeer < 0) break;
+      sourceIndex = nextSource;
+      peerIndex = selectedPeer;
+      total += routePointDistanceM(segments[sourceIndex].a, segments[sourceIndex].b);
+    }
+  };
+
+  extend(-1);
+  extend(1);
+  return total;
+}
+
+function linesForMask(segments: DisplaySegment[], included: boolean[]): RouteDisplayLine[] {
+  const lines: RouteDisplayLine[] = [];
+  let active: RouteDisplayLine | null = null;
+  segments.forEach((segment, index) => {
+    if (!included[index]) {
+      active = null;
+      return;
+    }
+    if (active && !segment.breakBefore
+      && routePointDistanceM(active.coordinates.at(-1)!, segment.a) <= CONNECTED_M) {
+      active.coordinates.push(clone(segment.b));
+      if (!active.occurrenceIds.includes(segment.occurrenceId)) active.occurrenceIds.push(segment.occurrenceId);
+      return;
+    }
+    active = {
+      id: `ordinary:${segment.id}`,
+      coordinates: [clone(segment.a), clone(segment.b)],
+      occurrenceIds: [segment.occurrenceId],
+    };
+    lines.push(active);
+  });
+  return lines;
+}
+
 /**
  * Build a reversible, screen-space presentation from immutable canonical
  * coordinates. Sampling is used only for overlap recognition; persistence,
  * metrics and navigation keep using the untouched canonical geometry.
  *
- * Repeated intervals remain in the original canonical centerline. Recognition
- * may add a restrained high-zoom traversal label, but never splits or offsets
- * the painted journey. Matching uses corridor and heading, so A-B can match
- * B-M-A without requiring identical endpoint pairs.
+ * Canonical coordinates remain untouched in `baseLines`. Presentation splits
+ * only proven repeated intervals so Mapbox can paint a small directional
+ * offset: consecutive A→B→A legs land on opposite visual sides and keep a
+ * rounded U at the real turn. Matching uses corridor and heading, so A-B can
+ * match B-M-A without requiring identical endpoint pairs.
  */
 export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): RouteDisplayGeometry {
   const gapAfter = new Set(geometry.gaps.map(gap => gap.afterPartId));
-  // Paint the ordered canonical coordinates as one uninterrupted source per
-  // real gap. Repeat recognition may add a restrained annotation, but it must
-  // never remove an interval from this source or move it to another offset
-  // source. Two sources produce independent caps at repeat transitions and
-  // their apparent separation changes with zoom and bearing.
+  // Retain the exact ordered canonical coordinates as a reversible authority
+  // per real gap. The renderer uses `ordinaryLines` plus `repeatLanes`; this
+  // untouched source remains available for fingerprints, metrics and parity.
   const baseLines: RouteDisplayLine[] = [];
   let activeBase: RouteDisplayLine | null = null;
   geometry.parts.forEach((part, partIndex) => {
@@ -169,14 +256,36 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
   });
 
   const matchIndexes = segments.map(() => [] as number[]);
-  for (let left = 0; left < segments.length; left += 1) {
-    for (let right = left + 3; right < segments.length; right += 1) {
-      if (segments[right].breakBefore) continue;
-      if (!segmentsShareCorridor(segments[left], segments[right])) continue;
-      matchIndexes[left].push(right);
-      matchIndexes[right].push(left);
+  // A route can contain hundreds of accepted observations. Compare only
+  // spatially nearby six-metre display segments; an all-pairs scan made a
+  // long Activity-derived Route spend over a second classifying no repeats.
+  const gridOrigin = segments[0]?.a;
+  const gridCellM = DISPLAY_SAMPLE_M + RETRACE_CORRIDOR_M;
+  const grid = new Map<string, number[]>();
+  const cellFor = (segment: DisplaySegment): [number, number] => {
+    const midpoint = interpolate(segment.a, segment.b, 0.5);
+    const [x, y] = localMetres(midpoint, gridOrigin ?? midpoint);
+    return [Math.floor(x / gridCellM), Math.floor(y / gridCellM)];
+  };
+  segments.forEach((segment, right) => {
+    const [cellX, cellY] = cellFor(segment);
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const candidates = grid.get(`${cellX + dx}:${cellY + dy}`) ?? [];
+        for (const left of candidates) {
+          if (right - left < 3 || segment.breakBefore) continue;
+          if (!segmentsShareCorridor(segments[left], segment)) continue;
+          if (sustainedCorridorOverlapM(segments, left, right) < RETRACE_MIN_SUSTAINED_OVERLAP_M) continue;
+          matchIndexes[left].push(right);
+          matchIndexes[right].push(left);
+        }
+      }
     }
-  }
+    const key = `${cellX}:${cellY}`;
+    const bucket = grid.get(key);
+    if (bucket) bucket.push(right);
+    else grid.set(key, [right]);
+  });
   const repeated = matchIndexes.map(matches => matches.length > 0);
 
   // The neighbour guard above intentionally prevents a segment from matching
@@ -210,7 +319,14 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
 
   // Sampling is recognition-only; the base source above always retains the
   // exact canonical vertices.
-  if (!repeated.some(Boolean)) return { baseLines, repeatLanes: [], repeatLabels: [] };
+  if (!repeated.some(Boolean)) return {
+    baseLines,
+    ordinaryLines: baseLines.map(line => ({ ...line, coordinates: line.coordinates.map(clone), occurrenceIds: [...line.occurrenceIds] })),
+    repeatLanes: [],
+    repeatLabels: [],
+  };
+
+  const ordinaryLines = linesForMask(segments, repeated.map(value => !value));
 
   const repeatLanes: RouteRepeatLane[] = [];
   let activeRepeat: RouteRepeatLane | null = null;
@@ -239,9 +355,10 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
           occurrenceIds: [segment.occurrenceId],
           direction: 'forward',
           multiplicity,
-          // Recognition metadata only. The renderer deliberately does not
-          // paint a separately offset lane.
-          offsetPx: 0,
+          // Mapbox applies a positive offset relative to traversal direction.
+          // Consecutive A→B→A legs therefore appear on opposite sides of the
+          // untouched canonical centerline and remain joined by a rounded U.
+          offsetPx: RETRACE_LANE_OFFSET_PX,
         };
       }
       return;
@@ -270,5 +387,5 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
       };
     });
 
-  return { baseLines, repeatLanes, repeatLabels };
+  return { baseLines, ordinaryLines, repeatLanes, repeatLabels };
 }

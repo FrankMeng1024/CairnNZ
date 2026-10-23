@@ -503,7 +503,9 @@ describe('Free Activity integration contracts', () => {
     expect(settings).not.toContain('recordMode:');
     expect(settings).not.toContain('showFriendOverlay:');
     expect(settings).not.toContain('useH3Fog:');
-    expect(ui).toContain('Automatic exploration & encounters');
+    expect(ui.match(/title="Automatic exploration"/g)).toHaveLength(2);
+    expect(ui).not.toContain('title="Automatic exploration & encounters"');
+    expect(ui).toContain('Hike and Run still work when it is Off');
   });
 
   test('background task publishes activation last, clears it first, and requires exact owner identity', () => {

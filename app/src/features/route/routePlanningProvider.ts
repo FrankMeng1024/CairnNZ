@@ -1,5 +1,5 @@
 import type { RoutePoint } from '../../store/useRouteStore';
-import { planWalkingRoute, type WalkingPlanPoint } from '../../services/routing/planWalkingRoute';
+import { planWalkingRoute, type WalkingPlanErrorCode, type WalkingPlanPoint } from '../../services/routing/planWalkingRoute';
 import { matchSegment } from '../../services/routing/mapmatch/MapMatchingClient';
 import type { MatchResult, MatchSegment } from '../../services/routing/mapmatch/types';
 import { douglasPeucker } from '../../utils/strokeSimplify';
@@ -59,7 +59,7 @@ export type DrawPlanResolution =
 export type PointPlanResolution =
   | { outcome: 'accepted'; points: RoutePoint[]; providerStartShiftM: number; providerTargetShiftM: number }
   | { outcome: 'review'; points: RoutePoint[]; reason: RouteProviderReason; providerStartShiftM: number; providerTargetShiftM: number }
-  | { outcome: 'rejected'; reason: RouteProviderReason };
+  | { outcome: 'rejected'; reason: RouteProviderReason; providerCode?: WalkingPlanErrorCode };
 
 export type DrawMatcher = (segment: MatchSegment, options?: { signal?: AbortSignal }) => Promise<MatchResult>;
 export type PointRouter = (
@@ -614,6 +614,7 @@ export async function resolvePointPlan(
     return {
       outcome: 'rejected',
       reason: error?.code === 'NO_ROUTE' ? 'no-route' : 'provider-unavailable',
+      ...(typeof error?.code === 'string' ? { providerCode: error.code as WalkingPlanErrorCode } : {}),
     };
   }
 }

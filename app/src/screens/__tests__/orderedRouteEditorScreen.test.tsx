@@ -111,7 +111,10 @@ jest.mock('../../components/Icon', () => {
   const ReactModule = require('react'); const { View } = require('react-native');
   return { Icon: ({ name }: any) => ReactModule.createElement(View, { testID: `icon-${name}` }) };
 });
-jest.mock('../../components/MapLoadOverlay', () => ({ MapLoadOverlay: () => null }));
+jest.mock('../../components/MapLoadOverlay', () => {
+  const ReactModule = require('react'); const { View } = require('react-native');
+  return { MapLoadOverlay: ({ testID, state, onRetry }: any) => ReactModule.createElement(View, { testID, state, onRetry }) };
+});
 jest.mock('../../components/ModalCard', () => {
   const ReactModule = require('react'); const { Text, View } = require('react-native');
   return {
@@ -346,23 +349,62 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(mockMemorySubscriptions).toEqual([{ friend_id: 11, friend_name: 'First Friend' }]);
   });
 
-  test('a terminal Friend source failure clears Route Fog pending and exposes unavailable semantics', async () => {
+  test('a terminal Friend source failure uses one central fail-closed status and keeps the checkbox immediate', async () => {
     mockMemorySubscriptions = [{ friend_id: 11, friend_name: 'First Friend' }];
     mockFriendSourceStates = { '11': { status: 'error', cellCount: 0, error: 'Unavailable' } };
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     fireEvent.press(screen.getByTestId('route-more'));
     fireEvent.press(screen.getByText('Mine & Friends'));
-    const combined = screen.getByLabelText('Mine and Friends exploration unavailable');
-    expect(combined.props.accessibilityState).toMatchObject({ selected: true, busy: false });
-    expect(screen.getByText('Shared exploration couldn’t refresh. Mine stays visible.')).toBeTruthy();
+    const combined = screen.getByLabelText('Mine and Friends exploration');
+    expect(combined.props.accessibilityState).toMatchObject({ selected: true, disabled: false });
+    expect(combined.props.accessibilityState.busy).toBeUndefined();
     expect(screen.queryByText('No shared Friend Fog is available. Mine stays visible.')).toBeNull();
     act(() => {
       mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('failed-scene', false);
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogUnavailable?.('failed-scene');
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingMapFully');
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
     });
-    await waitFor(() => expect(
-      screen.getByLabelText('Mine and Friends exploration unavailable').props.accessibilityState.busy,
-    ).toBe(false));
+    expect(await screen.findByText('Shared exploration could not refresh. Mine remains visible.')).toBeTruthy();
+    expect(screen.getByTestId('route-scene-retry')).toBeTruthy();
+    expect(screen.queryByText('Updating exploration…')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-scene-retry'));
+    expect(mockLoadSelectedProjections).toHaveBeenCalledTimes(1);
+  });
+
+  test('R01 cold Route scene waits for the exact Mapbox-painted Fog authority and rejects stale callbacks', async () => {
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    expect(screen.getByTestId('ordered-route-map-load-overlay')).toBeTruthy();
+
+    act(() => {
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingMapFully');
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-old', false);
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-current', false);
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-old', ['memory-fog-src']);
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
+    });
+    expect(screen.getByTestId('ordered-route-map-load-overlay')).toBeTruthy();
+
+    act(() => {
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-current', ['memory-fog-src']);
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
+    });
+    await waitFor(() => expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull());
+  });
+
+  test('R04/R08 Friends scope and picker operations never move the Route camera', async () => {
+    mockMemorySubscriptions = [{ friend_id: 11, friend_name: 'First Friend' }];
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    mockCameraSet.mockClear();
+    mockCameraFit.mockClear();
+    fireEvent.press(screen.getByTestId('route-more'));
+    fireEvent.press(screen.getByText('Mine & Friends'));
+    fireEvent.press(screen.getByTestId('route-friend-picker-open'));
+    expect(mockCameraSet).not.toHaveBeenCalled();
+    expect(mockCameraFit).not.toHaveBeenCalled();
   });
 
   test('a new Create Route inherits Memory scope once while the active editor remains independent', async () => {
@@ -740,6 +782,14 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(repeat[0].properties.text).toBe('2 passes');
     expect(repeat[0].geometry).toMatchObject({
       type: 'Point', coordinates: [expect.any(Number), expect.any(Number)],
+    });
+    const repeatLane = screen.getByTestId('source-ordered-route-repeat-lanes').props.shape.features;
+    expect(repeatLane).toHaveLength(1);
+    expect(repeatLane[0].properties.offsetPx).toBeGreaterThan(0);
+    expect(screen.getByTestId('layer-ordered-route-repeat-lane-line').props.style).toMatchObject({
+      lineOffset: ['get', 'offsetPx'],
+      lineCap: 'round',
+      lineJoin: 'round',
     });
     fireEvent.press(screen.getByLabelText('Undo last Route edit'));
     expect(screen.queryByTestId('source-ordered-route-repeat-labels')).toBeNull();
@@ -1152,6 +1202,34 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByTestId('route-point-confirm')).toBeTruthy();
     expect(mockResolvePoint).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(true);
+  });
+
+  test('R03 classified Point failure keeps the editor usable for the next Point and Draw', async () => {
+    mockResolvePoint
+      .mockResolvedValueOnce({ outcome: 'rejected', reason: 'provider-unavailable', providerCode: 'NETWORK' })
+      .mockResolvedValueOnce({
+        outcome: 'accepted',
+        points: [
+          { lat: -41.2865, lng: 174.7782 },
+          { lat: -41.2862, lng: 174.7777 },
+        ],
+      });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    expect(await screen.findByText('Walking routing needs a connection. Your Route is unchanged.')).toBeTruthy();
+    expect(screen.getByTestId('route-point-confirm')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    await waitFor(() => expect(mockResolvePoint).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('route-provider-progress')).toBeNull());
+    expect(screen.getByTestId('route-point-context')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('route-tool-draw'));
+    fireEvent.press(screen.getByTestId('emit-route-stroke'));
+    await waitFor(() => expect(mockResolveDraw).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId('route-provider-progress')).toBeNull());
   });
 
   test('R8 failed Point remains in Point mode without Retry or Cancel workflow', async () => {

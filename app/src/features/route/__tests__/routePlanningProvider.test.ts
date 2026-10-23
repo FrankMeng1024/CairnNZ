@@ -1,4 +1,5 @@
 import type { MatchResult } from '../../../services/routing/mapmatch/types';
+import { WalkingPlanError } from '../../../services/routing/planWalkingRoute';
 import {
   ROUTE_MATCH_CHUNK_COORDINATES,
   chunkOrderedTrace,
@@ -224,6 +225,19 @@ describe('Route planning provider boundaries', () => {
       points: [start, p(40, 0), snappedTarget],
     });
     expect(result.outcome === 'accepted' && result.providerTargetShiftM).toBeCloseTo(7, 0);
+  });
+
+  test.each([
+    ['NO_TOKEN', 'provider-unavailable'],
+    ['UNAUTHORIZED', 'provider-unavailable'],
+    ['RATE_LIMIT', 'provider-unavailable'],
+    ['NETWORK', 'provider-unavailable'],
+    ['NO_ROUTE', 'no-route'],
+  ] as const)('Point preserves the provider failure class %s for recovery UI', async (providerCode, reason) => {
+    const result = await resolvePointPlan(p(0, 0), p(80, 0), {
+      router: async () => { throw new WalkingPlanError(providerCode); },
+    });
+    expect(result).toEqual({ outcome: 'rejected', reason, providerCode });
   });
 
   test('multiple Map Matching submatches are never concatenated', async () => {

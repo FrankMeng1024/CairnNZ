@@ -24,6 +24,7 @@ const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
 const outputDir = path.resolve(process.env.CAIRN_O86_MEMORY_MAPBOX_OUTPUT || '/tmp/cairn-o86-memory-mapbox-performance');
 const trialCount = Number(process.env.CAIRN_O86_MEMORY_TRIALS || 20);
+const captureO91VisualExtras = process.env.CAIRN_O91_VISUAL_EXTRAS === '1';
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(outputDir, { recursive: true });
 
@@ -484,6 +485,31 @@ try {
               error: error?.stack || String(error),
               pass: false,
             });
+          }
+          if (captureO91VisualExtras) {
+            await page.setViewportSize({ width: 430, height: 932 });
+            await page.waitForTimeout(350);
+            await page.screenshot({ path: path.join(outputDir, 'friends-composite-actual-mapbox-430x932.png') });
+            const ornaments = page.locator('.mapboxgl-ctrl-bottom-left');
+            if (await ornaments.count()) {
+              await ornaments.screenshot({ path: path.join(outputDir, 'mapbox-logo-info-bottom-left-web.png') });
+            }
+            await page.evaluate(() => {
+              globalThis.__cairnStores.navigationRef.reset({ index: 0, routes: [{ name: 'Home' }] });
+            });
+            await page.waitForTimeout(250);
+            await page.evaluate(() => {
+              globalThis.__cairnStores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'Memory' }] });
+            });
+            await page.getByTestId('memory-back').waitFor({ state: 'visible', timeout: 5_000 });
+            await page.waitForTimeout(350);
+            await page.screenshot({ path: path.join(outputDir, 'memory-second-entry-shell-430x932.png') });
+            await page.evaluate(() => {
+              globalThis.__cairnStores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'Settings' }] });
+            });
+            const automaticExploration = page.getByTestId('settings-explore-open');
+            await automaticExploration.waitFor({ state: 'visible', timeout: 5_000 });
+            await page.screenshot({ path: path.join(outputDir, 'settings-automatic-exploration-430x932.png') });
           }
         }
       } catch (error) {

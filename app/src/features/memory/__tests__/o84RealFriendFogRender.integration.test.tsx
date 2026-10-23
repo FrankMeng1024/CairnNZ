@@ -54,6 +54,7 @@ import { useActivitySimulatorStore } from '../../activitySimulator/useActivitySi
 import {
   FogLayer,
   memoryFogSafeFallbackPresentationKey,
+  memoryFogSceneMatchesSelection,
   memoryFogSceneRemainsAuthorized,
 } from '../components/FogLayer';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
@@ -88,6 +89,18 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
       nowMs: 1_000,
     };
     expect(memoryFogSceneRemainsAuthorized(common)).toBe(true);
+    expect(memoryFogSceneMatchesSelection({ ...common, scope: 'combined' })).toBe(true);
+    expect(memoryFogSceneMatchesSelection({
+      ...common,
+      scope: 'combined',
+      selectedFriendIds: ['31', '32'],
+      authorizedSourceVersions: { '31': 7, '32': 9 },
+    })).toBe(false);
+    expect(memoryFogSceneMatchesSelection({
+      ...common,
+      scope: 'self',
+      selectedFriendIds: [],
+    })).toBe(false);
     expect(memoryFogSceneRemainsAuthorized({
       ...common,
       authorizedSourceVersions: { '31': 8 },

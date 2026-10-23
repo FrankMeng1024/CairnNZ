@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
 
 jest.setTimeout(15_000);
 
@@ -157,7 +157,38 @@ describe('Memory friend picker interaction owner', () => {
         sourceStates: { '11': { status: 'error', cellCount: 0, error: 'network' } },
       });
     });
-    await waitFor(() => expect(screen.getByText('Couldn’t load shared places · Retry')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText('Couldn’t load shared places · Retry')).toBeNull());
+  });
+
+  test('reflects selection intent immediately without a row spinner while the mutation is pending', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    useMemorySubscriptionsStore.setState({
+      availableSources: sources,
+      subscriptions: [],
+      loading: false,
+      error: null,
+    });
+    mockAuthenticatedFetch.mockImplementation(async (path: string, init: any = {}) => {
+      if (path === '/api/memory-subscriptions' && init.method === 'POST') {
+        await pending;
+        return ok({}, 201);
+      }
+      if (path === '/api/memory-subscriptions') return ok({ limit: null, count: 0, subscriptions: [] });
+      if (path === '/api/friend-sharing/sources') return ok({ sources });
+      throw new Error(`unexpected ${init.method ?? 'GET'} ${path}`);
+    });
+
+    const screen = render(<MemoryFriendPickModal visible onClose={jest.fn()} />);
+    await waitFor(() => expect(screen.getByTestId('memory-friend-row-11')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('memory-friend-row-11'));
+
+    expect(screen.getByTestId('memory-friend-row-11').props.accessibilityState).toMatchObject({ checked: true });
+    expect(screen.getByTestId('memory-friend-row-accessory-11').findAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(screen.queryByText(/Could not update|Couldn’t load shared places/i)).toBeNull();
+
+    release();
+    await waitFor(() => expect(useMemorySubscriptionsStore.getState().subscriptions.map(item => item.friend_id)).toContain(11));
   });
 
   test('shows an initial list-load failure and retries in place without clearing a valid selection', async () => {

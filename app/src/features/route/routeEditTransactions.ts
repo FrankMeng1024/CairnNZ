@@ -313,19 +313,43 @@ function intervalShapeScore(draft: OrderedRouteDraft, raw: RoutePoint[], option:
       + directionPenalty(rawExit, raw.at(-1)!, oldExit, interval.at(-1)!)) * 18;
 }
 
+function intervalAttachmentScore(
+  draft: OrderedRouteDraft,
+  raw: RoutePoint[],
+  option: RouteIntervalCandidate,
+): number {
+  const start = orderedPositionPoint(draft, option.start);
+  const end = orderedPositionPoint(draft, option.end);
+  if (!start || !end || raw.length < 2) return Number.POSITIVE_INFINITY;
+  const entry = option.reverseCandidate ? end : start;
+  const exit = option.reverseCandidate ? start : end;
+  return routePointDistanceM(raw[0], entry) + routePointDistanceM(raw.at(-1)!, exit);
+}
+
 function unambiguousInterval(
   draft: OrderedRouteDraft,
   raw: RoutePoint[],
   options: RouteIntervalCandidate[],
 ): RouteIntervalCandidate | null {
   if (options.length === 1) return options[0];
-  const ranked = options.map(option => ({ option, score: intervalShapeScore(draft, raw, option) }))
-    .sort((a, b) => a.score - b.score);
+  const ranked = options.map(option => {
+    const shapeScore = intervalShapeScore(draft, raw, option);
+    const attachmentScore = intervalAttachmentScore(draft, raw, option);
+    return { option, shapeScore, attachmentScore, score: shapeScore + attachmentScore * 2 };
+  }).sort((a, b) => a.score - b.score);
   const [best, second] = ranked;
   if (!best || !Number.isFinite(best.score) || !second) return best?.option ?? null;
+  // Exact/near-exact finger-down and finger-up evidence is stronger than a
+  // different ordered occurrence merely sharing the same nearby corridor.
+  // This resolves an ordinary correction beside a later parallel/retraced
+  // lane. Exact repeated occurrences retain equal attachment scores and still
+  // fail closed below; interval length is never used as a tie-breaker.
+  if (second.attachmentScore - best.attachmentScore >= 2) return best.option;
   // Whole-stroke shape and local direction resolve ordinary crossings. Equal
-  // repeated laps stay unresolved; interval length is never the tie-breaker.
-  return second.score - best.score >= Math.max(8, best.score * 0.22) ? best.option : null;
+  // repeated laps stay unresolved.
+  return second.shapeScore - best.shapeScore >= Math.max(8, best.shapeScore * 0.22)
+    ? best.option
+    : null;
 }
 
 function intervalOptions(
@@ -389,7 +413,11 @@ export interface DrawTransactionDiagnostics {
   attachmentToleranceM: number;
   startCandidates: RouteAnchorCandidate[];
   endCandidates: RouteAnchorCandidate[];
-  intervalCandidates: Array<RouteIntervalCandidate & { shapeScore: number }>;
+  intervalCandidates: Array<RouteIntervalCandidate & {
+    shapeScore: number;
+    attachmentScore: number;
+    selectionScore: number;
+  }>;
   selectedIntervalId: string | null;
   ambiguityReason: 'competing-start-occurrences' | 'competing-end-occurrences' | 'near-equal-intervals' | 'none';
   interiorCrossingCount: number;
@@ -421,7 +449,11 @@ export function classifyDrawTransactionWithDiagnostics(
       attachmentToleranceM: toleranceM,
       startCandidates: starts,
       endCandidates: ends,
-      intervalCandidates: options.map(option => ({ ...option, shapeScore: intervalShapeScore(draft, raw, option) })),
+      intervalCandidates: options.map(option => {
+        const shapeScore = intervalShapeScore(draft, raw, option);
+        const attachmentScore = intervalAttachmentScore(draft, raw, option);
+        return { ...option, shapeScore, attachmentScore, selectionScore: shapeScore + attachmentScore * 2 };
+      }),
       selectedIntervalId,
       ambiguityReason,
       interiorCrossingCount: interiorCrossingCount(draft, raw),

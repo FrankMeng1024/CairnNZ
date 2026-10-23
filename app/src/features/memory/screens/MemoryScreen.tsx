@@ -76,6 +76,10 @@ import {
   memoryMinePreviewCanRender,
 } from '../services/memoryEntryPresentation';
 import { memoryUserLocationShouldMount } from '../services/memoryLocationOwnership';
+import {
+  memoryFogPreparingMayClearFailure,
+  memoryFogTargetFailureVisible,
+} from '../services/memoryFogReadiness';
 import { claimMemoryGuidance } from '../services/memoryGuidance';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
@@ -246,6 +250,9 @@ export function MemoryScreen() {
   const [fogPresentationVersion, setFogPresentationVersion] = useState(0);
   const [fogScenePending, setFogScenePending] = useState(false);
   const [fogUnavailable, setFogUnavailable] = useState(false);
+  const fogTargetReadinessKeyRef = useRef('');
+  const fogReadyReadinessKeyRef = useRef('');
+  const fogUnavailableReadinessKeyRef = useRef('');
   const entryUsableRef = useRef(false);
   const [entryVeilMounted, setEntryVeilMounted] = useState(true);
   const entryVeilOpacity = useRef(new Animated.Value(1)).current;
@@ -254,9 +261,15 @@ export function MemoryScreen() {
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
+  const retrySelectionIntents = useMemorySubscriptionsStore((s) => s.retrySelectionIntents);
+  const selectionError = useMemorySubscriptionsStore((s) => s.selectionError);
   const hydrateFriendProjections = useFriendMemoryStore((s) => s.hydrate);
   const friendProjectionError = useFriendMemoryStore((s) => s.error);
   const friendMemoryVersion = useFriendMemoryStore((s) => s.version);
+  const hasVisibleFriendCoverage = useMemo(
+    () => memoryScope !== 'self' && useFriendMemoryStore.getState().getVisibleGeometries().length > 0,
+    [friendMemoryVersion, memoryScope],
+  );
   const userId = useAppStore((s) => s.user?.id ?? null);
   const activeOwnerId = userId == null ? null : String(userId);
   const cameraOwnerId = useMemoryCameraStore((s) => s.ownerId);
@@ -347,6 +360,9 @@ export function MemoryScreen() {
     qaReadinessTimersRef.current = [];
     qaReadinessScheduledRef.current.clear();
     entryUsableRef.current = false;
+    fogTargetReadinessKeyRef.current = '';
+    fogReadyReadinessKeyRef.current = '';
+    fogUnavailableReadinessKeyRef.current = '';
     setEntryVeilMounted(true);
     entryVeilOpacity.setValue(1);
     setMapReady(false);
@@ -395,7 +411,7 @@ export function MemoryScreen() {
     return () => clearTimeout(timer);
   }, [debugMode, mountKey]);
 
-  const deliverReadiness = useCallback((kind: 'map' | 'fog', sourceMountKey: number, apply: () => void) => {
+  const deliverReadiness = useCallback((kind: 'map' | 'fog', sourceMountKey: number, apply: () => void, authorityKey = 'entry') => {
     const qaRoot = globalThis as typeof globalThis & {
       __cairnMemoryQaConfig?: {
         controlledReadiness?: boolean;
@@ -414,7 +430,10 @@ export function MemoryScreen() {
     const configuredDelay = Platform.OS === 'web' && debugMode
       ? Number(qaRoot.__cairnMemoryQaConfig?.readinessDelayMs ?? 0)
       : 0;
-    const deliveryKey = `${sourceMountKey}:${kind}`;
+    // Map is one-shot per mount; Fog can publish many exact authorities while
+    // the retained MapView stays mounted. Keying only by `kind` dropped every
+    // Friends/Mine readiness after the first scene and left the loader stuck.
+    const deliveryKey = `${sourceMountKey}:${kind}:${authorityKey}`;
     if (qaReadinessScheduledRef.current.has(deliveryKey)) return;
     qaReadinessScheduledRef.current.add(deliveryKey);
     const elapsedMs = Date.now() - entryStartedAtRef.current;
@@ -446,6 +465,23 @@ export function MemoryScreen() {
       return next;
     });
   };
+
+  const handleRetrySharedMap = useCallback(() => {
+    fogUnavailableReadinessKeyRef.current = '';
+    setFogUnavailable(false);
+    setFogScenePending(true);
+    void (async () => {
+      await retrySelectionIntents();
+      await loadSubs();
+      const viewport = mapRef.current?.getCoverageViewport();
+      const selectionStillPending = Object.keys(
+        useMemorySubscriptionsStore.getState().selectionPending,
+      ).length > 0;
+      if (viewport && !selectionStillPending) {
+        await useFriendMemoryStore.getState().loadSelectedProjections(undefined, viewport);
+      }
+    })();
+  }, [loadSubs, retrySelectionIntents]);
 
   const initialMemoryOffline = Boolean(
     userId
@@ -610,6 +646,11 @@ export function MemoryScreen() {
         const authorityLoaded = await loadSubs();
         if (!focusActive || authorityLoaded === false
           || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
+        await retrySelectionIntents();
+        if (!focusActive || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
+        const selectionStillPending = Object.keys(
+          useMemorySubscriptionsStore.getState().selectionPending,
+        ).length > 0;
         // MemoryMap stays mounted between tabs. Reclaim its exact viewport
         // after fresh authorization: Route can legitimately have replaced the
         // singleton prepared/Friends viewport while Memory was blurred, and
@@ -619,7 +660,9 @@ export function MemoryScreen() {
         if (memoryViewport) {
           await Promise.all([
             usePreparedMemoryCoverageStore.getState().loadViewport(memoryViewport),
-            useFriendMemoryStore.getState().loadSelectedProjections(undefined, memoryViewport),
+            selectionStillPending
+              ? Promise.resolve()
+              : useFriendMemoryStore.getState().loadSelectedProjections(undefined, memoryViewport),
           ]);
         }
         if (!focusActive || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
@@ -644,7 +687,7 @@ export function MemoryScreen() {
         // while inside the tab can never be diagnosed otherwise.
         void flushLogsNow();
       };
-    }, [hydrateFriendProjections, loadCircleMarkers, loadSubs])
+    }, [hydrateFriendProjections, loadCircleMarkers, loadSubs, retrySelectionIntents])
   );
 
   // R4 + S1: only fetch a one-shot fix when (a) user explicitly
@@ -825,6 +868,12 @@ export function MemoryScreen() {
 
   const mapMayBeShown = Boolean(persistentCoord);
   const memoryEntryUsable = mapMayBeShown && mapReady && (fogReady || fogUnavailable);
+  const targetFriendFailureVisible = memoryFogTargetFailureVisible({
+    combinedScope: memoryScope !== 'self',
+    failure: selectionError ?? friendProjectionError,
+    targetReadinessKey: fogTargetReadinessKeyRef.current,
+    readyReadinessKey: fogReadyReadinessKeyRef.current,
+  });
   const authorizedPreviewUri = memoryMinePreviewCanRender({
     scope: memoryScope,
     ownerId: activeOwnerId,
@@ -1042,46 +1091,38 @@ export function MemoryScreen() {
           (user navigates back to Home), releasing GPS watcher + h3
           + memory-store subscriptions. */}
       <ForegroundUnlockManager />
-      {/* V9: Back button matches Hiking — pill variant + safe-area top inset
-          so it doesn't intrude into the Dynamic Island area. */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 24 }]} pointerEvents="box-none">
-        <BackButton variant="pill" onPress={() => nav.goBack()} />
+      {/* The screen chrome is independent from Mapbox/Fog readiness. It stays
+          interactive on cold entry, warm re-entry and retained-scene refresh. */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        <View style={[styles.memoryBackSurface, { backgroundColor: theme.mapOverlay }]}>
+          <BackButton variant="inline" onPress={() => nav.goBack()} testID="memory-back" />
+        </View>
         {/* v376: Pick icon 移到 MemoryScopeToggle 内部作为第三个 segment,
             scope=friends 时 width+opacity 展开,scope=mine 时 collapse 到 0
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
-        <MemoryScopeToggle
-          onPickPress={openFriendPicker}
-        />
+        <View style={styles.topActions}>
+          <TouchableOpacity
+            testID="memory-all-cairns-entry"
+            style={[styles.libraryAction, { backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
+            onPress={() => nav.navigate('AllCairns')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={acquiredUnreadCount > 0
+              ? `Open Cairn Library, ${acquiredUnreadCount} unread Cairn groups`
+              : 'Open Cairn Library'}
+          >
+            <Icon name="MapPin" size={17} color={theme.iconActive} strokeWidth={2.1} />
+            {acquiredUnreadCount > 0 ? (
+              <View style={[styles.libraryUnread, { backgroundColor: theme.primary }]}>
+                <Text style={[styles.libraryUnreadText, { color: theme.onPrimary }]}>
+                  {acquiredUnreadCount > 99 ? '99+' : acquiredUnreadCount}
+                </Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+          <MemoryScopeToggle onPickPress={openFriendPicker} />
+        </View>
       </View>
-      <TouchableOpacity
-        testID="memory-all-cairns-entry"
-        style={[
-          styles.allCairnsEntry,
-          {
-            top: insets.top + 72,
-            backgroundColor: theme.mapOverlay,
-            borderColor: theme.borderStrong,
-            shadowColor: theme.shadow,
-          },
-        ]}
-        onPress={() => nav.navigate('AllCairns')}
-        activeOpacity={0.86}
-        accessibilityRole="button"
-        accessibilityLabel={acquiredUnreadCount > 0
-          ? `Open Cairn Library, ${acquiredUnreadCount} unread Cairn groups`
-          : 'Open Cairn Library'}
-      >
-        <Icon name="MapPin" size={16} color={theme.iconActive} strokeWidth={2} />
-        <Text style={[styles.allCairnsEntryText, { color: theme.foreground }]}>Cairn Library</Text>
-        {acquiredUnreadCount > 0 ? (
-          <View style={[styles.allCairnsUnread, { backgroundColor: theme.primary }]}>
-            <Text style={[styles.allCairnsUnreadText, { color: theme.onPrimary }]}>
-              {acquiredUnreadCount > 99 ? '99+' : acquiredUnreadCount}
-            </Text>
-          </View>
-        ) : null}
-        <Icon name="ChevronRight" size={14} color={theme.iconInactive} strokeWidth={2} />
-      </TouchableOpacity>
       {syntheticQaAuthority ? (
         <View
           testID="memory-evidence-context"
@@ -1140,24 +1181,40 @@ export function MemoryScreen() {
             deliverReadiness('map', mountKey, () => setMapReady(true));
           }}
           onMapUnavailable={() => handleMapUnavailable(mountKey)}
-          onFogPreparing={(_readinessKey, retainsDisplayedScene) => {
+          onFogPreparing={(readinessKey, _retainsDisplayedScene) => {
             if (mountKeyRef.current !== mountKey) return;
-            setFogUnavailable(false);
-            setFogScenePending(retainsDisplayedScene);
+            fogTargetReadinessKeyRef.current = readinessKey;
+            // FogLayer may classify a cold request failure in an earlier
+            // effect than its Preparing callback for the same authority.
+            // Never let that later callback erase the already-classified
+            // error; Retry clears this ref before starting fresh work.
+            if (memoryFogPreparingMayClearFailure(
+              fogUnavailableReadinessKeyRef.current,
+              readinessKey,
+            )) {
+              setFogUnavailable(false);
+            }
+            setFogScenePending(fogReadyReadinessKeyRef.current !== readinessKey);
             if (!entryUsableRef.current) setFogReady(false);
           }}
-          onFogReady={() => {
+          onFogReady={(readinessKey) => {
             if (mountKeyRef.current !== mountKey) return;
+            if (fogTargetReadinessKeyRef.current && fogTargetReadinessKeyRef.current !== readinessKey) return;
             log('v359.fog_ready_cb', {});
             deliverReadiness('fog', mountKey, () => {
+              if (fogTargetReadinessKeyRef.current && fogTargetReadinessKeyRef.current !== readinessKey) return;
+              fogReadyReadinessKeyRef.current = readinessKey;
+              fogUnavailableReadinessKeyRef.current = '';
               setFogUnavailable(false);
               setFogScenePending(false);
               setFogReady(true);
               setFogPresentationVersion(value => value + 1);
-            });
+            }, readinessKey);
           }}
-          onFogUnavailable={() => {
+          onFogUnavailable={(readinessKey) => {
             if (mountKeyRef.current !== mountKey) return;
+            if (fogTargetReadinessKeyRef.current && fogTargetReadinessKeyRef.current !== readinessKey) return;
+            fogUnavailableReadinessKeyRef.current = readinessKey;
             if (!entryUsableRef.current) setFogReady(false);
             setFogScenePending(false);
             setFogUnavailable(true);
@@ -1212,7 +1269,7 @@ export function MemoryScreen() {
       {entryVeilMounted && !failReason ? (
         <Animated.View
           pointerEvents={memoryEntryUsable ? 'none' : 'auto'}
-          style={[StyleSheet.absoluteFill, { opacity: entryVeilOpacity, zIndex: 30, backgroundColor: theme.background }]}
+          style={[StyleSheet.absoluteFill, { opacity: entryVeilOpacity, zIndex: 7, backgroundColor: theme.background }]}
           testID="memory-entry-veil"
         >
           {authorizedPreviewUri ? (
@@ -1370,7 +1427,7 @@ export function MemoryScreen() {
       ) : null}
 
       {memoryEntryUsable && (cameraTransitionState
-        || (memoryScope !== 'self' && (friendProjectionError || fogUnavailable || fogScenePending))) ? (
+        || (memoryScope !== 'self' && (fogUnavailable || targetFriendFailureVisible || fogScenePending))) ? (
         <View
           style={[styles.mapStatusRegion, { top: insets.top + 116, bottom: insets.bottom + 92 }]}
           pointerEvents="box-none"
@@ -1378,44 +1435,59 @@ export function MemoryScreen() {
         >
           <TouchableOpacity
             style={[styles.mapStatusCard, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
-            disabled={!friendProjectionError && !fogUnavailable && cameraTransitionState !== 'error' && cameraTransitionState !== 'slow'}
+            disabled={!fogUnavailable && !targetFriendFailureVisible && cameraTransitionState !== 'error'}
             onPress={() => {
-              if (cameraTransitionState === 'error' || cameraTransitionState === 'slow') {
+              if (cameraTransitionState === 'error') {
                 handleRetryLoad();
                 return;
               }
-              if (friendProjectionError) {
-                const viewport = mapRef.current?.getCoverageViewport();
-                if (viewport) void useFriendMemoryStore.getState().loadSelectedProjections(undefined, viewport);
+              if (fogUnavailable || targetFriendFailureVisible) {
+                handleRetrySharedMap();
                 return;
               }
-              handleRetryLoad();
             }}
-            accessibilityRole={friendProjectionError || fogUnavailable || cameraTransitionState === 'error' || cameraTransitionState === 'slow' ? 'button' : undefined}
-            accessibilityLabel={friendProjectionError || fogUnavailable || cameraTransitionState === 'error' || cameraTransitionState === 'slow' ? 'Retry loading map' : 'Loading map'}
+            accessibilityRole={fogUnavailable || targetFriendFailureVisible || cameraTransitionState === 'error' ? 'button' : undefined}
+            accessibilityLabel={fogUnavailable || targetFriendFailureVisible || cameraTransitionState === 'error' ? 'Retry loading map' : 'Loading map'}
             testID="memory-map-status"
           >
-            {friendProjectionError || fogUnavailable || cameraTransitionState === 'error' ? (
-              <Icon name={friendProjectionError === 'offline' ? 'CloudOff' : 'RotateCcw'} size={15} color={theme.iconInactive} strokeWidth={2.2} />
+            {fogUnavailable || targetFriendFailureVisible || cameraTransitionState === 'error' ? (
+              <Icon name={(selectionError ?? friendProjectionError) === 'offline' ? 'CloudOff' : 'RotateCcw'} size={15} color={theme.iconInactive} strokeWidth={2.2} />
             ) : (
               <ActivityIndicator color={theme.primary} size="small" />
             )}
             <Text style={[styles.mapStatusText, { color: theme.foreground }]} numberOfLines={2}>
               {cameraTransitionState === 'error'
                 ? 'Map tiles couldn’t load · Tap to retry'
-                : cameraTransitionState === 'slow'
-                  ? 'This map is taking longer · Tap to retry'
-                  : cameraTransitionState === 'loading'
+                : cameraTransitionState === 'loading'
                     ? 'Loading this place…'
-                    : friendProjectionError === 'offline'
+                    : (selectionError ?? friendProjectionError) === 'offline'
                 ? 'Connect to load shared places · Tap to retry'
-                : friendProjectionError === 'unauthorized'
+                : (selectionError ?? friendProjectionError) === 'unauthorized'
                   ? 'Shared places are no longer available · Tap to refresh'
-                  : friendProjectionError || fogUnavailable
+                  : fogUnavailable
                     ? 'Shared map couldn’t load · Tap to retry'
                     : 'Loading shared map…'}
             </Text>
           </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {memoryEntryUsable && hasVisibleFriendCoverage && !fogScenePending && !fogUnavailable ? (
+        <View
+          style={[styles.memoryLegend, { bottom: insets.bottom + 72, backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          pointerEvents="none"
+          testID="memory-friends-legend"
+        >
+          {[
+            ['Mine', theme.mapMineMemoryFill],
+            ['Friends', theme.mapFriendMemoryFill],
+            ['Both', theme.mapMemoryOverlapFill],
+          ].map(([label, color]) => (
+            <View key={label} style={styles.memoryLegendItem}>
+              <View style={[styles.memoryLegendSwatch, { backgroundColor: color }]} />
+              <Text style={[styles.memoryLegendText, { color: theme.foreground }]}>{label}</Text>
+            </View>
+          ))}
         </View>
       ) : null}
 
@@ -1654,32 +1726,34 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 12,
-    zIndex: 10,
+    zIndex: 40,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     // Sprint 70 STORY-00539: BackButton on left, MemoryScopeToggle pushed
     // to right via space-between. Both pill-shaped so they balance visually.
     justifyContent: 'space-between',
   },
-  allCairnsEntry: {
-    position: 'absolute',
-    left: 12,
-    zIndex: 12,
-    minHeight: 40,
-    borderRadius: 20,
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  memoryBackSurface: {
+    minHeight: 44,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    justifyContent: 'center',
+  },
+  libraryAction: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    justifyContent: 'center',
     shadowOpacity: 0.14,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  allCairnsEntryText: { fontSize: 12, fontWeight: '700' },
-  allCairnsUnread: { minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  allCairnsUnreadText: { fontSize: 9, lineHeight: 12, fontWeight: '800' },
+  libraryUnread: { position: 'absolute', right: -3, top: -3, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  libraryUnreadText: { fontSize: 9, lineHeight: 12, fontWeight: '800' },
   evidenceContext: {
     position: 'absolute',
     left: 12,
@@ -1786,7 +1860,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 }, elevation: 4,
-    borderWidth: 1, borderColor: '#e8dfc8',
+    borderWidth: 1, borderColor: '#e8dfc8', zIndex: 25,
   },
   // v424: Hierarchy button (left-bottom, mirrors Recenter). Always visible
   // once GPS coords known. Layers icon → tap opens the region popover.
@@ -1874,6 +1948,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mapStatusText: { fontSize: 12, lineHeight: 16, fontWeight: '600', flexShrink: 1 },
+  memoryLegend: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    zIndex: 14,
+  },
+  memoryLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  memoryLegendSwatch: { width: 11, height: 11, borderRadius: 3 },
+  memoryLegendText: { fontSize: 10, lineHeight: 13, fontWeight: '700' },
   slowBannerSpinner: {
     marginRight: 8,
     transform: [{ scale: 0.7 }],

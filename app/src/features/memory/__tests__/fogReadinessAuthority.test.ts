@@ -1,16 +1,42 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  memoryFogPreparingMayClearFailure,
+  memoryFogTargetFailureVisible,
+} from '../services/memoryFogReadiness';
 
 const appRoot = path.resolve(__dirname, '../../../..');
 const read = (relative: string) => fs.readFileSync(path.join(appRoot, relative), 'utf8');
 
 describe('Memory fog readiness authority', () => {
+  test('a late Preparing callback cannot erase a classified failure for the same target', () => {
+    expect(memoryFogPreparingMayClearFailure('target-a', 'target-a')).toBe(false);
+    expect(memoryFogPreparingMayClearFailure('target-a', 'target-b')).toBe(true);
+    expect(memoryFogPreparingMayClearFailure('', 'target-a')).toBe(true);
+  });
+
+  test('a refresh failure is silent only over the exact complete target scene', () => {
+    expect(memoryFogTargetFailureVisible({
+      combinedScope: true,
+      failure: 'offline',
+      targetReadinessKey: 'target-b',
+      readyReadinessKey: 'target-a',
+    })).toBe(true);
+    expect(memoryFogTargetFailureVisible({
+      combinedScope: true,
+      failure: 'offline',
+      targetReadinessKey: 'target-a',
+      readyReadinessKey: 'target-a',
+    })).toBe(false);
+  });
+
   test('Cairns cannot be revealed by a timer or a previous account/mount', () => {
     const map = read('src/features/memory/components/MemoryMap.tsx');
     const fog = read('src/features/memory/components/FogLayer.tsx');
     const screen = read('src/features/memory/screens/MemoryScreen.tsx');
 
-    expect(map).toContain('{fogReady && pinsAuthorityReady && (');
+    expect(map).toContain('{pinsAuthorityReady && (');
+    expect(map).toContain('markers={fogReady ? allMarkers : ownMarkers}');
     expect(map).not.toMatch(/setTimeout\(\(\) => setFogReady/);
     expect(map).toContain('onDidFinishRenderingFrameFully');
     expect(map).toContain('fogGeometryReadyKeyRef.current !== readinessKey');
@@ -30,7 +56,9 @@ describe('Memory fog readiness authority', () => {
     expect(map).toContain('localHydration.ownerUserId === activeAccountId');
     expect(map).toContain("localHydration.initialReconcile === 'success'");
     expect(screen).not.toContain('_fogEverReady');
-    expect(screen).toContain('onFogReady={() =>');
+    expect(screen).toContain('onFogReady={(readinessKey) =>');
+    expect(screen).toContain("const deliveryKey = `${sourceMountKey}:${kind}:${authorityKey}`");
+    expect(screen).toContain('fogTargetReadinessKeyRef.current !== readinessKey');
   });
 
   test('content changes stale-filter async work while hydration bookkeeping cannot invalidate painted fog', () => {
@@ -42,6 +70,7 @@ describe('Memory fog readiness authority', () => {
     expect(fog).toContain('onFogPreparingRef.current?.(presentationKey, sceneAuthorized)');
     expect(fog).toContain('onFogUnavailableRef.current?.(presentationKey)');
     expect(fog).toContain('onFogReadyRef.current(presentationKey');
+    expect(fog).toContain('&& !combinedPreparationFailed');
     expect(fog).not.toMatch(/readinessKey = .*localHydration\.revision/);
   });
 

@@ -14,7 +14,7 @@
  *     custom Animated.timing + Easing.out(Easing.cubic) 280ms + parallel
  *     backdrop fade. Same easing as Hiking route picker.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
@@ -42,10 +42,7 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
   const unsubscribe = useMemorySubscriptionsStore((s) => s.unsubscribe);
   const isSubscribed = useMemorySubscriptionsStore((s) => s.isSubscribed);
   const setScope = useMemoryScopeStore((s) => s.setScope);
-  const sourceStates = useFriendMemoryStore((s) => s.sourceStates);
   const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
-  const [pendingIds, setPendingIds] = useState<number[]>([]);
-  const [mutationErrors, setMutationErrors] = useState<Record<number, string>>({});
 
   // UX-E fix: Animated values for smooth slide + backdrop fade matching
   // Hiking choose-a-route. Mount Modal in 'fade' mode (instant) and own
@@ -94,52 +91,22 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
     ]).start(() => onClose());
   };
 
-  const onTap = async (friendId: number, sharingStatus: 'not_shared' | 'shared_empty' | 'shared') => {
-    if (pendingIds.includes(friendId)) return;
+  const onTap = (friendId: number, sharingStatus: 'not_shared' | 'shared_empty' | 'shared') => {
     if (sharingStatus === 'not_shared') return;
     if (isSubscribed(friendId)) {
-      if (sourceStates[String(friendId)]?.status === 'error') {
-        void loadFriendProjections([friendId]);
-        return;
-      }
-      await removeFriend(friendId);
-      return;
-    }
-    setPendingIds(ids => [...ids, friendId]);
-    setMutationErrors(errors => Object.fromEntries(Object.entries(errors).filter(([id]) => Number(id) !== friendId)));
-    const status = await subscribe(friendId);
-    setPendingIds(ids => ids.filter(id => id !== friendId));
-    if (status >= 200 && status < 300) {
       if (activateCombinedOnSelect) setScope('combined');
-      void loadFriendProjections([friendId]);
-      return;
-    }
-    if (status === 409) {
-      // A duplicate after an unknown prior commit is reconciled from server.
-      await load();
-      const reconciled = useMemorySubscriptionsStore.getState();
-      if (reconciled.isSubscribed(friendId)) {
-        if (activateCombinedOnSelect) setScope('combined');
-        void loadFriendProjections([friendId]);
-      } else {
-        setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not select this friend. Try again.' }));
-      }
-      return;
-    }
-    setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not update. Check your connection.' }));
-  };
-
-  const removeFriend = async (friendId: number) => {
-    if (pendingIds.includes(friendId)) return;
-    setPendingIds(ids => [...ids, friendId]);
-    setMutationErrors(errors => Object.fromEntries(Object.entries(errors).filter(([id]) => Number(id) !== friendId)));
-    const status = await unsubscribe(friendId);
-    setPendingIds(ids => ids.filter(id => id !== friendId));
-    if (status < 200 || status >= 300) {
-      setMutationErrors(errors => ({ ...errors, [friendId]: 'Could not deselect this friend. Try again.' }));
+      void unsubscribe(friendId);
       return;
     }
     if (activateCombinedOnSelect) setScope('combined');
+    // subscribe() commits the local intent synchronously before its first
+    // await. Projection work starts only after the server accepts the grant;
+    // any transport failure remains a center-map retry, never a row error.
+    void subscribe(friendId).then(status => {
+      if ((status >= 200 && status < 300) || status === 409) {
+        void loadFriendProjections([friendId]);
+      }
+    });
   };
 
   return (
@@ -194,25 +161,17 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
                 const friendId = Number(item.friend_id);
                 const subscribed = isSubscribed(friendId);
                 const unavailable = item.sharing_status === 'not_shared';
-                const pending = pendingIds.includes(friendId);
-                const projectionState = sourceStates[String(friendId)];
                 const stateCopy: string | null = unavailable
                   ? 'Not shared with you'
-                  : pending || projectionState?.status === 'loading'
-                    ? null
-                    : projectionState?.status === 'error'
-                      ? 'Couldn’t load shared places · Retry'
-                      : projectionState?.status === 'empty' || item.sharing_status === 'shared_empty'
+                  : item.sharing_status === 'shared_empty'
                         ? 'No shared places yet'
-                        : subscribed && projectionState?.status === 'loaded'
-                          ? null
-                          : subscribed ? null : 'Shared with you';
+                        : subscribed ? null : 'Shared with you';
                 return (
                   <View>
                     <TouchableOpacity
                       style={[styles.row, subscribed && { backgroundColor: theme.surface }, unavailable && { opacity: 0.62 }]}
                       onPress={() => onTap(friendId, item.sharing_status)}
-                      disabled={pending || unavailable}
+                      disabled={unavailable}
                       testID={`memory-friend-row-${item.friend_id}`}
                       accessibilityRole="checkbox"
                       accessibilityState={{ disabled: unavailable, checked: subscribed }}
@@ -231,9 +190,7 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
                         </View>
                       </View>
                       <View style={styles.rowAccessory} testID={`memory-friend-row-accessory-${item.friend_id}`}>
-                        {pending ? (
-                          <ActivityIndicator size="small" color={theme.primary} />
-                        ) : unavailable ? (
+                        {unavailable ? (
                           <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
                         ) : (
                           <View style={[styles.checkbox, { borderColor: subscribed ? theme.primary : theme.borderStrong, backgroundColor: subscribed ? theme.primary : 'transparent' }]}>
@@ -242,7 +199,6 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
                         )}
                       </View>
                     </TouchableOpacity>
-                    {mutationErrors[friendId] ? <Text style={[styles.rowError, { color: theme.destructive }]}>{mutationErrors[friendId]}</Text> : null}
                   </View>
                 );
               }}
@@ -333,7 +289,5 @@ const styles = StyleSheet.create({
     width: 24, height: 24, borderRadius: 7, borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  rowError: { fontSize: FontSize.small, lineHeight: 17, marginHorizontal: Spacing.sm, marginBottom: Spacing.xs },
-  mutationError: { fontSize: FontSize.small, lineHeight: 17, marginTop: Spacing.sm },
   sep: { height: 1, backgroundColor: Colors.border, marginVertical: 2 },
 });

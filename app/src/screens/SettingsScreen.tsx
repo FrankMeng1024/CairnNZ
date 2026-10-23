@@ -814,7 +814,7 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <ToggleRow
             icon="Compass"
-            title="Automatic exploration & encounters"
+            title="Automatic exploration"
             detail={!automaticExplorationEnabled
               ? memoryLocationTransitionRequired
                 ? 'Review how ordinary eligible walking feeds Memory and nearby Cairn discovery independently'
@@ -1049,7 +1049,7 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <ToggleRow
             icon="Compass"
-            title="Automatic exploration & encounters"
+            title="Automatic exploration"
             detail={automaticExplorationEnabled && permissionStatus === 'granted'
               ? passiveBackgroundCapability.supported
                 && passiveBackgroundConsent === 'granted'
@@ -1152,7 +1152,7 @@ export function SettingsScreen() {
           <Row
             icon="Info"
             title="How Cairn uses data"
-            detail="Activities use location while recording. Automatic exploration & encounters lets eligible ordinary walking independently update personal Memory and scan for authorized nearby Cairns in foreground; normal background or screen-lock use requires separate consent and OS permission. Encounter notifications control alerts, not discovery."
+            detail="Activities use location while recording. Automatic exploration remembers eligible ordinary walks in Memory and may encounter authorized nearby Cairns while Cairn is open. Hike and Run still work when it is Off; background or screen-lock use needs separate consent and OS permission. Encounter notifications control alerts, not discovery."
           />
           <Divider color={background.settingsCardBorderColor} />
           <Row icon="Shield" title="Privacy Policy" detail="Read the full current policy" external onPress={() => void Linking.openURL(PRIVACY_URL)} testID="settings-privacy-policy" />

@@ -2,9 +2,17 @@ import { resolveMapboxPublicToken } from '../../config/mapbox';
 
 export type WalkingPlanPoint = { lat: number; lng: number };
 export const WALKING_PLAN_TIMEOUT_MS = 10_000;
+export type WalkingPlanErrorCode =
+  | 'NO_TOKEN'
+  | 'NO_ROUTE'
+  | 'NETWORK'
+  | 'UNAUTHORIZED'
+  | 'RATE_LIMIT'
+  | 'SERVER'
+  | 'INVALID_RESPONSE';
 
 export class WalkingPlanError extends Error {
-  constructor(public readonly code: 'NO_TOKEN' | 'NO_ROUTE' | 'NETWORK' | 'INVALID_RESPONSE') {
+  constructor(public readonly code: WalkingPlanErrorCode) {
     super(code);
   }
 }
@@ -41,7 +49,13 @@ export async function planWalkingRoute(
     clearTimeout(timeout);
     signal?.removeEventListener('abort', abortFromCaller);
   }
-  if (!response.ok) throw new WalkingPlanError(response.status === 404 ? 'NO_ROUTE' : 'NETWORK');
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new WalkingPlanError('UNAUTHORIZED');
+    if (response.status === 404) throw new WalkingPlanError('NO_ROUTE');
+    if (response.status === 429) throw new WalkingPlanError('RATE_LIMIT');
+    if (response.status >= 500) throw new WalkingPlanError('SERVER');
+    throw new WalkingPlanError('INVALID_RESPONSE');
+  }
   const payload = await response.json().catch(() => null) as any;
   const raw = payload?.routes?.[0]?.geometry?.coordinates;
   if (!Array.isArray(raw) || raw.length < 2) {

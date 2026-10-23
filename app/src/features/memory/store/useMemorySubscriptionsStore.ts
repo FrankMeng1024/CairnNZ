@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
+import { classifyFriendMemoryFailure, type FriendMemoryFailure } from '../services/friendMemoryFailure';
 
 interface MemorySubscription {
   friend_id: number;
@@ -34,6 +35,11 @@ interface State {
   availableSources: AvailableMemorySource[];
   loading: boolean;
   error: string | null;
+  /** Selection intent is immediate UI authority. Failed transport keeps the
+   * intent queued for the center-map Retry; authorization rejection is the
+   * only response that may fail closed and remove it. */
+  selectionPending: Record<string, 'select' | 'deselect'>;
+  selectionError: FriendMemoryFailure | null;
   /** Last raw HTTP status from a mutation, for UI to map 409 → paywall trigger. */
   // O1 batch 37: lastMutationStatus removed — 0 external readers; callers use the return value directly.
 
@@ -41,6 +47,7 @@ interface State {
   /** Returns server status code so caller can branch on 201/403/409. */
   subscribe: (friendId: number) => Promise<number>;
   unsubscribe: (friendId: number) => Promise<number>;
+  retrySelectionIntents: () => Promise<boolean>;
   /** Convenience selector — does this user count as picked? */
   isSubscribed: (friendId: number) => boolean;
   /** Account-fenced local removal used by unfriend intent. A fresh server
@@ -53,6 +60,39 @@ interface State {
 }
 
 let subscriptionGeneration = 0;
+const selectionMutationGenerations = new Map<string, number>();
+
+function nextSelectionMutationGeneration(friendId: number): number {
+  const key = String(friendId);
+  const next = (selectionMutationGenerations.get(key) ?? 0) + 1;
+  selectionMutationGenerations.set(key, next);
+  return next;
+}
+
+function applyPendingSelectionIntents(
+  subscriptions: MemorySubscription[],
+  sources: AvailableMemorySource[],
+  pending: Record<string, 'select' | 'deselect'>,
+): { subscriptions: MemorySubscription[]; sources: AvailableMemorySource[] } {
+  const nextSubscriptions = [...subscriptions];
+  for (const [friendIdKey, intent] of Object.entries(pending)) {
+    const friendId = Number(friendIdKey);
+    const source = sources.find(item => Number(item.friend_id) === friendId);
+    const index = nextSubscriptions.findIndex(item => Number(item.friend_id) === friendId);
+    if (intent === 'select' && index < 0 && source?.sharing_status !== 'not_shared') {
+      nextSubscriptions.push({ friend_id: friendId, friend_name: source?.friend_name ?? friendIdKey });
+    } else if (intent === 'deselect' && index >= 0) {
+      nextSubscriptions.splice(index, 1);
+    }
+  }
+  return {
+    subscriptions: nextSubscriptions,
+    sources: sources.map(source => {
+      const intent = pending[String(source.friend_id)];
+      return intent ? { ...source, selected: intent === 'select' } : source;
+    }),
+  };
+}
 
 function resolvedFriendName(nextName: unknown, previousName?: string): string {
   const candidate = typeof nextName === 'string' ? nextName.trim() : '';
@@ -92,6 +132,8 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   availableSources: [],
   loading: false,
   error: null,
+  selectionPending: {},
+  selectionError: null,
   // O1 batch 37: lastMutationStatus removed
 
   load: async () => {
@@ -152,11 +194,19 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       const data = await res.json();
       if (generationAtStart !== subscriptionGeneration
         || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
+      const reconciledSources = nextSources
+        ? reconcileAvailableMemorySources(previousSources, nextSources)
+        : previousSources;
+      const withIntents = applyPendingSelectionIntents(
+        Array.isArray(data.subscriptions) ? data.subscriptions : [],
+        reconciledSources,
+        get().selectionPending,
+      );
       set({
         limit: data.limit == null ? Number.POSITIVE_INFINITY : Number(data.limit),
-        subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
+        subscriptions: withIntents.subscriptions,
         ...(nextSources ? {
-          availableSources: reconcileAvailableMemorySources(previousSources, nextSources),
+          availableSources: withIntents.sources,
         } : {}),
         loading: false,
         error: sourcesBody ? null : `Could not refresh available friends (HTTP ${sourcesResponse.status}).`,
@@ -185,6 +235,23 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
     if (!viewerAtStart) return 0;
     const generationAtStart = subscriptionGeneration;
+    const mutationGeneration = nextSelectionMutationGeneration(friendId);
+    const source = get().availableSources.find(item => Number(item.friend_id) === friendId);
+    if (source?.sharing_status === 'not_shared') return 403;
+    const existing = get().subscriptions.find(item => Number(item.friend_id) === friendId);
+    const optimistic = existing ?? {
+      friend_id: friendId,
+      friend_name: source?.friend_name ?? String(friendId),
+      subscribed_at: new Date().toISOString(),
+    };
+    set(state => ({
+      subscriptions: existing ? state.subscriptions : [...state.subscriptions, optimistic],
+      availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
+        ? { ...item, selected: true }
+        : item),
+      selectionPending: { ...state.selectionPending, [String(friendId)]: 'select' },
+      selectionError: null,
+    }));
     try {
       const res = await authenticatedFetch('/api/memory-subscriptions', {
         method: 'POST',
@@ -192,30 +259,41 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         expectedUserId: viewerAtStart,
       });
       if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return 0;
-      if (res.ok) {
-        // Optimistic update: add locally from friendStore instead of
-        // re-fetching — avoids an extra round-trip that caused visible
-        // lag when tapping friends in the pick modal.
-        const { useFriendStore } = require('../../../store/useFriendStore');
-        const friend = useFriendStore.getState().friends.find(
-          (f: { id: string; name: string }) => Number(f.id) === friendId,
-        );
-        const newSub = {
-          friend_id: friendId,
-          friend_name: friend?.name ?? String(friendId),
-          subscribed_at: new Date().toISOString(),
-        };
-        if (!get().subscriptions.some(subscription => Number(subscription.friend_id) === friendId)) {
-          set({ subscriptions: [...get().subscriptions, newSub] });
-        }
-        set({
-          availableSources: get().availableSources.map(source =>
-            Number(source.friend_id) === friendId ? { ...source, selected: true } : source),
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
+        || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+      if (res.ok || res.status === 409) {
+        set(state => {
+          const selectionPending = { ...state.selectionPending };
+          delete selectionPending[String(friendId)];
+          return { selectionPending, selectionError: null };
         });
+      } else if (res.status === 401 || res.status === 403) {
+        set(state => {
+          const selectionPending = { ...state.selectionPending };
+          delete selectionPending[String(friendId)];
+          return {
+            subscriptions: state.subscriptions.filter(item => Number(item.friend_id) !== friendId),
+            availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
+              ? { ...item, selected: false, sharing_status: 'not_shared' }
+              : item),
+            selectionPending,
+            selectionError: 'unauthorized',
+          };
+        });
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { useFriendMemoryStore } = require('./useFriendMemoryStore');
+        useFriendMemoryStore.getState().invalidateFriend(friendId);
+        await useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart);
+      } else {
+        set({ selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }) });
       }
       return res.status;
     } catch {
+      if (generationAtStart === subscriptionGeneration
+        && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
+        && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
+        set({ selectionError: 'offline' });
+      }
       return 0;
     }
   },
@@ -231,26 +309,62 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
     if (!viewerAtStart) return 0;
     const generationAtStart = subscriptionGeneration;
+    const mutationGeneration = nextSelectionMutationGeneration(friendId);
+    set(state => ({
+      subscriptions: state.subscriptions.filter(item => Number(item.friend_id) !== friendId),
+      availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
+        ? { ...item, selected: false }
+        : item),
+      selectionPending: { ...state.selectionPending, [String(friendId)]: 'deselect' },
+      selectionError: null,
+    }));
     useFriendMemoryStore.getState().invalidateFriend(friendId);
+    // Privacy state is fenced synchronously above. Durable cache cleanup must
+    // not prevent the authoritative DELETE from being attempted if local
+    // storage itself is unhealthy.
+    void useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart)
+      .catch(() => undefined);
     try {
       const res = await authenticatedFetch(`/api/memory-subscriptions/${friendId}`, {
         method: 'DELETE',
         expectedUserId: viewerAtStart,
       });
       if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return 0;
-      if (res.ok) {
-        set({ subscriptions: get().subscriptions.filter((s) => s.friend_id !== friendId) });
-        set({
-          availableSources: get().availableSources.map(source =>
-            Number(source.friend_id) === friendId ? { ...source, selected: false } : source),
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
+        || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+      if (res.ok || res.status === 404) {
+        set(state => {
+          const selectionPending = { ...state.selectionPending };
+          delete selectionPending[String(friendId)];
+          return { selectionPending, selectionError: null };
         });
-        await useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart);
+      } else if (res.status === 401 || res.status === 403) {
+        set(state => {
+          const selectionPending = { ...state.selectionPending };
+          delete selectionPending[String(friendId)];
+          return { selectionPending, selectionError: 'unauthorized' };
+        });
+      } else {
+        set({ selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }) });
       }
       return res.status;
     } catch {
+      if (generationAtStart === subscriptionGeneration
+        && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
+        && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
+        set({ selectionError: 'offline' });
+      }
       return 0;
     }
+  },
+
+  retrySelectionIntents: async () => {
+    const intents = Object.entries(get().selectionPending);
+    if (intents.length === 0) return true;
+    const results = await Promise.all(intents.map(([friendId, intent]) => intent === 'select'
+      ? get().subscribe(Number(friendId))
+      : get().unsubscribe(Number(friendId))));
+    return results.every(status => (status >= 200 && status < 300) || status === 404 || status === 409);
   },
 
   isSubscribed: (friendId) =>
@@ -264,17 +378,23 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       availableSources: get().availableSources.filter(source => Number(source.friend_id) !== numericId),
       loading: false,
       error: null,
+      selectionPending: Object.fromEntries(Object.entries(get().selectionPending)
+        .filter(([id]) => Number(id) !== numericId)),
+      selectionError: null,
     });
   },
 
   reset: () => {
     subscriptionGeneration += 1;
+    selectionMutationGenerations.clear();
     set({
       limit: Number.POSITIVE_INFINITY,
       subscriptions: [],
       availableSources: [],
       loading: false,
       error: null,
+      selectionPending: {},
+      selectionError: null,
       // O1 batch 37: lastMutationStatus removed
     });
   },

@@ -57,6 +57,20 @@ describe('planWalkingRoute', () => {
     )).rejects.toEqual(expect.objectContaining({ code: 'INVALID_RESPONSE' }));
   });
 
+  test.each([
+    [401, 'UNAUTHORIZED'],
+    [403, 'UNAUTHORIZED'],
+    [429, 'RATE_LIMIT'],
+    [503, 'SERVER'],
+  ])('classifies HTTP %s without changing the Route', async (status, code) => {
+    const { planWalkingRoute } = loadWithToken(`pk.${'d'.repeat(48)}`);
+    global.fetch = jest.fn(async () => ({ ok: false, status })) as any;
+    await expect(planWalkingRoute(
+      { lat: -36.85, lng: 174.76 },
+      { lat: -36.83, lng: 174.78 },
+    )).rejects.toEqual(expect.objectContaining({ code }));
+  });
+
   test('times out a Directions request that never completes', async () => {
     jest.useFakeTimers();
     const { planWalkingRoute, WALKING_PLAN_TIMEOUT_MS } = loadWithToken(`pk.${'c'.repeat(48)}`);

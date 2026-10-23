@@ -178,6 +178,22 @@ describe('Route edit transaction classification', () => {
     expect(classified.diagnostics.intervalCandidates.every(option => Number.isFinite(option.shapeScore))).toBe(true);
   });
 
+  test('R02 exact endpoint evidence resolves a correction beside a nearby later lane', () => {
+    const base = createImportedOrderedDraft({
+      draftId: 'r02-nearby-lane', ownerId: 'owner-a',
+      segments: [[p(0, 0), p(50, 0), p(100, 0), p(100, 7), p(50, 7), p(0, 7), p(150, 40)]],
+    });
+    const raw = [p(20, 0), p(50, -24), p(80, 0)];
+    const classified = classifyDrawTransactionWithDiagnostics(base, raw, undefined, 12);
+    expect(classified.diagnostics.startCandidates.length).toBeGreaterThan(1);
+    expect(classified.diagnostics.endCandidates.length).toBeGreaterThan(1);
+    expect(classified.intent.kind).toBe('replace');
+    if (classified.intent.kind !== 'replace') return;
+    expect(classified.intent.options).toHaveLength(1);
+    expect(classified.intent.options[0].start.pointIndex).toBe(0);
+    expect(classified.intent.options[0].end.pointIndex).toBe(1);
+  });
+
   test('repeated coordinate occurrences stay unchanged instead of guessing an interval', () => {
     const base = appendOrderedSegment(
       empty(),
@@ -509,6 +525,11 @@ describe('Route edit transaction classification', () => {
     expect(orderedDraftPoints(second.draft).at(-1)).toEqual(p(400, 0));
     expect(orderedDraftDistanceM(second.draft)).toBeGreaterThan(398);
     expect(orderedDraftDistanceM(second.draft)).toBeLessThan(402);
+    const reopened = JSON.parse(JSON.stringify(second.draft));
+    expect(reopened.parts.map((part: any) => part.resolution)).toEqual([
+      'draw-matched', 'draw-manual', 'draw-matched', 'draw-manual',
+    ]);
+    expect(orderedDraftPoints(reopened)).toEqual(orderedDraftPoints(second.draft));
   });
 
   test('A3 a near-closed Activity endpoint owns Draw append before coincident replacement occurrences', () => {

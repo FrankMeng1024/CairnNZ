@@ -29,6 +29,7 @@ import { memoryScopeForNewRoute, type MemoryScope } from '../features/memory/sto
 import { useMemorySubscriptionsStore } from '../features/memory/store/useMemorySubscriptionsStore';
 import { getMapbox } from '../features/memory/services/mapboxAdapter';
 import { memoryCoverageViewport, type MemoryCoverageViewport } from '../features/memory/services/memoryCoverageViewport';
+import { memoryFogPaintEvidenceReady } from '../features/memory/services/memoryFogReadiness';
 import { TrimSlider } from '../components/map/TrimSlider';
 import { FontSize, RadiusRole, Spacing } from '../components/tokens';
 import { getCurrentRegion } from '../config/regions';
@@ -187,7 +188,13 @@ function createRouteGrowthFrameHistory(): RouteGrowthFrameHistory {
   };
 }
 
-function providerReason(reason: RouteProviderReason): string {
+function providerReason(reason: RouteProviderReason, providerCode?: string): string {
+  if (reason === 'provider-unavailable') {
+    if (providerCode === 'NO_TOKEN') return 'Walking routing is not configured. Your Route is unchanged.';
+    if (providerCode === 'UNAUTHORIZED') return 'Walking routing authorization failed. Your Route is unchanged.';
+    if (providerCode === 'RATE_LIMIT') return 'Walking routing is busy. Try another Point in a moment.';
+    if (providerCode === 'NETWORK') return 'Walking routing needs a connection. Your Route is unchanged.';
+  }
   switch (reason) {
     case 'no-route': return 'No nearby path found. You can draw this section.';
     case 'no-match': return 'No mapped path fits this drawing. Redraw with clearer attachments.';
@@ -307,6 +314,10 @@ export function OrderedRouteEditorScreen() {
   ));
   const [routeFogPending, setRouteFogPending] = useState(false);
   const [showRouteFogPending, setShowRouteFogPending] = useState(false);
+  const [routeFogTargetKey, setRouteFogTargetKey] = useState('');
+  const [routeFogReadyKey, setRouteFogReadyKey] = useState('');
+  const [routeFogUnavailableKey, setRouteFogUnavailableKey] = useState('');
+  const [routeSceneEverReady, setRouteSceneEverReady] = useState(false);
   const [memoryCoverageView, setMemoryCoverageView] = useState<MemoryCoverageViewport | null>(null);
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
   const routeGrowthAnimationRef = useRef<RouteGrowthAnimation | null>(null);
@@ -321,6 +332,11 @@ export function OrderedRouteEditorScreen() {
   const [bottomWorkspaceHeight, setBottomWorkspaceHeight] = useState(0);
   const mapViewRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
+  const routeFogTargetKeyRef = useRef('');
+  const routeFogGeometryReadyKeyRef = useRef('');
+  const routeFogPaintReadyKeyRef = useRef('');
+  const routeFogUnavailableCandidateKeyRef = useRef('');
+  const routeFogRequiredSourceIdsRef = useRef<string[]>(['memory-fog-src']);
   const cameraCenterRef = useRef<RoutePoint | null>(null);
   const initialBoundsRef = useRef<ReturnType<typeof initialBounds>>(null);
   const operationAbortRef = useRef<AbortController | null>(null);
@@ -376,13 +392,21 @@ export function OrderedRouteEditorScreen() {
         ? 'trim'
         : 'browse';
   const trimOpen = mode === 'TrimPreview';
-  const routeFogUnavailable = planningMemoryScope === 'combined' && Boolean(
+  const routeFriendProjectionFailure = planningMemoryScope === 'combined' && Boolean(
     friendMemoryError
     || memorySubscriptions.some(subscription => {
       const status = friendMemorySourceStates[String(subscription.friend_id)]?.status;
-      return status === 'error' || status === 'unauthorized';
+      return status === 'error';
     }),
   );
+  const routeFriendAuthorizationLost = planningMemoryScope === 'combined' && memorySubscriptions.some(
+    subscription => friendMemorySourceStates[String(subscription.friend_id)]?.status === 'unauthorized',
+  );
+  const routeFogExactTerminal = Boolean(routeFogTargetKey) && (
+    routeFogReadyKey === routeFogTargetKey
+    || routeFogUnavailableKey === routeFogTargetKey
+  );
+  const routeSceneReady = mapReady && routeFogExactTerminal;
   const setTool = useCallback((next: PlannerTool) => {
     setMode(next === 'draw' ? 'DrawArmed' : next === 'point' ? 'PointTargeting' : next === 'trim' ? 'TrimPreview' : 'Browse');
   }, []);
@@ -398,19 +422,17 @@ export function OrderedRouteEditorScreen() {
   }, []);
 
   useEffect(() => {
-    if (planningMemoryScope !== 'combined' || !routeFogPending || routeFogUnavailable) {
+    if (!routeSceneEverReady || !routeFogPending) {
       setShowRouteFogPending(false);
       return undefined;
     }
     const timer = setTimeout(() => setShowRouteFogPending(true), 180);
     return () => clearTimeout(timer);
-  }, [planningMemoryScope, routeFogPending, routeFogUnavailable]);
+  }, [routeFogPending, routeSceneEverReady]);
 
   useEffect(() => {
-    if (!routeFogUnavailable) return;
-    setRouteFogPending(false);
-    setShowRouteFogPending(false);
-  }, [routeFogUnavailable]);
+    if (routeSceneReady) setRouteSceneEverReady(true);
+  }, [routeSceneReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1115,6 +1137,81 @@ export function OrderedRouteEditorScreen() {
     setBottomWorkspaceHeight(current => current === measured ? current : measured);
   }, []);
 
+  useEffect(() => {
+    if (mapReady || !showPlannerMap) return undefined;
+    const timer = setTimeout(() => setMapLoadState('slow'), 8_000);
+    return () => clearTimeout(timer);
+  }, [mapEpoch, mapReady, showPlannerMap]);
+
+  const confirmRouteFogPaint = useCallback((fullyRenderedFrame = false) => {
+    const readinessKey = routeFogTargetKeyRef.current;
+    if (!readinessKey
+      || routeFogGeometryReadyKeyRef.current !== readinessKey
+      || routeFogPaintReadyKeyRef.current === readinessKey) return false;
+    const requiredSourceIds = routeFogRequiredSourceIdsRef.current;
+    const sourceProbe = mapViewRef.current?.isSourceLoaded;
+    const sourcesLoaded = typeof sourceProbe !== 'function'
+      || requiredSourceIds.every(sourceId => sourceProbe(sourceId));
+    const unavailable = routeFogUnavailableCandidateKeyRef.current === readinessKey;
+    const layerIds = requiredSourceIds.flatMap(sourceId => {
+      if (sourceId === 'memory-fog-src') return [
+        'memory-fog',
+        'memory-mine',
+        'memory-friend-union',
+        'memory-overlap',
+      ];
+      if (sourceId === 'memory-friend-union-src') return 'memory-friend-union';
+      if (sourceId === 'memory-overlap-src') return 'memory-overlap';
+      return sourceId;
+    });
+    const atomicSceneProbe = mapViewRef.current?.hasRenderedScene;
+    const renderedProbe = mapViewRef.current?.areLayersRendered;
+    const hasRenderedLayerProbe = !unavailable && (
+      typeof atomicSceneProbe === 'function'
+      || typeof renderedProbe === 'function'
+    );
+    const exactLayersRendered = typeof atomicSceneProbe === 'function'
+      ? atomicSceneProbe(layerIds, readinessKey)
+      : typeof renderedProbe === 'function' && renderedProbe(layerIds, readinessKey);
+    if (!memoryFogPaintEvidenceReady({
+      hasRenderedLayerProbe,
+      exactLayersRendered,
+      fullyRenderedFrame,
+      sourcesLoaded,
+    })) {
+      mapViewRef.current?.requestRender?.();
+      return false;
+    }
+    routeFogPaintReadyKeyRef.current = readinessKey;
+    setRouteFogPending(false);
+    setShowRouteFogPending(false);
+    if (unavailable) {
+      setRouteFogUnavailableKey(readinessKey);
+      setRouteFogReadyKey('');
+    } else {
+      setRouteFogReadyKey(readinessKey);
+      setRouteFogUnavailableKey('');
+    }
+    return true;
+  }, []);
+
+  const retryRouteScene = useCallback(() => {
+    if (mapLoadState === 'error' || !mapReady) {
+      setMapReady(false);
+      setMapLoadState('loading');
+      setRouteSceneEverReady(false);
+      routeFogPaintReadyKeyRef.current = '';
+      setMapEpoch(value => value + 1);
+      return;
+    }
+    setRouteFogPending(true);
+    setShowRouteFogPending(false);
+    void useFriendMemoryStore.getState().loadSelectedProjections(
+      undefined,
+      memoryCoverageView ?? undefined,
+    );
+  }, [mapLoadState, mapReady, memoryCoverageView]);
+
   const moveCamera = useCallback((point: RoutePoint, zoomLevel = 13.5) => {
     finishRouteAnimation('camera-action');
     cameraRef.current?.setCamera?.({
@@ -1653,6 +1750,7 @@ export function OrderedRouteEditorScreen() {
         strokeId: operationId,
         outcome: result.outcome,
         reason: 'reason' in result ? result.reason : null,
+        providerCode: 'providerCode' in result ? result.providerCode : null,
         providerGeometry: 'points' in result ? result.points : null,
         providerStartShiftM: 'providerStartShiftM' in result ? result.providerStartShiftM : null,
         providerTargetShiftM: 'providerTargetShiftM' in result ? result.providerTargetShiftM : null,
@@ -1735,17 +1833,19 @@ export function OrderedRouteEditorScreen() {
         recordRouteDrawingTrace('route_point_rejected', {
           strokeId: operationId,
           reason: result.reason,
+          providerCode: result.providerCode ?? null,
           rawTarget: target,
           baseRevision,
           unchangedFinalGeometry: orderedDraftPoints(live.present),
         }, 'selection');
         setPendingPointTarget(null);
-        setError(providerReason(result.reason));
+        setError(providerReason(result.reason, result.providerCode));
         setMode('PointTargeting');
         recordRouteDrawingTrace('route_operation_terminal', {
           strokeId: operationId,
           outcome: 'rejected',
           reason: result.reason,
+          providerCode: result.providerCode ?? null,
           finalMode: 'PointTargeting',
           busyReleased: true,
         }, 'state');
@@ -2106,9 +2206,14 @@ export function OrderedRouteEditorScreen() {
           zoomEnabled={tool !== 'draw'}
           rotateEnabled={tool !== 'draw'}
           pitchEnabled={tool !== 'draw'}
-          onDidFinishLoadingMap={mapReady ? undefined : () => setMapReady(true)}
-          onDidFinishRenderingMapFully={mapReady ? undefined : () => setMapReady(true)}
+          onDidFinishLoadingMap={() => setMapLoadState('loading')}
+          onDidFinishRenderingMapFully={() => {
+            setMapReady(true);
+            setMapLoadState('loading');
+            confirmRouteFogPaint(true);
+          }}
           onDidFinishRenderingFrameFully={() => {
+            confirmRouteFogPaint(true);
             const pendingPaint = routeGrowthPendingPaintSampleRef.current;
             if (pendingPaint) {
               routeGrowthPaintedSampleRef.current = {
@@ -2126,7 +2231,11 @@ export function OrderedRouteEditorScreen() {
               finishRouteAnimation('complete');
             }
           }}
-          onMapLoadingError={() => setMapLoadState('error')}
+          onMapLoadingError={() => {
+            setMapReady(false);
+            setMapLoadState('error');
+            setRouteSceneEverReady(false);
+          }}
           onCameraChanged={(event: any) => {
             const center = event?.properties?.center;
             if (Array.isArray(center) && center.length >= 2) cameraCenterRef.current = { lng: Number(center[0]), lat: Number(center[1]) };
@@ -2289,11 +2398,34 @@ export function OrderedRouteEditorScreen() {
           <FogLayer
             scopeOverride={planningMemoryScope} opacityScale={0.42}
             viewport={memoryCoverageView}
-            onFogPreparing={() => {
-              if (!routeFogUnavailable) setRouteFogPending(true);
+            onFogPreparing={(readinessKey, retainsDisplayedScene) => {
+              routeFogTargetKeyRef.current = readinessKey;
+              routeFogGeometryReadyKeyRef.current = '';
+              routeFogPaintReadyKeyRef.current = '';
+              routeFogUnavailableCandidateKeyRef.current = '';
+              routeFogRequiredSourceIdsRef.current = ['memory-fog-src'];
+              setRouteFogTargetKey(readinessKey);
+              setRouteFogUnavailableKey('');
+              if (!retainsDisplayedScene) setRouteFogReadyKey('');
+              setRouteFogPending(true);
             }}
-            onFogReady={() => setRouteFogPending(false)}
-            onFogUnavailable={() => setRouteFogPending(false)}
+            onFogReady={(readinessKey, requiredSourceIds) => {
+              if (routeFogTargetKeyRef.current !== readinessKey) return;
+              routeFogGeometryReadyKeyRef.current = readinessKey;
+              routeFogUnavailableCandidateKeyRef.current = '';
+              routeFogRequiredSourceIdsRef.current = requiredSourceIds;
+              mapViewRef.current?.requestRender?.();
+            }}
+            onFogUnavailable={(readinessKey) => {
+              if (routeFogTargetKeyRef.current !== readinessKey) return;
+              // FogLayer has already synchronously committed a fail-closed
+              // Mine-only/solid fallback. Retire the cold veil only after a
+              // subsequent Mapbox frame proves that replacement is painted.
+              routeFogGeometryReadyKeyRef.current = readinessKey;
+              routeFogUnavailableCandidateKeyRef.current = readinessKey;
+              routeFogRequiredSourceIdsRef.current = ['memory-fog-src'];
+              mapViewRef.current?.requestRender?.();
+            }}
           />
           {ShapeSource && LineLayer && trimOriginalFeature ? (
             <ShapeSource id="ordered-route-trim-original" shape={trimOriginalFeature}>
@@ -2337,10 +2469,10 @@ export function OrderedRouteEditorScreen() {
           ) : null}
         </MapView>
       ) : null}
-      {MapView && showPlannerMap && !mapReady ? (
+      {MapView && showPlannerMap && !routeSceneReady && !routeSceneEverReady ? (
         <MapLoadOverlay
           state={mapLoadState}
-          onRetry={() => { setMapReady(false); setMapLoadState('loading'); setMapEpoch(value => value + 1); }}
+          onRetry={retryRouteScene}
           testID="ordered-route-map-load-overlay"
         />
       ) : null}
@@ -2349,6 +2481,37 @@ export function OrderedRouteEditorScreen() {
           <ActivityIndicator color={theme.primary} />
           <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Finding your current location…</Text>
           <Text style={[styles.initialLocationHint, { color: theme.muted }]}>Your map will open as soon as location is ready.</Text>
+        </View>
+      ) : null}
+
+      {routeSceneEverReady && (showRouteFogPending || (
+        (routeFriendProjectionFailure || routeFriendAuthorizationLost)
+        && routeFogReadyKey !== routeFogTargetKey
+      )) ? (
+        <View
+          testID="route-scene-status"
+          accessibilityRole="summary"
+          style={[styles.routeSceneStatus, { backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
+        >
+          {showRouteFogPending ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+          <Text style={[styles.routeSceneStatusText, { color: theme.foreground }]} numberOfLines={2}>
+            {showRouteFogPending
+              ? 'Updating exploration…'
+              : routeFriendAuthorizationLost
+                ? 'Friend exploration is no longer authorized. Mine remains visible.'
+                : 'Shared exploration could not refresh. Mine remains visible.'}
+          </Text>
+          {!showRouteFogPending && routeFriendProjectionFailure ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Retry shared exploration"
+              onPress={retryRouteScene}
+              style={[styles.routeSceneRetry, { borderColor: theme.borderStrong }]}
+              testID="route-scene-retry"
+            >
+              <Text style={[styles.routeSceneRetryText, { color: theme.primary }]}>Retry</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
 
@@ -2401,19 +2564,13 @@ export function OrderedRouteEditorScreen() {
               disabled={memorySubscriptions.length === 0}
               onPress={() => setPlanningMemoryScope('combined')}
               accessibilityRole="radio"
-              accessibilityLabel={routeFogUnavailable
-                ? 'Mine and Friends exploration unavailable'
-                : 'Mine and Friends exploration'}
+              accessibilityLabel="Mine and Friends exploration"
               accessibilityState={{
                 selected: planningMemoryScope === 'combined',
                 disabled: memorySubscriptions.length === 0,
-                busy: planningMemoryScope === 'combined' && routeFogPending && !routeFogUnavailable,
               }}
             >
               <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine &amp; Friends</Text>
-              <View style={styles.routeFogPendingSlot}>
-                {showRouteFogPending ? <ActivityIndicator size="small" color={theme.primary} /> : null}
-              </View>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -2426,9 +2583,7 @@ export function OrderedRouteEditorScreen() {
             <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Friends</Text>
             <Text style={[styles.friendPickerCount, { color: theme.primary }]}>{memorySubscriptions.length} selected</Text>
           </TouchableOpacity>
-          {routeFogUnavailable ? (
-            <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>Shared exploration couldn’t refresh. Mine stays visible.</Text>
-          ) : memorySubscriptions.length === 0 ? (
+          {memorySubscriptions.length === 0 ? (
             <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>No shared Friend Fog is available. Mine stays visible.</Text>
           ) : null}
         </View>
@@ -2436,14 +2591,10 @@ export function OrderedRouteEditorScreen() {
 
       <View style={[
         styles.topBar,
-        { paddingTop: insets.top + Spacing.sm, paddingBottom: Spacing.sm },
+        { paddingTop: insets.top + Spacing.lg, paddingBottom: Spacing.xs },
       ]} pointerEvents="box-none" testID="route-editor-header">
-        <BackButton variant="pill" onPress={() => nav.goBack()} />
-          <View pointerEvents="none" style={styles.topTitleWrap}>
-          <View style={[styles.topTitleChip, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}>
-            <Text testID="route-editor-title" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
-          </View>
-        </View>
+        <BackButton variant="inline" onPress={() => nav.goBack()} />
+        <Text testID="route-editor-title" pointerEvents="none" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
         <View style={styles.topUtilityPlaceholder} />
       </View>
 
@@ -2628,10 +2779,8 @@ export function OrderedRouteEditorScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, zIndex: 10, borderBottomWidth: 0 },
-  topTitleWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  topTitleChip: { minHeight: 38, justifyContent: 'center', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md },
-  topTitle: { fontSize: FontSize.h3, fontWeight: '800' },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm, paddingHorizontal: Spacing.base, zIndex: 40, borderBottomWidth: 0 },
+  topTitle: { flex: 1, fontSize: FontSize.h3, fontWeight: '700', textAlign: 'center' },
   topSubtitle: { marginTop: 2, fontSize: FontSize.tiny, fontWeight: '600' },
   topUtility: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   topUtilityPlaceholder: { width: 44, height: 44 },
@@ -2647,7 +2796,6 @@ const styles = StyleSheet.create({
   friendPickerCount: { fontSize: FontSize.caption, fontWeight: '700' },
   popoverChoice: { minHeight: 44, borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   popoverChoiceText: { fontSize: FontSize.small, fontWeight: '700' },
-  routeFogPendingSlot: { width: 12, height: 16, alignItems: 'center', justifyContent: 'center' },
   popoverHint: { fontSize: FontSize.small, lineHeight: 17 },
   popoverAction: { minHeight: 38, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.sm, marginTop: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   popoverActionText: { fontSize: FontSize.caption, fontWeight: '700' },
@@ -2655,6 +2803,10 @@ const styles = StyleSheet.create({
   // does not change the camera coordinate; camera padding is only used for the
   // one-time initial fit, so the visual target and confirmed coordinate agree.
   centerTarget: { position: 'absolute', left: '50%', top: '50%', width: 34, height: 34, marginLeft: -17, marginTop: -17, alignItems: 'center', justifyContent: 'center', zIndex: 8 },
+  routeSceneStatus: { position: 'absolute', left: '50%', top: '50%', width: 244, minHeight: 40, marginLeft: -122, marginTop: -20, borderWidth: StyleSheet.hairlineWidth, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, zIndex: 20 },
+  routeSceneStatusText: { flexShrink: 1, fontSize: FontSize.small, lineHeight: 17, fontWeight: '600', textAlign: 'center' },
+  routeSceneRetry: { minHeight: 32, borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  routeSceneRetryText: { fontSize: FontSize.caption, fontWeight: '800' },
   targetRing: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, backgroundColor: 'rgba(255,255,255,0.35)' },
   targetDot: { position: 'absolute', width: 6, height: 6, borderRadius: 3 },
   bottomWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },

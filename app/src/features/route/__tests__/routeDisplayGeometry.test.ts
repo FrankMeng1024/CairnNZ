@@ -32,11 +32,23 @@ describe('display-only repeated traversal projection', () => {
     expect(display.baseLines).toHaveLength(1);
     expect(display.baseLines[0].coordinates).toEqual([p(0), p(50), p(100), p(50), p(0)]);
     expect(display.repeatLanes).toHaveLength(1);
-    expect(display.repeatLanes[0].offsetPx).toBe(0);
+    expect(display.repeatLanes[0].offsetPx).toBeGreaterThan(0);
     expect(display.repeatLanes[0].multiplicity).toBe(2);
     expect(display.repeatLanes[0].coordinates).toEqual(expect.arrayContaining([p(100)]));
     expect(display.repeatLabels.map(label => label.text)).toEqual(['2 passes']);
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
+  });
+
+  test('R06 a dense slightly wobbly one-way stroke is not a repeated traversal', () => {
+    const canonical = canonicalRouteGeometry({
+      points: [
+        p(0, 0), p(20, 1.2), p(8, -0.8), p(28, 1), p(16, -1.1),
+        p(36, 0.7), p(24, -0.9), p(44, 0.8), p(32, -0.6), p(52, 0),
+      ],
+    });
+    const display = buildRouteDisplayGeometry(canonical);
+    expect(display.repeatLanes).toEqual([]);
+    expect(display.repeatLabels).toEqual([]);
   });
 
   test('five passes stay a continuous serpentine and use a traversal count without arrows', () => {
@@ -51,6 +63,18 @@ describe('display-only repeated traversal projection', () => {
   test('nearby parallel geometry is not mistaken for the same traversal', () => {
     const canonical = canonicalRouteGeometry({ points: [p(0, 0), p(100, 0), p(100, 8), p(0, 8)] });
     expect(buildRouteDisplayGeometry(canonical).repeatLanes).toEqual([]);
+  });
+
+  test('a crossing-only figure eight does not manufacture passes or parallel lanes', () => {
+    const canonical = canonicalRouteGeometry({
+      points: [
+        p(-60, 0), p(-30, 30), p(0, 0), p(-30, -30), p(-60, 0),
+        p(0, 0), p(30, 30), p(60, 0), p(30, -30), p(0, 0),
+      ],
+    });
+    const display = buildRouteDisplayGeometry(canonical);
+    expect(display.repeatLanes).toEqual([]);
+    expect(display.repeatLabels).toEqual([]);
   });
 
   test('curved and partial returns preserve ordered occurrence ids', () => {
@@ -69,7 +93,7 @@ describe('display-only repeated traversal projection', () => {
     const display = buildRouteDisplayGeometry(canonical);
     const repeated = display.repeatLanes.filter(lane => lane.multiplicity > 1);
     expect(repeated.length).toBeGreaterThan(0);
-    expect(repeated.every(lane => lane.offsetPx === 0)).toBe(true);
+    expect(repeated.every(lane => lane.offsetPx > 0)).toBe(true);
     expect(display.repeatLabels.every(label => !/[←→]/.test(label.text))).toBe(true);
   });
 

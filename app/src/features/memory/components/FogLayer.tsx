@@ -138,6 +138,31 @@ export function memoryFogSceneRemainsAuthorized(input: {
     && source.authorizationExpiresAtMs > now);
 }
 
+/** Authorization answers whether already-painted borrowed geometry may remain
+ * on screen. Selection matching is stricter: it answers whether that scene is
+ * the complete target the UI currently requests. A subset is safe to retain
+ * under one center loader, but must never be reported ready. */
+export function memoryFogSceneMatchesSelection(input: {
+  scope: MemoryScope;
+  sceneAccountId: string;
+  currentAccountId: string;
+  friendSources: Array<{
+    friendId: string;
+    authorizationVersion: number;
+    authorizationExpiresAtMs: number;
+  }>;
+  selectedFriendIds: string[];
+  authorizedSourceVersions: Record<string, number>;
+  nowMs?: number;
+}): boolean {
+  if (!memoryFogSceneRemainsAuthorized(input)) return false;
+  if (input.scope === 'self') return input.friendSources.length === 0;
+  const sceneIds = [...new Set(input.friendSources.map(source => source.friendId))].sort();
+  const selectedIds = [...new Set(input.selectedFriendIds)].sort();
+  return sceneIds.length === selectedIds.length
+    && sceneIds.every((friendId, index) => friendId === selectedIds[index]);
+}
+
 export function memoryFogSafeFallbackPresentationKey(accountId: string, selfSignature: string): string {
   return `safe-fog:${accountId}:${selfSignature}`;
 }
@@ -1439,8 +1464,13 @@ export function FogLayer({
     .map(subscription => String(subscription.friend_id))
     .sort()
     .join(','));
-  const subscriptionsLoading = useMemorySubscriptionsStore((s) => s.loading);
-  const subscriptionsError = useMemorySubscriptionsStore((s) => s.error);
+  const selectionPendingKey = useMemorySubscriptionsStore((s) => Object.entries(s.selectionPending)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([friendId, intent]) => `${friendId}:${intent}`)
+    .join(','));
+  const subscriptionsLoading = useMemorySubscriptionsStore((s) => s.loading
+    || Object.keys(s.selectionPending).length > 0);
+  const subscriptionsError = useMemorySubscriptionsStore((s) => s.selectionError ?? s.error);
   const friendMemoryLoading = useFriendMemoryStore((s) => s.loading);
   const friendMemoryError = useFriendMemoryStore((s) => s.error);
   const friendSourceStates = useFriendMemoryStore((s) => s.sourceStates);
@@ -1455,14 +1485,17 @@ export function FogLayer({
   useEffect(() => {
     if (!viewport || syntheticQaAuthority) return;
     void loadPreparedViewport(viewport);
-    if (scope === 'combined') {
+    // The checkbox reflects intent immediately, but the coverage endpoint is
+    // grant-authorized. Wait for the POST/DELETE to settle before requesting
+    // projection geometry so selection cannot race its own authorization.
+    if (scope === 'combined' && !selectionPendingKey) {
       void friendMemoryRef().loadSelectedProjections(undefined, viewport);
     }
     // Map camera callbacks intentionally replace the viewport value as they
     // update. The stable quantized key, not object identity, owns network work;
     // otherwise each store update can trigger another request/render cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [friendMemoryRef, loadPreparedViewport, scope, selectedFriendIdsKey, syntheticQaAuthority, viewportKey]);
+  }, [friendMemoryRef, loadPreparedViewport, scope, selectedFriendIdsKey, selectionPendingKey, syntheticQaAuthority, viewportKey]);
 
   const preparedSelfReady = !syntheticQaAuthority
     && preparedMemoryStatus === 'ready'
@@ -1561,7 +1594,8 @@ export function FogLayer({
   const fogAuthorityReady = (syntheticQaAuthority
     ? localHydrationReady
     : preparedSelfReady || (!viewport && localHydrationReady))
-    && combinedPreparationSettled;
+    && combinedPreparationSettled
+    && !combinedPreparationFailed;
   const hasAnyEvidence = points.length > 0 || preparedSelfHasCoverage || friendGeometries.length > 0;
   const presentationKey = `${authority}|${contentSignature}`;
   const safeFallbackPresentationKey = memoryFogSafeFallbackPresentationKey(
@@ -1737,9 +1771,9 @@ export function FogLayer({
   useEffect(() => {
     if (!combinedPreparationFailed) return;
     const currentScene = publishedSceneRef.current;
-    const retainedSceneAuthorized = currentScene.friendSources.length > 0
-      && Boolean(currentScene.presentationKey)
-      && memoryFogSceneRemainsAuthorized({
+    const retainedSceneComplete = Boolean(currentScene.presentationKey)
+      && memoryFogSceneMatchesSelection({
+        scope,
         sceneAccountId: currentScene.accountId,
         currentAccountId: accountId,
         friendSources: currentScene.friendSources,
@@ -1749,11 +1783,11 @@ export function FogLayer({
     // Optional Friend coverage refresh failure must not turn a complete,
     // still-authorized rendered scene into "Map details unavailable". The
     // screen presents the scoped retry while this exact scene remains usable.
-    if (retainedSceneAuthorized) return;
+    if (retainedSceneComplete) return;
     // A genuinely cold failure has no coherent borrowed scene. The safe Mine
     // fallback commits in layout before the parent retires its entry veil.
     onFogUnavailableRef.current?.(presentationKey);
-  }, [accountId, authorizedSourceVersions, combinedPreparationFailed, presentationKey, selectedFriendIds]);
+  }, [accountId, authorizedSourceVersions, combinedPreparationFailed, presentationKey, scope, selectedFriendIds]);
   useEffect(() => {
     if (syntheticQaAuthority || !viewport || preparedMemoryStatus !== 'error') return;
     setGeometryReady(false);
@@ -2291,6 +2325,18 @@ export function FogLayer({
           fillAntialias: true,
         }}
       />
+      {LineLayer ? (
+        <LineLayer
+          id="memory-friend-union-edge"
+          filter={['==', ['get', 'cairnFogKind'], 'friend']}
+          style={{
+            lineColor: theme.mapFriendMemoryFill,
+            lineWidth: 1.6,
+            lineOpacity: 0.82 * clampedOpacityScale,
+            lineDasharray: [2, 1.5],
+          }}
+        />
+      ) : null}
       <FillLayer
         id="memory-overlap"
         filter={['==', ['get', 'cairnFogKind'], 'overlap']}
@@ -2300,6 +2346,17 @@ export function FogLayer({
           fillAntialias: true,
         }}
       />
+      {LineLayer ? (
+        <LineLayer
+          id="memory-overlap-edge"
+          filter={['==', ['get', 'cairnFogKind'], 'overlap']}
+          style={{
+            lineColor: theme.mapMemoryOverlapFill,
+            lineWidth: 2,
+            lineOpacity: 0.9 * clampedOpacityScale,
+          }}
+        />
+      ) : null}
     </ShapeSource>
     </>
   );

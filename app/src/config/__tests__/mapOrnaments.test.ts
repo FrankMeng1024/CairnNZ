@@ -19,10 +19,10 @@ describe('Mapbox ornament placement', () => {
     });
   });
 
-  test('Memory keeps legal controls at opposite bottom edges and clear of map controls', () => {
+  test('Memory groups the genuine logo and interactive information control at lower-left', () => {
     expect(MEMORY_MAP_ORNAMENTS).toEqual({
       logoPosition: { bottom: 8, left: 8 },
-      attributionPosition: { bottom: 8, right: 8 },
+      attributionPosition: { bottom: 8, left: 92 },
     });
   });
 });

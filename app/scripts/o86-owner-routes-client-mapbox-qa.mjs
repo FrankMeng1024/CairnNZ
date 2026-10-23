@@ -16,7 +16,7 @@ const outputDir = path.resolve(process.env.CAIRN_O86_OWNER_ROUTE_OUTPUT || '/tmp
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const expected = new Map([
   [92, 'Test1'], [93, 'Test2'], [94, 'Test3'], [95, 'Test a1'], [96, 'Test a2'], [97, 'Test4'],
-  [98, 'wrong1'],
+  [98, 'wrong1'], [99, 'bad Route'],
 ]);
 const requestedRouteIds = new Set(String(process.env.CAIRN_OWNER_ROUTE_IDS || '')
   .split(',').map(value => value.trim()).filter(Boolean).map(Number).filter(Number.isFinite));
@@ -30,6 +30,7 @@ const geometryVerdicts = new Map([
   [96, 'HISTORICAL_DEFECT_PRESENT: saved Test a2 remains the destructive short chord; source Activity 2134 is separately proven immutable.'],
   [97, 'HISTORICAL_MANUAL_GEOMETRY: saved Test4 raw terminal remains water-adjacent; manual provenance is not walking-network approval.'],
   [98, 'OWNER_O87_REGRESSION: exact saved wrong1 canonical geometry; visual continuity must be assessed without changing traversal order.'],
+  [99, 'OWNER_O91_REGRESSION: exact saved bad Route canonical geometry; read-only render proof does not modify or approve the original.'],
 ]);
 const hash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const quote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
@@ -37,7 +38,7 @@ const query = `
 const pool=require('./src/config/db');
 (async()=>{
   const [routes]=await pool.execute(
-    'SELECT id,user_id,name,description,points,waypoints,distance_m,elevation_gain_m,permission,created_at,updated_at,ordered_draft,resolution_state,creation_origin,source_activity_client_id,source_session_id,origin_geometry_hash,created_geometry_hash,geometry_edited_since_creation FROM routes WHERE id IN (92,93,94,95,96,97,98) ORDER BY id'
+    'SELECT id,user_id,name,description,points,waypoints,distance_m,elevation_gain_m,permission,created_at,updated_at,ordered_draft,resolution_state,creation_origin,source_activity_client_id,source_session_id,origin_geometry_hash,created_geometry_hash,geometry_edited_since_creation FROM routes WHERE id IN (92,93,94,95,96,97,98,99) ORDER BY id'
   );
   process.stdout.write(JSON.stringify(routes));
   await pool.end();
@@ -166,16 +167,39 @@ for (const savedRoute of routes) {
     await page.waitForTimeout(250);
     const editorPath = path.join(outputDir, `route-${savedRoute.id}-${savedRoute.name.replaceAll(' ', '-').toLowerCase()}-editor-390x844.png`);
     await page.screenshot({ path: editorPath });
-    const editorCapture = await page.evaluate(() => {
+    const editor = await page.evaluate(expectedLines => {
       const map = globalThis.__cairnMap;
       const layers = (map?.getStyle?.()?.layers ?? []).filter(layer => layer.id.includes('ordered-route'));
       const lines = layers.filter(layer => layer.type === 'line');
-      const canonicalLayer = lines.find(layer => layer.id === 'ordered-route-line');
-      const sourceData = canonicalLayer?.source ? map?.getSource?.(canonicalLayer.source)?._data : null;
-      const sourceShape = typeof sourceData === 'string' ? JSON.parse(sourceData) : sourceData;
-      const canonicalSourceCoordinates = (sourceShape?.features ?? [])
-        .filter(feature => feature?.geometry?.type === 'LineString')
-        .map(feature => feature.geometry.coordinates);
+      const sourceIds = [...new Set(lines.map(layer => layer.source).filter(Boolean))];
+      const displayLines = sourceIds.flatMap(sourceId => {
+        const data = map?.getSource?.(sourceId)?._data;
+        const shape = typeof data === 'string' ? JSON.parse(data) : data;
+        return (shape?.features ?? []).filter(feature => feature?.geometry?.type === 'LineString')
+          .map(feature => feature.geometry.coordinates);
+      });
+      const metres = (a, b) => {
+        const latitude = (a[1] + b[1]) * Math.PI / 360;
+        return Math.hypot((a[0] - b[0]) * 111_320 * Math.cos(latitude), (a[1] - b[1]) * 110_574);
+      };
+      const pointSegment = (point, a, b) => {
+        const latitude = point[1] * Math.PI / 180;
+        const px = (point[0] - a[0]) * 111_320 * Math.cos(latitude);
+        const py = (point[1] - a[1]) * 110_574;
+        const bx = (b[0] - a[0]) * 111_320 * Math.cos(latitude);
+        const by = (b[1] - a[1]) * 110_574;
+        const denominator = bx * bx + by * by;
+        const fraction = denominator ? Math.max(0, Math.min(1, (px * bx + py * by) / denominator)) : 0;
+        return Math.hypot(px - bx * fraction, py - by * fraction);
+      };
+      const expectedSegments = expectedLines.flatMap(line => line.slice(1).map((point, index) => [line[index], point]));
+      const displayLengthM = displayLines.reduce((sum, line) => sum + line.slice(1)
+        .reduce((lineSum, point, index) => lineSum + metres(line[index], point), 0), 0);
+      const expectedLengthM = expectedLines.reduce((sum, line) => sum + line.slice(1)
+        .reduce((lineSum, point, index) => lineSum + metres(line[index], point), 0), 0);
+      const maxCanonicalDeviationM = displayLines.flat().reduce((maximum, point) => Math.max(maximum,
+        Math.min(...expectedSegments.map(([a, b]) => pointSegment(point, a, b)))), 0);
+      const displayLengthRatio = expectedLengthM > 0 ? displayLengthM / expectedLengthM : 1;
       let renderedRouteFeatures = -1;
       try {
         renderedRouteFeatures = lines.length
@@ -188,18 +212,19 @@ for (const savedRoute of routes) {
         routeLineLayerIds: lines.map(layer => layer.id),
         repeatLineLayerIds: lines.filter(layer => layer.id.includes('repeat-')).map(layer => layer.id),
         lineOffsets: lines.map(layer => map.getPaintProperty(layer.id, 'line-offset')).filter(value => value != null),
-        canonicalSourceCoordinates,
+        roundRepeatLayers: lines.filter(layer => layer.id.includes('repeat-')).every(layer => (
+          map.getLayoutProperty(layer.id, 'line-cap') === 'round'
+          && map.getLayoutProperty(layer.id, 'line-join') === 'round'
+        )),
+        displaySourceLineCount: displayLines.length,
+        displaySourceCoordinateCount: displayLines.reduce((sum, line) => sum + line.length, 0),
+        maxCanonicalDeviationM,
+        displayLengthRatio,
+        displayCoverageMatchesExpected: maxCanonicalDeviationM <= 0.25
+          && displayLengthRatio >= 0.99 && displayLengthRatio <= 1.01,
         renderedRouteFeatures,
       };
-    });
-    const { canonicalSourceCoordinates: editorCanonicalCoordinates, ...editorRuntime } = editorCapture;
-    const editor = {
-      ...editorRuntime,
-      canonicalSourceHash: hash(editorCanonicalCoordinates),
-      canonicalSourceLineCount: editorCanonicalCoordinates.length,
-      canonicalSourceCoordinateCount: editorCanonicalCoordinates.reduce((sum, line) => sum + line.length, 0),
-      canonicalSourceMatchesExpected: hash(editorCanonicalCoordinates) === expectedCanonicalSourceHash,
-    };
+    }, canonicalLines);
 
     await page.evaluate(routeId => globalThis.__cairnStores.navigationRef.reset({
       index: 1, routes: [{ name: 'Home' }, { name: 'MapHistory', params: { routeId } }],
@@ -212,37 +237,56 @@ for (const savedRoute of routes) {
     await page.waitForTimeout(250);
     const detailPath = path.join(outputDir, `route-${savedRoute.id}-${savedRoute.name.replaceAll(' ', '-').toLowerCase()}-detail-390x844.png`);
     await page.screenshot({ path: detailPath });
-    const detailCapture = await page.evaluate(() => {
+    const detail = await page.evaluate(expectedLines => {
       const map = globalThis.__cairnMap;
       const layers = map?.getStyle?.()?.layers ?? [];
-      const canonicalLayer = layers.find(layer => (
-        layer.type === 'line'
-        && layer.id.startsWith('route-detail-')
-        && layer.id.endsWith('-line')
-        && !layer.id.includes('-gap-')
-        && !layer.id.includes('-repeat-')
-      ));
-      const sourceData = canonicalLayer?.source ? map?.getSource?.(canonicalLayer.source)?._data : null;
-      const sourceShape = typeof sourceData === 'string' ? JSON.parse(sourceData) : sourceData;
-      const canonicalSourceCoordinates = (sourceShape?.features ?? [])
-        .filter(feature => feature?.geometry?.type === 'LineString')
-        .map(feature => feature.geometry.coordinates);
+      const routeLines = layers.filter(layer => layer.type === 'line' && layer.id.startsWith('route-detail-'));
+      const sourceIds = [...new Set(routeLines.map(layer => layer.source).filter(Boolean))];
+      const displayLines = sourceIds.flatMap(sourceId => {
+        const data = map?.getSource?.(sourceId)?._data;
+        const shape = typeof data === 'string' ? JSON.parse(data) : data;
+        return (shape?.features ?? []).filter(feature => feature?.geometry?.type === 'LineString')
+          .map(feature => feature.geometry.coordinates);
+      });
+      const metres = (a, b) => {
+        const latitude = (a[1] + b[1]) * Math.PI / 360;
+        return Math.hypot((a[0] - b[0]) * 111_320 * Math.cos(latitude), (a[1] - b[1]) * 110_574);
+      };
+      const pointSegment = (point, a, b) => {
+        const latitude = point[1] * Math.PI / 180;
+        const px = (point[0] - a[0]) * 111_320 * Math.cos(latitude);
+        const py = (point[1] - a[1]) * 110_574;
+        const bx = (b[0] - a[0]) * 111_320 * Math.cos(latitude);
+        const by = (b[1] - a[1]) * 110_574;
+        const denominator = bx * bx + by * by;
+        const fraction = denominator ? Math.max(0, Math.min(1, (px * bx + py * by) / denominator)) : 0;
+        return Math.hypot(px - bx * fraction, py - by * fraction);
+      };
+      const expectedSegments = expectedLines.flatMap(line => line.slice(1).map((point, index) => [line[index], point]));
+      const displayLengthM = displayLines.reduce((sum, line) => sum + line.slice(1)
+        .reduce((lineSum, point, index) => lineSum + metres(line[index], point), 0), 0);
+      const expectedLengthM = expectedLines.reduce((sum, line) => sum + line.slice(1)
+        .reduce((lineSum, point, index) => lineSum + metres(line[index], point), 0), 0);
+      const maxCanonicalDeviationM = displayLines.flat().reduce((maximum, point) => Math.max(maximum,
+        Math.min(...expectedSegments.map(([a, b]) => pointSegment(point, a, b)))), 0);
+      const displayLengthRatio = expectedLengthM > 0 ? displayLengthM / expectedLengthM : 1;
       return {
         styleLoaded: Boolean(map?.isStyleLoaded?.()),
         repeatLayers: layers.filter(layer => layer.id.includes('repeat-')).map(layer => layer.id),
-        canonicalSourceCoordinates,
+        roundRepeatLayers: routeLines.filter(layer => layer.id.includes('repeat-')).every(layer => (
+          map.getLayoutProperty(layer.id, 'line-cap') === 'round'
+          && map.getLayoutProperty(layer.id, 'line-join') === 'round'
+        )),
+        displaySourceLineCount: displayLines.length,
+        displaySourceCoordinateCount: displayLines.reduce((sum, line) => sum + line.length, 0),
+        maxCanonicalDeviationM,
+        displayLengthRatio,
+        displayCoverageMatchesExpected: maxCanonicalDeviationM <= 0.25
+          && displayLengthRatio >= 0.99 && displayLengthRatio <= 1.01,
         attributionVisible: [...document.querySelectorAll('.mapboxgl-ctrl-logo,.mapboxgl-ctrl-attrib')]
           .some(node => { const box = node.getBoundingClientRect(); return box.width > 0 && box.height > 0; }),
       };
-    });
-    const { canonicalSourceCoordinates: detailCanonicalCoordinates, ...detailRuntime } = detailCapture;
-    const detail = {
-      ...detailRuntime,
-      canonicalSourceHash: hash(detailCanonicalCoordinates),
-      canonicalSourceLineCount: detailCanonicalCoordinates.length,
-      canonicalSourceCoordinateCount: detailCanonicalCoordinates.reduce((sum, line) => sum + line.length, 0),
-      canonicalSourceMatchesExpected: hash(detailCanonicalCoordinates) === expectedCanonicalSourceHash,
-    };
+    }, canonicalLines);
     const zoomMatrix = [];
     const zoomAnimationFrames = [];
     // The Owner's topology contract is multi-zoom and includes transition
@@ -267,19 +311,11 @@ for (const savedRoute of routes) {
         const suffix = `z${String(view.zoom).replace('.', '-')}-b${view.bearing}${view.focus ? `-${view.focus}` : ''}`;
         const capture = `route-${savedRoute.id}-${savedRoute.name.replaceAll(' ', '-').toLowerCase()}-detail-${suffix}-390x844.png`;
         await page.screenshot({ path: path.join(outputDir, capture) });
-        const frame = await page.evaluate(expectedLines => {
+        const frame = await page.evaluate(() => {
           const map = globalThis.__cairnMap;
           const routeLayers = (map?.getStyle?.()?.layers ?? []).filter(layer => layer.id.startsWith('route-detail-'));
           const routeSources = [...new Set(routeLayers.map(layer => layer.source).filter(Boolean))];
           const routeLineLayers = routeLayers.filter(layer => layer.type === 'line');
-          const canonicalLayer = routeLineLayers.find(layer => (
-            layer.id.endsWith('-line') && !layer.id.includes('-gap-') && !layer.id.includes('-repeat-')
-          ));
-          const sourceData = canonicalLayer?.source ? map?.getSource?.(canonicalLayer.source)?._data : null;
-          const sourceShape = typeof sourceData === 'string' ? JSON.parse(sourceData) : sourceData;
-          const canonicalSourceCoordinates = (sourceShape?.features ?? [])
-            .filter(feature => feature?.geometry?.type === 'LineString')
-            .map(feature => feature.geometry.coordinates);
           let renderedFeatures = -1;
           try {
             const lineLayers = routeLineLayers.map(layer => layer.id);
@@ -295,11 +331,15 @@ for (const savedRoute of routes) {
             routeLineLayerIds: routeLineLayers.map(layer => layer.id),
             repeatLineLayerIds: routeLineLayers.filter(layer => layer.id.includes('repeat-')).map(layer => layer.id),
             lineOffsets: routeLineLayers.map(layer => map.getPaintProperty(layer.id, 'line-offset')).filter(value => value != null),
-            canonicalSourceMatchesExpected: JSON.stringify(canonicalSourceCoordinates) === JSON.stringify(expectedLines),
+            roundRepeatLayers: routeLineLayers.filter(layer => layer.id.includes('repeat-')).every(layer => (
+              map.getLayoutProperty(layer.id, 'line-cap') === 'round'
+              && map.getLayoutProperty(layer.id, 'line-join') === 'round'
+            )),
             renderedFeatures,
           };
-        }, canonicalLines);
-        zoomMatrix.push({ ...view, ...frame, screenshot: capture });
+        });
+        const { center: _privateCenter, ...safeView } = view;
+        zoomMatrix.push({ ...safeView, ...frame, screenshot: capture });
       }
 
       // Inspect intermediate Mapbox zoom/bearing frames in both directions.
@@ -324,18 +364,10 @@ for (const savedRoute of routes) {
           await page.waitForTimeout(index === 0 ? 40 : 190);
           const capture = `route-${savedRoute.id}-zoom-${direction}-frame-${index}.png`;
           await page.screenshot({ path: path.join(outputDir, capture) });
-          const frame = await page.evaluate(expectedLines => {
+          const frame = await page.evaluate(() => {
             const map = globalThis.__cairnMap;
             const layers = (map?.getStyle?.()?.layers ?? [])
               .filter(layer => layer.id.startsWith('route-detail-') && layer.type === 'line');
-            const canonicalLayer = layers.find(layer => (
-              layer.id.endsWith('-line') && !layer.id.includes('-gap-') && !layer.id.includes('-repeat-')
-            ));
-            const sourceData = canonicalLayer?.source ? map?.getSource?.(canonicalLayer.source)?._data : null;
-            const sourceShape = typeof sourceData === 'string' ? JSON.parse(sourceData) : sourceData;
-            const canonicalSourceCoordinates = (sourceShape?.features ?? [])
-              .filter(feature => feature?.geometry?.type === 'LineString')
-              .map(feature => feature.geometry.coordinates);
             let renderedFeatures = -1;
             try {
               renderedFeatures = map.queryRenderedFeatures(undefined, { layers: layers.map(layer => layer.id) }).length;
@@ -346,10 +378,13 @@ for (const savedRoute of routes) {
               routeLineLayerIds: layers.map(layer => layer.id),
               repeatLineLayerIds: layers.filter(layer => layer.id.includes('repeat-')).map(layer => layer.id),
               lineOffsets: layers.map(layer => map.getPaintProperty(layer.id, 'line-offset')).filter(value => value != null),
-              canonicalSourceMatchesExpected: JSON.stringify(canonicalSourceCoordinates) === JSON.stringify(expectedLines),
+              roundRepeatLayers: layers.filter(layer => layer.id.includes('repeat-')).every(layer => (
+                map.getLayoutProperty(layer.id, 'line-cap') === 'round'
+                && map.getLayoutProperty(layer.id, 'line-join') === 'round'
+              )),
               renderedFeatures,
             };
-          }, canonicalLines);
+          });
           zoomAnimationFrames.push({ direction, index, ...frame, screenshot: capture });
         }
       }
@@ -359,14 +394,21 @@ for (const savedRoute of routes) {
       && zoomAnimationFrames.length === 14
       && topologyFrames.every(frame => (
         frame.renderedFeatures > 0
-        && frame.repeatLineLayerIds.length === 0
-        && frame.lineOffsets.every(value => Number(value) === 0)
-        && frame.canonicalSourceMatchesExpected
+        && frame.repeatLineLayerIds.length % 2 === 0
+        && frame.roundRepeatLayers
+        && frame.lineOffsets.every(value => (
+          Number(value) === 0
+          || (Array.isArray(value) && value[0] === 'get' && value[1] === 'offsetPx')
+        ))
       ));
-    const editorTopologyPass = editor.repeatLineLayerIds.length === 0
-      && editor.lineOffsets.every(value => Number(value) === 0)
-      && editor.canonicalSourceMatchesExpected;
-    const detailTopologyPass = detail.canonicalSourceMatchesExpected;
+    const editorTopologyPass = editor.repeatLineLayerIds.length % 2 === 0
+      && editor.roundRepeatLayers
+      && editor.lineOffsets.every(value => (
+        Number(value) === 0
+        || (Array.isArray(value) && value[0] === 'get' && value[1] === 'offsetPx')
+      ))
+      && editor.displayCoverageMatchesExpected;
+    const detailTopologyPass = detail.roundRepeatLayers && detail.displayCoverageMatchesExpected;
     const renderPass = editor.styleLoaded && editor.routeLayers.length >= 2 && editor.renderedRouteFeatures > 0
       && editorTopologyPass
       && detail.styleLoaded && detail.attributionVisible && detailTopologyPass && topologyPass && errors.length === 0;

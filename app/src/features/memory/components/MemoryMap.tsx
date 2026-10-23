@@ -38,11 +38,11 @@ import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOv
 import { useAppStore } from '../../../store/useAppStore';
 import { AcquiredCairnClusterLayer } from './AcquiredCairnClusterLayer';
 import { useCairnPresentationStore } from '../../cairns/cairnPresentationStore';
-import { excludeAcquiredFriendMarkers } from '../services/cairnMapPresentation';
+import { markersForMemoryScope } from '../services/cairnMapPresentation';
 import { memoryCoverageViewport, type MemoryCoverageViewport } from '../services/memoryCoverageViewport';
 import { memoryFogPaintEvidenceReady } from '../services/memoryFogReadiness';
 import { memoryMinePreviewCanCapture } from '../services/memoryEntryPresentation';
-import { memoryCameraAtTarget } from '../services/memoryCameraTransition';
+import { memoryCameraAtTarget, memoryCameraCenterFromEvent } from '../services/memoryCameraTransition';
 
 let memoryMapHasRendered = false;
 
@@ -93,9 +93,9 @@ interface Props {
    * (corridor cutouts from GPS data). Used by MemoryScreen as the
    * second gate for hiding the loading overlay.
    */
-  onFogReady?: () => void;
+  onFogReady?: (readinessKey: string) => void;
   onFogPreparing?: (readinessKey: string, retainsDisplayedScene: boolean) => void;
-  onFogUnavailable?: () => void;
+  onFogUnavailable?: (readinessKey: string) => void;
   /**
    * v424: fly camera to arbitrary center+zoom, driven by HierarchyPanel
    * region selection. Prop-based so parent controls timing. Bumping
@@ -152,17 +152,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const memoryScopeRef = useRef(memoryScope);
   memoryScopeRef.current = memoryScope;
   const allMarkers = useMemo(() => {
-    if (memoryScope === 'self') return ownMarkers;
-    // Acquired Friend Cairns have one authoritative map presentation in
-    // AcquiredCairnClusterLayer. /api/circle/markers carries the same
-    // immutable acquisition revisions for legacy consumers, so omit those
-    // stable ids here instead of rendering two overlapping features with
-    // different press/archive semantics.
-    const seen = new Set(ownMarkers.map(marker => String(marker.id)));
-    return [...ownMarkers, ...excludeAcquiredFriendMarkers(
-      friendMarkers.filter(marker => !seen.has(String(marker.id))),
-      acquiredMarkers,
-    )];
+    return markersForMemoryScope(memoryScope, ownMarkers, friendMarkers, acquiredMarkers);
   }, [acquiredMarkers, friendMarkers, memoryScope, ownMarkers]);
   const mapViewRef = useRef<any>(null);
   const mapSizeRef = useRef({
@@ -272,22 +262,45 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const idleFireCountRef = useRef(0);
   const lastIdleAtRef = useRef(0);
   const idleThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingFlyRef = useRef<{ token: number; center: [number, number]; atTarget: boolean } | null>(null);
-  const pendingFlySlowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onMapSettle = useCallback((feature: any) => {
-    const center = feature?.properties?.center;
-    const zoom = feature?.properties?.zoom;
-    if (!Array.isArray(center) || center.length < 2 || typeof zoom !== 'number') return;
-    const pendingFly = pendingFlyRef.current;
-    if (pendingFly && memoryCameraAtTarget(
-      pendingFly.center,
-      [Number(center[0]), Number(center[1])],
-    )) {
-      pendingFly.atTarget = true;
-      // Require one fully-rendered frame after the destination camera settles;
-      // an idle event alone does not prove remote-region tiles are visible.
-      mapViewRef.current?.requestRender?.();
+  const pendingFlyRef = useRef<{ token: number; center: [number, number] } | null>(null);
+  const renderedCameraCenterRef = useRef<[number, number] | null>(null);
+  const settlePendingCameraAtCenter = useCallback((center: [number, number], source: string) => {
+    const pending = pendingFlyRef.current;
+    if (!pending || !memoryCameraAtTarget(pending.center, center)) return false;
+    pendingFlyRef.current = null;
+    onCameraTransitionState?.(null);
+    log('memory.camera_destination_settled', { token: pending.token, source });
+    return true;
+  }, [onCameraTransitionState]);
+  const settlePendingCameraFromMap = useCallback(async (source: string) => {
+    const pending = pendingFlyRef.current;
+    if (!pending) return false;
+    if (renderedCameraCenterRef.current
+      && settlePendingCameraAtCenter(renderedCameraCenterRef.current, `${source}-known-center`)) return true;
+    try {
+      const raw = mapViewRef.current?.getCenter?.();
+      const resolved = raw && typeof raw.then === 'function' ? await raw : raw;
+      const center: [number, number] | null = Array.isArray(resolved) && resolved.length >= 2
+        ? [Number(resolved[0]), Number(resolved[1])]
+        : resolved && Number.isFinite(Number(resolved.lng)) && Number.isFinite(Number(resolved.lat))
+          ? [Number(resolved.lng), Number(resolved.lat)]
+          : null;
+      if (!center || pendingFlyRef.current?.token !== pending.token) return false;
+      return settlePendingCameraAtCenter(center, source);
+    } catch (error) {
+      log('memory.camera_destination_probe_failed', { source, error: String(error).slice(0, 120) });
+      return false;
     }
+  }, [settlePendingCameraAtCenter]);
+  const onMapSettle = useCallback((feature: any) => {
+    const center = memoryCameraCenterFromEvent(feature);
+    const zoom = feature?.properties?.zoom;
+    if (!center || typeof zoom !== 'number') return;
+    renderedCameraCenterRef.current = center;
+    // RNMapbox emits the installed terminal camera event through onMapIdle.
+    // The Web adapter carries the centre in geometry.coordinates while native
+    // currently uses properties.center, so accept both event shapes.
+    settlePendingCameraAtCenter([Number(center[0]), Number(center[1])], 'map-idle');
     // v386: propagate zoom to shared value so pin components can animate
     // transform:scale on the UI thread (reanimated). This is the
     // OTA-friendly zoom-responsive scaling for PointAnnotation, since
@@ -347,7 +360,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
         onMapMoved();
       }
     }, 100);
-  }, [onMapMoved]);
+  }, [onMapMoved, settlePendingCameraAtCenter]);
 
   // v340: when Recenter pill is tapped, MemoryScreen bumps
   // recenterToken; we then run cameraRef.setCamera with 600ms flyTo.
@@ -478,7 +491,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
       scope: memoryScope,
     });
     setFogReady(true);
-    onFogReady?.();
+    onFogReady?.(readinessKey);
     return true;
   }, [mapFirstRender, memoryScope, onFogReady, onMapFullyReady]);
 
@@ -514,28 +527,23 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     if (!flyToTarget) return;
     if (flyToTarget.token === lastFlyTokenRef.current) return;
     lastFlyTokenRef.current = flyToTarget.token;
-    pendingFlyRef.current = { token: flyToTarget.token, center: flyToTarget.center, atTarget: false };
-    if (pendingFlySlowTimerRef.current) clearTimeout(pendingFlySlowTimerRef.current);
+    pendingFlyRef.current = { token: flyToTarget.token, center: flyToTarget.center };
     onCameraTransitionState?.('loading');
-    const expectedToken = flyToTarget.token;
-    pendingFlySlowTimerRef.current = setTimeout(() => {
-      if (pendingFlyRef.current?.token === expectedToken) onCameraTransitionState?.('slow');
-    }, 2_500);
     // 更新 anchor 到目标 center, 防止 flyTo 触发 pan-detected → 弹回 recenter pill
     anchorRef.current = { lat: flyToTarget.center[1], lng: flyToTarget.center[0] };
     setHasPannedAway(true);  // 已经不在自己 GPS 位置了, recenter pill 应该出现
     suppressPanDetectUntilRef.current = Date.now() + 600;
-    cameraRef.current?.setCamera?.({
-      centerCoordinate: flyToTarget.center,
-      zoomLevel: flyToTarget.zoom,
-      animationDuration: 800,
+    const expectedToken = flyToTarget.token;
+    void settlePendingCameraFromMap('before-camera-command').then(alreadyAtTarget => {
+      if (alreadyAtTarget || pendingFlyRef.current?.token !== expectedToken) return;
+      cameraRef.current?.setCamera?.({
+        centerCoordinate: flyToTarget.center,
+        zoomLevel: flyToTarget.zoom,
+        animationDuration: 800,
+      });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyToTarget?.token]);
-
-  useEffect(() => () => {
-    if (pendingFlySlowTimerRef.current) clearTimeout(pendingFlySlowTimerRef.current);
-  }, []);
 
   const onRecenter = useCallback(() => {
     log('memory.map_recenter_btn');
@@ -599,9 +607,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             setMapZoom(z);
           }
           // v427: propagate center to parent for hierarchy panel init
-          if (onCameraCenter) {
-            const c = e?.properties?.center ?? e?.geometry?.coordinates;
-            if (Array.isArray(c) && c.length >= 2 && typeof c[0] === 'number') {
+          const c = memoryCameraCenterFromEvent(e);
+          if (c) {
+            // Retain the current centre so a later same-centre command can
+            // complete without waiting for an idle event Mapbox will not emit.
+            // A true distant transition still waits for onMapIdle.
+            renderedCameraCenterRef.current = [Number(c[0]), Number(c[1])];
+            if (onCameraCenter) {
               onCameraCenter(c[1], c[0]);
             }
           }
@@ -640,6 +652,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             onMapFullyReady();
           }
           confirmCurrentFogPaint(false);
+          void settlePendingCameraFromMap('map-loaded');
         }}
         onDidFinishRenderingMapFully={() => {
           // Mapbox may emit this event for every requested repaint while a
@@ -672,19 +685,16 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // have already painted. Do not hold the blocking entry veil once
           // this exact-authority frame exists.
           confirmCurrentFogPaint(true);
-          const pendingFly = pendingFlyRef.current;
-          if (pendingFly?.atTarget) {
-            if (pendingFlySlowTimerRef.current) clearTimeout(pendingFlySlowTimerRef.current);
-            pendingFlySlowTimerRef.current = null;
-            pendingFlyRef.current = null;
-            onCameraTransitionState?.(null);
-            log('memory.camera_destination_visible', { token: pendingFly.token });
-          }
+          void settlePendingCameraFromMap('frame-fully-rendered');
         }}
         onMapLoadingError={(event: unknown) => {
           log('memory.map_loading_error', { event: (() => { try { return JSON.stringify(event).slice(0, 500); } catch { return String(event); } })() });
-          setMapLoadState('error');
-          if (pendingFlyRef.current) onCameraTransitionState?.('error');
+          // RNMapbox documents this callback as non-exclusive with a later
+          // successful load and it may fire once per resource. A retained map
+          // must not become a false full-map error during a distant camera
+          // transition. Only a cold renderer with no completed map treats it
+          // as terminal; target Fog/source readiness reports its own error.
+          if (!memoryMapHasRendered && !mapFirstRender) setMapLoadState('error');
         }}
         onRegionIsChanging={(feature: any) => {
           // v340: suppress pan-detect for 1s after a programmatic
@@ -822,7 +832,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             fogGeometryReadyKeyRef.current = '';
             fogPaintReadyKeyRef.current = '';
             if (!fogRetainingSceneRef.current) setFogReady(false);
-            onFogUnavailable?.();
+            onFogUnavailable?.(readinessKey);
           }}
         />
         {/* Memory is territory and accumulated place history, not another
@@ -839,9 +849,9 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
             (or 2.5s fallback for users with 0 points). This prevents the
             Mystery flash without breaking the case where the flag never
             sets (existing users). */}
-        {fogReady && pinsAuthorityReady && (
+        {pinsAuthorityReady && (
           <>
-            <AcquiredCairnClusterLayer
+            {fogReady ? <AcquiredCairnClusterLayer
               onOpenSingle={markerId => onOpenAcquiredCairn?.(markerId)}
               onOpenGroup={markerIds => onOpenAcquiredGroup?.(markerIds)}
               onExpandCluster={(center, zoom) => {
@@ -853,8 +863,13 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
                 });
               }}
               onClusterError={onAcquiredClusterError}
+            /> : null}
+            <CairnPinsLayer
+              markers={fogReady ? allMarkers : ownMarkers}
+              centerLat={centerLat}
+              centerLng={centerLng}
+              strangerMarks={fogReady ? strangerMarks : undefined}
             />
-            <CairnPinsLayer markers={allMarkers} centerLat={centerLat} centerLng={centerLng} strangerMarks={strangerMarks} />
           </>
         )}
       </MapView>

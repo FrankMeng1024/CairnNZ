@@ -28,7 +28,7 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
     ? { ...geometry, parts: geometry.parts.filter(part => part.id !== hiddenPartId) }
     : geometry;
   const display = buildRouteDisplayGeometry(visibleGeometry);
-  const features = display.baseLines.map(line => ({
+  const features = display.ordinaryLines.map(line => ({
       type: 'Feature' as const,
       id: line.id,
       properties: { occurrenceIds: line.occurrenceIds.join(',') },
@@ -37,6 +37,19 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
         coordinates: line.coordinates.map(point => [point.lng, point.lat]),
       },
     }));
+  const repeatLaneFeatures = display.repeatLanes.map(lane => ({
+    type: 'Feature' as const,
+    id: lane.id,
+    properties: {
+      occurrenceIds: lane.occurrenceIds.join(','),
+      multiplicity: lane.multiplicity,
+      offsetPx: lane.offsetPx,
+    },
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: lane.coordinates.map(point => [point.lng, point.lat]),
+    },
+  }));
   const repeatLabelFeatures = display.repeatLabels.map(label => ({
     type: 'Feature' as const,
     id: label.id,
@@ -78,6 +91,37 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
               lineColor: theme.mapRouteLine,
               lineWidth: 6,
               lineOpacity: 0.96,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
+        </ShapeSource>
+      ) : null}
+      {repeatLaneFeatures.length > 0 ? (
+        <ShapeSource
+          id={`${idPrefix}-repeat-lanes`}
+          shape={{ type: 'FeatureCollection', features: repeatLaneFeatures }}
+        >
+          <LineLayer
+            id={`${idPrefix}-repeat-lane-casing`}
+            slot="top"
+            style={{
+              lineColor: theme.mapRouteCasing,
+              lineWidth: 9,
+              lineOffset: ['get', 'offsetPx'],
+              lineOpacity: 0.84,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
+          <LineLayer
+            id={`${idPrefix}-repeat-lane-line`}
+            slot="top"
+            style={{
+              lineColor: theme.mapRouteLine,
+              lineWidth: 5.5,
+              lineOffset: ['get', 'offsetPx'],
+              lineOpacity: 0.98,
               lineCap: 'round',
               lineJoin: 'round',
             }}
