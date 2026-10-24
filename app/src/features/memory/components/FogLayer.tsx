@@ -1244,11 +1244,12 @@ export async function buildTiledCombinedDisplayEvidence(
     if (input.fullFriendTile) {
       const fullFriend = displayTilePolygon(x, y);
       outputPolygons.push(fullFriend.geometry.coordinates);
-      friendOutputPolygons.push(fullFriend.geometry.coordinates);
       if (input.self) {
         try {
           const overlap = intersectTurf(featureCollection([input.self, fullFriend]));
           appendGeometry(overlapOutputPolygons, overlap as Feature<Polygon | MultiPolygon> | null);
+          const friendOnly = differenceTurf(featureCollection([fullFriend, input.self]));
+          appendGeometry(friendOutputPolygons, friendOnly as Feature<Polygon | MultiPolygon> | null);
         } catch (error: any) {
           log('fog.union_overlap_failed', {
             tile: key,
@@ -1256,6 +1257,8 @@ export async function buildTiledCombinedDisplayEvidence(
           });
           return null;
         }
+      } else {
+        friendOutputPolygons.push(fullFriend.geometry.coordinates);
       }
       if (Date.now() - outputSliceStartedAt >= DISPLAY_SCAN_SLICE_BUDGET_MS) {
         sliceDurationsMs.push(Date.now() - outputSliceStartedAt);
@@ -1276,11 +1279,12 @@ export async function buildTiledCombinedDisplayEvidence(
         ? friendFeatures[0]
         : await unionDisplayFeatures(friendFeatures, shouldContinue, sliceDurationsMs);
     if (friendFeatures.length > 0 && !friendMerged) return null;
-    appendGeometry(friendOutputPolygons, friendMerged);
     if (input.self && friendMerged) {
       try {
         const overlap = intersectTurf(featureCollection([input.self, friendMerged]));
         appendGeometry(overlapOutputPolygons, overlap as Feature<Polygon | MultiPolygon> | null);
+        const friendOnly = differenceTurf(featureCollection([friendMerged, input.self]));
+        appendGeometry(friendOutputPolygons, friendOnly as Feature<Polygon | MultiPolygon> | null);
       } catch (error: any) {
         log('fog.union_overlap_failed', {
           tile: key,
@@ -1288,6 +1292,8 @@ export async function buildTiledCombinedDisplayEvidence(
         });
         return null;
       }
+    } else {
+      appendGeometry(friendOutputPolygons, friendMerged);
     }
     const features: Array<Feature<Polygon | MultiPolygon>> = [
       ...(input.self ? [input.self] : []),
@@ -1380,6 +1386,7 @@ async function combinePreparedCoverage(
   friendGeometries: MultiPolygon[],
 ): Promise<{
   fogShape: Feature<Polygon | MultiPolygon> | null;
+  mineEvidence: Feature<Polygon | MultiPolygon> | null;
   friendEvidence: Feature<Polygon | MultiPolygon> | null;
   overlapEvidence: Feature<Polygon | MultiPolygon> | null;
   sliceDurationsMs: number[];
@@ -1404,6 +1411,7 @@ async function combinePreparedCoverage(
   }
   if (!friendEvidence) return {
     fogShape: composeFogShape(selfEvidence),
+    mineEvidence: selfEvidence,
     friendEvidence: null,
     overlapEvidence: null,
     sliceDurationsMs,
@@ -1411,13 +1419,25 @@ async function combinePreparedCoverage(
   const overlapEvidence = selfEvidence
     ? intersectTurf(featureCollection([selfEvidence, friendEvidence])) as Feature<Polygon | MultiPolygon> | null
     : null;
+  const friendOnlyEvidence = selfEvidence
+    ? differenceTurf(featureCollection([friendEvidence, selfEvidence])) as Feature<Polygon | MultiPolygon> | null
+    : friendEvidence;
+  const mineOnlyEvidence = selfEvidence
+    ? differenceTurf(featureCollection([selfEvidence, friendEvidence])) as Feature<Polygon | MultiPolygon> | null
+    : null;
   const fogShape = composePreparedCoverageFog(selfEvidence, friendEvidence);
   sliceDurationsMs.push(Date.now() - startedAt);
-  // Paint the complete de-duplicated Friend union once, then let the single
-  // overlap layer above it replace the colour where Mine intersects. Computing
-  // `friend - mine` produced the same pixels but added a third expensive
-  // polygon-clipping pass on every selection/viewport change.
-  return { fogShape, friendEvidence, overlapEvidence, sliceDurationsMs };
+  // Friend-only and overlap are disjoint. Painting the complete Friend union
+  // underneath overlap compounded opacity and made one overlapping source look
+  // stronger than Mine. The clipped friend-only result keeps Mine visually
+  // authoritative and does not darken once per selected friend.
+  return {
+    fogShape,
+    mineEvidence: mineOnlyEvidence,
+    friendEvidence: friendOnlyEvidence,
+    overlapEvidence,
+    sliceDurationsMs,
+  };
 }
 
 export function FogLayer({
@@ -2015,10 +2035,11 @@ export function FogLayer({
         : null;
       if (friendSnapshot.length > 0 && !combined) return;
       // The exact combined complement is composed directly from the two
-      // authoritative prepared sources. `selfEvidence` remains the only
-      // durable evidence cache; borrowed classifications live only in the
-      // short-lived, authorization-fenced module presentation above.
-      const displayEvidence = selfEvidence;
+      // authoritative prepared sources. The three paint classifications are
+      // disjoint, so overlap is painted once rather than darkening Mine under
+      // a second translucent fill. Full `selfEvidence` remains the only
+      // durable Mine cache; borrowed classifications live only in session.
+      const displayEvidence = combined?.mineEvidence ?? selfEvidence;
       const nextFriendDisplay = combined?.friendEvidence ?? null;
       const nextOverlapDisplay = combined?.overlapEvidence ?? null;
       const selfShape = selfEvidence ? composeFogShape(selfEvidence) : solidFogShape();
@@ -2087,7 +2108,7 @@ export function FogLayer({
         _moduleSelfAccount = accountId;
         _moduleSelfSig = selfContentSignature;
         _moduleSelfFogShape = selfShape;
-        _moduleSelfEvidenceShape = displayEvidence;
+        _moduleSelfEvidenceShape = selfEvidence;
         _moduleSelfDisplayGeometryCache = built.cache;
       }
       setFogShape(shape);
@@ -2333,8 +2354,8 @@ export function FogLayer({
           filter={['==', ['get', 'cairnFogKind'], 'friend']}
           style={{
             lineColor: theme.mapFriendMemoryFill,
-            lineWidth: 1.6,
-            lineOpacity: 0.82 * clampedOpacityScale,
+            lineWidth: 1.2,
+            lineOpacity: 0.52 * clampedOpacityScale,
             lineDasharray: [2, 1.5],
           }}
         />
@@ -2354,8 +2375,8 @@ export function FogLayer({
           filter={['==', ['get', 'cairnFogKind'], 'overlap']}
           style={{
             lineColor: theme.mapMemoryOverlapFill,
-            lineWidth: 2,
-            lineOpacity: 0.9 * clampedOpacityScale,
+            lineWidth: 1,
+            lineOpacity: 0.34 * clampedOpacityScale,
           }}
         />
       ) : null}

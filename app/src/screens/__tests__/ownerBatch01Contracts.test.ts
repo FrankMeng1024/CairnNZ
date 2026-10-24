@@ -59,6 +59,10 @@ describe('Owner device Batch 01 source contracts', () => {
   test('Cairn sheet does not display a false drag affordance', () => {
     const sheet = read('features/marks/components/MarkDetailSheet.tsx');
     expect(sheet).toContain('showHandle={false}');
+    expect(sheet).toContain('backdropVariant="mapPreview"');
+    const frame = read('components/BottomSheetFrame.tsx');
+    expect(frame).toContain("backdropVariant === 'mapPreview' ? 'transparent' : theme.scrim");
+    expect(frame).toContain('accessibilityViewIsModal');
   });
 
   test('Plant pin heading follows the semantic visual theme', () => {

@@ -130,7 +130,9 @@ function Meta({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(20,20,20,0.30)',
+    // A map preview keeps its geographic context visible. The full-screen
+    // Pressable still owns dismissal; only the dark visual scrim is removed.
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
   sheet: {

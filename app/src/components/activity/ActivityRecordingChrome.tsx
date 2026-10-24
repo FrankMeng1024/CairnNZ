@@ -9,6 +9,7 @@ import { Icon, type IconName } from '../Icon';
 import { CairnIcon, type CairnIconName } from '../CairnIcon';
 import { Colors, FontSize, RadiusRole, Shadow, Spacing } from '../tokens';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
+import { BackButton } from '../BackButton';
 
 export type ActivityRecordingMode = 'hike' | 'run';
 export type ActivityRecordingPhase = 'ready' | 'starting' | 'tracking' | 'paused' | 'finishing';
@@ -111,16 +112,13 @@ export function ActivityTopChrome({
           },
         ]}
       >
-        <TouchableOpacity
-          onPress={onBack}
-          activeOpacity={0.78}
-          style={styles.backAction}
-          accessibilityRole="button"
-          accessibilityLabel={`Back from ${modeMeta.label}`}
-        >
-          <Icon name="ChevronLeft" size={21} color={theme.icon} strokeWidth={2.4} />
-          <Text style={[styles.backLabel, { color: theme.foregroundSecondary }]}>Back</Text>
-        </TouchableOpacity>
+        <View style={styles.backAction}>
+          <BackButton
+            variant="inline"
+            onPress={onBack}
+            accessibilityLabel={`Back from ${modeMeta.label}`}
+          />
+        </View>
 
         <View style={styles.identity} pointerEvents="none">
           <View style={styles.identityTitleRow}>
@@ -544,11 +542,9 @@ const styles = StyleSheet.create({
   backAction: {
     minWidth: 76,
     minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: Spacing.xs,
+    justifyContent: 'center',
   },
-  backLabel: { fontSize: FontSize.caption, fontWeight: '600' },
   identity: { flex: 1, alignItems: 'center', justifyContent: 'center', minWidth: 0 },
   identityTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   identityTitle: { fontSize: 16, lineHeight: 20, fontWeight: '700', letterSpacing: -0.2 },

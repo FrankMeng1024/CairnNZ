@@ -437,11 +437,9 @@ export function PinAdjustStep({
       {/* R114 (2026-08-07): header rebalanced per design §8 (Bug #6).
           Was: pill BackButton above a light title — title looked like
           the anchor but back was above it, confusing hierarchy. Now:
-          ghostRound 36px quiet back button + title bumped to
-          fontWeight 700 with extra top margin so title reads as the
-          page anchor and back reads as subordinate but tappable. */}
+          the same inline Back composition as Activity Detail. */}
       <View style={styles.backRow}>
-        <BackButton variant="ghostRound" onPress={onBack} />
+        <BackButton variant="inline" onPress={onBack} />
       </View>
       <Text style={[styles.title, { color: theme.foreground }]}>Where's your cairn?</Text>
       <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>
@@ -683,8 +681,7 @@ function PinAdjustFallback({
   return (
     <View style={styles.container}>
       <View style={styles.backRow}>
-        {/* R114 (2026-08-07): fallback matches new ghostRound header. */}
-        <BackButton variant="ghostRound" onPress={onBack} />
+        <BackButton variant="inline" onPress={onBack} />
       </View>
       <Text style={[styles.title, { color: theme.foreground }]}>Where's your cairn?</Text>
       <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>Map preview not available on this platform.</Text>

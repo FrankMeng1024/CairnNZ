@@ -35,6 +35,7 @@ import { useAppStore } from '../store/useAppStore';
 import { storage } from '../store/storage';
 import { Colors, Spacing, Radius, FontSize, Shadow, IconSize } from '../components/tokens';
 import { Icon } from '../components/Icon';
+import { BackButton } from '../components/BackButton';
 import { PasswordField } from '../components/PasswordField';
 import { login, register, loginWithGoogle, verifyCode, resendCode,
   passwordResetRequest, passwordResetVerify, patchDob, restoreAccount,
@@ -1658,10 +1659,9 @@ export function AuthScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={formStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-            <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('register')}>
-              <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-              <Text style={formStyles.backText}>Back</Text>
-            </TouchableOpacity>
+            <View style={formStyles.backBtn}>
+              <BackButton variant="inline" onPress={() => handleViewChange('register')} />
+            </View>
 
             <View style={formStyles.titleRow}>
               <CairnLogo size={28} />
@@ -1879,10 +1879,9 @@ export function AuthScreen() {
                 (Auth Sign In/Up standard). Was hardcoded '#3E5F3A' from
                 the verify_email concept scan — inconsistent with register/
                 login/verify backs in the same flow. */}
-            <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('register')}>
-              <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-              <Text style={formStyles.backText}>Back</Text>
-            </TouchableOpacity>
+            <View style={formStyles.backBtn}>
+              <BackButton variant="inline" onPress={() => handleViewChange('register')} />
+            </View>
 
             {/* Title — concept 22pt bold, dark near-black #1C1C1C.
                 Concept scan y=132/904 (14.6% viewport top) → 136pt on 932pt. */}
@@ -2394,10 +2393,9 @@ export function AuthScreen() {
         {/* R21 v3 (2026-08-17): unified to shared formStyles.backBtn/backText
             (Auth Sign In/Up standard). Was inline styles with fontSize: 14
             hardcoded — diverged from Sign In (uses FontSize.caption = 13). */}
-        <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('login')}>
-          <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-          <Text style={formStyles.backText}>Back</Text>
-        </TouchableOpacity>
+        <View style={formStyles.backBtn}>
+          <BackButton variant="inline" onPress={() => handleViewChange('login')} />
+        </View>
         <View style={{ marginTop: 40 }}>
           <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>
             Reset password
@@ -2482,10 +2480,9 @@ export function AuthScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={[formStyles.scroll, { paddingHorizontal: 28, paddingTop: 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* R21 v3 (2026-08-17): unified to shared formStyles.backBtn/backText. */}
-        <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange('forgot_request')}>
-          <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-          <Text style={formStyles.backText}>Back</Text>
-        </TouchableOpacity>
+        <View style={formStyles.backBtn}>
+          <BackButton variant="inline" onPress={() => handleViewChange('forgot_request')} />
+        </View>
         <View style={{ marginTop: 40 }}>
           <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>
             Enter code
@@ -2606,10 +2603,9 @@ export function AuthScreen() {
               因为只有 sign in 的入口"): Back target depends on which view
               we're in — register backs to login (only entry to Auth is
               Sign In); login backs to splash. */}
-          <TouchableOpacity style={formStyles.backBtn} onPress={() => handleViewChange(isRegister ? 'login' : 'splash')}>
-            <Icon name="ChevronLeft" size={IconSize.sm} color={Colors.primary} strokeWidth={2.5} />
-            <Text style={formStyles.backText}>Back</Text>
-          </TouchableOpacity>
+          <View style={formStyles.backBtn}>
+            <BackButton variant="inline" onPress={() => handleViewChange(isRegister ? 'login' : 'splash')} />
+          </View>
 
           {/* Title row: R22 (2026-08-17) concept-scanned Create Account layout:
               - Concept 1 (createAccount1.png) shows NO cairn icon inline —
@@ -3129,8 +3125,7 @@ const formStyles = StyleSheet.create({
   // ScrollView paddingTop stays small so form content doesn't waste space
   // — back gets its own vertical breathing room below the safe-area inset.
   scroll: { paddingHorizontal: 28, paddingTop: 24, paddingBottom: Spacing.lg },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', marginBottom: Spacing.md, paddingVertical: 8 },
-  backText: { fontSize: FontSize.caption, color: Colors.primary, fontWeight: '600' },
+  backBtn: { alignSelf: 'flex-start', marginBottom: Spacing.md },
 
   // Title row: icon inline-left of title text
   titleRow: {

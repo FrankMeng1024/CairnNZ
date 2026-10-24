@@ -175,7 +175,8 @@ export function AllCairnsScreen() {
   const hasMore = useMarkerStore(state => state.libraryHasMore);
   const serverQuery = useMarkerStore(state => state.libraryQuery);
   const loadLibrary = useMarkerStore(state => state.loadCairnLibrary);
-  const [query, setQuery] = useState(serverQuery);
+  const [leftQuery, setLeftQuery] = useState(serverQuery);
+  const [foundQuery, setFoundQuery] = useState('');
   const [audience, setAudience] = useState<AudienceFilter>('all');
   const [sort, setSort] = useState<CairnSort>('recent');
   const [section, setSection] = useState<LibrarySection>(route.params?.initialSection ?? 'left');
@@ -188,13 +189,19 @@ export function AllCairnsScreen() {
   const restoringRef = useRef(new Set<number>());
   const foundRequestRef = useRef(0);
   const foundCursorRef = useRef<string | null>(null);
+  const foundTargetKeyRef = useRef('');
   const ownerId = useAppStore(state => String(state.user?.id ?? ''));
+  const query = section === 'left' ? leftQuery : foundQuery;
+  const setQuery = section === 'left' ? setLeftQuery : setFoundQuery;
 
   useEffect(() => {
     foundRequestRef.current += 1;
     restoringRef.current.clear();
     foundCursorRef.current = null;
+    foundTargetKeyRef.current = '';
     setFoundHasMore(false);
+    setFoundCairns([]);
+    setFoundError('');
     setRestoringIds([]);
   }, [ownerId]);
 
@@ -203,6 +210,7 @@ export function AllCairnsScreen() {
     const requestedState = foundCollectionState;
     const requestedOwner = ownerId;
     if (!requestedOwner) return;
+    if (reset) foundTargetKeyRef.current = `${requestedOwner}|${requestedState}`;
     setFoundLoading(true);
     setFoundError('');
     try {
@@ -273,8 +281,11 @@ export function AllCairnsScreen() {
   }, [ownerId]);
 
   useEffect(() => {
-    if (section === 'found') void loadFound(true);
-  }, [loadFound, section]);
+    const key = `${ownerId}|${foundCollectionState}`;
+    if (section === 'found' && ownerId && foundTargetKeyRef.current !== key) {
+      void loadFound(true);
+    }
+  }, [foundCollectionState, loadFound, ownerId, section]);
 
   useEffect(() => {
     if (coverage === 'not-loaded' && !loading) {
@@ -284,39 +295,40 @@ export function AllCairnsScreen() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const normalized = query.trim();
+      if (section !== 'left') return;
+      const normalized = leftQuery.trim();
       if (normalized !== serverQuery && !loading) {
         void loadLibrary({ query: normalized, reset: true }).catch(() => {});
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [loadLibrary, loading, query, serverQuery]);
+  }, [leftQuery, loadLibrary, loading, section, serverQuery]);
 
   const merged = useMemo(
     () => mergeOwnedCairns(markers, remoteMarkers),
     [markers, remoteMarkers],
   );
   const visible = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
+    const normalized = leftQuery.trim().toLocaleLowerCase();
     return merged
       .filter(marker => audience === 'all' || marker.permission === audience)
       .filter(marker => !normalized || searchableText(marker).includes(normalized))
       .sort((a, b) => sort === 'recent'
         ? (b.createdAt ?? 0) - (a.createdAt ?? 0)
         : (a.createdAt ?? 0) - (b.createdAt ?? 0));
-  }, [audience, merged, query, sort]);
+  }, [audience, leftQuery, merged, sort]);
   const visibleFound = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
+    const normalized = foundQuery.trim().toLocaleLowerCase();
     const requested = route.params?.markerIds?.length ? new Set(route.params.markerIds.map(String)) : null;
     return foundCairns
       .filter(cairn => !requested || requested.has(String(cairn.marker_id)))
       .filter(cairn => !normalized
         || `${cairn.text ?? ''}\n${cairn.author_name ?? ''}`.toLocaleLowerCase().includes(normalized));
-  }, [foundCairns, query, route.params?.markerIds]);
+  }, [foundCairns, foundQuery, route.params?.markerIds]);
 
   const refresh = useCallback(() => {
-    void loadLibrary({ query: query.trim(), reset: true }).catch(() => {});
-  }, [loadLibrary, query]);
+    void loadLibrary({ query: leftQuery.trim(), reset: true }).catch(() => {});
+  }, [leftQuery, loadLibrary]);
 
   const incompleteCopy = error === 'unavailable'
     ? 'Showing Cairns available on this iPhone. Full history could not be checked.'
@@ -327,10 +339,10 @@ export function AllCairnsScreen() {
         : null;
 
   const showInitialLoading = loading && coverage === 'not-loaded' && visible.length === 0;
-  const emptyTitle = query.trim()
+  const emptyTitle = leftQuery.trim()
     ? (coverage === 'complete' ? 'No matching Cairns' : 'No matches in available Cairns')
     : 'No Cairns yet';
-  const emptyBody = query.trim()
+  const emptyBody = leftQuery.trim()
     ? (coverage === 'complete'
       ? 'Try a different name or note.'
       : 'Try another search, or reconnect to check more history.')
@@ -353,7 +365,7 @@ export function AllCairnsScreen() {
             <TouchableOpacity
               key={value}
               style={[styles.sectionTab, selected && { backgroundColor: theme.controlSelected }]}
-              onPress={() => { setSection(value); setQuery(''); }}
+              onPress={() => setSection(value)}
               accessibilityState={{ selected }}
               testID={`cairn-library-${value}`}
             >
@@ -372,125 +384,136 @@ export function AllCairnsScreen() {
           style={styles.searchWrap}
       />
 
-      {section === 'left' ? <View style={styles.controls} testID="all-cairns-controls">
-        <Text style={[styles.controlLabel, { color: theme.foregroundSecondary }]}>AUDIENCE</Text>
-        <LibraryFilterRow value={audience} options={AUDIENCE_FILTERS} onChange={setAudience} testID="all-cairns-filter" />
-        <TouchableOpacity
-          testID="all-cairns-sort"
-          accessibilityRole="button"
-          accessibilityLabel={`Sorted ${sort === 'recent' ? 'recent first' : 'oldest first'}. Change order`}
-          onPress={() => setSort(current => current === 'recent' ? 'oldest' : 'recent')}
-          style={styles.sortControl}
+      <View style={styles.libraryPanels}>
+        <View
+          style={[styles.libraryPanel, section !== 'left' && styles.libraryPanelHidden]}
+          pointerEvents={section === 'left' ? 'auto' : 'none'}
+          accessibilityElementsHidden={section !== 'left'}
+          importantForAccessibility={section === 'left' ? 'auto' : 'no-hide-descendants'}
         >
-          <Icon name="ArrowUpDown" size={15} color={theme.iconInactive} strokeWidth={2} />
-          <Text style={[styles.sortText, { color: theme.foregroundSecondary }]}>
-            {sort === 'recent' ? 'Planted: newest first' : 'Planted: oldest first'}
-          </Text>
-        </TouchableOpacity>
-      </View> : null}
-
-      {section === 'found' ? (
-        <LibraryFilterRow
-          value={foundCollectionState}
-          options={[{ key: 'active', label: 'Current' }, { key: 'archived', label: 'Archived' }]}
-          onChange={setFoundCollectionState}
-          testID="found-cairns-filter"
-          style={styles.foundFilterRow}
-        />
-      ) : null}
-
-      {section === 'left' && incompleteCopy ? (
-        <ContentSurface level="record" style={styles.coverage} testID="all-cairns-coverage">
-          <View style={styles.coverageRow}>
-            <Icon name="CloudOff" size={16} color={theme.iconInactive} strokeWidth={2} />
-            <Text style={[styles.coverageText, { color: theme.foregroundSecondary }]}>{incompleteCopy}</Text>
-            <TouchableOpacity onPress={refresh} disabled={loading} accessibilityRole="button">
-              <Text style={[styles.retryText, { color: theme.primary }]}>{loading ? 'Checking…' : 'Retry'}</Text>
+          <View style={styles.controls} testID="all-cairns-controls">
+            <Text style={[styles.controlLabel, { color: theme.foregroundSecondary }]}>AUDIENCE</Text>
+            <LibraryFilterRow value={audience} options={AUDIENCE_FILTERS} onChange={setAudience} testID="all-cairns-filter" />
+            <TouchableOpacity
+              testID="all-cairns-sort"
+              accessibilityRole="button"
+              accessibilityLabel={`Sorted ${sort === 'recent' ? 'recent first' : 'oldest first'}. Change order`}
+              onPress={() => setSort(current => current === 'recent' ? 'oldest' : 'recent')}
+              style={styles.sortControl}
+            >
+              <Icon name="ArrowUpDown" size={15} color={theme.iconInactive} strokeWidth={2} />
+              <Text style={[styles.sortText, { color: theme.foregroundSecondary }]}>
+                {sort === 'recent' ? 'Planted: newest first' : 'Planted: oldest first'}
+              </Text>
             </TouchableOpacity>
           </View>
-        </ContentSurface>
-      ) : null}
-
-      {section === 'found' ? (
-        foundLoading && visibleFound.length === 0 ? (
-          <View style={styles.centerState}><ActivityIndicator color={theme.primary} /></View>
-        ) : (
-          <FlatList
-            testID="found-cairns-list"
-            data={visibleFound}
-            keyExtractor={item => String(item.marker_id)}
-            renderItem={({ item }) => (
-              <FoundCairnRow
-                cairn={item}
-                archived={foundCollectionState === 'archived'}
-                onRestore={() => void restoreFound(item.marker_id)}
-                restoring={restoringIds.includes(item.marker_id)}
-                revisionId={route.params?.revisionIdsByMarker?.[String(item.marker_id)]}
-              />
-            )}
-            contentContainerStyle={[styles.list, visibleFound.length === 0 && styles.listEmpty]}
-            refreshControl={<RefreshControl refreshing={foundLoading} onRefresh={() => void loadFound(true)} tintColor={theme.primary} />}
-            ListHeaderComponent={foundError ? <Text style={[styles.coverageText, { color: theme.foregroundSecondary }]}>{foundError}</Text> : null}
-            ListEmptyComponent={(
-              <View style={styles.centerState} testID="found-cairns-empty">
-                <View style={[styles.emptyIcon, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
-                  <Icon name="MapPin" size={24} color={theme.iconActive} strokeWidth={2} />
-                </View>
-                <Text style={[styles.stateTitle, { color: theme.foreground }]}>{foundCollectionState === 'archived' ? 'No archived Cairns' : 'No acquired Cairns yet'}</Text>
-                <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{foundCollectionState === 'archived' ? 'Archived Cairns can be restored here.' : 'Cairns discovered during eligible visits will appear here.'}</Text>
+          {incompleteCopy ? (
+            <ContentSurface level="record" style={styles.coverage} testID="all-cairns-coverage">
+              <View style={styles.coverageRow}>
+                <Icon name="CloudOff" size={16} color={theme.iconInactive} strokeWidth={2} />
+                <Text style={[styles.coverageText, { color: theme.foregroundSecondary }]}>{incompleteCopy}</Text>
+                <TouchableOpacity onPress={refresh} disabled={loading} accessibilityRole="button">
+                  <Text style={[styles.retryText, { color: theme.primary }]}>{loading ? 'Checking…' : 'Retry'}</Text>
+                </TouchableOpacity>
               </View>
-            )}
-            ListFooterComponent={foundHasMore ? (
-              <TouchableOpacity
-                style={[styles.loadMore, { borderColor: theme.borderStrong, backgroundColor: theme.secondaryAction }]}
-                onPress={() => { void loadFound(false); }}
-                disabled={foundLoading}
-                testID="found-cairns-load-more"
-              >
-                {foundLoading ? <ActivityIndicator color={theme.primary} /> : (
-                  <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Load older found Cairns</Text>
-                )}
-              </TouchableOpacity>
-            ) : null}
-          />
-        )
-      ) : showInitialLoading ? (
-        <View style={styles.centerState} testID="all-cairns-loading">
-          <ActivityIndicator color={theme.primary} />
-          <Text style={[styles.stateTitle, { color: theme.foreground }]}>Opening your Cairns…</Text>
-        </View>
-      ) : (
-        <FlatList
-          testID="all-cairns-list"
-          data={visible}
-          keyExtractor={cairnStableId}
-          renderItem={({ item }) => <CairnRow marker={item} />}
-          contentContainerStyle={[styles.list, visible.length === 0 && styles.listEmpty]}
-          keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl refreshing={loading && coverage !== 'not-loaded'} onRefresh={refresh} tintColor={theme.primary} />}
-          ListEmptyComponent={(
-            <View style={styles.centerState} testID={query.trim() ? 'all-cairns-search-empty' : 'all-cairns-empty'}>
-              <View style={[styles.emptyIcon, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
-                <Icon name="MapPin" size={24} color={theme.iconActive} strokeWidth={2} />
-              </View>
-              <Text style={[styles.stateTitle, { color: theme.foreground }]}>{emptyTitle}</Text>
-              <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{emptyBody}</Text>
-            </View>
-          )}
-          ListFooterComponent={hasMore ? (
-            <TouchableOpacity
-              style={[styles.loadMore, { borderColor: theme.borderStrong, backgroundColor: theme.secondaryAction }]}
-              onPress={() => { void loadLibrary({ query: query.trim(), reset: false }).catch(() => {}); }}
-              disabled={loading}
-              testID="all-cairns-load-more"
-            >
-              {loading ? <ActivityIndicator color={theme.primary} /> : (
-                <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Load older Cairns</Text>
-              )}
-            </TouchableOpacity>
+            </ContentSurface>
           ) : null}
-        />
-      )}
+          {showInitialLoading ? (
+            <View style={styles.centerState} testID="all-cairns-loading">
+              <ActivityIndicator color={theme.primary} />
+              <Text style={[styles.stateTitle, { color: theme.foreground }]}>Opening your Cairns…</Text>
+            </View>
+          ) : (
+            <FlatList
+              testID="all-cairns-list"
+              data={visible}
+              keyExtractor={cairnStableId}
+              renderItem={({ item }) => <CairnRow marker={item} />}
+              contentContainerStyle={[styles.list, visible.length === 0 && styles.listEmpty]}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={<RefreshControl refreshing={loading && coverage !== 'not-loaded'} onRefresh={refresh} tintColor={theme.primary} />}
+              ListEmptyComponent={(
+                <View style={styles.centerState} testID={leftQuery.trim() ? 'all-cairns-search-empty' : 'all-cairns-empty'}>
+                  <View style={[styles.emptyIcon, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
+                    <Icon name="MapPin" size={24} color={theme.iconActive} strokeWidth={2} />
+                  </View>
+                  <Text style={[styles.stateTitle, { color: theme.foreground }]}>{emptyTitle}</Text>
+                  <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{emptyBody}</Text>
+                </View>
+              )}
+              ListFooterComponent={hasMore ? (
+                <TouchableOpacity
+                  style={[styles.loadMore, { borderColor: theme.borderStrong, backgroundColor: theme.secondaryAction }]}
+                  onPress={() => { void loadLibrary({ query: leftQuery.trim(), reset: false }).catch(() => {}); }}
+                  disabled={loading}
+                  testID="all-cairns-load-more"
+                >
+                  {loading ? <ActivityIndicator color={theme.primary} /> : (
+                    <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Load older Cairns</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+            />
+          )}
+        </View>
+
+        <View
+          style={[styles.libraryPanel, section !== 'found' && styles.libraryPanelHidden]}
+          pointerEvents={section === 'found' ? 'auto' : 'none'}
+          accessibilityElementsHidden={section !== 'found'}
+          importantForAccessibility={section === 'found' ? 'auto' : 'no-hide-descendants'}
+        >
+          <LibraryFilterRow
+            value={foundCollectionState}
+            options={[{ key: 'active', label: 'Current' }, { key: 'archived', label: 'Archived' }]}
+            onChange={setFoundCollectionState}
+            testID="found-cairns-filter"
+            style={styles.foundFilterRow}
+          />
+          {foundLoading && visibleFound.length === 0 ? (
+            <View style={styles.centerState}><ActivityIndicator color={theme.primary} /></View>
+          ) : (
+            <FlatList
+              testID="found-cairns-list"
+              data={visibleFound}
+              keyExtractor={item => String(item.marker_id)}
+              renderItem={({ item }) => (
+                <FoundCairnRow
+                  cairn={item}
+                  archived={foundCollectionState === 'archived'}
+                  onRestore={() => void restoreFound(item.marker_id)}
+                  restoring={restoringIds.includes(item.marker_id)}
+                  revisionId={route.params?.revisionIdsByMarker?.[String(item.marker_id)]}
+                />
+              )}
+              contentContainerStyle={[styles.list, visibleFound.length === 0 && styles.listEmpty]}
+              refreshControl={<RefreshControl refreshing={foundLoading} onRefresh={() => void loadFound(true)} tintColor={theme.primary} />}
+              ListHeaderComponent={foundError ? <Text style={[styles.coverageText, { color: theme.foregroundSecondary }]}>{foundError}</Text> : null}
+              ListEmptyComponent={(
+                <View style={styles.centerState} testID="found-cairns-empty">
+                  <View style={[styles.emptyIcon, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
+                    <Icon name="MapPin" size={24} color={theme.iconActive} strokeWidth={2} />
+                  </View>
+                  <Text style={[styles.stateTitle, { color: theme.foreground }]}>{foundCollectionState === 'archived' ? 'No archived Cairns' : 'No acquired Cairns yet'}</Text>
+                  <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{foundCollectionState === 'archived' ? 'Archived Cairns can be restored here.' : 'Cairns discovered during eligible visits will appear here.'}</Text>
+                </View>
+              )}
+              ListFooterComponent={foundHasMore ? (
+                <TouchableOpacity
+                  style={[styles.loadMore, { borderColor: theme.borderStrong, backgroundColor: theme.secondaryAction }]}
+                  onPress={() => { void loadFound(false); }}
+                  disabled={foundLoading}
+                  testID="found-cairns-load-more"
+                >
+                  {foundLoading ? <ActivityIndicator color={theme.primary} /> : (
+                    <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Load older found Cairns</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+            />
+          )}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -506,6 +529,9 @@ const styles = StyleSheet.create({
   sectionTabs: { marginHorizontal: Spacing.xl, marginBottom: Spacing.md, padding: 3, borderWidth: 1, borderRadius: RadiusRole.button, flexDirection: 'row' },
   sectionTab: { flex: 1, minHeight: 38, borderRadius: RadiusRole.button, alignItems: 'center', justifyContent: 'center' },
   sectionTabText: { fontSize: FontSize.small, fontWeight: '700' },
+  libraryPanels: { flex: 1 },
+  libraryPanel: { flex: 1 },
+  libraryPanelHidden: { display: 'none' },
   controls: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, gap: Spacing.sm },
   controlLabel: { fontSize: FontSize.caption, fontWeight: '700', letterSpacing: 0.8 },
   foundFilterRow: { marginHorizontal: Spacing.xl, marginTop: Spacing.md },

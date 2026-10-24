@@ -165,15 +165,12 @@ describe('O87 Memory presentation state contracts', () => {
   });
 
   test.each([DAY_VISUAL_THEME, SUNSET_VISUAL_THEME, NIGHT_VISUAL_THEME])(
-    '$mode keeps Mine, Friends and overlap semantically distinct',
+    '$mode keeps Friends restrained and gives overlap Mine visual priority',
     (theme) => {
-      expect(new Set([
-        theme.mapMineMemoryFill,
-        theme.mapFriendMemoryFill,
-        theme.mapMemoryOverlapFill,
-      ]).size).toBe(3);
-      expect(theme.mapMemoryOverlapOpacity).toBeGreaterThan(theme.mapMineMemoryOpacity);
-      expect(theme.mapMemoryOverlapOpacity).toBeGreaterThan(theme.mapFriendMemoryOpacity);
+      expect(theme.mapFriendMemoryFill).not.toBe(theme.mapMineMemoryFill);
+      expect(theme.mapFriendMemoryOpacity).toBeLessThanOrEqual(0.24);
+      expect(theme.mapMemoryOverlapFill).toBe(theme.mapMineMemoryFill);
+      expect(theme.mapMemoryOverlapOpacity).toBe(theme.mapMineMemoryOpacity);
     },
   );
 });

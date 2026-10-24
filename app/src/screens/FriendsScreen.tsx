@@ -39,6 +39,7 @@ import { StateSurface } from '../components/StateSurface';
 import { TextField } from '../components/TextField';
 import { ContentSurface } from '../components/ContentSurface';
 import { DismissButton } from '../components/DismissButton';
+import { BackButton } from '../components/BackButton';
 import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { Colors, FontSize, IconSize, Radius, Shadow, Spacing } from '../components/tokens';
 import { deriveFriendsRequestContentState } from '../utils/friendsRequestState';
@@ -809,19 +810,13 @@ export function FriendsScreen() {
 
       {/* Header */}
       <View style={[s.header, { paddingTop: Math.max(insets.top, Spacing.md) }]}>
-        <TouchableOpacity
-          style={s.hIcon}
-          onPress={() => nav.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-        >
-          <Icon name="ChevronLeft" size={DS.ic_md} color={headerColor} strokeWidth={1.9} />
-        </TouchableOpacity>
+        <View style={s.headerBack}>
+          <BackButton variant="inline" onPress={() => nav.goBack()} />
+        </View>
         <View style={s.titleBlock}>
           <Text style={[s.hTitle, { color: headerColor }]}>Friends</Text>
         </View>
-        <View style={s.hIcon} accessible={false} />
+        <View style={s.headerBack} accessible={false} />
       </View>
 
       {/* Tabs */}
@@ -1078,10 +1073,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  hIcon: {
-    width: 44,
+  headerBack: {
+    width: 72,
     height: 44,
-    alignItems: 'center',
     justifyContent: 'center',
   },
   hTitle: {

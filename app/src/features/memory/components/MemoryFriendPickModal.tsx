@@ -14,7 +14,7 @@
  *     custom Animated.timing + Easing.out(Easing.cubic) 280ms + parallel
  *     backdrop fade. Same easing as Hiking route picker.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator, Animated, Easing } from 'react-native';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
@@ -23,6 +23,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/t
 import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { DismissButton } from '../../../components/DismissButton';
+import type { AvailableMemorySource } from '../store/useMemorySubscriptionsStore';
 
 interface Props {
   visible: boolean;
@@ -31,6 +32,77 @@ interface Props {
    * independent display scope while editing the shared contributor set. */
   activateCombinedOnSelect?: boolean;
 }
+
+interface FriendMemoryRowProps {
+  source: AvailableMemorySource;
+  subscribed: boolean;
+  onToggle: (
+    friendId: number,
+    sharingStatus: AvailableMemorySource['sharing_status'],
+    subscribed: boolean,
+  ) => void;
+}
+
+/** Selection/fetch state may update the list, but unchanged friend identity,
+ * name and row layout do not render again. The fixed status/accessory slots
+ * also prevent checkbox acknowledgement from shifting the name baseline. */
+const FriendMemoryRow = memo(function FriendMemoryRow({
+  source,
+  subscribed,
+  onToggle,
+}: FriendMemoryRowProps) {
+  const theme = useVisualTheme();
+  const friendId = Number(source.friend_id);
+  const unavailable = source.sharing_status === 'not_shared';
+  const stateCopy: string | null = unavailable
+    ? 'Not shared with you'
+    : source.sharing_status === 'shared_empty'
+      ? 'No shared places yet'
+      : subscribed ? null : 'Shared with you';
+  return (
+    <TouchableOpacity
+      style={[styles.row, subscribed && { backgroundColor: theme.surface }, unavailable && { opacity: 0.62 }]}
+      onPress={() => onToggle(friendId, source.sharing_status, subscribed)}
+      disabled={unavailable}
+      testID={`memory-friend-row-${source.friend_id}`}
+      accessibilityRole="checkbox"
+      accessibilityLabel={source.friend_name}
+      accessibilityState={{ disabled: unavailable, checked: subscribed }}
+    >
+      <View style={styles.rowMain}>
+        <Text style={[styles.rowName, { color: theme.foreground }]} numberOfLines={1}>
+          {source.friend_name}
+        </Text>
+        <View style={styles.rowStatusSlot} testID={`memory-friend-row-status-slot-${source.friend_id}`}>
+          {stateCopy ? (
+            <Text
+              style={[styles.rowEmail, { color: theme.foregroundSecondary }]}
+              testID={`memory-friend-row-status-${source.friend_id}`}
+              numberOfLines={1}
+            >
+              {stateCopy}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={styles.rowAccessory} testID={`memory-friend-row-accessory-${source.friend_id}`}>
+        {unavailable ? (
+          <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
+        ) : (
+          <View style={[styles.checkbox, { borderColor: subscribed ? theme.primary : theme.borderStrong, backgroundColor: subscribed ? theme.primary : 'transparent' }]}>
+            {subscribed ? <Icon name="Check" size={14} color={theme.onPrimary} strokeWidth={2.5} /> : null}
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}, (previous, next) => (
+  previous.subscribed === next.subscribed
+  && previous.onToggle === next.onToggle
+  && previous.source.friend_id === next.source.friend_id
+  && previous.source.friend_name === next.source.friend_name
+  && previous.source.sharing_status === next.source.sharing_status
+));
 
 export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSelect = true }: Props) {
   const theme = useVisualTheme();
@@ -91,9 +163,13 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
     ]).start(() => onClose());
   };
 
-  const onTap = (friendId: number, sharingStatus: 'not_shared' | 'shared_empty' | 'shared') => {
+  const onTap = useCallback((
+    friendId: number,
+    sharingStatus: AvailableMemorySource['sharing_status'],
+    subscribed: boolean,
+  ) => {
     if (sharingStatus === 'not_shared') return;
-    if (isSubscribed(friendId)) {
+    if (subscribed) {
       if (activateCombinedOnSelect) setScope('combined');
       void unsubscribe(friendId);
       return;
@@ -107,7 +183,7 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
         void loadFriendProjections([friendId]);
       }
     });
-  };
+  }, [activateCombinedOnSelect, loadFriendProjections, setScope, subscribe, unsubscribe]);
 
   return (
     <Modal
@@ -157,51 +233,13 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
             <FlatList
               data={sources}
               keyExtractor={(f) => String(f.friend_id)}
-              renderItem={({ item }) => {
-                const friendId = Number(item.friend_id);
-                const subscribed = isSubscribed(friendId);
-                const unavailable = item.sharing_status === 'not_shared';
-                const stateCopy: string | null = unavailable
-                  ? 'Not shared with you'
-                  : item.sharing_status === 'shared_empty'
-                        ? 'No shared places yet'
-                        : subscribed ? null : 'Shared with you';
-                return (
-                  <View>
-                    <TouchableOpacity
-                      style={[styles.row, subscribed && { backgroundColor: theme.surface }, unavailable && { opacity: 0.62 }]}
-                      onPress={() => onTap(friendId, item.sharing_status)}
-                      disabled={unavailable}
-                      testID={`memory-friend-row-${item.friend_id}`}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ disabled: unavailable, checked: subscribed }}
-                    >
-                      <View style={styles.rowMain}>
-                        <Text style={[styles.rowName, { color: theme.foreground }]}>{item.friend_name}</Text>
-                        <View style={styles.rowStatusSlot} testID={`memory-friend-row-status-slot-${item.friend_id}`}>
-                        {stateCopy ? (
-                          <Text
-                            style={[styles.rowEmail, { color: theme.foregroundSecondary }]}
-                            testID={`memory-friend-row-status-${item.friend_id}`}
-                          >
-                            {stateCopy}
-                          </Text>
-                        ) : null}
-                        </View>
-                      </View>
-                      <View style={styles.rowAccessory} testID={`memory-friend-row-accessory-${item.friend_id}`}>
-                        {unavailable ? (
-                          <Icon name="Lock" size={16} color={Colors.warning} strokeWidth={2.2} />
-                        ) : (
-                          <View style={[styles.checkbox, { borderColor: subscribed ? theme.primary : theme.borderStrong, backgroundColor: subscribed ? theme.primary : 'transparent' }]}>
-                            {subscribed ? <Icon name="Check" size={14} color={theme.onPrimary} strokeWidth={2.5} /> : null}
-                          </View>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }}
+              renderItem={({ item }) => (
+                <FriendMemoryRow
+                  source={item}
+                  subscribed={isSubscribed(Number(item.friend_id))}
+                  onToggle={onTap}
+                />
+              )}
               ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: theme.border }]} />}
             />
             </>

@@ -35,9 +35,16 @@ interface BackButtonProps {
   label?: string;
   onPress?: () => void;
   testID?: string;
+  accessibilityLabel?: string;
 }
 
-export function BackButton({ variant = 'inline', label = 'Back', onPress, testID }: BackButtonProps) {
+export function BackButton({
+  variant = 'inline',
+  label = 'Back',
+  onPress,
+  testID,
+  accessibilityLabel = label,
+}: BackButtonProps) {
   const nav = useNavigation();
   const scale = useRef(new Animated.Value(1)).current;
   // R21 (2026-08-18): dark-aware colour. Ink becomes cream on night bg
@@ -67,7 +74,7 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress, testID
           onPressOut={handlePressOut}
           activeOpacity={1}
           accessibilityRole="button"
-          accessibilityLabel={label}
+          accessibilityLabel={accessibilityLabel}
         >
           <Icon name="ChevronLeft" size={IconSize.sm} color={inkColor} strokeWidth={2.5} />
           <Text style={[styles.inlineText, { color: inkColor }]}>{label}</Text>
@@ -91,7 +98,7 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress, testID
           onPressOut={handlePressOut}
           activeOpacity={1}
           accessibilityRole="button"
-          accessibilityLabel={label}
+          accessibilityLabel={accessibilityLabel}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon name="ChevronLeft" size={22} color={theme.icon} strokeWidth={2.4} />
@@ -110,7 +117,7 @@ export function BackButton({ variant = 'inline', label = 'Back', onPress, testID
         onPressOut={handlePressOut}
         activeOpacity={1}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={accessibilityLabel}
       >
         {BlurView ? (
           <BlurView intensity={30} tint={theme.mode === 'night' ? 'dark' : 'light'} style={[styles.pillBlur, { backgroundColor: theme.scenicSurface, borderColor: theme.border }]}>

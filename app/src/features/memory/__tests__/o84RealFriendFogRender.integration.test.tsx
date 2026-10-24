@@ -1,5 +1,7 @@
 import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
+import intersectTurf from '@turf/intersect';
+import { featureCollection } from '@turf/turf';
 
 const mockRenderedSources = new Map<string, any>();
 const mockAuthenticatedFetch = jest.fn();
@@ -241,6 +243,9 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
     expect(polygonCount(friendShape)).toBeGreaterThan(0);
     expect(polygonCount(overlapShape)).toBeGreaterThan(0);
     expect(polygonCount(mineShape)).toBeGreaterThan(0);
+    expect(intersectTurf(featureCollection([mineShape, friendShape]))).toBeNull();
+    expect(intersectTurf(featureCollection([mineShape, overlapShape]))).toBeNull();
+    expect(intersectTurf(featureCollection([friendShape, overlapShape]))).toBeNull();
     expect(fogShape.properties.cairnEvidencePointCount).toBe(0);
     expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('mine-exact-v1');
 

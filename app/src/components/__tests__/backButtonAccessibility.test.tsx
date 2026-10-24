@@ -23,6 +23,17 @@ const variants: Variant[] = ['pill', 'inline', 'ghostRound'];
 const backButtonPath = path.resolve(__dirname, '..', 'BackButton.tsx');
 const publicDetailPath = path.resolve(__dirname, '..', '..', 'screens', 'PublicCairnDetailScreen.tsx');
 
+function productionTsxFiles(root: string): string[] {
+  return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
+    const absolute = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__' || entry.name.endsWith('_generated')) return [];
+      return productionTsxFiles(absolute);
+    }
+    return entry.isFile() && entry.name.endsWith('.tsx') ? [absolute] : [];
+  });
+}
+
 function mutatePillOpeningTag(source: string, mutate: (tag: string) => string): string {
   const pillStart = source.indexOf('// Pill: frosted-glass effect');
   const tagStart = source.indexOf('<TouchableOpacity', pillStart);
@@ -38,7 +49,7 @@ function pillAccessibilityContract(source: string): boolean {
   if (pillStart < 0 || tagStart < 0 || tagEnd === 0) return false;
   const tag = source.slice(tagStart, tagEnd);
   return (tag.match(/accessibilityRole="button"/g) ?? []).length === 1
-    && (tag.match(/accessibilityLabel=\{label\}/g) ?? []).length === 1;
+    && (tag.match(/accessibilityLabel=\{accessibilityLabel\}/g) ?? []).length === 1;
 }
 
 describe('BackButton accessibility contract', () => {
@@ -58,6 +69,13 @@ describe('BackButton accessibility contract', () => {
 
     expect(screen.getAllByRole('button', { name: 'Return to Memory' })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  });
+
+  it('keeps Activity-standard visible copy while allowing a contextual accessible name', () => {
+    const screen = render(<BackButton accessibilityLabel="Back from Hike" />);
+
+    expect(screen.getByText('Back')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back from Hike' })).toBeTruthy();
   });
 
   it('fires a pill callback exactly once without also navigating', () => {
@@ -81,7 +99,7 @@ describe('BackButton accessibility contract', () => {
   it('fails its pill source contract if either repaired semantic is removed', () => {
     const source = fs.readFileSync(backButtonPath, 'utf8');
     const withoutRole = mutatePillOpeningTag(source, tag => tag.replace('        accessibilityRole="button"\n', ''));
-    const withoutLabel = mutatePillOpeningTag(source, tag => tag.replace('        accessibilityLabel={label}\n', ''));
+    const withoutLabel = mutatePillOpeningTag(source, tag => tag.replace('        accessibilityLabel={accessibilityLabel}\n', ''));
 
     expect(pillAccessibilityContract(source)).toBe(true);
     expect(pillAccessibilityContract(withoutRole)).toBe(false);
@@ -99,6 +117,24 @@ describe('BackButton accessibility contract', () => {
     const authorizedBranch = source.slice(authorizedStart);
     expect(unavailableBranch).toContain('Public Cairn unavailable');
     expect(unavailableBranch).toContain('<BackButton variant="inline" />');
-    expect(authorizedBranch).toContain('<BackButton variant="pill" />');
+    expect(authorizedBranch).toContain('<BackButton variant="inline" />');
+  });
+
+  it('uses the Activity-standard inline composition on every production BackButton callsite', () => {
+    const sourceRoot = path.resolve(__dirname, '..', '..');
+    const callsites = productionTsxFiles(sourceRoot)
+      .filter(file => file !== backButtonPath)
+      .map(file => ({ file, source: fs.readFileSync(file, 'utf8') }))
+      .filter(item => item.source.includes('<BackButton'));
+
+    expect(callsites.length).toBeGreaterThan(10);
+    for (const callsite of callsites) {
+      expect(callsite.source).not.toMatch(/<BackButton[^>]+variant="(?:pill|ghostRound)"/);
+    }
+
+    const memory = fs.readFileSync(path.resolve(sourceRoot, 'features/memory/screens/MemoryScreen.tsx'), 'utf8');
+    expect(memory).not.toContain('memoryBackSurface');
+    const activityDetail = fs.readFileSync(path.resolve(sourceRoot, 'screens/MapHistoryScreen.tsx'), 'utf8');
+    expect(activityDetail).toContain('<BackButton\n            variant="inline"');
   });
 });

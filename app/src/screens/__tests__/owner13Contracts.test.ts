@@ -7,7 +7,8 @@ describe('Owner 13 root-cause source contracts', () => {
   test('Memory entry exposes Cairn Library without renaming the technical route', () => {
     const memory = read('features/memory/screens/MemoryScreen.tsx');
     expect(memory).toContain('Open Cairn Library');
-    expect(memory).toContain('>Cairn Library</Text>');
+    expect(memory).toContain('libraryActionLabel');
+    expect(memory).toContain('>Library</Text>');
     expect(memory).not.toContain('Open All Cairns');
     expect(memory).toContain("nav.navigate('AllCairns')");
   });
@@ -18,6 +19,10 @@ describe('Owner 13 root-cause source contracts', () => {
     expect(library).toContain('LibrarySearchField');
     expect(library).toContain('LibraryFilterRow');
     expect(library).not.toContain('styles.rowIcon, { backgroundColor');
+    expect(library).toContain("section !== 'left' && styles.libraryPanelHidden");
+    expect(library).toContain("section !== 'found' && styles.libraryPanelHidden");
+    expect(library).toContain('foundTargetKeyRef.current !== key');
+    expect(library).not.toContain("setSection(value); setQuery('')");
   });
 
   test('Trails shares Search-first compact controls across Activities and Routes', () => {

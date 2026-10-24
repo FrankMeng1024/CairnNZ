@@ -1875,7 +1875,7 @@ function MapHistoryObjectScreen() {
       <SafeAreaView style={styles.topBar} edges={['top']}>
         <View style={styles.topRow} testID={isRouteDetail ? 'route-detail-header' : undefined}>
           <BackButton
-            variant={isRouteDetail ? 'pill' : 'inline'}
+            variant="inline"
             onPress={targetSessionId
               ? handleActivityBack
               : undefined}

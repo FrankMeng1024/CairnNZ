@@ -26,6 +26,9 @@ interface Props {
   keyboardVerticalOffset?: number;
   testID?: string;
   showHandle?: boolean;
+  /** Map previews keep geographic context visible while preserving the same
+   * dismissal, keyboard and accessibility boundary as a standard sheet. */
+  backdropVariant?: 'standard' | 'mapPreview';
 }
 
 /** Shared bottom-sheet material, safe-area, keyboard and dismissal contract. */
@@ -38,6 +41,7 @@ export function BottomSheetFrame({
   keyboardVerticalOffset = 0,
   testID,
   showHandle = true,
+  backdropVariant = 'standard',
 }: Props) {
   const theme = useVisualTheme();
   const insets = useSafeAreaInsets();
@@ -50,7 +54,10 @@ export function BottomSheetFrame({
       onRequestClose={dismissible ? onDismiss : undefined}
     >
       <KeyboardAvoidingView
-        style={[styles.backdrop, { backgroundColor: theme.scrim }]}
+        style={[
+          styles.backdrop,
+          { backgroundColor: backdropVariant === 'mapPreview' ? 'transparent' : theme.scrim },
+        ]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={keyboardVerticalOffset}
       >

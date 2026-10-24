@@ -154,6 +154,7 @@ export function MarkDetailSheet(props: Props) {
       visible={!!marker}
       onDismiss={onClose}
       showHandle={false}
+      backdropVariant="mapPreview"
       testID={`mark-detail-sheet-form-${form}`}
     >
         <View style={styles.sheetContent}>

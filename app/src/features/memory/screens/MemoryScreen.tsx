@@ -1088,9 +1088,7 @@ export function MemoryScreen() {
       {/* The screen chrome is independent from Mapbox/Fog readiness. It stays
           interactive on cold entry, warm re-entry and retained-scene refresh. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <View style={[styles.memoryBackSurface, { backgroundColor: theme.mapOverlay }]}>
-          <BackButton variant="inline" onPress={() => nav.goBack()} testID="memory-back" />
-        </View>
+        <BackButton variant="inline" onPress={() => nav.goBack()} testID="memory-back" />
         {/* v376: Pick icon 移到 MemoryScopeToggle 内部作为第三个 segment,
             scope=friends 时 width+opacity 展开,scope=mine 时 collapse 到 0
             (用户 v375 反馈: 之前的 fixed-position 占位空白难看)。 */}
@@ -1106,6 +1104,7 @@ export function MemoryScreen() {
               : 'Open Cairn Library'}
           >
             <Icon name="MapPin" size={17} color={theme.iconActive} strokeWidth={2.1} />
+            <Text style={[styles.libraryActionLabel, { color: theme.foreground }]}>Library</Text>
             {acquiredUnreadCount > 0 ? (
               <View style={[styles.libraryUnread, { backgroundColor: theme.primary }]}>
                 <Text style={[styles.libraryUnreadText, { color: theme.onPrimary }]}>
@@ -1723,22 +1722,19 @@ const styles = StyleSheet.create({
     zIndex: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    // Sprint 70 STORY-00539: BackButton on left, MemoryScopeToggle pushed
-    // to right via space-between. Both pill-shaped so they balance visually.
+    // Activity Detail's inline Back is the navigation reference. Map actions
+    // retain their own material, but navigation itself is never wrapped.
     justifyContent: 'space-between',
   },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  memoryBackSurface: {
-    minHeight: 44,
-    paddingHorizontal: 6,
-    borderRadius: 14,
-    justifyContent: 'center',
-  },
   libraryAction: {
-    width: 44,
+    minWidth: 76,
     height: 44,
-    borderRadius: 22,
+    paddingHorizontal: 10,
+    borderRadius: 16,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 5,
     alignItems: 'center',
     justifyContent: 'center',
     shadowOpacity: 0.14,
@@ -1746,6 +1742,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
+  libraryActionLabel: { fontSize: 12, fontWeight: '700' },
   libraryUnread: { position: 'absolute', right: -3, top: -3, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   libraryUnreadText: { fontSize: 9, lineHeight: 12, fontWeight: '800' },
   evidenceContext: {

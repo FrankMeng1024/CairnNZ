@@ -423,7 +423,7 @@ export function MarkerDetailScreen() {
           />
         ) : null}
         <View style={styles.backRowOverlay} pointerEvents="box-none">
-          <BackButton variant="pill" />
+          <BackButton variant="inline" />
         </View>
       </View>
 
