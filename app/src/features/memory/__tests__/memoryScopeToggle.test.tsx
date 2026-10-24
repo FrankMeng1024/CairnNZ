@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import { Animated, StyleSheet } from 'react-native';
 
 jest.mock('../../../hooks/useVisualTheme', () => {
@@ -67,20 +67,14 @@ describe('Memory scope presentation', () => {
     expect(useMemoryScopeStore.getState()).toMatchObject({ ownerUserId: 'viewer-b', scope: 'self' });
   });
 
-  test('reserves a stable pending slot but suppresses sub-180 ms spinner flashes', () => {
-    jest.useFakeTimers();
-    useMemoryScopeStore.setState({ ownerUserId: 'viewer-a', scope: 'combined' });
-    const screen = render(<MemoryScopeToggle pending />);
+  test('keeps scope selection immediate without a duplicate per-control loading state', () => {
+    const screen = render(<MemoryScopeToggle onPickPress={jest.fn()} />);
 
-    expect(screen.getByTestId('memory-scope-pending-slot')).toBeTruthy();
-    expect(screen.queryByTestId('memory-scope-pending')).toBeNull();
-    act(() => { jest.advanceTimersByTime(179); });
-    expect(screen.queryByTestId('memory-scope-pending')).toBeNull();
-    act(() => { jest.advanceTimersByTime(1); });
-    expect(screen.getByTestId('memory-scope-pending')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('memory-scope-combined'));
 
-    screen.rerender(<MemoryScopeToggle pending={false} />);
+    expect(useMemoryScopeStore.getState().scope).toBe('combined');
+    expect(screen.getByTestId('memory-scope-combined').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.queryByTestId('memory-scope-pending-slot')).toBeNull();
     expect(screen.queryByTestId('memory-scope-pending')).toBeNull();
-    jest.useRealTimers();
   });
 });

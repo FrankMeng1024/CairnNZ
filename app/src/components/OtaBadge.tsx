@@ -379,7 +379,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // GPS source health, and faster foreground publication of durable history.
 // O90 (2026-10-23): integrated automatic diagnostics and production backend
 // compatibility candidate on the unchanged Build 65 / 0.2.6-o66 runtime.
-export const OTA_VERSION = 'O91';
+export const OTA_VERSION = 'O92';
 
 /** Home's intentionally quiet build receipt. Update transport state belongs
  * to Expo Updates and diagnostics; it is not a user-facing success banner. */
