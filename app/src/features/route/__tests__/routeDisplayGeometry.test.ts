@@ -36,6 +36,17 @@ describe('display-only repeated traversal projection', () => {
     expect(display.repeatLanes[0].multiplicity).toBe(2);
     expect(display.repeatLanes[0].coordinates).toEqual(expect.arrayContaining([p(100)]));
     expect(display.repeatLabels.map(label => label.text)).toEqual(['2 passes']);
+    // A positive Mapbox lineOffset separates the two lanes but cannot join a
+    // 180-degree cusp by itself. The display contract therefore needs an
+    // explicit, ordered, display-only semicircle at the genuine turnback.
+    expect(display.turnConnectors).toHaveLength(1);
+    expect(display.turnConnectors[0].coordinate).toEqual(p(100));
+    expect(display.turnConnectors[0].occurrenceIds).toEqual(expect.arrayContaining([
+      'legacy-route:1',
+      'legacy-route:2',
+    ]));
+    expect(display.turnConnectors[0].rotationDeg).toBeGreaterThanOrEqual(0);
+    expect(display.turnConnectors[0].rotationDeg).toBeLessThan(360);
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 
@@ -58,6 +69,17 @@ describe('display-only repeated traversal projection', () => {
     expect(display.repeatLanes[0].multiplicity).toBe(5);
     expect(display.repeatLabels.map(label => label.text)).toEqual(['5 passes']);
     expect(display.repeatLabels[0].text).not.toMatch(/[←→]/);
+  });
+
+  test('three passes retain truthful turnback coordinates at both corridor ends', () => {
+    const canonical = canonicalRouteGeometry({
+      points: [p(0), p(45), p(90), p(45), p(0), p(45), p(90)],
+    });
+    const display = buildRouteDisplayGeometry(canonical);
+    expect(display.turnConnectors.map(connector => connector.coordinate)).toEqual([
+      p(90),
+      p(0),
+    ]);
   });
 
   test('nearby parallel geometry is not mistaken for the same traversal', () => {

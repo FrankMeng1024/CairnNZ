@@ -6,6 +6,8 @@ export interface RouteDisplayLine {
   id: string;
   coordinates: RoutePoint[];
   occurrenceIds: string[];
+  /** Stable six-metre interval identities used by the visual coverage oracle. */
+  coverageIds: string[];
 }
 
 export interface RouteRepeatLane extends RouteDisplayLine {
@@ -22,12 +24,23 @@ export interface RouteRepeatLabel {
   direction: 'forward' | 'backward';
 }
 
+export interface RouteTurnConnector {
+  id: string;
+  coordinate: RoutePoint;
+  occurrenceIds: string[];
+  multiplicity: number;
+  /** Rotate the display-only U so its open side faces the repeated arms. */
+  rotationDeg: number;
+}
+
 export interface RouteDisplayGeometry {
   baseLines: RouteDisplayLine[];
   /** Display-only non-retraced intervals. Canonical geometry remains in baseLines. */
   ordinaryLines: RouteDisplayLine[];
   repeatLanes: RouteRepeatLane[];
   repeatLabels: RouteRepeatLabel[];
+  /** Display-only caps joining offset lanes at proven consecutive turnbacks. */
+  turnConnectors: RouteTurnConnector[];
 }
 
 interface DisplaySegment {
@@ -62,6 +75,12 @@ function localMetres(point: RoutePoint, origin: RoutePoint): [number, number] {
   const latScale = 111_132;
   const lngScale = 111_320 * Math.cos(origin.lat * Math.PI / 180);
   return [(point.lng - origin.lng) * lngScale, (point.lat - origin.lat) * latScale];
+}
+
+/** Map bearing: north=0, east=90. */
+function bearingDeg(from: RoutePoint, to: RoutePoint): number {
+  const [east, north] = localMetres(to, from);
+  return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
 }
 
 function pointToSegmentDistanceM(point: RoutePoint, a: RoutePoint, b: RoutePoint): number {
@@ -194,12 +213,14 @@ function linesForMask(segments: DisplaySegment[], included: boolean[]): RouteDis
       && routePointDistanceM(active.coordinates.at(-1)!, segment.a) <= CONNECTED_M) {
       active.coordinates.push(clone(segment.b));
       if (!active.occurrenceIds.includes(segment.occurrenceId)) active.occurrenceIds.push(segment.occurrenceId);
+      active.coverageIds.push(segment.id);
       return;
     }
     active = {
       id: `ordinary:${segment.id}`,
       coordinates: [clone(segment.a), clone(segment.b)],
       occurrenceIds: [segment.occurrenceId],
+      coverageIds: [segment.id],
     };
     lines.push(active);
   });
@@ -217,7 +238,10 @@ function linesForMask(segments: DisplaySegment[], included: boolean[]): RouteDis
  * rounded U at the real turn. Matching uses corridor and heading, so A-B can
  * match B-M-A without requiring identical endpoint pairs.
  */
-export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): RouteDisplayGeometry {
+export function buildRouteDisplayGeometry(
+  geometry: CanonicalRouteGeometry,
+  options: { repeatPresentationEnabled?: boolean } = {},
+): RouteDisplayGeometry {
   const gapAfter = new Set(geometry.gaps.map(gap => gap.afterPartId));
   // Retain the exact ordered canonical coordinates as a reversible authority
   // per real gap. The renderer uses `ordinaryLines` plus `repeatLanes`; this
@@ -228,17 +252,22 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
     if (part.points.length < 2) return;
     const hasGap = partIndex > 0 && gapAfter.has(geometry.parts[partIndex - 1].id);
     const occurrenceIds = part.points.slice(0, -1).map((_, index) => `${part.id}:${index}`);
+    const coverageIds = part.points.slice(0, -1).flatMap((point, index) => (
+      subdivide(occurrenceIds[index], point, part.points[index + 1], false).map(segment => segment.id)
+    ));
     if (activeBase
       && !hasGap
       && routePointDistanceM(activeBase.coordinates.at(-1)!, part.points[0]) <= CONNECTED_M) {
       activeBase.coordinates.push(...part.points.slice(1).map(clone));
       activeBase.occurrenceIds.push(...occurrenceIds);
+      activeBase.coverageIds.push(...coverageIds);
       return;
     }
     activeBase = {
       id: `base:${part.id}`,
       coordinates: part.points.map(clone),
       occurrenceIds,
+      coverageIds,
     };
     baseLines.push(activeBase);
   });
@@ -254,6 +283,19 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
       ));
     });
   });
+
+  if (options.repeatPresentationEnabled === false) return {
+    baseLines,
+    ordinaryLines: baseLines.map(line => ({
+      ...line,
+      coordinates: line.coordinates.map(clone),
+      occurrenceIds: [...line.occurrenceIds],
+      coverageIds: [...line.coverageIds],
+    })),
+    repeatLanes: [],
+    repeatLabels: [],
+    turnConnectors: [],
+  };
 
   const matchIndexes = segments.map(() => [] as number[]);
   // A route can contain hundreds of accepted observations. Compare only
@@ -321,9 +363,15 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
   // exact canonical vertices.
   if (!repeated.some(Boolean)) return {
     baseLines,
-    ordinaryLines: baseLines.map(line => ({ ...line, coordinates: line.coordinates.map(clone), occurrenceIds: [...line.occurrenceIds] })),
+    ordinaryLines: baseLines.map(line => ({
+      ...line,
+      coordinates: line.coordinates.map(clone),
+      occurrenceIds: [...line.occurrenceIds],
+      coverageIds: [...line.coverageIds],
+    })),
     repeatLanes: [],
     repeatLabels: [],
+    turnConnectors: [],
   };
 
   const ordinaryLines = linesForMask(segments, repeated.map(value => !value));
@@ -346,6 +394,7 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
         if (!activeRepeat.occurrenceIds.includes(segment.occurrenceId)) {
           activeRepeat.occurrenceIds.push(segment.occurrenceId);
         }
+        activeRepeat.coverageIds.push(segment.id);
         activeRepeat.multiplicity = Math.max(activeRepeat.multiplicity, multiplicity);
       } else {
         flushRepeat();
@@ -353,6 +402,7 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
           id: `repeat:${segment.id}`,
           coordinates: [clone(segment.a), clone(segment.b)],
           occurrenceIds: [segment.occurrenceId],
+          coverageIds: [segment.id],
           direction: 'forward',
           multiplicity,
           // Mapbox applies a positive offset relative to traversal direction.
@@ -368,6 +418,59 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
   });
   flushRepeat();
 
+  const hasDirectRepeatEvidence = (start: number, direction: -1 | 1): boolean => {
+    let index = start;
+    for (let steps = 0; steps < 4 && index >= 0 && index < segments.length; steps += 1) {
+      if (!repeated[index]) return false;
+      if (matchIndexes[index].length > 0) return true;
+      const next = index + direction;
+      if (!canStep(segments, index, next)) return false;
+      index = next;
+    }
+    return false;
+  };
+
+  // Mapbox offsets each traversal relative to its travel direction. At a
+  // genuine consecutive A→B→A reversal that creates the desired parallel
+  // lanes, but a 180-degree line join alone leaves two separated tips. Add a
+  // small screen-space U only where both adjacent arms have independent,
+  // sustained repeat evidence. This is presentation metadata: it never enters
+  // canonical geometry, distance, persistence, or exploration authority.
+  const turnConnectors: RouteTurnConnector[] = [];
+  for (let right = 1; right < segments.length; right += 1) {
+    const left = right - 1;
+    if (!repeated[left] || !repeated[right] || segments[right].breakBefore) continue;
+    if (routePointDistanceM(segments[left].b, segments[right].a) > CONNECTED_M) continue;
+    if (headingDot(segments[left], segments[right]) > -0.5) continue;
+    if (!hasDirectRepeatEvidence(left, -1) || !hasDirectRepeatEvidence(right, 1)) continue;
+
+    const coordinate = interpolate(segments[left].b, segments[right].a, 0.5);
+    const multiplicity = Math.max(
+      traversalMultiplicity(matchIndexes[left]),
+      traversalMultiplicity(matchIndexes[right]),
+    );
+    const existing = turnConnectors.find(connector => (
+      routePointDistanceM(connector.coordinate, coordinate) <= CONNECTED_M
+    ));
+    const occurrenceIds = [segments[left].occurrenceId, segments[right].occurrenceId];
+    if (existing) {
+      occurrenceIds.forEach(id => {
+        if (!existing.occurrenceIds.includes(id)) existing.occurrenceIds.push(id);
+      });
+      existing.multiplicity = Math.max(existing.multiplicity, multiplicity);
+      continue;
+    }
+    turnConnectors.push({
+      id: `turn:${segments[left].id}:${segments[right].id}`,
+      coordinate,
+      occurrenceIds,
+      multiplicity,
+      // The letter U opens toward north before rotation. Point that opening
+      // back along the incoming arm, away from the genuine turnback.
+      rotationDeg: bearingDeg(coordinate, segments[left].a),
+    });
+  }
+
   const repeatLabels: RouteRepeatLabel[] = repeatLanes
     .filter(lane => lane.multiplicity >= 2
       && lane.coordinates.slice(1).reduce(
@@ -375,17 +478,32 @@ export function buildRouteDisplayGeometry(geometry: CanonicalRouteGeometry): Rou
         0,
       ) >= RETRACE_LABEL_MIN_M)
     .map(lane => {
-      const middle = Math.floor((lane.coordinates.length - 1) / 2);
-      const a = lane.coordinates[middle];
-      const b = lane.coordinates[Math.min(lane.coordinates.length - 1, middle + 1)];
+      const segmentLengths = lane.coordinates.slice(1).map((point, index) => (
+        routePointDistanceM(lane.coordinates[index], point)
+      ));
+      const totalLength = segmentLengths.reduce((sum, value) => sum + value, 0);
+      const labelDistance = totalLength * 0.25;
+      let traversed = 0;
+      let coordinate = clone(lane.coordinates[0]);
+      for (let index = 0; index < segmentLengths.length; index += 1) {
+        const next = traversed + segmentLengths[index];
+        if (next >= labelDistance) {
+          const fraction = segmentLengths[index] > 0
+            ? (labelDistance - traversed) / segmentLengths[index]
+            : 0;
+          coordinate = interpolate(lane.coordinates[index], lane.coordinates[index + 1], fraction);
+          break;
+        }
+        traversed = next;
+      }
       return {
         id: `repeat-label:${lane.id}`,
-        coordinate: interpolate(a, b, 0.5),
+        coordinate,
         text: `${lane.multiplicity} passes`,
         occurrenceIds: [...lane.occurrenceIds],
         direction: lane.direction,
       };
     });
 
-  return { baseLines, ordinaryLines, repeatLanes, repeatLabels };
+  return { baseLines, ordinaryLines, repeatLanes, repeatLabels, turnConnectors };
 }

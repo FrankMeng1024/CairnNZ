@@ -11,10 +11,10 @@ import {
   compareOrderedPositions,
   normalizeOrderedPoints,
   prependOrderedSegment,
-  orderedIntervalCrossesGap,
   orderedDraftPoints,
   orderedPositionPoint,
   replaceOrderedInterval,
+  replaceOrderedIntervalAcrossGap,
   routePointDistanceM,
   type EditableRouteResolution,
   type OrderedPosition,
@@ -80,6 +80,7 @@ export interface RouteIntervalCandidate {
   start: OrderedPosition;
   end: OrderedPosition;
   reverseCandidate: boolean;
+  crossedGapIds?: string[];
 }
 
 export type DrawTransactionIntent =
@@ -88,6 +89,7 @@ export type DrawTransactionIntent =
   | { kind: 'prepend' }
   | { kind: 'bridge'; gapId: string; reverseCandidate: boolean }
   | { kind: 'replace'; options: RouteIntervalCandidate[] }
+  | { kind: 'replace-across-gap'; options: RouteIntervalCandidate[]; gapId: string }
   | { kind: 'pending-bridge'; gapId: string; points: RoutePoint[]; draftId: string; baseRevision: number }
   | { kind: 'pending-replace'; points: RoutePoint[]; draftId: string; baseRevision: number; ambiguity?: 'overlap' }
   | { kind: 'reject'; code: 'ZERO_LENGTH' | 'DISCONNECTED' | 'AMBIGUOUS_INTERVAL' | 'STALE_TRANSACTION' };
@@ -365,7 +367,16 @@ function intervalOptions(
       const forward = comparison < 0;
       const a = forward ? start : end;
       const b = forward ? end : start;
-      if (orderedIntervalCrossesGap(draft, a, b)) continue;
+      const startPartIndex = draft.parts.findIndex(part => part.id === a.partId);
+      const endPartIndex = draft.parts.findIndex(part => part.id === b.partId);
+      const gapByPart = new Map(draft.gaps.map(gap => [gap.afterPartId, gap.id]));
+      const crossedGapIds = draft.parts.slice(startPartIndex, endPartIndex)
+        .map(part => gapByPart.get(part.id))
+        .filter((gapId): gapId is string => Boolean(gapId));
+      // One Draw owns one missing-evidence interval. Connecting two gaps at
+      // once would silently invent an additional relationship the user did
+      // not individually establish.
+      if (crossedGapIds.length > 1) continue;
       const id = `${positionKey(a)}-${positionKey(b)}`;
       if (!options.some(option => option.id === id)) {
         options.push({
@@ -373,6 +384,7 @@ function intervalOptions(
           start: { partId: a.partId, pointIndex: a.pointIndex, ...(a.fraction != null ? { fraction: a.fraction } : {}) },
           end: { partId: b.partId, pointIndex: b.pointIndex, ...(b.fraction != null ? { fraction: b.fraction } : {}) },
           reverseCandidate: !forward,
+          ...(crossedGapIds.length ? { crossedGapIds } : {}),
         });
       }
     }
@@ -435,7 +447,9 @@ export function classifyDrawTransactionWithDiagnostics(
   const ends = raw.at(-1) ? nearestOrderedPositions(draft, raw.at(-1)!, toleranceM) : [];
   const options = selectedGapId ? [] : intervalOptions(draft, starts, ends);
   const intent = classifyDrawTransaction(draft, raw, selectedGapId, attachmentToleranceM);
-  const selectedIntervalId = intent.kind === 'replace' ? intent.options[0]?.id ?? null : null;
+  const selectedIntervalId = intent.kind === 'replace' || intent.kind === 'replace-across-gap'
+    ? intent.options[0]?.id ?? null
+    : null;
   const ambiguityReason = intent.kind === 'pending-replace' && intent.ambiguity === 'overlap'
     ? starts.length > 1 && ends.length <= 1
       ? 'competing-start-occurrences'
@@ -497,27 +511,6 @@ export function classifyDrawTransaction(
   }
   if (draft.parts.length === 0 && !draft.startPoint) return { kind: 'new' };
 
-  // A dotted imported-Activity gap is already an explicit pair of adjacent
-  // anchors. Drawing from one side to the other is the user's bridge intent;
-  // requiring a separate "Connect next gap" selection hid that ownership in
-  // UI state and made ordinary Draw reject the same valid stroke. Resolve only
-  // one exact adjacent gap, never guess when multiple gaps overlap.
-  const gapBridges = draft.gaps.flatMap(gap => {
-    const leftIndex = draft.parts.findIndex(part => part.id === gap.afterPartId);
-    const left = leftIndex >= 0 ? draft.parts[leftIndex] : undefined;
-    const right = leftIndex >= 0 ? draft.parts[leftIndex + 1] : undefined;
-    if (!left || !right) return [];
-    const forward = routePointDistanceM(first, left.points.at(-1)!) <= toleranceM
-      && routePointDistanceM(last, right.points[0]) <= toleranceM;
-    const reverse = routePointDistanceM(last, left.points.at(-1)!) <= toleranceM
-      && routePointDistanceM(first, right.points[0]) <= toleranceM;
-    return forward || reverse
-      ? [{ kind: 'bridge' as const, gapId: gap.id, reverseCandidate: reverse && !forward }]
-      : [];
-  });
-  if (gapBridges.length === 1) return gapBridges[0];
-  if (gapBridges.length > 1) return { kind: 'reject', code: 'AMBIGUOUS_INTERVAL' };
-
   const terminal = terminalPoint(draft);
   const beginning = initialPoint(draft);
   const startsAtTerminal = Boolean(terminal && routePointDistanceM(first, terminal) <= toleranceM);
@@ -534,6 +527,9 @@ export function classifyDrawTransaction(
   if (options.length > 0) {
     const selected = unambiguousInterval(draft, raw, options);
     if (selected) {
+      if (selected.crossedGapIds?.length === 1) {
+        return { kind: 'replace-across-gap', options: [selected], gapId: selected.crossedGapIds[0] };
+      }
       if (startsAtTerminal) {
         // End-to-earlier strokes have two legitimate meanings. A stroke that
         // closely retraces the selected suffix is a continued traversal and
@@ -596,8 +592,9 @@ function orient(points: RoutePoint[], reverse: boolean): RoutePoint[] {
 
 export function applyDrawTransaction(
   draft: OrderedRouteDraft,
-  intent: Exclude<DrawTransactionIntent, { kind: 'replace' | 'reject' }>
-    | { kind: 'replace'; option: RouteIntervalCandidate },
+  intent: Exclude<DrawTransactionIntent, { kind: 'replace' | 'replace-across-gap' | 'reject' }>
+    | { kind: 'replace'; option: RouteIntervalCandidate }
+    | { kind: 'replace-across-gap'; option: RouteIntervalCandidate; gapId: string },
   candidate: RoutePoint[],
   resolution: EditableRouteResolution,
 ): RouteEditResult {
@@ -612,6 +609,19 @@ export function applyDrawTransaction(
   }
   if (intent.kind === 'bridge') {
     return bridgeOrderedGap(draft, intent.gapId, orient(candidate, intent.reverseCandidate), resolution);
+  }
+  if (intent.kind === 'replace-across-gap') {
+    if (isDestructiveActivityReplacement(draft, intent.option, candidate)) {
+      return { ok: false, code: 'DESTRUCTIVE_ACTIVITY_REPLACEMENT', draft };
+    }
+    return replaceOrderedIntervalAcrossGap(
+      draft,
+      intent.option.start,
+      intent.option.end,
+      intent.gapId,
+      orient(candidate, intent.option.reverseCandidate),
+      resolution,
+    );
   }
   if (isDestructiveActivityReplacement(draft, intent.option, candidate)) {
     return { ok: false, code: 'DESTRUCTIVE_ACTIVITY_REPLACEMENT', draft };
@@ -646,14 +656,15 @@ function orientDrawParts(parts: DrawTransactionPart[], reverse: boolean): DrawTr
  */
 export function applyDrawTransactionParts(
   draft: OrderedRouteDraft,
-  intent: Exclude<DrawTransactionIntent, { kind: 'replace' | 'reject' }>
-    | { kind: 'replace'; option: RouteIntervalCandidate },
+  intent: Exclude<DrawTransactionIntent, { kind: 'replace' | 'replace-across-gap' | 'reject' }>
+    | { kind: 'replace'; option: RouteIntervalCandidate }
+    | { kind: 'replace-across-gap'; option: RouteIntervalCandidate; gapId: string },
   sourceParts: DrawTransactionPart[],
 ): RouteEditResult {
   if (sourceParts.length === 0) return { ok: false, code: 'ZERO_LENGTH', draft };
   const shouldReverse = intent.kind === 'prepend'
     || (intent.kind === 'bridge' && intent.reverseCandidate)
-    || (intent.kind === 'replace' && intent.option.reverseCandidate);
+    || ((intent.kind === 'replace' || intent.kind === 'replace-across-gap') && intent.option.reverseCandidate);
   const parts = orientDrawParts(sourceParts, shouldReverse)
     .map(part => ({ ...part, points: normalizeOrderedPoints(part.points) }))
     .filter(part => part.points.length >= 2);
@@ -679,7 +690,9 @@ export function applyDrawTransactionParts(
       ? ':prepend'
       : intent.kind === 'bridge'
         ? ':bridge:'
-        : ':replace:';
+        : intent.kind === 'replace-across-gap'
+          ? ':replace-gap:'
+          : ':replace:';
   // Earlier Draw operations retain ids such as `:append:` and `:replace:`.
   // Looking up by the operation marker alone therefore selected the first
   // historical part on the second multi-section Draw, replaced that old part,

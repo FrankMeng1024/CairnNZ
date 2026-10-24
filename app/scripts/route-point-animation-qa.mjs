@@ -14,6 +14,7 @@ const diagnosticHideDetail = process.env.CAIRN_POINT_QA_HIDE_DETAIL === '1';
 const diagnosticSymbolProfile = String(process.env.CAIRN_POINT_QA_SYMBOL_PROFILE || 'all');
 const foregroundBrowser = process.env.CAIRN_POINT_QA_FOREGROUND === '1';
 const localQaStyle = process.env.CAIRN_POINT_QA_LOCAL_STYLE === '1';
+const liveProvider = process.env.CAIRN_POINT_QA_PROVIDER === 'live';
 const fixturePath = process.env.CAIRN_POINT_QA_FIXTURE_FILE;
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(recordVideo ? videoDir : outputDir, { recursive: true });
@@ -118,9 +119,24 @@ if (foregroundBrowser && process.platform === 'darwin') {
 const page = await context.newPage();
 const video = page.video();
 const runtimeErrors = [];
+const liveProviderReceipts = [];
 page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.stack ?? error.message}`));
 page.on('console', message => {
   if (message.type() === 'error') runtimeErrors.push(`console: ${message.text()}`);
+});
+page.on('response', response => {
+  if (!liveProvider || !response.url().includes('/directions/v5/mapbox/walking/')) return;
+  void response.json().then(body => {
+    const url = new URL(response.url());
+    liveProviderReceipts.push({
+      httpStatus: response.status(),
+      code: body?.code ?? null,
+      routeCount: Array.isArray(body?.routes) ? body.routes.length : 0,
+      coordinateCount: decodeURIComponent(url.pathname.split('/').at(-1) ?? '').split(';').length,
+    });
+  }).catch(() => liveProviderReceipts.push({
+    httpStatus: response.status(), code: null, routeCount: null, coordinateCount: 2,
+  }));
 });
 await page.addInitScript((useLocalStyle) => {
   globalThis.__cairnMapQaLocalStyle = useLocalStyle;
@@ -147,7 +163,7 @@ await page.route('**/api/**', async route => {
     body: JSON.stringify({ data: [], sessions: [], markers: [], notifications: [], count: 0 }),
   });
 });
-await page.route('**/directions/v5/mapbox/walking/**', async route => {
+if (!liveProvider) await page.route('**/directions/v5/mapbox/walking/**', async route => {
   if (providerDelayMs > 0) await new Promise(resolve => setTimeout(resolve, providerDelayMs));
   if (providerBody) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(providerBody) });
@@ -684,7 +700,9 @@ try {
       id: scenario.id,
       baseId: scenario.baseId,
       trial: scenario.trial,
-      provenance: scenario.provenance ?? 'SYNTHETIC_INVARIANT_ONLY: Expo Web active editor with a fabricated provider response; not evidence of realistic walking-route quality',
+      provenance: scenario.provenance ?? (liveProvider
+        ? 'QA-GENERATED PUBLIC MAP INPUT: Expo Web active editor with an actual Mapbox walking Directions response; not native iPhone evidence'
+        : 'SYNTHETIC_INVARIANT_ONLY: Expo Web active editor with a fabricated provider response; not evidence of realistic walking-route quality'),
       originalRoute: scenario.route,
       target: scenario.target,
       recordedProviderGeometry: scenario.provider,
@@ -756,8 +774,8 @@ const report = {
   basemapBoundary: localQaStyle
     ? 'LOCAL_LIGHTWEIGHT_DIAGNOSTIC_STYLE_ONLY: isolates app animation overhead; not acceptable as real-map Route quality evidence'
     : 'REAL_MAPBOX_HOSTED_BASEMAP',
-  evidenceClass: fixtureDocument?.evidenceClass ?? 'SYNTHETIC_INVARIANT_ONLY',
-  providerReceipt: fixtureDocument?.providerReceipt ?? null,
+  evidenceClass: liveProvider ? 'ACTUAL_MAPBOX_PROVIDER_PUBLIC_QA_INPUT' : (fixtureDocument?.evidenceClass ?? 'SYNTHETIC_INVARIANT_ONLY'),
+  providerReceipt: liveProvider ? liveProviderReceipts : (fixtureDocument?.providerReceipt ?? null),
   mapStyleProfile,
   repeatCount,
   scenarios: results,

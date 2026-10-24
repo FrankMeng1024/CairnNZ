@@ -448,6 +448,23 @@ export function orderedIntervalCrossesGap(
   return false;
 }
 
+function orderedGapIdsBetween(
+  draft: OrderedRouteDraft,
+  start: OrderedPosition,
+  end: OrderedPosition,
+): string[] {
+  const startPart = orderedPositionIndex(draft, start);
+  const endPart = orderedPositionIndex(draft, end);
+  if (startPart < 0 || endPart < startPart) return [];
+  const gapByPart = new Map(draft.gaps.map(gap => [gap.afterPartId, gap.id]));
+  const ids: string[] = [];
+  for (let index = startPart; index < endPart; index += 1) {
+    const gapId = gapByPart.get(draft.parts[index].id);
+    if (gapId) ids.push(gapId);
+  }
+  return ids;
+}
+
 export function orderedIntervalPoints(
   draft: OrderedRouteDraft,
   start: OrderedPosition,
@@ -509,11 +526,40 @@ export function replaceOrderedInterval(
   candidate: RoutePoint[],
   resolution: EditableRouteResolution,
 ): RouteEditResult {
+  return replaceOrderedIntervalInternal(draft, start, end, candidate, resolution);
+}
+
+/**
+ * Replace one ordered interval that crosses exactly one explicit Activity
+ * gap. Both positions still resolve on real solid parts; the missing-evidence
+ * connector is never an attachment surface or canonical route segment.
+ */
+export function replaceOrderedIntervalAcrossGap(
+  draft: OrderedRouteDraft,
+  start: OrderedPosition,
+  end: OrderedPosition,
+  gapId: string,
+  candidate: RoutePoint[],
+  resolution: EditableRouteResolution,
+): RouteEditResult {
+  return replaceOrderedIntervalInternal(draft, start, end, candidate, resolution, gapId);
+}
+
+function replaceOrderedIntervalInternal(
+  draft: OrderedRouteDraft,
+  start: OrderedPosition,
+  end: OrderedPosition,
+  candidate: RoutePoint[],
+  resolution: EditableRouteResolution,
+  allowedGapId?: string,
+): RouteEditResult {
   const startPartIndex = orderedPositionIndex(draft, start);
   const endPartIndex = orderedPositionIndex(draft, end);
   const order = compareOrderedPositions(draft, start, end);
+  const crossedGapIds = orderedGapIdsBetween(draft, start, end);
   if (startPartIndex < 0 || endPartIndex < 0 || order == null || order >= 0
-    || orderedIntervalCrossesGap(draft, start, end)) {
+    || (allowedGapId == null && crossedGapIds.length > 0)
+    || (allowedGapId != null && (crossedGapIds.length !== 1 || crossedGapIds[0] !== allowedGapId))) {
     return { ok: false, code: 'INVALID_INTERVAL', draft };
   }
   const startPart = draft.parts[startPartIndex];
@@ -533,7 +579,7 @@ export function replaceOrderedInterval(
     resolution: startPart.resolution,
   });
   replacementParts.push({
-    id: makePartId(draft, `replace:${startPartIndex}`),
+    id: makePartId(draft, `${allowedGapId ? 'replace-gap' : 'replace'}:${startPartIndex}`),
     points: seamSafePoints,
     resolution,
   });
@@ -546,7 +592,8 @@ export function replaceOrderedInterval(
   next.parts.splice(startPartIndex, endPartIndex - startPartIndex + 1, ...replacementParts);
   const lastReplacementPartId = replacementParts[replacementParts.length - 1].id;
   const removedIds = new Set(draft.parts.slice(startPartIndex, endPartIndex + 1).map(part => part.id));
-  next.gaps = next.gaps.filter(gap => !removedIds.has(gap.afterPartId) || gap.afterPartId === endPart.id)
+  next.gaps = next.gaps.filter(gap => gap.id !== allowedGapId
+      && (!removedIds.has(gap.afterPartId) || gap.afterPartId === endPart.id))
     .map(gap => gap.afterPartId === endPart.id
     ? { ...gap, afterPartId: lastReplacementPartId }
     : gap);

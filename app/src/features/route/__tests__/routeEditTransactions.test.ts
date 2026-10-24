@@ -303,18 +303,20 @@ describe('Route edit transaction classification', () => {
     expect(result.draft.parts[1].points).toEqual([p(20, 0), p(35, 10), p(50, 0)]);
   });
 
-  test('ordinary Draw across one imported Activity gap infers the adjacent bridge without a compulsory selection step', () => {
+  test('ordinary Draw across one imported Activity gap infers ordered replacement without a compulsory selection step', () => {
     const imported = createImportedOrderedDraft({
       draftId: 'activity-auto-gap', ownerId: 'owner-a',
       segments: [[p(0, 0), p(20, 0)], [p(50, 0), p(70, 0)]],
     });
     const raw = [p(20, 0), p(34, 8), p(50, 0)];
     const intent = classifyDrawTransaction(imported, raw);
-    expect(intent).toEqual({
-      kind: 'bridge', gapId: imported.gaps[0].id, reverseCandidate: false,
+    expect(intent).toMatchObject({
+      kind: 'replace-across-gap', gapId: imported.gaps[0].id,
     });
-    if (intent.kind !== 'bridge') return;
-    const result = applyDrawTransaction(imported, intent, raw, 'draw-manual');
+    if (intent.kind !== 'replace-across-gap') return;
+    const result = applyDrawTransaction(imported, {
+      kind: 'replace-across-gap', gapId: intent.gapId, option: intent.options[0],
+    }, raw, 'draw-manual');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.draft.gaps).toEqual([]);
@@ -374,14 +376,23 @@ describe('Route edit transaction classification', () => {
     if (intent.kind === 'replace') expect(intent.options).toHaveLength(1);
   });
 
-  test('R2 replacement never crosses an unresolved imported gap', () => {
+  test('R2 interior solid anchors replace exactly one unresolved imported gap', () => {
     const imported = createImportedOrderedDraft({
       draftId: 'replace-gap', ownerId: 'owner-a',
       segments: [[p(0, 0), p(40, 0)], [p(80, 0), p(120, 0)]],
     });
-    expect(classifyDrawTransaction(imported, [p(20, 0), p(60, 20), p(100, 0)])).toEqual({
-      kind: 'reject', code: 'DISCONNECTED',
-    });
+    const raw = [p(20, 0), p(60, 20), p(100, 0)];
+    const intent = classifyDrawTransaction(imported, raw);
+    expect(intent).toMatchObject({ kind: 'replace-across-gap', gapId: imported.gaps[0].id });
+    if (intent.kind !== 'replace-across-gap') return;
+    const result = applyDrawTransaction(imported, {
+      kind: intent.kind, gapId: intent.gapId, option: intent.options[0],
+    }, raw, 'draw-manual');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.gaps).toEqual([]);
+    expect(result.draft.parts[0].points).toEqual([p(0, 0), p(20, 0)]);
+    expect(result.draft.parts.at(-1)?.points).toEqual([p(100, 0), p(120, 0)]);
   });
 
   test('R3 sparse segment-interior anchors are projected without enlarging attachment tolerance', () => {

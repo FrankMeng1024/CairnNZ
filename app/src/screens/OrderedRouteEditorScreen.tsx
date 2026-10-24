@@ -99,6 +99,7 @@ import {
 import { routeMatchesIdentity } from '../features/route/routeContracts';
 import { selectActivityRouteImportPoints } from '../features/route/activityRouteImport';
 import { canonicalRouteGeometry, type CanonicalRouteGeometry } from '../features/route/canonicalRouteGeometry';
+import { buildRouteDisplayGeometry } from '../features/route/routeDisplayGeometry';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { uuidv4 } from '../services/offlineQueue';
@@ -318,6 +319,7 @@ export function OrderedRouteEditorScreen() {
   const [routeFogReadyKey, setRouteFogReadyKey] = useState('');
   const [routeFogUnavailableKey, setRouteFogUnavailableKey] = useState('');
   const [routeSceneEverReady, setRouteSceneEverReady] = useState(false);
+  const routeSceneEverReadyRef = useRef(false);
   const [memoryCoverageView, setMemoryCoverageView] = useState<MemoryCoverageViewport | null>(null);
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
   const routeGrowthAnimationRef = useRef<RouteGrowthAnimation | null>(null);
@@ -384,6 +386,10 @@ export function OrderedRouteEditorScreen() {
     key: string;
     geometry: CanonicalRouteGeometry;
   } | null>(null);
+  const routeTurnbackCacheRef = useRef<{
+    key: string;
+    turnbacks: ReturnType<typeof buildRouteDisplayGeometry>['turnConnectors'];
+  } | null>(null);
   const tool: PlannerTool = mode === 'DrawArmed' || mode === 'Drawing'
     ? 'draw'
     : mode === 'PointTargeting'
@@ -431,7 +437,10 @@ export function OrderedRouteEditorScreen() {
   }, [routeFogPending, routeSceneEverReady]);
 
   useEffect(() => {
-    if (routeSceneReady) setRouteSceneEverReady(true);
+    if (routeSceneReady) {
+      routeSceneEverReadyRef.current = true;
+      setRouteSceneEverReady(true);
+    }
   }, [routeSceneReady]);
 
   useEffect(() => {
@@ -1300,7 +1309,7 @@ export function OrderedRouteEditorScreen() {
       setMode('Browse');
       return false;
     }
-    if (intent.kind === 'replace') {
+    if (intent.kind === 'replace' || intent.kind === 'replace-across-gap') {
       if (intent.options.length > 1) {
         setError('Redraw from clearer positions so Cairn can preserve the right path.');
         setMode('Browse');
@@ -1308,7 +1317,10 @@ export function OrderedRouteEditorScreen() {
       }
       const option = intent.options[0];
       if (!option) { setError('Redraw from clearer positions. Your Route is unchanged.'); setMode('Browse'); return false; }
-      const committed = commitResult(applyDrawTransactionParts(current.present, { kind: 'replace', option }, parts), 'replace-draw');
+      const operation = intent.kind === 'replace-across-gap'
+        ? { kind: 'replace-across-gap' as const, option, gapId: intent.gapId }
+        : { kind: 'replace' as const, option };
+      const committed = commitResult(applyDrawTransactionParts(current.present, operation, parts), 'replace-draw');
       setMode('Browse');
       if (committed) {
         setBriefStatus(completionMessage);
@@ -1454,7 +1466,12 @@ export function OrderedRouteEditorScreen() {
       return;
     }
     const operationId = strokeId;
-    const token = beginRouteOperation(current.present, ownerId, intent.kind === 'bridge' ? 'bridge' : intent.kind === 'replace' ? 'replace' : 'draw', operationId);
+    const token = beginRouteOperation(
+      current.present,
+      ownerId,
+      intent.kind === 'bridge' ? 'bridge' : intent.kind === 'replace' || intent.kind === 'replace-across-gap' ? 'replace' : 'draw',
+      operationId,
+    );
     operationAbortRef.current?.abort();
     const controller = new AbortController();
     providerTransactionRef.current = true;
@@ -2101,6 +2118,13 @@ export function OrderedRouteEditorScreen() {
     };
   }
   const routeGeometry = canonicalGeometryCacheRef.current.geometry;
+  if (routeTurnbackCacheRef.current?.key !== routeGeometryKey) {
+    routeTurnbackCacheRef.current = {
+      key: routeGeometryKey,
+      turnbacks: buildRouteDisplayGeometry(routeGeometry).turnConnectors,
+    };
+  }
+  const routeTurnbacks = routeTurnbackCacheRef.current.turnbacks;
   const trimOriginalFeature = trimOpen ? {
     type: 'FeatureCollection' as const,
     features: draft.parts.filter(part => part.points.length >= 2).map(part => ({
@@ -2122,13 +2146,16 @@ export function OrderedRouteEditorScreen() {
     const end = displayDraft.parts.at(-1)?.points.at(-1);
     if (!start) return [];
     const same = end && routePointDistanceM(start, end) <= 0.35;
+    const isTurnback = (point: RoutePoint) => routeTurnbacks.some(turn => (
+      routePointDistanceM(point, turn.coordinate) <= 0.5
+    ));
     return [{
       type: 'Feature' as const,
-      properties: { role: same ? 'Start / End' : 'Start' },
+      properties: { role: same ? 'Start / End' : 'Start', turnback: isTurnback(start) },
       geometry: { type: 'Point' as const, coordinates: [start.lng, start.lat] },
     }, ...(end && !same ? [{
       type: 'Feature' as const,
-      properties: { role: 'End' },
+      properties: { role: 'End', turnback: isTurnback(end) },
       geometry: { type: 'Point' as const, coordinates: [end.lng, end.lat] },
     }] : [])];
   })();
@@ -2232,9 +2259,15 @@ export function OrderedRouteEditorScreen() {
             }
           }}
           onMapLoadingError={() => {
+            // A tile/glyph/resource callback can arrive after a complete scene
+            // is already usable. Preserve that safe rendered scene; only an
+            // initial style/map failure owns the cold-start error state.
+            if (routeSceneEverReadyRef.current) {
+              mapViewRef.current?.requestRender?.();
+              return;
+            }
             setMapReady(false);
             setMapLoadState('error');
-            setRouteSceneEverReady(false);
           }}
           onCameraChanged={(event: any) => {
             const center = event?.properties?.center;
@@ -2458,7 +2491,14 @@ export function OrderedRouteEditorScreen() {
           ) : null}
           {ShapeSource && CircleLayer && routeEndpoints.length ? (
             <ShapeSource id="ordered-route-endpoints" shape={{ type: 'FeatureCollection', features: routeEndpoints }}>
-              <CircleLayer id="ordered-route-endpoint-circles" slot="top" style={{ circleRadius: 7, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRouteLine, circleStrokeWidth: 3 }} />
+              <CircleLayer id="ordered-route-endpoint-circles" slot="top" style={{
+                // At an endpoint that was also an earlier real turnback, keep
+                // Start/End legible without covering the display-only U.
+                circleRadius: ['case', ['boolean', ['get', 'turnback'], false], 3, 7],
+                circleColor: theme.surfaceElevated,
+                circleStrokeColor: theme.mapRouteLine,
+                circleStrokeWidth: ['case', ['boolean', ['get', 'turnback'], false], 1.5, 3],
+              }} />
               {SymbolLayer ? <SymbolLayer id="ordered-route-endpoint-labels" slot="top" style={{ textField: ['get', 'role'], textSize: 11, textOffset: [0, 1.55], textColor: theme.foreground, textHaloColor: theme.surfaceElevated, textHaloWidth: 1.5, textAllowOverlap: true }} /> : null}
             </ShapeSource>
           ) : null}

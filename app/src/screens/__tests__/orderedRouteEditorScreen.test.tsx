@@ -394,6 +394,48 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     await waitFor(() => expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull());
   });
 
+  test('a transient Mapbox resource error after a ready scene keeps the usable Route visible', async () => {
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    act(() => {
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingMapFully');
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-ready', false);
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-ready', ['memory-fog-src']);
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
+    });
+    await waitFor(() => expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull());
+    expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
+
+    act(() => {
+      fireEvent(screen.getByTestId('mock-map'), 'mapLoadingError', {
+        type: 'resource',
+        message: 'transient tile request failed',
+      });
+    });
+
+    expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull();
+    expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
+  });
+
+  test('a genuine initial Mapbox failure stays fail-closed and retry starts a new cold load', async () => {
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    expect(screen.getByTestId('ordered-route-map-load-overlay')).toBeTruthy();
+
+    act(() => {
+      fireEvent(screen.getByTestId('mock-map'), 'mapLoadingError', {
+        type: 'style',
+        message: 'initial style unavailable',
+      });
+    });
+    expect(screen.getByTestId('ordered-route-map-load-overlay').props.state).toBe('error');
+    expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
+
+    act(() => screen.getByTestId('ordered-route-map-load-overlay').props.onRetry());
+    await waitFor(() => expect(screen.getByTestId('ordered-route-map-load-overlay').props.state).toBe('loading'));
+    expect(screen.getByTestId('ordered-route-map-load-overlay')).toBeTruthy();
+  });
+
   test('R04/R08 Friends scope and picker operations never move the Route camera', async () => {
     mockMemorySubscriptions = [{ friend_id: 11, friend_name: 'First Friend' }];
     const screen = render(<OrderedRouteEditorScreen />);
@@ -508,6 +550,62 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       sw: [121.4737, 31.2304],
       paddingRight: 88,
     }));
+  });
+
+  test('Activity interior-to-interior Draw replaces one true gap through the production screen handler and Undo restores it', async () => {
+    const solidA = [
+      { lat: -41.2865, lng: 174.7762 },
+      { lat: -41.2865, lng: 174.7767 },
+      { lat: -41.2865, lng: 174.7772 },
+    ];
+    const solidB = [
+      { lat: -41.2865, lng: 174.7782 },
+      { lat: -41.2865, lng: 174.7787 },
+      { lat: -41.2865, lng: 174.7792 },
+    ];
+    mockLoadedDraft = {
+      schemaVersion: 1, draftId: 'activity:gap-screen', ownerId: 'owner-a', origin: 'activity', revision: 0,
+      parts: [
+        { id: 'recorded-a', resolution: 'recorded', points: solidA },
+        { id: 'recorded-b', resolution: 'recorded', points: solidB },
+      ],
+      gaps: [{ id: 'gap-a-b', afterPartId: 'recorded-a', reason: 'activity-gap' }],
+    };
+    mockEmittedStroke = [
+      solidA[1],
+      { lat: -41.2861, lng: 174.7777 },
+      solidB[1],
+    ];
+    mockResolveDraw.mockResolvedValueOnce({
+      outcome: 'accepted',
+      points: mockEmittedStroke,
+      parts: [{ points: mockEmittedStroke, resolution: 'draw-matched' }],
+      callCount: 1,
+    });
+
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    expect(screen.getByTestId('source-ordered-route-gaps')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('route-tool-draw'));
+    fireEvent.press(screen.getByTestId('emit-route-stroke'));
+    await waitFor(() => expect(mockResolveDraw).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId('source-ordered-route-gaps')).toBeNull());
+
+    const committed = screen.getByTestId('source-ordered-route-parts').props.shape.features
+      .flatMap((feature: any) => feature.geometry.coordinates);
+    expect(committed[0]).toEqual([solidA[0].lng, solidA[0].lat]);
+    expect(committed).toContainEqual([solidA[1].lng, solidA[1].lat]);
+    expect(committed).toContainEqual([mockEmittedStroke[1].lng, mockEmittedStroke[1].lat]);
+    expect(committed).toContainEqual([solidB[1].lng, solidB[1].lat]);
+    expect(committed.at(-1)).toEqual([solidB[2].lng, solidB[2].lat]);
+
+    fireEvent.press(screen.getByLabelText('Undo last Route edit'));
+    expect(screen.getByTestId('source-ordered-route-gaps')).toBeTruthy();
+    const restored = screen.getByTestId('source-ordered-route-parts').props.shape.features;
+    expect(restored.map((feature: any) => feature.geometry.coordinates)).toEqual([
+      solidA.map(point => [point.lng, point.lat]),
+      solidB.map(point => [point.lng, point.lat]),
+    ]);
   });
 
   test('R1 explicit Activity Back then Create starts pristine with empty Undo and a new draft identity', async () => {

@@ -31,7 +31,11 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
   const features = display.ordinaryLines.map(line => ({
       type: 'Feature' as const,
       id: line.id,
-      properties: { occurrenceIds: line.occurrenceIds.join(',') },
+      properties: {
+        occurrenceIds: line.occurrenceIds.join(','),
+        coverageIds: line.coverageIds.join(','),
+        role: 'canonical-presentation',
+      },
       geometry: {
         type: 'LineString' as const,
         coordinates: line.coordinates.map(point => [point.lng, point.lat]),
@@ -42,8 +46,10 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
     id: lane.id,
     properties: {
       occurrenceIds: lane.occurrenceIds.join(','),
+      coverageIds: lane.coverageIds.join(','),
       multiplicity: lane.multiplicity,
       offsetPx: lane.offsetPx,
+      role: 'canonical-presentation',
     },
     geometry: {
       type: 'LineString' as const,
@@ -55,6 +61,18 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
     id: label.id,
     properties: { text: label.text, direction: label.direction, occurrenceIds: label.occurrenceIds.join(',') },
     geometry: { type: 'Point' as const, coordinates: [label.coordinate.lng, label.coordinate.lat] },
+  }));
+  const turnConnectorFeatures = display.turnConnectors.map(connector => ({
+    type: 'Feature' as const,
+    id: connector.id,
+    properties: {
+      occurrenceIds: connector.occurrenceIds.join(','),
+      multiplicity: connector.multiplicity,
+      rotationDeg: connector.rotationDeg,
+      glyph: 'U',
+      displayOnly: true,
+    },
+    geometry: { type: 'Point' as const, coordinates: [connector.coordinate.lng, connector.coordinate.lat] },
   }));
   const gapFeatures = geometry.gaps.map(gap => ({
     type: 'Feature' as const,
@@ -124,6 +142,48 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
               lineOpacity: 0.98,
               lineCap: 'round',
               lineJoin: 'round',
+            }}
+          />
+        </ShapeSource>
+      ) : null}
+      {SymbolLayer && turnConnectorFeatures.length > 0 ? (
+        <ShapeSource
+          id={`${idPrefix}-turn-connectors`}
+          shape={{ type: 'FeatureCollection', features: turnConnectorFeatures }}
+        >
+          <SymbolLayer
+            id={`${idPrefix}-turn-connector-casing`}
+            slot="top"
+            style={{
+              textField: ['get', 'glyph'],
+              // On three-or-more traversals a genuine turnback can coincide
+              // with the final Start/End marker. Keep the connector visible
+              // around that marker without moving its truthful coordinate.
+              textSize: ['case', ['>=', ['get', 'multiplicity'], 3], 30, 18],
+              textColor: theme.mapRouteCasing,
+              textRotate: ['get', 'rotationDeg'],
+              textRotationAlignment: 'map',
+              textPitchAlignment: 'map',
+              textAllowOverlap: true,
+              textIgnorePlacement: true,
+              textAnchor: 'center',
+              textOffset: [0, -0.04],
+            }}
+          />
+          <SymbolLayer
+            id={`${idPrefix}-turn-connector-fill`}
+            slot="top"
+            style={{
+              textField: ['get', 'glyph'],
+              textSize: ['case', ['>=', ['get', 'multiplicity'], 3], 25, 14],
+              textColor: theme.mapRouteLine,
+              textRotate: ['get', 'rotationDeg'],
+              textRotationAlignment: 'map',
+              textPitchAlignment: 'map',
+              textAllowOverlap: true,
+              textIgnorePlacement: true,
+              textAnchor: 'center',
+              textOffset: [0, -0.04],
             }}
           />
         </ShapeSource>

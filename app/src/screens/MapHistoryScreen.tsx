@@ -405,6 +405,15 @@ function NativeTrackMap({
           geometry: { type: 'LineString' as const, coordinates: segment.map(point => [point.lng, point.lat]) },
           properties: {},
         }));
+        const gapFeatures = trace.gaps.map((gap, i) => ({
+          type: 'Feature' as const,
+          id: `activity-gap-${i}`,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [[gap.from.lng, gap.from.lat], [gap.to.lng, gap.to.lat]],
+          },
+          properties: { displayOnly: true, evidence: 'missing-location' },
+        }));
         return (
           <>
             {solidFeatures.length > 0 && (
@@ -425,6 +434,25 @@ function NativeTrackMap({
                     lineOpacity: 0.9,
                     lineCap: 'round',
                     lineJoin: 'round',
+                  }}
+                />
+              </ShapeSource>
+            )}
+            {gapFeatures.length > 0 && (
+              <ShapeSource
+                key={`track-gaps-${mapBindingIdentity}`}
+                id={`track-gaps-${mapBindingIdentity}`}
+                shape={{ type: 'FeatureCollection', features: gapFeatures }}
+              >
+                <LineLayer
+                  id={`track-gaps-layer-${mapBindingIdentity}`}
+                  slot="top"
+                  style={{
+                    lineColor: visualTheme.mapRouteGap,
+                    lineWidth: 3,
+                    lineOpacity: 0.9,
+                    lineDasharray: [2, 2],
+                    lineCap: 'round',
                   }}
                 />
               </ShapeSource>
