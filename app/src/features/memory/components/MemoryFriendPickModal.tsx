@@ -24,6 +24,7 @@ import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { DismissButton } from '../../../components/DismissButton';
 import type { AvailableMemorySource } from '../store/useMemorySubscriptionsStore';
+import { cairnText } from '../../../i18n/runtime';
 
 interface Props {
   visible: boolean;
@@ -55,10 +56,10 @@ const FriendMemoryRow = memo(function FriendMemoryRow({
   const friendId = Number(source.friend_id);
   const unavailable = source.sharing_status === 'not_shared';
   const stateCopy: string | null = unavailable
-    ? 'Not shared with you'
+    ? cairnText('memory.memory-friend-pick-modal.not-shared-with-you')
     : source.sharing_status === 'shared_empty'
-      ? 'No shared places yet'
-      : subscribed ? null : 'Shared with you';
+      ? cairnText('memory.memory-friend-pick-modal.no-shared-places-yet-157d811')
+      : subscribed ? null : cairnText('memory.memory-friend-pick-modal.shared-with-you');
   return (
     <TouchableOpacity
       style={[styles.row, subscribed && { backgroundColor: theme.surface }, unavailable && { opacity: 0.62 }]}
@@ -203,31 +204,29 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: theme.foreground }]}>Friends in Memory</Text>
-              <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
-                Choose one or more shared exploration areas
-              </Text>
+              <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('memory.memory-friend-pick-modal.friends-in-memory')}</Text>
+              <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>{cairnText('memory.memory-friend-pick-modal.choose-one-or-more-shared-exploration-areas')}</Text>
             </View>
-            <DismissButton onPress={dismiss} label="Close friend selection" testID="memory-friend-pick-close" />
+            <DismissButton onPress={dismiss} label={cairnText('memory.memory-friend-pick-modal.close-friend-selection')} testID="memory-friend-pick-close" />
           </View>
 
           {loading && sources.length === 0 ? (
             <View style={styles.loadingBox}><ActivityIndicator color={theme.primary} /></View>
           ) : loadError && sources.length === 0 ? (
             <View style={styles.listError} testID="memory-friend-list-error">
-              <Text style={[styles.emptyHint, { color: theme.destructive }]}>Couldn't load friends</Text>
+              <Text style={[styles.emptyHint, { color: theme.destructive }]}>{cairnText('memory.memory-friend-pick-modal.couldn-t-load-friends')}</Text>
               <TouchableOpacity
                 onPress={() => { void load(); }}
                 accessibilityRole="button"
-                accessibilityLabel="Retry loading friends"
+                accessibilityLabel={cairnText('memory.memory-friend-pick-modal.retry-loading-friends')}
                 testID="memory-friend-list-retry"
                 style={[styles.retryButton, { borderColor: theme.borderStrong }]}
               >
-                <Text style={[styles.retryText, { color: theme.primary }]}>Retry</Text>
+                <Text style={[styles.retryText, { color: theme.primary }]}>{cairnText('common.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : sources.length === 0 ? (
-            <Text style={[styles.emptyHint, { color: theme.muted }]}>No shared places yet.</Text>
+            <Text style={[styles.emptyHint, { color: theme.muted }]}>{cairnText('memory.memory-friend-pick-modal.no-shared-places-yet')}</Text>
           ) : (
             <>
             <FlatList

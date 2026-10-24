@@ -32,6 +32,7 @@ import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { CairnPlaceAnchor } from '../../cairns/components/CairnPaper';
 import { CAIRN_TERMS, cairnAudienceCopy, publicCreationBlockReason } from '../../cairns/cairnExperience';
+import { cairnText } from '../../../i18n/runtime';
 
 interface Props {
   title: string;
@@ -92,8 +93,8 @@ export function ContentStep({
     && !publicBlock;
   const audience = cairnAudienceCopy(visibility);
   const ageSeconds = capturedAtMs == null ? null : Math.max(0, Math.floor((Date.now() - capturedAtMs) / 1000));
-  const accuracyLabel = accuracyM == null ? 'accuracy unavailable' : `±${Math.max(1, Math.round(accuracyM))} m`;
-  const ageLabel = ageSeconds == null ? 'capture time unavailable' : ageSeconds < 10 ? 'just captured' : `${ageSeconds}s old`;
+  const accuracyLabel = accuracyM == null ? cairnText('plant.content-step.accuracy-unavailable') : cairnText('plant.content-step.value-m', { value1: Math.max(1, Math.round(accuracyM)) });
+  const ageLabel = ageSeconds == null ? cairnText('plant.content-step.capture-time-unavailable') : ageSeconds < 10 ? cairnText('plant.content-step.just-captured') : cairnText('plant.content-step.value-s-old', { ageSeconds: ageSeconds });
 
   return (
     <KeyboardAvoidingView
@@ -114,7 +115,7 @@ export function ContentStep({
             </View>
             <View style={styles.headerCopy}>
               <Text style={[styles.title, { color: theme.foreground }]}>{CAIRN_TERMS.leaveTitle}</Text>
-              <Text style={[styles.headerEyebrow, { color: theme.foregroundSecondary }]}>MARK THIS PLACE</Text>
+              <Text style={[styles.headerEyebrow, { color: theme.foregroundSecondary }]}>{cairnText('plant.content-step.mark-this-place')}</Text>
             </View>
             <View style={styles.headerBalance} accessibilityElementsHidden />
           </View>
@@ -126,17 +127,19 @@ export function ContentStep({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>A folded note held by this place. You can leave it empty when saving only for yourself or friends.</Text>
+            <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>{cairnText('plant.content-step.a-folded-note-held-by-this-place')}</Text>
 
             <TouchableOpacity
               onPress={onAdjustLocation ?? onBack}
               accessibilityRole="button"
-              accessibilityLabel={`${activityLocation ? 'Using Activity location' : 'Location confirmed'}. ${accuracyLabel}. Adjust location`}
+              accessibilityLabel={cairnText('plant.content-step.value-value-adjust-location', { value1: activityLocation ? cairnText('plant.content-step.using-this-activity-s-location') : cairnText('plant.content-step.location-confirmed'), accuracyLabel: accuracyLabel })}
             >
               <CairnPlaceAnchor
-                title={activityLocation ? 'Using this Activity’s location' : 'Location confirmed'}
-                detail={`${accuracyLabel} · ${ageLabel}${locationProvenance === 'simulator_test' ? ' · Simulator test' : ''}`}
-                status="Adjust"
+                title={activityLocation ? cairnText('plant.content-step.using-this-activity-s-location') : cairnText('plant.content-step.location-confirmed')}
+                detail={locationProvenance === 'simulator_test'
+                  ? cairnText('plant.content-step.location-detail-simulator', { accuracyLabel, ageLabel })
+                  : cairnText('plant.content-step.location-detail', { accuracyLabel, ageLabel })}
+                status={cairnText('plant.content-step.adjust')}
                 compact
               />
             </TouchableOpacity>
@@ -180,7 +183,7 @@ export function ContentStep({
               </Text>
             ) : null}
             <PrimaryButton
-              label={submitting ? 'Leaving this Cairn…' : audience.action}
+              label={submitting ? cairnText('plant.content-step.leaving-this-cairn') : audience.action}
               loading={submitting}
               disabled={!canSubmit}
               renderIcon={(color) => <Icon name={visibility === 'personal' ? 'Lock' : visibility === 'group' ? 'Users' : 'Globe'} size={17} color={color} strokeWidth={2.2} />}

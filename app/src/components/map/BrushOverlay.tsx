@@ -30,6 +30,7 @@ import {
   sendEditDiag,
 } from '../../services/editDiagSender';
 import { Colors, FontSize, Spacing } from '../tokens';
+import { cairnText } from '../../i18n/runtime';
 
 // v269: per-stroke raw-sample diagnostic buffer. Module-scope so the
 // gesture handlers can write to it from the JS thread without React
@@ -547,7 +548,7 @@ export function BrushOverlay({ mapViewRef }: Props): React.JSX.Element | null {
       </View>
       <View pointerEvents="none" style={[styles.modeHint, { top: insets.top + 56 }]}>
         <Text style={styles.modeHintText}>
-          {activeTool === 'brush' ? 'Drawing — start on the route' : 'Eraser — drag over a stroke to remove'}
+          {activeTool === 'brush' ? cairnText('map.brush-overlay.drawing-start-on-the-route') : cairnText('map.brush-overlay.eraser-drag-over-a-stroke-to-remove')}
         </Text>
       </View>
       {/* v255: lastError pill removed from top. PO request — all error

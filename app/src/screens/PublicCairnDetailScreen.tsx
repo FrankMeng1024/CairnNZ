@@ -27,6 +27,7 @@ import {
   type PublicCairnAccountAuthority,
   type PublicCairnDetail,
 } from '../features/public/services/publicCairns';
+import { cairnText } from '../i18n/runtime';
 
 let MapView: any = null;
 let Camera: any = null;
@@ -208,7 +209,7 @@ export function PublicCairnDetailScreen() {
       setLoadState({
         ...ticket,
         loading: true,
-        error: invalidated ? 'This Public Cairn is no longer available.' : detailLoadError(caught),
+        error: invalidated ? cairnText('public-cairn-detail-screen.this-public-cairn-is-no-longer-available-e1eea8f') : detailLoadError(caught),
       });
     }).finally(() => {
       if (!attemptIsCurrent()) return;
@@ -278,7 +279,7 @@ export function PublicCairnDetailScreen() {
         && current.resourceId === id
         && current.authority.viewerId === authority.viewerId
         && current.authority.generation === authority.generation
-          ? { ...current, loading: false, error: 'This Public Cairn is no longer available.' }
+          ? { ...current, loading: false, error: cairnText('public-cairn-detail-screen.this-public-cairn-is-no-longer-available-e1eea8f') }
           : current
       ));
     }
@@ -303,12 +304,12 @@ export function PublicCairnDetailScreen() {
   const loading = publicEnabled && Boolean(publicViewerId) && !detail
     && (currentLoadState?.loading ?? true);
   const unavailableError = publicEnabled
-    ? currentLoadState?.error ?? 'This Public Cairn is no longer available.'
-    : 'Public Cairns are not available in this release.';
+    ? currentLoadState?.error ?? cairnText('public-cairn-detail-screen.this-public-cairn-is-no-longer-available-e1eea8f')
+    : cairnText('public-cairn-detail-screen.public-cairns-are-not-available-in-this');
   const detailStatus = actionFeedback ?? currentLoadState?.error ?? null;
 
   const words = useMemo(() => detail ? splitTitleBody(detail.text) : { title: '', body: '' }, [detail]);
-  const title = detail ? cairnDisplayTitle(words.title, words.body, detail.createdAt) : 'Public Cairn';
+  const title = detail ? cairnDisplayTitle(words.title, words.body, detail.createdAt) : cairnText('public-cairn-detail-screen.public-cairn');
   const markerType = detail ? (MARKER_TYPES as any)[detail.type] ?? MARKER_TYPES.cairn : MARKER_TYPES.cairn;
 
   const retryDetail = () => {
@@ -329,28 +330,28 @@ export function PublicCairnDetailScreen() {
       if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;
       if (result.status === 'queued_offline') {
         showPublicActionFeedback(
-          selected === 'hide' ? 'Hidden here' : 'Blocked here',
-          'This change is saved on this device and will retry when you are connected.',
+          selected === 'hide' ? cairnText('public-cairn-detail-screen.hidden-here') : cairnText('public-cairn-detail-screen.blocked-here'),
+          cairnText('public-cairn-detail-screen.this-change-is-saved-on-this-device'),
         );
       } else if (result.status === 'queued_retry') {
         showPublicActionFeedback(
-          selected === 'hide' ? 'Hidden here' : 'Blocked here',
-          'This change is saved on this device. The service did not accept it yet and will retry.',
+          selected === 'hide' ? cairnText('public-cairn-detail-screen.hidden-here') : cairnText('public-cairn-detail-screen.blocked-here'),
+          cairnText('public-cairn-detail-screen.this-change-is-saved-on-this-device-7b87de2'),
         );
       } else if (result.status === 'auth_required') {
         showPublicActionFeedback(
-          selected === 'hide' ? 'Hidden here' : 'Blocked here',
-          'This change is saved on this device. Sign in again to send it.',
+          selected === 'hide' ? cairnText('public-cairn-detail-screen.hidden-here') : cairnText('public-cairn-detail-screen.blocked-here'),
+          cairnText('public-cairn-detail-screen.this-change-is-saved-on-this-device-df95334'),
         );
       } else if (result.status === 'rejected') {
-        setActionFeedback('The service rejected this change. It remains applied on this device.');
+        setActionFeedback(cairnText('public-cairn-detail-screen.the-service-rejected-this-change-it-remains'));
       } else if (result.status === 'unavailable') {
-        Alert.alert('No longer available', 'This Public Cairn is no longer available.');
+        Alert.alert(cairnText('public-cairn-detail-screen.no-longer-available'), cairnText('public-cairn-detail-screen.this-public-cairn-is-no-longer-available'));
       }
       nav.goBack();
     } catch {
       if (!screenActionIsCurrent(ticket)) return;
-      setActionFeedback('Could not save that change on this device. Nothing was sent; please try again.');
+      setActionFeedback(cairnText('public-cairn-detail-screen.could-not-save-that-change-on-this'));
     } finally {
       if (screenActionIsCurrent(ticket)) setActionPending(false);
     }
@@ -366,18 +367,18 @@ export function PublicCairnDetailScreen() {
       if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;
       if (result.status === 'confirmed') setThanked(true);
       else if (result.status === 'queued_offline') {
-        showPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');
+        showPublicActionFeedback(cairnText('public-cairn-detail-screen.thanks-saved'), cairnText('public-cairn-detail-screen.your-thanks-will-retry-when-you-are'));
       } else if (result.status === 'queued_retry') {
-        showPublicActionFeedback('Thanks saved', 'The service did not accept it yet and will retry.');
+        showPublicActionFeedback(cairnText('public-cairn-detail-screen.thanks-saved'), cairnText('public-cairn-detail-screen.the-service-did-not-accept-it-yet'));
       } else if (result.status === 'auth_required') {
-        showPublicActionFeedback('Thanks saved', 'Sign in again to send your Thanks.');
+        showPublicActionFeedback(cairnText('public-cairn-detail-screen.thanks-saved'), cairnText('public-cairn-detail-screen.sign-in-again-to-send-your-thanks'));
       } else if (result.status === 'rejected') {
-        setActionFeedback('The service rejected this Thanks.');
+        setActionFeedback(cairnText('public-cairn-detail-screen.the-service-rejected-this-thanks'));
       } else {
-        setActionFeedback('This Public Cairn is no longer available.');
+        setActionFeedback(cairnText('public-cairn-detail-screen.this-public-cairn-is-no-longer-available-e1eea8f'));
       }
     } catch {
-      if (screenActionIsCurrent(ticket)) setActionFeedback('Could not save your Thanks; please try again.');
+      if (screenActionIsCurrent(ticket)) setActionFeedback(cairnText('public-cairn-detail-screen.could-not-save-your-thanks-please-try'));
     } finally {
       if (screenActionIsCurrent(ticket)) setActionPending(false);
     }
@@ -394,27 +395,27 @@ export function PublicCairnDetailScreen() {
       if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;
       if (result.status === 'confirmed') {
         setReportCompleted(true);
-        setReportFeedback('Report received.');
+        setReportFeedback(cairnText('public-cairn-detail-screen.report-received'));
       } else if (result.status === 'queued_offline') {
         setReportCompleted(true);
-        setReportFeedback('Saved to retry when you are connected.');
+        setReportFeedback(cairnText('public-cairn-detail-screen.saved-to-retry-when-you-are-connected'));
       } else if (result.status === 'queued_retry') {
         setReportCompleted(true);
-        setReportFeedback('Saved. The service did not accept it yet and will retry.');
+        setReportFeedback(cairnText('public-cairn-detail-screen.saved-the-service-did-not-accept-it'));
       } else if (result.status === 'auth_required') {
         setReportCompleted(true);
-        setReportFeedback('Saved on this device. Sign in again to send it.');
+        setReportFeedback(cairnText('public-cairn-detail-screen.saved-on-this-device-sign-in-again'));
       } else if (result.status === 'rejected') {
         setReportCompleted(false);
-        setReportFeedback('The service rejected this report. Check the details and try again.');
+        setReportFeedback(cairnText('public-cairn-detail-screen.the-service-rejected-this-report-check-the'));
       } else {
         setReportCompleted(false);
-        setReportFeedback('This Public Cairn is no longer available.');
+        setReportFeedback(cairnText('public-cairn-detail-screen.this-public-cairn-is-no-longer-available-e1eea8f'));
       }
     } catch {
       if (!screenActionIsCurrent(ticket)) return;
       setReportCompleted(false);
-      setReportFeedback('Could not save this report on your device. Your draft is still here; please try again.');
+      setReportFeedback(cairnText('public-cairn-detail-screen.could-not-save-this-report-on-your'));
     } finally {
       if (screenActionIsCurrent(ticket)) setActionPending(false);
     }
@@ -426,7 +427,7 @@ export function PublicCairnDetailScreen() {
         <View style={styles.plainHeader}><BackButton variant="inline" /></View>
         <StateSurface
           variant="loading"
-          title="Loading Public Cairn…"
+          title={cairnText('public-cairn-detail-screen.loading-public-cairn')}
           material="embedded"
           alignment="center"
           style={styles.empty}
@@ -441,9 +442,9 @@ export function PublicCairnDetailScreen() {
         <View style={styles.plainHeader}><BackButton variant="inline" /></View>
         <View style={styles.empty}>
           <Icon name="CloudOff" size={26} color={theme.iconInactive} />
-          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Public Cairn unavailable</Text>
+          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{cairnText('public-cairn-detail-screen.public-cairn-unavailable')}</Text>
           <Text style={[styles.emptyBody, { color: theme.foregroundSecondary }]}>{unavailableError}</Text>
-          {publicEnabled ? <PrimaryButton label="Try again" onPress={retryDetail} /> : null}
+          {publicEnabled ? <PrimaryButton label={cairnText('public-cairn-detail-screen.try-again')} onPress={retryDetail} /> : null}
         </View>
       </SafeAreaView>
     );
@@ -471,50 +472,50 @@ export function PublicCairnDetailScreen() {
             ) : null}
           </MapView>
         ) : (
-          <View style={[styles.mapFallback, { backgroundColor: theme.surface }]}> 
+          <View style={[styles.mapFallback, { backgroundColor: theme.surface }]}>
             <Icon name="Map" size={24} color={theme.iconInactive} />
-            <Text style={[styles.mapFallbackTitle, { color: theme.foreground }]}>Map unavailable</Text>
-            <Text style={[styles.mapFallbackBody, { color: theme.foregroundSecondary }]}>The Cairn text remains available.</Text>
+            <Text style={[styles.mapFallbackTitle, { color: theme.foreground }]}>{cairnText('public-cairn-detail-screen.map-unavailable')}</Text>
+            <Text style={[styles.mapFallbackBody, { color: theme.foregroundSecondary }]}>{cairnText('public-cairn-detail-screen.the-cairn-text-remains-available')}</Text>
           </View>
         )}
         <View style={styles.back}><BackButton variant="inline" /></View>
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>PUBLIC CAIRN · READ ONLY</Text>
+        <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>{cairnText('public-cairn-detail-screen.public-cairn-read-only')}</Text>
         <Text style={[styles.title, { color: theme.foreground }]}>{title}</Text>
         {words.body ? <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{words.body}</Text> : null}
-        {!words.title && !words.body ? <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{detail?.displayText || 'A moment here'}</Text> : null}
+        {!words.title && !words.body ? <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{detail?.displayText || cairnText('public-cairn-detail-screen.a-moment-here')}</Text> : null}
         <View style={styles.metaRow}>
-          <View style={[styles.badge, { borderColor: markerType.color, backgroundColor: markerType.bg }]}> 
+          <View style={[styles.badge, { borderColor: markerType.color, backgroundColor: markerType.bg }]}>
             <Text style={[styles.badgeText, { color: markerType.color }]}>{markerType.label}</Text>
           </View>
-          <Text style={[styles.author, { color: theme.foregroundSecondary }]}>Left anonymously</Text>
+          <Text style={[styles.author, { color: theme.foregroundSecondary }]}>{cairnText('public-cairn-detail-screen.left-anonymously')}</Text>
         </View>
         {detailStatus ? <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{detailStatus}</Text> : null}
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
         <View style={styles.actions}>
           <PrimaryButton
-            label={thanked ? 'Thanks sent' : 'Thanks'}
+            label={thanked ? cairnText('public-cairn-detail-screen.thanks-sent') : cairnText('public-cairn-detail-screen.thanks')}
             onPress={() => void sendThanks()}
             disabled={thanked || actionPending}
             style={styles.action}
             testID="public-thanks"
           />
-          <PrimaryButton label="Hide" variant="secondary" onPress={() => setConfirmAction('hide')} disabled={actionPending} style={styles.action} testID="public-hide" />
+          <PrimaryButton label={cairnText('public-cairn-detail-screen.hide')} variant="secondary" onPress={() => setConfirmAction('hide')} disabled={actionPending} style={styles.action} testID="public-hide" />
         </View>
         <View style={styles.secondaryActions}>
-          <TouchableOpacity style={styles.safetyAction} onPress={() => setConfirmAction('block')} disabled={actionPending} accessibilityRole="button" accessibilityLabel="Block author">
-            <Text style={[styles.link, { color: theme.destructive }]}>Block author</Text>
+          <TouchableOpacity style={styles.safetyAction} onPress={() => setConfirmAction('block')} disabled={actionPending} accessibilityRole="button" accessibilityLabel={cairnText('public-cairn-detail-screen.block-author')}>
+            <Text style={[styles.link, { color: theme.destructive }]}>{cairnText('public-cairn-detail-screen.block-author')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.safetyAction} onPress={() => setReportOpen(true)} disabled={actionPending} accessibilityRole="button" accessibilityLabel="Report Cairn">
-            <Text style={[styles.link, { color: theme.foregroundSecondary }]}>Report</Text>
+          <TouchableOpacity style={styles.safetyAction} onPress={() => setReportOpen(true)} disabled={actionPending} accessibilityRole="button" accessibilityLabel={cairnText('public-cairn-detail-screen.report-cairn')}>
+            <Text style={[styles.link, { color: theme.foregroundSecondary }]}>{cairnText('public-cairn-detail-screen.report')}</Text>
           </TouchableOpacity>
         </View>
-        <Text style={[styles.safety, { color: theme.muted }]}>Reports are reviewed; this is not an emergency service.</Text>
+        <Text style={[styles.safety, { color: theme.muted }]}>{cairnText('public-cairn-detail-screen.reports-are-reviewed-this-is-not-an')}</Text>
       </ScrollView>
 
       <ModalCard visible={reportOpen} onDismiss={() => !actionPending && setReportOpen(false)} testID="public-report-sheet">
-        <ModalCardHeader title="Report this Cairn" body="Choose the closest reason. Your precise visit location is not sent to the author." onClose={() => setReportOpen(false)} />
+        <ModalCardHeader title={cairnText('public-cairn-detail-screen.report-this-cairn')} body={cairnText('public-cairn-detail-screen.choose-the-closest-reason-your-precise-visit')} onClose={() => setReportOpen(false)} />
         <View style={styles.reportBody}>
           <View style={styles.reportChoices}>
             {(['spam', 'unsafe', 'harassment', 'other'] as ReportCategory[]).map(category => (
@@ -532,30 +533,30 @@ export function PublicCairnDetailScreen() {
           <TextInput
             value={reportDetail}
             onChangeText={setReportDetail}
-            placeholder="Optional context"
+            placeholder={cairnText('public-cairn-detail-screen.optional-context')}
             placeholderTextColor={theme.muted}
             maxLength={500}
             multiline
             style={[styles.reportInput, { color: theme.foreground, borderColor: theme.border, backgroundColor: theme.inputSurface }]}
-            accessibilityLabel="Report context"
+            accessibilityLabel={cairnText('public-cairn-detail-screen.report-context')}
           />
           {reportFeedback ? <Text style={[styles.status, { color: theme.foregroundSecondary }]}>{reportFeedback}</Text> : null}
-          <PrimaryButton label={actionPending ? 'Sending…' : reportCompleted ? 'Report saved' : 'Submit report'} onPress={() => void submitReport()} disabled={actionPending || reportCompleted} testID="public-report-submit" />
+          <PrimaryButton label={actionPending ? cairnText('public-cairn-detail-screen.sending') : reportCompleted ? cairnText('public-cairn-detail-screen.report-saved') : cairnText('public-cairn-detail-screen.submit-report')} onPress={() => void submitReport()} disabled={actionPending || reportCompleted} testID="public-report-submit" />
         </View>
       </ModalCard>
 
       <ModalCard visible={confirmAction !== null} onDismiss={() => !actionPending && setConfirmAction(null)} testID="public-confirm-action">
         <ModalCardHeader
-          title={confirmAction === 'block' ? 'Block this author?' : 'Hide this Cairn?'}
+          title={confirmAction === 'block' ? cairnText('public-cairn-detail-screen.block-this-author') : cairnText('public-cairn-detail-screen.hide-this-cairn')}
           body={confirmAction === 'block'
-            ? 'Their Public Cairns and any friend access will no longer be available. Your own data is unchanged.'
-            : 'It will disappear for you immediately. This does not punish the author.'}
+            ? cairnText('public-cairn-detail-screen.their-public-cairns-and-any-friend-access')
+            : cairnText('public-cairn-detail-screen.it-will-disappear-for-you-immediately-this')}
           onClose={() => setConfirmAction(null)}
         />
         <View style={styles.confirmBody}>
-          <PrimaryButton label="Cancel" variant="secondary" onPress={() => setConfirmAction(null)} disabled={actionPending} />
+          <PrimaryButton label={cairnText('common.cancel')} variant="secondary" onPress={() => setConfirmAction(null)} disabled={actionPending} />
           <PrimaryButton
-            label={confirmAction === 'block' ? 'Block author' : 'Hide Cairn'}
+            label={confirmAction === 'block' ? cairnText('public-cairn-detail-screen.block-author') : cairnText('public-cairn-detail-screen.hide-cairn')}
             onPress={() => void commitConfirmedAction()}
             disabled={actionPending}
             testID="public-confirm-submit"

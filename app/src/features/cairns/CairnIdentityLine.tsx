@@ -4,11 +4,12 @@ import type { MarkerPermission } from '../../store/useMarkerStore';
 import { Icon, type IconName } from '../../components/Icon';
 import { FontSize, Radius, Spacing } from '../../components/tokens';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
+import { cairnText } from '../../i18n/runtime';
 
 const AUDIENCE: Record<MarkerPermission, { label: string; icon: IconName }> = {
-  personal: { label: 'Only me', icon: 'Lock' },
-  group: { label: 'Friends', icon: 'Users' },
-  public: { label: 'Public', icon: 'Globe' },
+  personal: { get label() { return cairnText('cairns.cairn-identity-line.only-me'); }, icon: 'Lock' },
+  group: { get label() { return cairnText('cairns.cairn-identity-line.friends'); }, icon: 'Users' },
+  public: { get label() { return cairnText('cairns.cairn-identity-line.public'); }, icon: 'Globe' },
 };
 
 /** Authorship and audience are separate product facts; never encode either by colour alone. */
@@ -28,10 +29,10 @@ export function CairnIdentityLine({
   const theme = useVisualTheme();
   const audience = AUDIENCE[permission] ?? AUDIENCE.personal;
   const authorLabel = isOwner
-    ? 'Your Cairn'
+    ? cairnText('cairns.cairn-identity-line.your-cairn')
     : permission === 'public'
-      ? 'Community Cairn'
-      : authorName ? `From ${authorName}` : 'Friend’s Cairn';
+      ? cairnText('cairns.cairn-identity-line.community-cairn')
+      : authorName ? cairnText('cairns.cairn-identity-line.from-value', { authorName: authorName }) : cairnText('cairns.cairn-identity-line.friend-s-cairn');
   return (
     <View style={[styles.row, compact && styles.compact]} testID="cairn-identity-line">
       <View style={styles.fact}>
@@ -40,7 +41,7 @@ export function CairnIdentityLine({
       </View>
       <View style={[styles.audience, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
         <Icon name={qa ? 'Wrench' : audience.icon} size={12} color={theme.iconActive} strokeWidth={2} />
-        <Text style={[styles.audienceText, { color: theme.foreground }]}>{qa ? 'Simulator only' : audience.label}</Text>
+        <Text style={[styles.audienceText, { color: theme.foreground }]}>{qa ? cairnText('cairns.cairn-identity-line.simulator-only') : audience.label}</Text>
       </View>
     </View>
   );

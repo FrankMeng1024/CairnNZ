@@ -117,6 +117,7 @@ async function persistFriends(
 // ── API Integration (backend calls — use authenticatedFetch, no token param needed) ──
 
 import { authenticatedFetch } from '../services/apiService';
+import { cairnText } from '../i18n/runtime';
 
 interface FriendActionAuthority {
   viewerId: string;
@@ -127,12 +128,22 @@ interface FriendActionAuthority {
 export interface FriendMutationResult {
   success: boolean;
   error?: string;
+  errorCode?: string;
   /** The initiating account/generation is no longer authoritative. */
   superseded?: true;
   /** The relationship mutation is known to have committed on the server. */
   serverCommitted?: true;
   /** Local durable cleanup could not be confirmed and must not be retried as a server mutation. */
   localCleanup?: 'storage-uncertain';
+}
+
+function legacyFriendRequestCode(status: number, raw: unknown): string {
+  const value = String(raw ?? '').toLowerCase();
+  if (status === 404 || value.includes('not found')) return 'USER_NOT_FOUND';
+  if (value.includes('yourself') || value.includes('self')) return 'SELF_REQUEST';
+  if (value.includes('already friends')) return 'ALREADY_FRIENDS';
+  if (value.includes('already sent') || value.includes('pending')) return 'REQUEST_ALREADY_PENDING';
+  return status >= 500 ? 'SERVER_ERROR' : 'REQUEST_FAILED';
 }
 
 export type FriendRequestLoadResult<T> =
@@ -193,7 +204,7 @@ function committedCleanupUncertainResult(action: 'Block' | 'Unfriend'): FriendMu
     success: false,
     serverCommitted: true,
     localCleanup: 'storage-uncertain',
-    error: `${action} completed on the server, but downloaded shared content could not be cleared from this device.`,
+    error: cairnText('use-friend-store.value-completed-on-the-server-but-downloaded', { action: action }),
   };
 }
 
@@ -215,16 +226,20 @@ export async function sendFriendRequest(
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      return { success: false, error: data.error || 'Request failed' };
+      return {
+        success: false,
+        error: cairnText('use-friend-store.request-failed'),
+        errorCode: String(data.code || legacyFriendRequestCode(res.status, data.error)),
+      };
     }
     const data = await res.json().catch(() => ({}));
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     const request = parseOutboundRequest(data?.request);
-    if (!request) return { success: false, serverCommitted: true, error: 'Request sent, but its server record could not be displayed. Refresh Requests.' };
+    if (!request) return { success: false, serverCommitted: true, error: cairnText('use-friend-store.request-sent-but-its-server-record-could') };
     return { success: true, serverCommitted: true, request };
-  } catch (err: any) {
+  } catch {
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
-    return { success: false, error: err.message || 'Network error' };
+    return { success: false, error: cairnText('use-friend-store.network-error'), errorCode: 'TRANSPORT' };
   }
 }
 
@@ -237,13 +252,13 @@ export async function fetchFriendRequests(): Promise<FriendRequestLoadResult<Inc
   try {
     const res = await authenticatedFetch('/api/friends/requests', { expectedUserId: authority.viewerId });
     if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
-    if (!res.ok) return { success: false, error: `Could not load requests (HTTP ${res.status}).` };
+    if (!res.ok) return { success: false, error: cairnText('use-friend-store.could-not-load-requests-http-value', { status: res.status }) };
     const rows = await res.json();
     if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
     return { success: true, items: Array.isArray(rows) ? rows : [] };
-  } catch (error: any) {
+  } catch {
     if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
-    return { success: false, error: error?.message || 'Could not load requests.' };
+    return { success: false, error: cairnText('use-friend-store.could-not-load-requests') };
   }
 }
 
@@ -264,10 +279,10 @@ export async function acceptFriendRequestAPI(requestId: string, shareMemory = fa
     const data = await res.json().catch(() => ({}));
     return res.ok
       ? { success: true, serverCommitted: true, friendId: String(data.friend_id ?? '') }
-      : { success: false, error: data.error || 'Could not accept request.' };
-  } catch (error: any) {
+      : { success: false, error: cairnText('use-friend-store.could-not-accept-request'), errorCode: String(data.code || 'ACCEPT_FAILED') };
+  } catch {
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
-    return { success: false, error: error?.message || 'Network error' };
+    return { success: false, error: cairnText('use-friend-store.network-error'), errorCode: 'TRANSPORT' };
   }
 }
 
@@ -287,10 +302,10 @@ export async function rejectFriendRequestAPI(requestId: string): Promise<FriendM
     const data = await res.json().catch(() => ({}));
     return res.ok
       ? { success: true, serverCommitted: true }
-      : { success: false, error: data.error || 'Could not decline request.' };
-  } catch (error: any) {
+      : { success: false, error: cairnText('use-friend-store.could-not-decline-request'), errorCode: String(data.code || 'DECLINE_FAILED') };
+  } catch {
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
-    return { success: false, error: error?.message || 'Network error' };
+    return { success: false, error: cairnText('use-friend-store.network-error'), errorCode: 'TRANSPORT' };
   }
 }
 
@@ -327,13 +342,13 @@ export async function fetchOutboundRequests(): Promise<FriendRequestLoadResult<O
   try {
     const res = await authenticatedFetch('/api/friends/requests/outbound', { expectedUserId: authority.viewerId });
     if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
-    if (!res.ok) return { success: false, error: `Could not load sent requests (HTTP ${res.status}).` };
+    if (!res.ok) return { success: false, error: cairnText('use-friend-store.could-not-load-sent-requests-http-value', { status: res.status }) };
     const rows = await res.json();
     if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
     return { success: true, items: (Array.isArray(rows) ? rows : []).map(parseOutboundRequest).filter(Boolean) as OutboundRequest[] };
-  } catch (error: any) {
+  } catch {
     if (!friendActionAuthorityIsCurrent(authority)) return { success: false, superseded: true };
-    return { success: false, error: error?.message || 'Could not load sent requests.' };
+    return { success: false, error: cairnText('use-friend-store.could-not-load-sent-requests') };
   }
 }
 
@@ -349,10 +364,10 @@ export async function cancelOutboundRequest(requestId: number): Promise<FriendMu
     const data = await res.json().catch(() => ({}));
     return res.ok
       ? { success: true, serverCommitted: true }
-      : { success: false, error: data.error || 'Could not update this request.' };
-  } catch (error: any) {
+      : { success: false, error: cairnText('use-friend-store.could-not-update-this-request'), errorCode: String(data.code || 'UPDATE_REQUEST_FAILED') };
+  } catch {
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
-    return { success: false, error: error?.message || 'Network error' };
+    return { success: false, error: cairnText('use-friend-store.network-error'), errorCode: 'TRANSPORT' };
   }
 }
 
@@ -542,7 +557,7 @@ export async function removeFriendAPI(
   friendId: number | string,
 ): Promise<FriendMutationResult> {
   const authority = captureFriendActionAuthority();
-  if (!authority) return { success: false, error: 'Account unavailable' };
+  if (!authority) return { success: false, error: cairnText('use-friend-store.account-unavailable') };
   invalidateFriendListReads();
   // Invalidate source-bound async work at intent time. If the server removal
   // fails, only a later authorized read may restore the borrowed data.
@@ -569,7 +584,7 @@ export async function removeFriendAPI(
       // response is fenced by removeFriendLocally's generation increment.
       void require('../features/memory/store/useMemorySubscriptionsStore')
         .useMemorySubscriptionsStore.getState().load();
-      return { success: false, error: (data as any).error || 'Remove failed' };
+      return { success: false, error: (data as any).error || cairnText('use-friend-store.remove-failed') };
     }
     serverCommitted = true;
     const intentCleanupUncertain = await intentCleanup;
@@ -593,7 +608,7 @@ export async function removeFriendAPI(
     useFriendStore.setState({ friends: prev });
     void require('../features/memory/store/useMemorySubscriptionsStore')
       .useMemorySubscriptionsStore.getState().load();
-    return { success: false, error: err.message || 'Network error' };
+    return { success: false, error: err.message || cairnText('use-friend-store.network-error') };
   }
 }
 
@@ -612,7 +627,7 @@ export async function blockUser(
   reason?: string,
 ): Promise<FriendMutationResult> {
   const authority = captureFriendActionAuthority();
-  if (!authority) return { success: false, error: 'Account unavailable' };
+  if (!authority) return { success: false, error: cairnText('use-friend-store.account-unavailable') };
   invalidateFriendListReads();
   const intentCleanup = purgeFriendNamespaces(targetId, authority)
     .then(() => false, () => true);
@@ -628,7 +643,7 @@ export async function blockUser(
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
-      return { success: false, error: data.error || 'Block failed' };
+      return { success: false, error: cairnText('use-friend-store.block-failed'), errorCode: String(data.code || 'BLOCK_FAILED') };
     }
     serverCommitted = true;
     const intentCleanupUncertain = await intentCleanup;
@@ -653,10 +668,10 @@ export async function blockUser(
       return committedCleanupUncertainResult('Block');
     }
     return { success: true };
-  } catch (err: any) {
+  } catch {
     if (!friendActionAuthorityIsCurrent(authority)) return accountChangedResult();
     if (serverCommitted) return committedCleanupUncertainResult('Block');
-    return { success: false, error: err?.message || 'Network error' };
+    return { success: false, error: cairnText('use-friend-store.network-error'), errorCode: 'TRANSPORT' };
   }
 }
 

@@ -2,6 +2,7 @@ import { AppState, Platform } from 'react-native';
 import { storage } from '../../store/storage';
 import { getPushPreferences, registerForPush, updatePushPreferences } from '../../services/pushService';
 import { useAppStore } from '../../store/useAppStore';
+import { cairnText } from '../../i18n/runtime';
 
 const ENABLED_PREFIX = 'cairn:encounter-notifications:v1:';
 const OPENED_PREFIX = 'cairn:encounter-notification-open:v1:';
@@ -68,17 +69,17 @@ export async function getEncounterNotificationState(ownerId: string): Promise<En
   const permission = await permissionStatus(isCurrent);
   if (Platform.OS !== 'web' && !isCurrent()) return {
     supported: false, enabled: false, permission: 'unavailable',
-    detail: 'Notification state belongs to the currently signed-in account.',
+    detail: cairnText('cairns.cairn-encounter-notifications.notification-state-belongs-to-the-currently-signed'),
   };
   const chosen = ownerId ? await storage.getItem(enabledKey(ownerId)).catch(() => null) : null;
   if (Platform.OS !== 'web' && !isCurrent()) return {
     supported: false, enabled: false, permission: 'unavailable',
-    detail: 'Notification state belongs to the currently signed-in account.',
+    detail: cairnText('cairns.cairn-encounter-notifications.notification-state-belongs-to-the-currently-signed'),
   };
   const serverPrefs = ownerId && Platform.OS !== 'web' ? await getPushPreferences(ownerId) : null;
   if (Platform.OS !== 'web' && !isCurrent()) return {
     supported: false, enabled: false, permission: 'unavailable',
-    detail: 'Notification state belongs to the currently signed-in account.',
+    detail: cairnText('cairns.cairn-encounter-notifications.notification-state-belongs-to-the-currently-signed'),
   };
   const enabled = chosen === '1' && permission === 'granted' && serverPrefs?.memoryHits === true;
   return {
@@ -86,14 +87,14 @@ export async function getEncounterNotificationState(ownerId: string): Promise<En
     enabled,
     permission,
     detail: Platform.OS === 'web'
-      ? 'System encounter notifications are available only in the installed iPhone or Android app.'
+      ? cairnText('cairns.cairn-encounter-notifications.system-encounter-notifications-are-available-only-in')
       : permission === 'denied'
-        ? 'Notifications are off in system Settings. Encounters still appear in Memory.'
+        ? cairnText('cairns.cairn-encounter-notifications.notifications-are-off-in-system-settings-encounters')
         : chosen === '1' && serverPrefs == null
-          ? 'Could not confirm the server setting. Encounters still save to Memory; try again when online.'
+          ? cairnText('cairns.cairn-encounter-notifications.could-not-confirm-the-server-setting-encounters')
         : enabled
-          ? 'A private system alert may appear after the server confirms a new encounter. Delivery timing is controlled by the device.'
-          : 'Off. Encountered Cairns still save to Memory and appear in the app.',
+          ? cairnText('cairns.cairn-encounter-notifications.a-private-system-alert-may-appear-after')
+          : cairnText('cairns.cairn-encounter-notifications.off-encountered-cairns-still-save-to-memory'),
   };
 }
 

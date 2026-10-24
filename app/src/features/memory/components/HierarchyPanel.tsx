@@ -45,6 +45,7 @@ import { MemoryColors } from '../config/memoryConfig';
 import { Icon } from '../../../components/Icon';
 import { fetchPanelData, type PanelData, type PanelItem } from '../services/hierarchyService';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
+import { cairnText } from '../../../i18n/runtime';
 
 interface Props {
   titleId: string;                           // 'world' or a country id
@@ -92,7 +93,7 @@ export function HierarchyPanel({
       .then((d) => {
         if (cancelled) return;
         if (!d) {
-          setError('Could not load region info');
+          setError(cairnText('memory.hierarchy-panel.could-not-load-region-info'));
         } else {
           setData(d);
         }
@@ -100,7 +101,7 @@ export function HierarchyPanel({
       })
       .catch(() => {
         if (!cancelled) {
-          setError('Network error');
+          setError(cairnText('memory.hierarchy-panel.network-error'));
           setLoading(false);
         }
       });
@@ -182,14 +183,14 @@ export function HierarchyPanel({
             minimumFontScale={0.75}
             testID="hierarchy-title"
           >
-            {data?.title.name_en ?? 'Loading…'}
+            {data?.title.name_en ?? cairnText('common.loading')}
           </Text>
           {data?.parent ? (
             <TouchableOpacity
               style={[styles.upBtn, { backgroundColor: theme.surface }]}
               onPress={onGoUp}
               activeOpacity={0.7}
-              accessibilityLabel="Go up"
+              accessibilityLabel={cairnText('memory.hierarchy-panel.go-up')}
               testID="hierarchy-up-btn"
             >
               <Icon name="ArrowUp" size={16} color={Colors.primary} strokeWidth={2.5} />
@@ -210,9 +211,7 @@ export function HierarchyPanel({
           <View style={[styles.listContainer, loading && styles.stale]}>
             {showEmptyBanner ? (
               <View style={styles.emptyBanner} testID="hierarchy-empty-banner">
-                <Text style={styles.emptyBannerText}>
-                  Head out and start walking to unlock places.
-                </Text>
+                <Text style={styles.emptyBannerText}>{cairnText('memory.hierarchy-panel.head-out-and-start-walking-to-unlock')}</Text>
               </View>
             ) : null}
             <ScrollView
@@ -231,7 +230,14 @@ export function HierarchyPanel({
                     key={item.id}
                     testID={`hierarchy-row-${item.id}`}
                     accessibilityState={{ selected: isHere }}
-                    accessibilityLabel={`${item.name_en}, ${item.ownership === 'both' ? 'Mine and Friends' : item.ownership === 'mine' ? 'Mine' : 'Friends'}`}
+                    accessibilityLabel={cairnText('memory.hierarchy-panel.value-value', {
+                      name_en: item.name_en,
+                      value2: item.ownership === 'both'
+                        ? cairnText('memory.ownership.mine-and-friends')
+                        : item.ownership === 'mine'
+                          ? cairnText('memory.ownership.mine')
+                          : cairnText('memory.ownership.friends'),
+                    })}
                     style={[
                       styles.row,
                       { borderTopColor: theme.border },
@@ -263,12 +269,12 @@ export function HierarchyPanel({
                     >
                       {item.ownership === 'mine' || item.ownership === 'both' ? (
                         <View style={[styles.ownershipBadge, { backgroundColor: theme.mapMineMemoryFill }]}>
-                          <Text style={styles.ownershipText}>M</Text>
+                          <Text style={styles.ownershipText}>{cairnText('memory.hierarchy-panel.m')}</Text>
                         </View>
                       ) : null}
                       {item.ownership === 'friends' || item.ownership === 'both' ? (
                         <View style={[styles.ownershipBadge, { backgroundColor: theme.mapFriendMemoryFill }]}>
-                          <Text style={styles.ownershipText}>F</Text>
+                          <Text style={styles.ownershipText}>{cairnText('memory.hierarchy-panel.f')}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -278,7 +284,7 @@ export function HierarchyPanel({
             </ScrollView>
             {isScrollable && showScrollHint ? (
               <View style={styles.scrollHint} pointerEvents="none">
-                <Text style={styles.scrollHintText}>▼ more</Text>
+                <Text style={styles.scrollHintText}>{cairnText('memory.hierarchy-panel.more')}</Text>
               </View>
             ) : null}
           </View>
@@ -288,9 +294,7 @@ export function HierarchyPanel({
         {data && !error && lockedCount > 0 && !showEmptyBanner ? (
           <View style={styles.lockedSummary} testID="hierarchy-locked-summary">
             <View style={[styles.dot, styles.dotLocked]} />
-            <Text style={styles.lockedSummaryText}>
-              {lockedCount} more locked
-            </Text>
+            <Text style={styles.lockedSummaryText}>{cairnText('memory.hierarchy-panel.value-more-locked', { lockedCount: lockedCount })}</Text>
           </View>
         ) : null}
 
@@ -299,11 +303,11 @@ export function HierarchyPanel({
           <View style={styles.legend} testID="hierarchy-legend">
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, styles.dotMarked]} />
-              <Text style={styles.legendText}>Marked</Text>
+              <Text style={styles.legendText}>{cairnText('memory.hierarchy-panel.marked')}</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, styles.dotWalked]} />
-              <Text style={styles.legendText}>Walked</Text>
+              <Text style={styles.legendText}>{cairnText('memory.hierarchy-panel.walked')}</Text>
             </View>
           </View>
         ) : null}

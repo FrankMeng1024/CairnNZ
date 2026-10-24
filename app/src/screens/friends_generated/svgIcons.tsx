@@ -136,4 +136,14 @@ export const svgByAsset = {
   'send.svg': SvgSend,
   'settings.svg': SvgSettings,
   'trails.svg': SvgTrails,
+  // The Friends design spec keeps the `icons/` prefix in its asset refs.
+  // Retain both generated spellings so the preview is type-safe and renders
+  // the same canonical glyphs rather than silently dropping them.
+  'icons/add.svg': SvgAdd,
+  'icons/back.svg': SvgBack,
+  'icons/friends.svg': SvgFriends,
+  'icons/mail.svg': SvgMail,
+  'icons/memory.svg': SvgMemory,
+  'icons/settings.svg': SvgSettings,
+  'icons/trails.svg': SvgTrails,
 } as const;

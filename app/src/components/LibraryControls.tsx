@@ -12,6 +12,7 @@ import {
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { Icon } from './Icon';
 import { FontSize, RadiusRole, Spacing } from './tokens';
+import { cairnText } from '../i18n/runtime';
 
 export function LibrarySearchField({
   value,
@@ -48,7 +49,7 @@ export function LibrarySearchField({
         <TouchableOpacity
           onPress={() => onChange('')}
           accessibilityRole="button"
-          accessibilityLabel={`Clear ${label.toLocaleLowerCase()}`}
+          accessibilityLabel={cairnText('library-controls.clear-value', { value1: label.toLocaleLowerCase() })}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon name="X" size={15} color={theme.iconInactive} strokeWidth={2} />

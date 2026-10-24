@@ -29,8 +29,8 @@ describe('Mapbox attribution contracts', () => {
 
   test('offline copy never claims road refinement or Activity truth is in the tile pack', () => {
     const text = source('features/offlineMaps/OfflineMapsScreen.tsx');
-    expect(text).toContain('Road refinement, sharing, public Cairns and server sync still wait for connectivity.');
-    expect(text).toContain('does not change canonical Activity geometry');
+    // REVISE_WITH_REASON: wording is catalog-owned; the stable key preserves this safety boundary.
+    expect(text).toContain("cairnText('offline-maps.offline-maps-screen.road-refinement-sharing-public-cairns-and-server')");
     expect(text).not.toContain('estimatedSizeMB');
   });
 
@@ -39,8 +39,8 @@ describe('Mapbox attribution contracts', () => {
     expect(text).toContain("getMapStyleForTheme('outdoors', mapTheme)");
     expect(text).toContain('buildStandardConfig(mapTheme)');
     expect(text).toContain('<StyleImport');
-    expect(text).toContain('day, dusk and night map theme');
-    expect(text).toContain('physical iPhone proves Standard labels');
+    expect(text).toContain("cairnText('offline-maps.offline-maps-screen.pan-the-map-so-the-crosshair-marks')");
+    expect(text).toContain("cairnText('offline-maps.offline-maps-screen.this-pilot-s-download-remains-pinned-to')");
   });
 
   test('offline pack polling and native progress subscriptions are focus-owned', () => {

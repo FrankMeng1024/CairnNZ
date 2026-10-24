@@ -11,6 +11,7 @@ import { useEffect, useRef } from 'react';
 import { Alert, Linking } from 'react-native';
 import { useRouteEditStore } from './src/store/useRouteEditStore';
 import { getFlagsSync } from './src/config/featureFlags';
+import { cairnText } from './src/i18n/runtime';
 
 export function MigratorRetryPrompt(): null {
   // Track last seen retry state so we only fire alert on transition.
@@ -41,7 +42,7 @@ export function MigratorRetryPrompt(): null {
 
       const buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }> = [
         {
-          text: 'Skip',
+          text: cairnText('migrator-retry-prompt.skip'),
           style: 'cancel',
           onPress: () => useRouteEditStore.getState().skipMigration(),
         },
@@ -49,7 +50,7 @@ export function MigratorRetryPrompt(): null {
 
       if (retry.retry) {
         buttons.push({
-          text: 'Retry',
+          text: cairnText('common.retry'),
           onPress: () => {
             // Caller (RouteEditor) will detect cleared migratorRetry via subscribe
             // and re-issue beginEdit. We just clear the retry state here.
@@ -59,7 +60,7 @@ export function MigratorRetryPrompt(): null {
       }
 
       buttons.push({
-        text: 'Report',
+        text: cairnText('migrator-retry-prompt.report'),
         onPress: () => {
           // Open mailto with prefilled diagnostic info. Best-effort; if no
           // mail client, just log.
@@ -96,8 +97,8 @@ export function MigratorRetryPrompt(): null {
       });
 
       Alert.alert(
-        'Migration failed',
-        `Could not prepare this route for editing.\n\n${retry.error}`,
+        cairnText('migrator-retry-prompt.migration-failed'),
+        cairnText('migrator-retry-prompt.could-not-prepare-this-route-for-editing', { error: retry.error }),
         buttons,
       );
     });

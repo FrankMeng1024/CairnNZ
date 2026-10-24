@@ -77,11 +77,16 @@ describe('Free Activity integration contracts', () => {
 
   test('a failed durable completion remains paused and explains that Save did not complete', () => {
     const source = read('src/store/useTrackingStore.ts');
+    const catalog = read('src/i18n/cairnText.ts');
     const failure = source.slice(
       source.indexOf('if (!durableSaveCommitted)'),
       source.indexOf('if (remoteId)', source.indexOf('if (!durableSaveCommitted)')),
     );
-    expect(failure).toContain("'Activity not saved'");
+    // REVISE_WITH_REASON: app-owned copy now has one authority in cairnText.ts;
+    // keep this contract on both the stable key wiring and its en-NZ source.
+    expect(failure).toContain("cairnText('use-tracking-store.activity-not-saved')");
+    expect(catalog).toContain("'use-tracking-store.activity-not-saved':");
+    expect(catalog).toContain("'en-NZ': 'Activity not saved'");
     expect(failure).toContain("status: 'paused'");
     expect(failure).toContain("status: 'recoverable-failure'");
     expect(failure).toContain("reason: 'local-commit-failed'");
@@ -110,8 +115,13 @@ describe('Free Activity integration contracts', () => {
 
   test('transition chrome shows truthful Resuming state while keeping Finish enabled', () => {
     const chrome = read('src/components/activity/ActivityRecordingChrome.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(chrome).toContain("phase: 'tracking' | 'paused' | 'resuming' | 'pausing' | 'finishing'");
-    expect(chrome).toContain("phase === 'resuming' ? 'Resuming…'");
+    // REVISE_WITH_REASON: verify the state-to-key mapping without restoring a
+    // second English authority beside the localized callsite.
+    expect(chrome).toContain("phase === 'resuming' ? cairnText('activity.activity-recording-chrome.resuming')");
+    expect(catalog).toContain("'activity.activity-recording-chrome.resuming':");
+    expect(catalog).toContain("'en-NZ': 'Resuming…'");
     const finishControl = chrome.slice(chrome.indexOf('onPress={onFinish}'), chrome.indexOf('</TouchableOpacity>', chrome.indexOf('onPress={onFinish}')));
     expect(finishControl).toContain('disabled={finishing}');
     expect(finishControl).not.toContain('transitioning');
@@ -445,10 +455,15 @@ describe('Free Activity integration contracts', () => {
 
   test('Hike and Run use the same terminal-aware Start error presentation', () => {
     const shared = read('src/components/activity/ActivityRecordingChrome.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
     expect(shared).toContain('activityStartErrorMessage');
-    expect(shared).toContain('Your previous Activity is safely saved and still syncing.');
+    // REVISE_WITH_REASON: the shared helper owns the stable key; the catalog
+    // owns the exact source copy.
+    expect(shared).toContain("cairnText('activity.activity-recording-chrome.your-previous-activity-is-safely-saved-and')");
+    expect(catalog).toContain("'activity.activity-recording-chrome.your-previous-activity-is-safely-saved-and':");
+    expect(catalog).toContain("'en-NZ': 'Your previous Activity is safely saved and still syncing. Try again when sync completes.'");
     expect(hike).toContain('startError={activityStartErrorMessage(startError)}');
     expect(run).toContain('startError={activityStartErrorMessage(startError)}');
   });
@@ -497,15 +512,19 @@ describe('Free Activity integration contracts', () => {
   test('fresh-user automatic exploration defaults on while Activity capture remains independent', () => {
     const settings = read('src/features/memory/store/useMemorySettingsStore.ts');
     const ui = read('src/screens/SettingsScreen.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(settings).toMatch(/passiveExplorationEnabled:\s*true/);
     expect(settings).toContain('passiveExplorationContractVersion: 6');
     expect(settings).toContain('automaticExplorationDisclosureVersion');
     expect(settings).not.toContain('recordMode:');
     expect(settings).not.toContain('showFriendOverlay:');
     expect(settings).not.toContain('useH3Fog:');
-    expect(ui.match(/title="Automatic exploration"/g)).toHaveLength(2);
-    expect(ui).not.toContain('title="Automatic exploration & encounters"');
-    expect(ui).toContain('Hike and Run still work when it is Off');
+    // REVISE_WITH_REASON: count the shared stable key at both surfaces and
+    // keep exact English solely in the catalog.
+    expect(ui.match(/title=\{cairnText\('settings-screen\.automatic-exploration'\)\}/g)).toHaveLength(2);
+    expect(ui).not.toContain("title={cairnText('settings-screen.automatic-exploration-encounters')}");
+    expect(ui).toContain("cairnText('settings-screen.off-ordinary-app-use-does-not-record')");
+    expect(catalog).toContain("'en-NZ': 'Off · ordinary app use does not record exploration or scan for encounters; Hike and Run still work'");
   });
 
   test('background task publishes activation last, clears it first, and requires exact owner identity', () => {
@@ -631,10 +650,14 @@ describe('Free Activity integration contracts', () => {
 
   test('a missing Activity target has a Detail-specific degraded state', () => {
     const source = read('src/screens/MapHistoryScreen.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(source).toContain('testID="activity-detail-unavailable"');
-    expect(source).toContain('This Activity could not be found in local Activity history.');
-    expect(source).toContain("? 'Back'");
-    expect(source).toContain(": 'Back to Activities'");
+    // REVISE_WITH_REASON: assert keys at the branch and exact copy at its one
+    // editable authority.
+    expect(source).toContain("cairnText('map-history-screen.this-activity-could-not-be-found-in')");
+    expect(source).toContain("? cairnText('navigation.back')");
+    expect(source).toContain(": cairnText('map-history-screen.back-to-activities')");
+    expect(catalog).toContain("'en-NZ': 'This Activity could not be found in local Activity history.'");
     expect(source).toContain('onPress={handleActivityBack}');
   });
 
@@ -655,13 +678,17 @@ describe('Free Activity integration contracts', () => {
     const detail = read('src/screens/MapHistoryScreen.tsx');
     const trails = read('src/screens/RoutesScreen.tsx');
     const editor = read('src/screens/OrderedRouteEditorScreen.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(detail).toContain('testID="activity-create-route"');
     expect(detail).toContain("creationSource: 'activity'");
     expect(detail).toContain('fromSessionId: selectedSession.id');
     expect(detail).toContain('creationSessionId: createRouteCreationSessionId()');
-    expect(detail).toContain('This Activity and its Memory stay unchanged.');
+    // REVISE_WITH_REASON: keep the independence copy in the catalog while
+    // retaining a source-level guard on the exact callsite.
+    expect(detail).toContain("cairnText('map-history-screen.creates-a-separate-editable-copy-this-activity')");
+    expect(catalog).toContain("'en-NZ': 'Creates a separate editable copy. This Activity and its Memory stay unchanged.'");
     expect(detail).not.toContain('Save as Route');
-    expect(trails).toContain('Use an Activity');
+    expect(trails).toContain("cairnText('routes-screen.use-an-activity')");
     expect(editor).toContain('const segments = segmentTrace(points).segments');
     expect(editor).toContain('createImportedOrderedDraft');
     expect(editor).not.toContain('trace.gaps.flatMap');

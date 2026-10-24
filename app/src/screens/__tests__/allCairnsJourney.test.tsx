@@ -84,6 +84,10 @@ describe('Cairn Library ordinary tab journey', () => {
     fireEvent.changeText(screen.getByTestId('all-cairns-search'), 'fern');
     expect(screen.getByTestId('all-cairns-search').props.value).toBe('fern');
 
+    // Selection ACK is intentionally one paint ahead of target acquisition.
+    // Wait for the independent target request before releasing its response;
+    // the already-mounted empty panel is not proof that loading completed.
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
     releaseFound();
     await waitFor(() => expect(screen.getByTestId('found-cairns-empty')).toBeTruthy());
     expect(mockFetch).toHaveBeenCalledTimes(1);

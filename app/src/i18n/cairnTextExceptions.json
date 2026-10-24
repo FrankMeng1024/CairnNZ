@@ -1,0 +1,107 @@
+[
+  {
+    "path": "src/features/activity/almostDoneCloneV1.ts",
+    "syntax": "property:label",
+    "text": "QA / SNAP REVIEW CLONE",
+    "classification": "PROTOCOL_IDENTIFIER",
+    "reason": "Literal-typed retained QA provenance identifier; not rendered as app copy and must remain byte-stable across locale changes."
+  },
+  {
+    "path": "src/services/backgroundLocationTask.ts",
+    "syntax": "display-variable:STORAGE_KEY_ACTIVITY_CONTEXT",
+    "text": "cairn_bg_activity_context_v2",
+    "classification": "STORAGE_IDENTIFIER",
+    "reason": "AsyncStorage protocol key; translating it would orphan active background Activity ownership state."
+  },
+  {
+    "path": "src/services/mapboxPrewarm.ts",
+    "syntax": "display-variable:PACK_NAME",
+    "text": "cairn-nz-viewport-warmup",
+    "classification": "PROVIDER_IDENTIFIER",
+    "reason": "Mapbox offline-pack identifier; never rendered as app copy and must remain stable across locales."
+  },
+  {
+    "path": "src/features/activitySimulator/snapLabActivityStore.ts",
+    "syntax": "display-variable:WEB_DB_NAME",
+    "text": "cairn-snap-lab-v1",
+    "classification": "STORAGE_IDENTIFIER",
+    "reason": "IndexedDB database identifier for diagnostic replay; never rendered and must remain byte-stable."
+  },
+  {
+    "path": "src/diagnostics/build57StartupProbe.ts",
+    "syntax": "display-variable:name",
+    "text": "Error",
+    "classification": "ERROR_CLASS_IDENTIFIER",
+    "reason": "Fallback JavaScript Error.name captured in diagnostic payload, not display copy."
+  },
+  {
+    "path": "src/screens/MapHistoryScreen.tsx",
+    "syntax": "display-variable:iconName",
+    "text": "CloudOff",
+    "classification": "ICON_IDENTIFIER",
+    "reason": "Typed icon registry key, not user-facing text."
+  },
+  {
+    "path": "src/screens/MapHistoryScreen.tsx",
+    "syntax": "display-variable:iconName",
+    "text": "Route",
+    "classification": "ICON_IDENTIFIER",
+    "reason": "Typed icon registry key, not user-facing text."
+  },
+  {
+    "path": "src/screens/MapHistoryScreen.tsx",
+    "syntax": "display-variable:iconName",
+    "text": "TriangleAlert",
+    "classification": "ICON_IDENTIFIER",
+    "reason": "Typed icon registry key, not user-facing text."
+  },
+  {
+    "path": "src/screens/MapHistoryScreen.tsx",
+    "syntax": "display-variable:iconName",
+    "text": "Map",
+    "classification": "ICON_IDENTIFIER",
+    "reason": "Typed icon registry key, not user-facing text."
+  },
+  {
+    "path": "src/screens/MarkerPin.tsx",
+    "syntax": "display-variable:iconName",
+    "text": "Flag",
+    "classification": "ICON_IDENTIFIER",
+    "reason": "Typed icon registry fallback, not user-facing text."
+  },
+  {
+    "path": "src/services/apiService.ts",
+    "syntax": "display-variable:errName",
+    "text": "Error",
+    "classification": "ERROR_CLASS_IDENTIFIER",
+    "reason": "Fallback JavaScript error-class name recorded in bounded telemetry, not display copy."
+  },
+  {
+    "path": "src/services/markerInteractionService.ts",
+    "syntax": "display-assignment:name",
+    "text": "MarkerInteractionError",
+    "classification": "ERROR_CLASS_IDENTIFIER",
+    "reason": "Error.name identifier used by exception handling and diagnostics; never normal UI copy."
+  },
+  {
+    "path": "src/components/tokens.ts",
+    "syntax": "property:warning",
+    "text": "#b36b00",
+    "classification": "DESIGN_TOKEN",
+    "reason": "Canonical hexadecimal warning colour token, not display copy."
+  },
+  {
+    "path": "src/screens/SettingsScreen.tsx",
+    "syntax": "attribute-direct:detail",
+    "text": "support@cairnapp.nz",
+    "classification": "EXTERNAL_CONTACT_IDENTIFIER",
+    "reason": "Support address is an externally routed identifier and must remain byte-identical to the mailto destination, not translated copy."
+  },
+  {
+    "path": "src/screens/SettingsScreen.tsx",
+    "syntax": "attribute-direct:detail",
+    "text": "Apple Standard EULA",
+    "classification": "THIRD_PARTY_LEGAL_TITLE",
+    "reason": "Official third-party legal document title; Cairn does not own or translate the linked document."
+  }
+]

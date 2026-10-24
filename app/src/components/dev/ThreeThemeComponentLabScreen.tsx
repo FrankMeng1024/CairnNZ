@@ -12,6 +12,7 @@ import { SegmentedControl } from '../SegmentedControl';
 import { TextField } from '../TextField';
 import { FontSize, IconSize, RadiusRole, Spacing } from '../tokens';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
+import { cairnText } from '../../i18n/runtime';
 
 /** Strictly development-only proof of production shared primitives. */
 export function ThreeThemeComponentLabScreen() {
@@ -29,12 +30,12 @@ export function ThreeThemeComponentLabScreen() {
           <BackButton onPress={() => {}} testID="lab-back" />
           <DismissButton onPress={() => {}} testID="lab-close" />
         </View>
-        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>DEV · THREE-THEME AUTHORITY</Text>
-        <Text style={[styles.title, { color: theme.textPrimary }]}>Shared visual primitives</Text>
+        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>{cairnText('dev.three-theme-component-lab-screen.dev-three-theme-authority')}</Text>
+        <Text style={[styles.title, { color: theme.textPrimary }]}>{cairnText('dev.three-theme-component-lab-screen.shared-visual-primitives')}</Text>
 
         <SegmentedControl<'records' | 'saved'>
           value={tab}
-          segments={[{ key: 'records', label: 'Records' }, { key: 'saved', label: 'Saved' }]}
+          segments={[{ key: 'records', label: cairnText('dev.three-theme-component-lab-screen.records') }, { key: 'saved', label: cairnText('dev.three-theme-component-lab-screen.saved') }]}
           onChange={setTab}
           testID="lab-tabs"
         />
@@ -43,37 +44,37 @@ export function ThreeThemeComponentLabScreen() {
           <View style={styles.rowCopy}>
             <Icon name="Footprints" size={IconSize.md} color={theme.icon} strokeWidth={2} />
             <View style={styles.copy}>
-              <Text testID="lab-record-text" style={[styles.recordTitle, { color: theme.textPrimary }]}>Milford Track</Text>
-              <Text style={[styles.recordMeta, { color: theme.textSecondary }]}>Yesterday · 14.2 km</Text>
+              <Text testID="lab-record-text" style={[styles.recordTitle, { color: theme.textPrimary }]}>{cairnText('dev.three-theme-component-lab-screen.milford-track')}</Text>
+              <Text style={[styles.recordMeta, { color: theme.textSecondary }]}>{cairnText('dev.three-theme-component-lab-screen.yesterday-14-2-km')}</Text>
             </View>
             <Icon name="ChevronRight" size={IconSize.sm} color={theme.iconInactive} strokeWidth={2} />
           </View>
         </ContentSurface>
 
         <ContentSurface level="elevated" testID="lab-elevated-card">
-          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Elevated card</Text>
-          <Text style={[styles.cardBody, { color: theme.textSecondary }]}>A stronger material step for grouped information.</Text>
+          <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>{cairnText('dev.three-theme-component-lab-screen.elevated-card')}</Text>
+          <Text style={[styles.cardBody, { color: theme.textSecondary }]}>{cairnText('dev.three-theme-component-lab-screen.a-stronger-material-step-for-grouped-information')}</Text>
         </ContentSurface>
 
         <View style={styles.buttonStack}>
           <PrimaryButton
-            label="Start exploring"
+            label={cairnText('dev.three-theme-component-lab-screen.start-exploring')}
             onPress={() => {}}
             testID="lab-primary-button"
             renderIcon={color => <Icon name="Compass" size={IconSize.sm} color={color} strokeWidth={2.1} />}
           />
           <PrimaryButton
-            label="Save for later"
+            label={cairnText('dev.three-theme-component-lab-screen.save-for-later')}
             onPress={() => {}}
             variant="secondary"
             testID="lab-secondary-button"
             renderIcon={color => <Icon name="Heart" size={IconSize.sm} color={color} strokeWidth={2.1} />}
           />
-          <PrimaryButton label="Unavailable" onPress={() => {}} disabled testID="lab-disabled-button" />
+          <PrimaryButton label={cairnText('dev.three-theme-component-lab-screen.unavailable')} onPress={() => {}} disabled testID="lab-disabled-button" />
           <ContentSurface testID="lab-destructive-normal">
-            <Text style={[styles.utility, { color: theme.textPrimary }]}>Remove downloaded route</Text>
+            <Text style={[styles.utility, { color: theme.textPrimary }]}>{cairnText('dev.three-theme-component-lab-screen.remove-downloaded-route')}</Text>
           </ContentSurface>
-          <PrimaryButton label="Confirm removal" onPress={() => {}} variant="destructive" testID="lab-destructive-final" />
+          <PrimaryButton label={cairnText('dev.three-theme-component-lab-screen.confirm-removal')} onPress={() => {}} variant="destructive" testID="lab-destructive-final" />
         </View>
 
         <View style={styles.iconPair} testID="lab-icon-pair">
@@ -83,49 +84,49 @@ export function ThreeThemeComponentLabScreen() {
           <View testID="lab-icon-active">
             <Icon name="MapPin" size={IconSize.md} color={theme.iconActive} strokeWidth={2} />
           </View>
-          <Text style={[styles.iconLabel, { color: theme.textSecondary }]}>Neutral / active icons</Text>
+          <Text style={[styles.iconLabel, { color: theme.textSecondary }]}>{cairnText('dev.three-theme-component-lab-screen.neutral-active-icons')}</Text>
         </View>
 
-        <TextField label="Route name" placeholder="Name this route" testID="lab-field-default" />
-        <TextField label="Email address" defaultValue="not-an-email" error="Enter a valid email address." testID="lab-field-error" />
-        <TextField label="Invite code" value="Unavailable" disabled testID="lab-field-disabled" />
+        <TextField label={cairnText('dev.three-theme-component-lab-screen.route-name')} placeholder={cairnText('dev.three-theme-component-lab-screen.name-this-route')} testID="lab-field-default" />
+        <TextField label={cairnText('dev.three-theme-component-lab-screen.email-address')} defaultValue="not-an-email" error={cairnText('dev.three-theme-component-lab-screen.enter-a-valid-email-address')} testID="lab-field-error" />
+        <TextField label={cairnText('dev.three-theme-component-lab-screen.invite-code')} value={cairnText('dev.three-theme-component-lab-screen.unavailable-6c68f19')} disabled testID="lab-field-disabled" />
 
         <View testID="lab-scrim-sample" style={[styles.scrimContext, { backgroundColor: theme.scenicSurface, borderColor: theme.borderSubtle }]}>
-          <Text style={[styles.scrimLabel, { color: theme.textPrimary }]}>Environmental context</Text>
+          <Text style={[styles.scrimLabel, { color: theme.textPrimary }]}>{cairnText('dev.three-theme-component-lab-screen.environmental-context')}</Text>
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: theme.scrim }]} />
-          <Text style={[styles.scrimForeground, { color: theme.scenicText }]}>Scrim reduces competition</Text>
+          <Text style={[styles.scrimForeground, { color: theme.scenicText }]}>{cairnText('dev.three-theme-component-lab-screen.scrim-reduces-competition')}</Text>
         </View>
 
-        <PrimaryButton label="Open sheet sample" onPress={() => setSheetVisible(true)} variant="secondary" />
-        <PrimaryButton label="Open modal sample" onPress={() => setModalVisible(true)} variant="secondary" />
+        <PrimaryButton label={cairnText('dev.three-theme-component-lab-screen.open-sheet-sample')} onPress={() => setSheetVisible(true)} variant="secondary" />
+        <PrimaryButton label={cairnText('dev.three-theme-component-lab-screen.open-modal-sample')} onPress={() => setModalVisible(true)} variant="secondary" />
       </ScrollView>
 
       <BottomSheetFrame visible={sheetVisible} onDismiss={() => setSheetVisible(false)} testID="lab-sheet">
         <BottomSheetHeader
-          title="Route options"
-          subtitle="The sheet is elevated without losing environmental continuity."
+          title={cairnText('dev.three-theme-component-lab-screen.route-options')}
+          subtitle={cairnText('dev.three-theme-component-lab-screen.the-sheet-is-elevated-without-losing-environmental')}
           onClose={() => setSheetVisible(false)}
         />
         <BottomSheetContent>
           <ContentSurface>
-            <Text style={[styles.recordTitle, { color: theme.textPrimary }]}>Download for offline use</Text>
-            <Text style={[styles.recordMeta, { color: theme.textSecondary }]}>Keep this route available beyond coverage.</Text>
+            <Text style={[styles.recordTitle, { color: theme.textPrimary }]}>{cairnText('dev.three-theme-component-lab-screen.download-for-offline-use')}</Text>
+            <Text style={[styles.recordMeta, { color: theme.textSecondary }]}>{cairnText('dev.three-theme-component-lab-screen.keep-this-route-available-beyond-coverage')}</Text>
           </ContentSurface>
           <View style={styles.sheetAction}>
-            <PrimaryButton label="Download route" onPress={() => {}} />
+            <PrimaryButton label={cairnText('dev.three-theme-component-lab-screen.download-route')} onPress={() => {}} />
           </View>
         </BottomSheetContent>
       </BottomSheetFrame>
 
       <ModalCard visible={modalVisible} onDismiss={() => setModalVisible(false)} testID="lab-modal">
         <ModalCardHeader
-          title="Save this route?"
-          body="It will remain available from Trails."
+          title={cairnText('dev.three-theme-component-lab-screen.save-this-route')}
+          body={cairnText('dev.three-theme-component-lab-screen.it-will-remain-available-from-trails')}
           onClose={() => setModalVisible(false)}
         />
         <View style={styles.buttonStack}>
-          <PrimaryButton label="Save route" onPress={() => {}} />
-          <PrimaryButton label="Not now" onPress={() => setModalVisible(false)} variant="secondary" />
+          <PrimaryButton label={cairnText('dev.three-theme-component-lab-screen.save-route')} onPress={() => {}} />
+          <PrimaryButton label={cairnText('dev.three-theme-component-lab-screen.not-now')} onPress={() => setModalVisible(false)} variant="secondary" />
         </View>
       </ModalCard>
     </SafeAreaView>

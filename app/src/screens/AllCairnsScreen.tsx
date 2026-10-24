@@ -32,6 +32,7 @@ import { authenticatedFetch } from '../services/apiService';
 import { useCairnPresentationStore } from '../features/cairns/cairnPresentationStore';
 import { useAppStore } from '../store/useAppStore';
 import { cairnPublicationTruth } from '../features/cairns/cairnExperience';
+import { cairnText, formatCairnDate } from '../i18n/runtime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'AllCairns'>;
@@ -56,13 +57,6 @@ type FoundCairn = {
   has_unread: number | boolean;
 };
 
-const AUDIENCE_FILTERS: ReadonlyArray<{ key: AudienceFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'personal', label: 'Only me' },
-  { key: 'group', label: 'Friends' },
-  { key: 'public', label: 'Public' },
-];
-
 function searchableText(marker: Marker): string {
   const decoded = splitTitleBody(marker.note ?? '');
   return `${decoded.title}\n${decoded.body}`.toLocaleLowerCase();
@@ -81,7 +75,7 @@ function CairnRow({ marker }: { marker: Marker }) {
     <LibraryRecordSurface
       onPress={() => nav.navigate('MarkerDetail', { markerId: id })}
       testID={`all-cairns-row-${id}`}
-      accessibilityLabel={`Cairn: ${title}`}
+      accessibilityLabel={cairnText('all-cairns-screen.cairn-value', { title: title })}
     >
       <View style={styles.row}>
         <View style={styles.rowIcon}>
@@ -131,7 +125,7 @@ function FoundCairnRow({ cairn, archived, onRestore, restoring, revisionId }: {
         revisionId,
       })}
       testID={`found-cairn-row-${cairn.marker_id}`}
-      accessibilityLabel="Acquired Cairn"
+      accessibilityLabel={cairnText('all-cairns-screen.acquired-cairn')}
     >
       <View style={styles.row}>
         <View style={styles.rowIcon}>
@@ -140,19 +134,17 @@ function FoundCairnRow({ cairn, archived, onRestore, restoring, revisionId }: {
         <View style={styles.rowCopy}>
           <Text style={[styles.rowTitle, { color: theme.foreground }]} numberOfLines={1}>
             {cairn.availability === 'available'
-              ? decoded.title || decoded.body || 'A moment here'
-              : cairn.availability === 'under_review' ? 'Content under review' : 'Content unavailable'}
+              ? decoded.title || decoded.body || cairnText('all-cairns-screen.a-moment-here')
+              : cairn.availability === 'under_review' ? cairnText('all-cairns-screen.content-under-review') : cairnText('all-cairns-screen.content-unavailable')}
           </Text>
-          <Text style={[styles.rowMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
-            {cairn.author_name
-              ? `Left by ${cairn.author_name}`
-              : cairn.source_audience === 'public' ? 'Left anonymously' : 'Left by a friend'} · {cairn.revision_count} {Number(cairn.revision_count) === 1 ? 'version' : 'versions'}
-          </Text>
-          <Text style={[styles.rowMeta, { color: theme.muted }]}>{new Date(cairn.acquired_at).toLocaleDateString()}</Text>
+          <Text style={[styles.rowMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{cairnText('all-cairns-screen.value-value-value', { value1: cairn.author_name
+              ? cairnText('all-cairns-screen.left-by-value', { author_name: cairn.author_name })
+              : cairn.source_audience === 'public' ? cairnText('all-cairns-screen.left-anonymously') : cairnText('all-cairns-screen.left-by-a-friend'), revision_count: cairn.revision_count, value3: Number(cairn.revision_count) === 1 ? cairnText('all-cairns-screen.version') : cairnText('all-cairns-screen.versions') })}</Text>
+          <Text style={[styles.rowMeta, { color: theme.muted }]}>{formatCairnDate(new Date(cairn.acquired_at))}</Text>
         </View>
         {archived ? (
           <TouchableOpacity disabled={restoring} onPress={onRestore} accessibilityRole="button" testID={`found-cairn-restore-${cairn.marker_id}`}>
-            <Text style={[styles.restoreText, { color: restoring ? theme.muted : theme.primary }]}>{restoring ? 'Restoring…' : 'Restore'}</Text>
+            <Text style={[styles.restoreText, { color: restoring ? theme.muted : theme.primary }]}>{restoring ? cairnText('all-cairns-screen.restoring') : cairnText('all-cairns-screen.restore')}</Text>
           </TouchableOpacity>
         ) : null}
         {!archived && cairn.availability === 'available' && !cairn.opened_at ? <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} /> : null}
@@ -193,6 +185,12 @@ export function AllCairnsScreen() {
   const ownerId = useAppStore(state => String(state.user?.id ?? ''));
   const query = section === 'left' ? leftQuery : foundQuery;
   const setQuery = section === 'left' ? setLeftQuery : setFoundQuery;
+  const audienceFilters: ReadonlyArray<{ key: AudienceFilter; label: string }> = [
+    { key: 'all', label: cairnText('all-cairns-screen.all') },
+    { key: 'personal', label: cairnText('all-cairns-screen.only-me') },
+    { key: 'group', label: cairnText('all-cairns-screen.friends') },
+    { key: 'public', label: cairnText('all-cairns-screen.public') },
+  ];
 
   useEffect(() => {
     foundRequestRef.current += 1;
@@ -251,7 +249,7 @@ export function AllCairnsScreen() {
       void useCairnPresentationStore.getState().refreshAcquiredMap();
     } catch {
       if (request !== foundRequestRef.current) return;
-      setFoundError('Connect to refresh acquired Cairns.');
+      setFoundError(cairnText('all-cairns-screen.connect-to-refresh-acquired-cairns'));
     } finally {
       if (request === foundRequestRef.current) setFoundLoading(false);
     }
@@ -271,7 +269,7 @@ export function AllCairnsScreen() {
       setFoundCairns(current => current.filter(cairn => cairn.marker_id !== markerId));
       void useCairnPresentationStore.getState().refreshAcquiredMap();
     } catch {
-      if (String(useAppStore.getState().user?.id ?? '') === ownerId) setFoundError('Could not restore this Cairn. Try again.');
+      if (String(useAppStore.getState().user?.id ?? '') === ownerId) setFoundError(cairnText('all-cairns-screen.could-not-restore-this-cairn-try-again'));
     } finally {
       restoringRef.current.delete(markerId);
       if (String(useAppStore.getState().user?.id ?? '') === ownerId) {
@@ -283,8 +281,12 @@ export function AllCairnsScreen() {
   useEffect(() => {
     const key = `${ownerId}|${foundCollectionState}`;
     if (section === 'found' && ownerId && foundTargetKeyRef.current !== key) {
-      void loadFound(true);
+      // The tab highlight is immediate UI intent. Begin target acquisition at
+      // the next paint boundary so list/network setup cannot delay that ACK.
+      const frame = requestAnimationFrame(() => { void loadFound(true); });
+      return () => cancelAnimationFrame(frame);
     }
+    return undefined;
   }, [foundCollectionState, loadFound, ownerId, section]);
 
   useEffect(() => {
@@ -331,31 +333,29 @@ export function AllCairnsScreen() {
   }, [leftQuery, loadLibrary]);
 
   const incompleteCopy = error === 'unavailable'
-    ? 'Showing Cairns available on this iPhone. Full history could not be checked.'
+    ? cairnText('all-cairns-screen.showing-cairns-available-on-this-iphone-full')
     : error === 'server-upgrade-required'
-      ? 'Showing downloaded Cairns. Some older Cairns may not appear yet.'
+      ? cairnText('all-cairns-screen.showing-downloaded-cairns-some-older-cairns-may')
       : coverage === 'partial' && hasMore
-        ? 'Recent Cairns are ready. Load older Cairns when you need them.'
+        ? cairnText('all-cairns-screen.recent-cairns-are-ready-load-older-cairns')
         : null;
 
   const showInitialLoading = loading && coverage === 'not-loaded' && visible.length === 0;
   const emptyTitle = leftQuery.trim()
-    ? (coverage === 'complete' ? 'No matching Cairns' : 'No matches in available Cairns')
-    : 'No Cairns yet';
+    ? (coverage === 'complete' ? cairnText('all-cairns-screen.no-matching-cairns') : cairnText('all-cairns-screen.no-matches-in-available-cairns'))
+    : cairnText('all-cairns-screen.no-cairns-yet');
   const emptyBody = leftQuery.trim()
     ? (coverage === 'complete'
-      ? 'Try a different name or note.'
-      : 'Try another search, or reconnect to check more history.')
-    : 'Quick Cairns and full Plants will appear here after you leave them.';
+      ? cairnText('all-cairns-screen.try-a-different-name-or-note')
+      : cairnText('all-cairns-screen.try-another-search-or-reconnect-to-check'))
+    : cairnText('all-cairns-screen.quick-cairns-and-full-plants-will-appear');
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <BackButton variant="inline" testID="all-cairns-back" />
-        <Text style={[styles.title, { color: theme.foreground }]}>Cairn Library</Text>
-        <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
-          Cairns you left and versions you found.
-        </Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('all-cairns-screen.cairn-library')}</Text>
+        <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>{cairnText('all-cairns-screen.cairns-you-left-and-versions-you-found')}</Text>
       </View>
 
       <View style={[styles.sectionTabs, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -369,7 +369,7 @@ export function AllCairnsScreen() {
               accessibilityState={{ selected }}
               testID={`cairn-library-${value}`}
             >
-              <Text style={[styles.sectionTabText, { color: selected ? theme.foreground : theme.foregroundSecondary }]}>{value === 'left' ? 'I left' : 'I found'}</Text>
+              <Text style={[styles.sectionTabText, { color: selected ? theme.foreground : theme.foregroundSecondary }]}>{value === 'left' ? cairnText('all-cairns-screen.i-left') : cairnText('all-cairns-screen.i-found')}</Text>
             </TouchableOpacity>
           );
         })}
@@ -379,8 +379,8 @@ export function AllCairnsScreen() {
           testID="all-cairns-search"
           value={query}
           onChange={setQuery}
-          placeholder={section === 'left' ? 'Search names and notes' : 'Search found Cairns'}
-          label="Search your Cairns"
+          placeholder={section === 'left' ? cairnText('all-cairns-screen.search-names-and-notes') : cairnText('all-cairns-screen.search-found-cairns')}
+          label={cairnText('all-cairns-screen.search-your-cairns')}
           style={styles.searchWrap}
       />
 
@@ -392,18 +392,18 @@ export function AllCairnsScreen() {
           importantForAccessibility={section === 'left' ? 'auto' : 'no-hide-descendants'}
         >
           <View style={styles.controls} testID="all-cairns-controls">
-            <Text style={[styles.controlLabel, { color: theme.foregroundSecondary }]}>AUDIENCE</Text>
-            <LibraryFilterRow value={audience} options={AUDIENCE_FILTERS} onChange={setAudience} testID="all-cairns-filter" />
+            <Text style={[styles.controlLabel, { color: theme.foregroundSecondary }]}>{cairnText('all-cairns-screen.audience')}</Text>
+            <LibraryFilterRow value={audience} options={audienceFilters} onChange={setAudience} testID="all-cairns-filter" />
             <TouchableOpacity
               testID="all-cairns-sort"
               accessibilityRole="button"
-              accessibilityLabel={`Sorted ${sort === 'recent' ? 'recent first' : 'oldest first'}. Change order`}
+              accessibilityLabel={cairnText('all-cairns-screen.sorted-value-change-order', { value1: sort === 'recent' ? cairnText('library.sort.recent-first') : cairnText('library.sort.oldest-first') })}
               onPress={() => setSort(current => current === 'recent' ? 'oldest' : 'recent')}
               style={styles.sortControl}
             >
               <Icon name="ArrowUpDown" size={15} color={theme.iconInactive} strokeWidth={2} />
               <Text style={[styles.sortText, { color: theme.foregroundSecondary }]}>
-                {sort === 'recent' ? 'Planted: newest first' : 'Planted: oldest first'}
+                {sort === 'recent' ? cairnText('all-cairns-screen.planted-newest-first') : cairnText('all-cairns-screen.planted-oldest-first')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -413,7 +413,7 @@ export function AllCairnsScreen() {
                 <Icon name="CloudOff" size={16} color={theme.iconInactive} strokeWidth={2} />
                 <Text style={[styles.coverageText, { color: theme.foregroundSecondary }]}>{incompleteCopy}</Text>
                 <TouchableOpacity onPress={refresh} disabled={loading} accessibilityRole="button">
-                  <Text style={[styles.retryText, { color: theme.primary }]}>{loading ? 'Checking…' : 'Retry'}</Text>
+                  <Text style={[styles.retryText, { color: theme.primary }]}>{loading ? cairnText('all-cairns-screen.checking') : cairnText('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             </ContentSurface>
@@ -421,7 +421,7 @@ export function AllCairnsScreen() {
           {showInitialLoading ? (
             <View style={styles.centerState} testID="all-cairns-loading">
               <ActivityIndicator color={theme.primary} />
-              <Text style={[styles.stateTitle, { color: theme.foreground }]}>Opening your Cairns…</Text>
+              <Text style={[styles.stateTitle, { color: theme.foreground }]}>{cairnText('all-cairns-screen.opening-your-cairns')}</Text>
             </View>
           ) : (
             <FlatList
@@ -449,7 +449,7 @@ export function AllCairnsScreen() {
                   testID="all-cairns-load-more"
                 >
                   {loading ? <ActivityIndicator color={theme.primary} /> : (
-                    <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Load older Cairns</Text>
+                    <Text style={[styles.loadMoreText, { color: theme.foreground }]}>{cairnText('all-cairns-screen.load-older-cairns')}</Text>
                   )}
                 </TouchableOpacity>
               ) : null}
@@ -465,7 +465,7 @@ export function AllCairnsScreen() {
         >
           <LibraryFilterRow
             value={foundCollectionState}
-            options={[{ key: 'active', label: 'Current' }, { key: 'archived', label: 'Archived' }]}
+            options={[{ key: 'active', label: cairnText('all-cairns-screen.current') }, { key: 'archived', label: cairnText('all-cairns-screen.archived') }]}
             onChange={setFoundCollectionState}
             testID="found-cairns-filter"
             style={styles.foundFilterRow}
@@ -494,8 +494,8 @@ export function AllCairnsScreen() {
                   <View style={[styles.emptyIcon, { backgroundColor: theme.controlSelected, borderColor: theme.borderStrong }]}>
                     <Icon name="MapPin" size={24} color={theme.iconActive} strokeWidth={2} />
                   </View>
-                  <Text style={[styles.stateTitle, { color: theme.foreground }]}>{foundCollectionState === 'archived' ? 'No archived Cairns' : 'No acquired Cairns yet'}</Text>
-                  <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{foundCollectionState === 'archived' ? 'Archived Cairns can be restored here.' : 'Cairns discovered during eligible visits will appear here.'}</Text>
+                  <Text style={[styles.stateTitle, { color: theme.foreground }]}>{foundCollectionState === 'archived' ? cairnText('all-cairns-screen.no-archived-cairns') : cairnText('all-cairns-screen.no-acquired-cairns-yet')}</Text>
+                  <Text style={[styles.stateBody, { color: theme.foregroundSecondary }]}>{foundCollectionState === 'archived' ? cairnText('all-cairns-screen.archived-cairns-can-be-restored-here') : cairnText('all-cairns-screen.cairns-discovered-during-eligible-visits-will-appear')}</Text>
                 </View>
               )}
               ListFooterComponent={foundHasMore ? (
@@ -506,7 +506,7 @@ export function AllCairnsScreen() {
                   testID="found-cairns-load-more"
                 >
                   {foundLoading ? <ActivityIndicator color={theme.primary} /> : (
-                    <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Load older found Cairns</Text>
+                    <Text style={[styles.loadMoreText, { color: theme.foreground }]}>{cairnText('all-cairns-screen.load-older-found-cairns')}</Text>
                   )}
                 </TouchableOpacity>
               ) : null}

@@ -19,6 +19,7 @@ import {
   fetchFriendCairn, fetchFriendContent, fetchFriendRoute, hideFriendContent, prepareFriendRouteUse,
   type FriendCairn, type FriendRoute,
 } from '../features/friends/services/friendContent';
+import { cairnText, formatCairnDate } from '../i18n/runtime';
 
 type ScreenRoute = RouteProp<RootStackParamList, 'FriendContent'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -37,7 +38,7 @@ function RoutePreview({ points }: { points: Array<{ lat: number; lng: number }> 
   }, [points]);
   return (
     <View style={[styles.preview, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
-      {path ? <Svg width="100%" height={140} viewBox="0 0 300 140"><Polyline points={path} fill="none" stroke={theme.primary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" /></Svg> : <Text style={{ color: theme.muted }}>Route geometry unavailable.</Text>}
+      {path ? <Svg width="100%" height={140} viewBox="0 0 300 140"><Polyline points={path} fill="none" stroke={theme.primary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" /></Svg> : <Text style={{ color: theme.muted }}>{cairnText('friend-content-screen.route-geometry-unavailable')}</Text>}
     </View>
   );
 }
@@ -76,12 +77,12 @@ export function FriendContentScreen() {
       const detail = await fetchFriendRoute(summary.id, friendId);
       setSelectedRoute(detail.content);
       if (detail.source === 'offline-cache') {
-        setActionError(`Offline copy · authorization last checked ${new Date(detail.expiresAt - 24 * 60 * 60 * 1000).toLocaleString()}`);
+        setActionError(cairnText('friend-content-screen.offline-copy-authorization-last-checked-value', { value1: formatCairnDate(detail.expiresAt - 24 * 60 * 60 * 1000, { dateStyle: 'medium', timeStyle: 'short' }) }));
       }
     } catch (error: any) {
       setActionError(error?.code === 'revoked'
-        ? 'This Route is no longer shared with you.'
-        : 'This Route is unavailable offline. Connect and try again.');
+        ? cairnText('friend-content-screen.this-route-is-no-longer-shared-with')
+        : cairnText('friend-content-screen.this-route-is-unavailable-offline-connect-and'));
     }
     finally { setRouteLoading(false); }
   };
@@ -92,12 +93,12 @@ export function FriendContentScreen() {
       const detail = await fetchFriendCairn(summary.id, friendId);
       setSelectedCairn(detail.content);
       if (detail.source === 'offline-cache') {
-        setActionError(`Offline copy · access expires ${new Date(detail.expiresAt).toLocaleString()}`);
+        setActionError(cairnText('friend-content-screen.offline-copy-access-expires-value', { value1: formatCairnDate(detail.expiresAt, { dateStyle: 'medium', timeStyle: 'short' }) }));
       }
     } catch (error: any) {
       setActionError(error?.code === 'revoked'
-        ? 'This Cairn is no longer shared with you.'
-        : 'This Cairn is unavailable offline. Connect and try again.');
+        ? cairnText('friend-content-screen.this-cairn-is-no-longer-shared-with')
+        : cairnText('friend-content-screen.this-cairn-is-unavailable-offline-connect-and'));
     }
   };
 
@@ -115,33 +116,33 @@ export function FriendContentScreen() {
       });
     } catch (error: any) {
       setActionError(error?.code === 'revoked'
-        ? 'This Route is no longer shared with you.'
+        ? cairnText('friend-content-screen.this-route-is-no-longer-shared-with')
         : error?.code === 'expired'
-          ? 'No valid offline permission remains for this Route. Connect and try again.'
-          : 'This shared Route cannot be started now. Connect and try again.');
+          ? cairnText('friend-content-screen.no-valid-offline-permission-remains-for-this')
+          : cairnText('friend-content-screen.this-shared-route-cannot-be-started-now'));
     }
     finally { setLeaseLoading(null); }
   };
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
-      <View style={styles.header}><BackButton onPress={() => nav.goBack()} /><View><Text style={[styles.title, { color: theme.foreground }]}>{friendName}</Text><Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>Shared with you · read only</Text></View></View>
-      {state === 'loading' ? <StateSurface variant="loading" title="Loading shared content…" material="embedded" alignment="center" style={styles.state} /> : null}
-      {state === 'unavailable' ? <StateSurface variant="unavailable" title="Shared content unavailable" body="Connect and try again. Previously opened content is not treated as current authorization." actions={<PrimaryButton label="Try again" onPress={() => void load()} />} material="embedded" alignment="center" style={styles.state} /> : null}
+      <View style={styles.header}><BackButton onPress={() => nav.goBack()} /><View><Text style={[styles.title, { color: theme.foreground }]}>{friendName}</Text><Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>{cairnText('friend-content-screen.shared-with-you-read-only')}</Text></View></View>
+      {state === 'loading' ? <StateSurface variant="loading" title={cairnText('friend-content-screen.loading-shared-content')} material="embedded" alignment="center" style={styles.state} /> : null}
+      {state === 'unavailable' ? <StateSurface variant="unavailable" title={cairnText('friend-content-screen.shared-content-unavailable')} body={cairnText('friend-content-screen.connect-and-try-again-previously-opened-content')} actions={<PrimaryButton label={cairnText('friend-content-screen.try-again')} onPress={() => void load()} />} material="embedded" alignment="center" style={styles.state} /> : null}
       {state === 'ready' ? <ScrollView contentContainerStyle={styles.content}>
-        {offlineContext ? <ContentSurface style={styles.offlineNotice}><Icon name="CloudOff" size={17} color={theme.foregroundSecondary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>Available offline</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Last checked {new Date(offlineContext.checkedAt).toLocaleString()} · expires {new Date(offlineContext.expiresAt).toLocaleString()}</Text></View></ContentSurface> : null}
+        {offlineContext ? <ContentSurface style={styles.offlineNotice}><Icon name="CloudOff" size={17} color={theme.foregroundSecondary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>{cairnText('friend-content-screen.available-offline')}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('friend-content-screen.last-checked-value-expires-value', { value1: formatCairnDate(offlineContext.checkedAt, { dateStyle: 'medium', timeStyle: 'short' }), value2: formatCairnDate(offlineContext.expiresAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</Text></View></ContentSurface> : null}
         {actionError && !selectedCairn && !selectedRoute ? <Text style={[styles.error, { color: theme.destructive }]}>{actionError}</Text> : null}
-        <Text style={[styles.section, { color: theme.foregroundSecondary }]}>Encountered Cairns</Text>
-        {cairns.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>No Cairns have been encountered from this friend yet.</Text> : cairns.map(cairn => {
+        <Text style={[styles.section, { color: theme.foregroundSecondary }]}>{cairnText('friend-content-screen.encountered-cairns')}</Text>
+        {cairns.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>{cairnText('friend-content-screen.no-cairns-have-been-encountered-from-this')}</Text> : cairns.map(cairn => {
           const words = splitTitleBody(cairn.text);
-          return <TouchableOpacity key={cairn.id} onPress={() => void openCairn(cairn)}><ContentSurface style={styles.row}><Icon name="MapPin" size={18} color={theme.primary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>{cairnDisplayTitle(words.title, words.body, cairn.createdAt)}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Encountered · {new Date(cairn.encounteredAt).toLocaleDateString()}</Text></View><Icon name="ChevronRight" size={16} color={theme.iconInactive} /></ContentSurface></TouchableOpacity>;
+          return <TouchableOpacity key={cairn.id} onPress={() => void openCairn(cairn)}><ContentSurface style={styles.row}><Icon name="MapPin" size={18} color={theme.primary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>{cairnDisplayTitle(words.title, words.body, cairn.createdAt)}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('friend-content-screen.encountered-value', { value1: formatCairnDate(cairn.encounteredAt) })}</Text></View><Icon name="ChevronRight" size={16} color={theme.iconInactive} /></ContentSurface></TouchableOpacity>;
         })}
-        <Text style={[styles.section, { color: theme.foregroundSecondary }]}>Shared Routes</Text>
-        {routes.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>No Routes are currently shared with you.</Text> : routes.map(item => <TouchableOpacity key={item.id} onPress={() => void openRoute(item)}><ContentSurface style={styles.row}><Icon name="Route" size={18} color={theme.primary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>{item.name}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{(item.distanceM / 1000).toFixed(1)} km · +{Math.round(item.elevationGainM)} m</Text></View><Icon name="ChevronRight" size={16} color={theme.iconInactive} /></ContentSurface></TouchableOpacity>)}
+        <Text style={[styles.section, { color: theme.foregroundSecondary }]}>{cairnText('friend-content-screen.shared-routes')}</Text>
+        {routes.length === 0 ? <Text style={[styles.empty, { color: theme.muted }]}>{cairnText('friend-content-screen.no-routes-are-currently-shared-with-you')}</Text> : routes.map(item => <TouchableOpacity key={item.id} onPress={() => void openRoute(item)}><ContentSurface style={styles.row}><Icon name="Route" size={18} color={theme.primary} /><View style={styles.rowText}><Text style={[styles.rowTitle, { color: theme.foreground }]}>{item.name}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('friend-content-screen.value-km-value-m-ca6bc5b', { value1: (item.distanceM / 1000).toFixed(1), value2: Math.round(item.elevationGainM) })}</Text></View><Icon name="ChevronRight" size={16} color={theme.iconInactive} /></ContentSurface></TouchableOpacity>)}
       </ScrollView> : null}
 
-      {selectedCairn ? <ModalCard visible onDismiss={() => setSelectedCairn(null)} testID="friend-cairn-detail"><ModalCardHeader title={cairnDisplayTitle(splitTitleBody(selectedCairn.text).title, '', selectedCairn.createdAt)} body={`By ${selectedCairn.author.name} · read only`} onClose={() => setSelectedCairn(null)} /><Text style={[styles.detailBody, { color: theme.foreground }]}>{splitTitleBody(selectedCairn.text).body || 'No note was added.'}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Encountered {new Date(selectedCairn.encounteredAt).toLocaleString()}</Text>{actionError ? <Text style={[styles.error, { color: theme.destructive }]}>{actionError}</Text> : null}<PrimaryButton label="Hide from my view" variant="secondary" onPress={async () => { try { const result = await hideFriendContent('cairns', selectedCairn.id, friendId); setCairns(value => value.filter(item => item.id !== selectedCairn.id)); setSelectedCairn(null); if (!result.remoteConfirmed) setActionError('Hidden on this device. We will retry sharing this choice when connected.'); } catch { setActionError('Could not save this choice on this device. Try again.'); } }} /></ModalCard> : null}
-      {selectedRoute ? <ModalCard visible onDismiss={() => setSelectedRoute(null)} testID="friend-route-detail"><ModalCardHeader title={selectedRoute.name} body={`By ${selectedRoute.author.name} · read-only reference`} onClose={() => setSelectedRoute(null)} />{routeLoading ? <StateSurface variant="loading" title="Loading Route…" material="embedded" alignment="center" /> : <><RoutePreview points={selectedRoute.points ?? []} /><Text style={[styles.detailBody, { color: theme.foregroundSecondary }]}>{selectedRoute.description || `${(selectedRoute.distanceM / 1000).toFixed(1)} km · +${Math.round(selectedRoute.elevationGainM)} m`}</Text>{actionError ? <Text style={[styles.error, { color: theme.destructive }]}>{actionError}</Text> : null}<View style={styles.actions}><PrimaryButton label="Use for Hike" onPress={() => void useSharedRoute('hike')} loading={leaseLoading === 'hike'} /><PrimaryButton label="Use for Run" variant="secondary" onPress={() => void useSharedRoute('run')} loading={leaseLoading === 'run'} /></View><PrimaryButton label="Hide from my view" variant="secondary" onPress={async () => { try { const result = await hideFriendContent('routes', selectedRoute.id, friendId); setRoutes(value => value.filter(item => item.id !== selectedRoute.id)); setSelectedRoute(null); if (!result.remoteConfirmed) setActionError('Hidden on this device. We will retry sharing this choice when connected.'); } catch { setActionError('Could not save this choice on this device. Try again.'); } }} /></>}</ModalCard> : null}
+      {selectedCairn ? <ModalCard visible onDismiss={() => setSelectedCairn(null)} testID="friend-cairn-detail"><ModalCardHeader title={cairnDisplayTitle(splitTitleBody(selectedCairn.text).title, '', selectedCairn.createdAt)} body={cairnText('friend-content-screen.by-value-read-only', { name: selectedCairn.author.name })} onClose={() => setSelectedCairn(null)} /><Text style={[styles.detailBody, { color: theme.foreground }]}>{splitTitleBody(selectedCairn.text).body || cairnText('friend-content-screen.no-note-was-added')}</Text><Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('friend-content-screen.encountered-value-8092020', { value1: formatCairnDate(selectedCairn.encounteredAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</Text>{actionError ? <Text style={[styles.error, { color: theme.destructive }]}>{actionError}</Text> : null}<PrimaryButton label={cairnText('friend-content-screen.hide-from-my-view')} variant="secondary" onPress={async () => { try { const result = await hideFriendContent('cairns', selectedCairn.id, friendId); setCairns(value => value.filter(item => item.id !== selectedCairn.id)); setSelectedCairn(null); if (!result.remoteConfirmed) setActionError(cairnText('friend-content-screen.hidden-on-this-device-we-will-retry')); } catch { setActionError(cairnText('friend-content-screen.could-not-save-this-choice-on-this')); } }} /></ModalCard> : null}
+      {selectedRoute ? <ModalCard visible onDismiss={() => setSelectedRoute(null)} testID="friend-route-detail"><ModalCardHeader title={selectedRoute.name} body={cairnText('friend-content-screen.by-value-read-only-reference', { name: selectedRoute.author.name })} onClose={() => setSelectedRoute(null)} />{routeLoading ? <StateSurface variant="loading" title={cairnText('friend-content-screen.loading-route')} material="embedded" alignment="center" /> : <><RoutePreview points={selectedRoute.points ?? []} /><Text style={[styles.detailBody, { color: theme.foregroundSecondary }]}>{selectedRoute.description || cairnText('friend-content-screen.value-km-value-m', { value1: (selectedRoute.distanceM / 1000).toFixed(1), value2: Math.round(selectedRoute.elevationGainM) })}</Text>{actionError ? <Text style={[styles.error, { color: theme.destructive }]}>{actionError}</Text> : null}<View style={styles.actions}><PrimaryButton label={cairnText('friend-content-screen.use-for-hike')} onPress={() => void useSharedRoute('hike')} loading={leaseLoading === 'hike'} /><PrimaryButton label={cairnText('friend-content-screen.use-for-run')} variant="secondary" onPress={() => void useSharedRoute('run')} loading={leaseLoading === 'run'} /></View><PrimaryButton label={cairnText('friend-content-screen.hide-from-my-view')} variant="secondary" onPress={async () => { try { const result = await hideFriendContent('routes', selectedRoute.id, friendId); setRoutes(value => value.filter(item => item.id !== selectedRoute.id)); setSelectedRoute(null); if (!result.remoteConfirmed) setActionError(cairnText('friend-content-screen.hidden-on-this-device-we-will-retry')); } catch { setActionError(cairnText('friend-content-screen.could-not-save-this-choice-on-this')); } }} /></>}</ModalCard> : null}
     </SafeAreaView>
   );
 }

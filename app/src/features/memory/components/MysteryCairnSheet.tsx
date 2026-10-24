@@ -26,6 +26,7 @@ import { MemoryColors, MysteryPreviewConfig } from '../config/memoryConfig';
 import { Colors } from '../../../components/tokens';
 import { haversineM } from '../../../utils/geo';
 import { useDistance } from '../../../utils/distanceFormat';
+import { cairnText, formatCairnDate } from '../../../i18n/runtime';
 
 interface Props {
   marker: Marker | null;
@@ -38,10 +39,10 @@ function formatAge(planted: number): string {
   const diff = Date.now() - planted;
   const hour = 60 * 60 * 1000;
   const day = 24 * hour;
-  if (diff < hour)       return 'just now';
-  if (diff < day)        return `${Math.floor(diff / hour)} h ago`;
-  if (diff < 30 * day)   return `${Math.floor(diff / day)} d ago`;
-  return new Date(planted).toLocaleDateString();
+  if (diff < hour)       return cairnText('memory.mystery-cairn-sheet.just-now');
+  if (diff < day)        return cairnText('memory.mystery-cairn-sheet.value-h-ago', { value1: Math.floor(diff / hour) });
+  if (diff < 30 * day)   return cairnText('memory.mystery-cairn-sheet.value-d-ago', { value1: Math.floor(diff / day) });
+  return formatCairnDate(planted);
 }
 
 /**
@@ -88,15 +89,15 @@ export function MysteryCairnSheet({ marker, userLat, userLng, onClose }: Props) 
           <View style={styles.iconCircle}>
             <Text style={styles.iconChar}>?</Text>
           </View>
-          <Text style={styles.title}>Someone left a cairn here</Text>
-          <Text style={styles.desc}>You'll be able to read it when you get closer.</Text>
+          <Text style={styles.title}>{cairnText('memory.mystery-cairn-sheet.someone-left-a-cairn-here')}</Text>
+          <Text style={styles.desc}>{cairnText('memory.mystery-cairn-sheet.you-ll-be-able-to-read-it')}</Text>
 
           <View style={styles.metaRow}>
             {MysteryPreviewConfig.showAgeRelative && (
-              <Meta label="ago" value={formatAge(marker.createdAt)} />
+              <Meta label={cairnText('memory.mystery-cairn-sheet.ago')} value={formatAge(marker.createdAt)} />
             )}
             {MysteryPreviewConfig.showDistanceBearing && (
-              <Meta label="away" value={dist.formatShort(distance)} />
+              <Meta label={cairnText('memory.mystery-cairn-sheet.away')} value={dist.formatShort(distance)} />
             )}
           </View>
 
@@ -105,12 +106,12 @@ export function MysteryCairnSheet({ marker, userLat, userLng, onClose }: Props) 
               <View style={styles.arrowCircle}>
                 <Text style={styles.arrowChar}>{bearingArrow(bearing)}</Text>
               </View>
-              <Text style={styles.cta}>Walk this way to reveal</Text>
+              <Text style={styles.cta}>{cairnText('memory.mystery-cairn-sheet.walk-this-way-to-reveal')}</Text>
             </>
           )}
 
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <Text style={styles.closeBtnText}>Close</Text>
+            <Text style={styles.closeBtnText}>{cairnText('common.close')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

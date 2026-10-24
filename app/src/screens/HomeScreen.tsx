@@ -48,6 +48,7 @@ import {
   resolveDiscoveryHomeDestination,
   resolveHomeStateWindow,
 } from '../features/cairns/homeStateWindow';
+import { cairnText, formatCairnDate } from '../i18n/runtime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -81,31 +82,31 @@ function formatRelativeDay(startedAt: number | string): string {
   const t = typeof startedAt === 'number' ? startedAt : new Date(startedAt).getTime();
   const elapsedMs = Math.max(0, Date.now() - t);
   const minutes = Math.floor(elapsedMs / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return cairnText('home-screen.just-now');
+  if (minutes < 60) return cairnText('home-screen.value-min-ago', { minutes: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return cairnText('home-screen.value-h-ago', { hours: hours });
   const days = Math.floor(hours / 24);
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  return new Date(t).toLocaleDateString();
+  if (days === 1) return cairnText('home-screen.yesterday');
+  if (days < 7) return cairnText('home-screen.value-days-ago', { days: days });
+  return formatCairnDate(t);
 }
 
 function activityStateCopy(
   state: ActivityOperationalState,
   mode: 'hiking' | 'running' | undefined,
 ): { eyebrow: string; title: string } {
-  const noun = mode === 'running' ? 'run' : 'hike';
+  const noun = mode === 'running' ? cairnText('home-screen.run') : cairnText('home-screen.hike');
   const modeLabel = noun.toUpperCase();
   switch (state) {
-    case 'starting': return { eyebrow: `${modeLabel} STARTING`, title: `Starting ${noun}` };
-    case 'tracking': return { eyebrow: `${modeLabel} RECORDING`, title: `Current ${noun}` };
-    case 'resuming': return { eyebrow: `${modeLabel} RESUMING`, title: `Resuming ${noun}` };
-    case 'pausing': return { eyebrow: `${modeLabel} PAUSING`, title: `Pausing ${noun}` };
-    case 'paused': return { eyebrow: `${modeLabel} PAUSED`, title: `Paused ${noun}` };
-    case 'finishing': return { eyebrow: `${modeLabel} FINISHING`, title: `Finishing ${noun}` };
-    case 'recovery': return { eyebrow: `${modeLabel} INTERRUPTED`, title: `Interrupted ${noun}` };
-    default: return { eyebrow: modeLabel, title: `Recent ${noun}` };
+    case 'starting': return { eyebrow: cairnText('home-screen.value-starting', { modeLabel: modeLabel }), title: cairnText('home-screen.starting-value', { noun: noun }) };
+    case 'tracking': return { eyebrow: cairnText('home-screen.value-recording', { modeLabel: modeLabel }), title: cairnText('home-screen.current-value', { noun: noun }) };
+    case 'resuming': return { eyebrow: cairnText('home-screen.value-resuming', { modeLabel: modeLabel }), title: cairnText('home-screen.resuming-value', { noun: noun }) };
+    case 'pausing': return { eyebrow: cairnText('home-screen.value-pausing', { modeLabel: modeLabel }), title: cairnText('home-screen.pausing-value', { noun: noun }) };
+    case 'paused': return { eyebrow: cairnText('home-screen.value-paused', { modeLabel: modeLabel }), title: cairnText('home-screen.paused-value', { noun: noun }) };
+    case 'finishing': return { eyebrow: cairnText('home-screen.value-finishing', { modeLabel: modeLabel }), title: cairnText('home-screen.finishing-value', { noun: noun }) };
+    case 'recovery': return { eyebrow: cairnText('home-screen.value-interrupted', { modeLabel: modeLabel }), title: cairnText('home-screen.interrupted-value', { noun: noun }) };
+    default: return { eyebrow: modeLabel, title: cairnText('home-screen.recent-value', { noun: noun }) };
   }
 }
 
@@ -359,41 +360,41 @@ export function HomeScreen() {
     : null;
   const lastCompletedMode = lastHike?.activityMode === 'running' ? 'running' as const : 'hiking' as const;
   const lastHikeTitle = showSaveRecovery
-    ? 'Activity needs saving'
+    ? cairnText('home-screen.activity-needs-saving')
     : showUnfinished
       ? displayedStateCopy.title
     : showDiscovery
       ? discoveryHomeCopy!.title
     : showMemoryReturn
-      ? (memoryPointCount > 0 ? 'Your Memory is growing' : 'Your Cairns are in Memory')
-    : (lastHike?.name || (lastCompletedMode === 'running' ? 'Recent run' : 'Recent hike'));
+      ? (memoryPointCount > 0 ? cairnText('home-screen.your-memory-is-growing') : cairnText('home-screen.your-cairns-are-in-memory'))
+    : (lastHike?.name || (lastCompletedMode === 'running' ? cairnText('home-screen.recent-run') : cairnText('home-screen.recent-hike')));
   const lastHikeMeta = showSaveRecovery
-    ? 'Recorded on this device · Tap to retry'
+    ? cairnText('home-screen.recorded-on-this-device-tap-to-retry')
     : showUnfinished
-      ? `${formatActivityDistance(displayedDistanceM)} · ${formatDuration(displayedDurationS)} · ${formatRelativeDay(displayedStartedAt)}`
+      ? cairnText('home-screen.value-value-value', { value1: formatActivityDistance(displayedDistanceM), value2: formatDuration(displayedDurationS), value3: formatRelativeDay(displayedStartedAt) })
     : showDiscovery
       ? discoveryHomeCopy!.meta
     : showMemoryReturn
-      ? (memoryPointCount > 0 ? `${Math.max(0.01, exploredKm2).toFixed(2)} km² explored` : `${memoryCairnCount} ${memoryCairnCount === 1 ? 'Cairn' : 'Cairns'} in Memory`)
+      ? (memoryPointCount > 0 ? cairnText('home-screen.value-km-explored', { value1: Math.max(0.01, exploredKm2).toFixed(2) }) : cairnText('home.memory.cairns', { count: memoryCairnCount }))
     : (lastHike
-    ? `${formatActivityDistance(lastHike.distanceM || 0)} · ${formatDuration(lastHike.durationS || 0)} · ${formatRelativeDay(lastHike.startedAt)}`
+    ? cairnText('home-screen.value-value-value', { value1: formatActivityDistance(lastHike.distanceM || 0), value2: formatDuration(lastHike.durationS || 0), value3: formatRelativeDay(lastHike.startedAt) })
     : '');
   const lastHikeDetails = showSaveRecovery
-    ? ['Recorded on device', 'Action required']
+    ? [cairnText('home-screen.recorded-on-device'), cairnText('home-screen.action-required')]
     : showUnfinished
       ? [formatActivityDistance(displayedDistanceM), formatDuration(displayedDurationS), formatRelativeDay(displayedStartedAt)]
     : showDiscovery
       ? discoveryHomeCopy!.details
     : showMemoryReturn
       ? (memoryPointCount > 0
-        ? [`${Math.max(0.01, exploredKm2).toFixed(2)} km² explored`, 'View Memory']
-        : [`${memoryCairnCount} ${memoryCairnCount === 1 ? 'Cairn' : 'Cairns'}`, 'View Memory'])
+        ? [cairnText('home-screen.value-km-explored', { value1: Math.max(0.01, exploredKm2).toFixed(2) }), cairnText('home-screen.view-memory')]
+        : [cairnText('home.memory.cairns-short', { count: memoryCairnCount }), cairnText('home-screen.view-memory')])
     : (lastHike
       ? [formatActivityDistance(lastHike.distanceM || 0), formatDuration(lastHike.durationS || 0), formatRelativeDay(lastHike.startedAt)]
       : []);
 
   const initial = ((user?.name ?? user?.email ?? '?').charAt(0) || '?').toUpperCase();
-  const greetingName = user?.name || 'Explorer';
+  const greetingName = user?.name || cairnText('home-screen.explorer');
 
   // R21 (2026-08-17 user "右上角小转换 icon 切百分比"): compute % of country
   // area. Only meaningful if we resolved a country. Uses hardcoded area map.
@@ -474,14 +475,14 @@ export function HomeScreen() {
             lastHikeMeta={lastHikeMeta}
             lastHikeDetails={lastHikeDetails}
             lastHikeEyebrow={showSaveRecovery
-              ? 'SAVE NEEDS ATTENTION'
+              ? cairnText('home-screen.save-needs-attention')
               : showUnfinished
                 ? displayedStateCopy.eyebrow
               : showDiscovery
-                ? 'FOUND IN YOUR WALK'
+                ? cairnText('home-screen.found-in-your-walk')
               : showMemoryReturn
-                ? 'YOUR MEMORY'
-              : (lastCompletedMode === 'running' ? 'LAST RUN' : 'LAST HIKE')}
+                ? cairnText('home-screen.your-memory')
+              : (lastCompletedMode === 'running' ? cairnText('home-screen.last-run') : cairnText('home-screen.last-hike'))}
             lastHikeMode={showSaveRecovery ? saveLostPayload?.activityMode : showUnfinished ? displayedMode : lastCompletedMode}
             onLastHikePress={showSaveRecovery
               ? () => nav.navigate(saveLostPayload!.activityMode === 'running' ? 'Running' : 'Hiking')
@@ -539,9 +540,9 @@ export function HomeScreen() {
                   alignItems: 'center', justifyContent: 'center',
                   borderWidth: 1, borderColor: 'rgba(33,54,44,0.15)',
                 }}
-                accessibilityLabel="DEV weather cycler"
+                accessibilityLabel={cairnText('home-screen.dev-weather-cycler')}
               >
-                <Text style={{ fontSize: 10, fontWeight: '900', color: '#21362C', letterSpacing: 0.5 }}>DEV</Text>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#21362C', letterSpacing: 0.5 }}>{cairnText('home-screen.dev')}</Text>
               </TouchableOpacity>
               {devMenuOpen && (
                 <View style={{
@@ -554,9 +555,7 @@ export function HomeScreen() {
                   shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
                   elevation: 6,
                 }}>
-                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
-                    LOCATION
-                  </Text>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>{cairnText('home-screen.location')}</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
                     {NZ_TEST_CITIES.map((city) => {
                       const active = locationOverride?.label === city.label;
@@ -585,9 +584,7 @@ export function HomeScreen() {
                       );
                     })}
                   </View>
-                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
-                    WEATHER
-                  </Text>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>{cairnText('home-screen.weather')}</Text>
                   <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
                     {(['sunny','cloudy','rain','snow'] as const).map((c) => {
                       const active = conditionOverride === c;
@@ -612,9 +609,7 @@ export function HomeScreen() {
                       );
                     })}
                   </View>
-                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
-                    TIME
-                  </Text>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 2, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>{cairnText('home-screen.time')}</Text>
                   <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
                     {([null, 'day', 'sunset', 'night'] as const).map((time) => {
                       const active = timeOfDayOverride === time;
@@ -631,18 +626,14 @@ export function HomeScreen() {
                           }}
                         >
                           <Text style={{ fontSize: 10, fontWeight: '600', color: '#21362C', textTransform: 'capitalize' }}>
-                            {time ?? 'auto'}
+                            {time ?? cairnText('home-screen.auto')}
                           </Text>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
-                  <Text style={{ paddingHorizontal: 4, paddingBottom: 2, fontSize: 9, color: '#6D746F' }}>
-                    Resolved {scenicTime.timeOfDay} · {bgTokens.assetId}
-                  </Text>
-                  <Text style={{ paddingHorizontal: 4, paddingTop: 4, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>
-                    ACTION ICONS · REVIEW ONLY
-                  </Text>
+                  <Text style={{ paddingHorizontal: 4, paddingBottom: 2, fontSize: 9, color: '#6D746F' }}>{cairnText('home-screen.resolved-value-value', { timeOfDay: scenicTime.timeOfDay, assetId: bgTokens.assetId })}</Text>
+                  <Text style={{ paddingHorizontal: 4, paddingTop: 4, paddingBottom: 3, fontSize: 9, fontWeight: '700', color: '#8A8F95', letterSpacing: 0.5 }}>{cairnText('home-screen.action-icons-review-only')}</Text>
                   <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
                     {(['H1', 'H2', 'H3', 'H4', 'H5'] as const).map(candidate => (
                       <TouchableOpacity
@@ -673,7 +664,7 @@ export function HomeScreen() {
                     }}
                     style={{ marginTop: 6, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(33,54,44,0.10)' }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#21362C' }}>Open Debug tools</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#21362C' }}>{cairnText('home-screen.open-debug-tools')}</Text>
                   </TouchableOpacity>
                 </View>
               )}

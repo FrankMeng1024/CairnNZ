@@ -57,6 +57,7 @@ import {
   type ActivityRoadContext,
 } from '../features/activity/activityRoadContext';
 import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
+import { cairnText } from '../i18n/runtime';
 
 // Session-local readiness memory: cold entry keeps the intentional Cairn
 // preparation boundary; subsequent ready-from-cache entries suppress only a
@@ -1288,12 +1289,8 @@ export function HikingMap({
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ alignItems: 'center', gap: Spacing.sm, width: '78%', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, borderRadius: Radius.cardLg, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}>
             <Icon name="Map" size={38} color={theme.iconInactive} />
-            <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: theme.foreground }}>
-              Map unavailable
-            </Text>
-            <Text style={{ fontSize: FontSize.caption, lineHeight: 18, color: theme.foregroundSecondary, textAlign: 'center' }}>
-              GPS recording can continue while the map is unavailable
-            </Text>
+            <Text style={{ fontSize: FontSize.h3, fontWeight: '700', color: theme.foreground }}>{cairnText('hiking-map.map-unavailable')}</Text>
+            <Text style={{ fontSize: FontSize.caption, lineHeight: 18, color: theme.foregroundSecondary, textAlign: 'center' }}>{cairnText('hiking-map.gps-recording-can-continue-while-the-map')}</Text>
           </View>
         </View>
         {markers.map((m, i) => (
@@ -1659,10 +1656,8 @@ export function HikingMap({
       {isOffline && mapFirstRender && (
         <View style={mapStyles.offlineOverlay} pointerEvents="box-none">
           <View style={[mapStyles.offlineCard, { backgroundColor: theme.mapOverlay, borderColor: theme.border }] }>
-            <Text style={[mapStyles.offlineTitle, { color: theme.foreground }]}>Map offline</Text>
-            <Text style={[mapStyles.offlineBody, { color: theme.foregroundSecondary }] }>
-              Your activity is still being recorded. The map will fill in when you're back online.
-            </Text>
+            <Text style={[mapStyles.offlineTitle, { color: theme.foreground }]}>{cairnText('hiking-map.map-offline')}</Text>
+            <Text style={[mapStyles.offlineBody, { color: theme.foregroundSecondary }] }>{cairnText('hiking-map.your-activity-is-still-being-recorded-the')}</Text>
           </View>
         </View>
       )}

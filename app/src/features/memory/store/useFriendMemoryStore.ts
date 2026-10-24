@@ -10,6 +10,7 @@ import {
   type FriendMemoryFailure,
   type MemoryOperationFailure,
 } from '../services/friendMemoryFailure';
+import { cairnText } from '../../../i18n/runtime';
 
 export interface FriendProjectionCell {
   id: string;
@@ -784,7 +785,9 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
               cellCount: retained[request.id]?.geometry?.coordinates.length
                 ?? retained[request.id]?.cells.length
                 ?? 0,
-              error: timedOut ? 'Friend Memory timed out' : error?.message || 'Unavailable',
+              error: timedOut
+                ? cairnText('memory.use-friend-memory-store.friend-memory-timed-out')
+                : cairnText('memory.use-friend-memory-store.unavailable'),
             },
           },
           version: get().version + 1,

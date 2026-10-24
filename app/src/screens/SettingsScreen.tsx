@@ -75,6 +75,7 @@ import {
   setEncounterNotificationsEnabled,
   type EncounterNotificationState,
 } from '../features/cairns/cairnEncounterNotifications';
+import { cairnText, formatCairnDate } from '../i18n/runtime';
 
 type Page = 'root' | 'account' | 'privacy' | 'content-review' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
@@ -106,18 +107,18 @@ interface AffectedCairnRevision {
 
 const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 const UNITS_SEGMENTS = [
-  { key: 'metric', label: 'Metric' },
-  { key: 'imperial', label: 'Imperial' },
+  { key: 'metric', get label() { return cairnText('settings-screen.metric'); } },
+  { key: 'imperial', get label() { return cairnText('settings-screen.imperial'); } },
 ] as const;
 const APPEARANCE_SEGMENTS = [
-  { key: 'auto', label: 'Auto' },
-  { key: 'day', label: 'Day' },
-  { key: 'sunset', label: 'Sunset' },
-  { key: 'night', label: 'Night' },
+  { key: 'auto', get label() { return cairnText('settings-screen.auto'); } },
+  { key: 'day', get label() { return cairnText('settings-screen.day'); } },
+  { key: 'sunset', get label() { return cairnText('settings-screen.sunset'); } },
+  { key: 'night', get label() { return cairnText('settings-screen.night'); } },
 ] as const;
 const FEEDBACK_SEGMENTS = [
-  { key: 'feedback', label: 'Feedback' },
-  { key: 'bug', label: 'Bug' },
+  { key: 'feedback', get label() { return cairnText('settings-screen.feedback'); } },
+  { key: 'bug', get label() { return cairnText('settings-screen.bug'); } },
 ] as const;
 
 function SectionTitle({ children, color, shadowColor }: { children: React.ReactNode; color: string; shadowColor: string }) {
@@ -245,9 +246,9 @@ function formatBytes(value: number | null): string | null {
 
 function providerSummary(hasPassword: boolean | undefined, providers: string[] | undefined): string {
   const names = (providers ?? []).map((provider) => provider.charAt(0).toUpperCase() + provider.slice(1));
-  if (hasPassword === true) return names.length > 0 ? `Email + ${names.join(' + ')}` : 'Email + password';
+  if (hasPassword === true) return names.length > 0 ? cairnText('settings-screen.email-value', { value1: names.join(' + ') }) : cairnText('settings-screen.email-password');
   if (hasPassword === false && names.length > 0) return names.join(' + ');
-  return 'Checking sign-in method…';
+  return cairnText('settings-screen.checking-sign-in-method');
 }
 
 function currentOwnerId(): string | null {
@@ -312,7 +313,7 @@ export function SettingsScreen() {
     supported: false,
     enabled: false,
     permission: 'unavailable',
-    detail: 'Checking this installed app…',
+    detail: cairnText('settings-screen.checking-this-installed-app'),
   });
   const [encounterNotificationsBusy, setEncounterNotificationsBusy] = useState(false);
 
@@ -446,7 +447,7 @@ export function SettingsScreen() {
     setFeedbackState('idle');
     setFeedbackError('');
     setFeedbackSubmissionId(Crypto.randomUUID());
-    setEncounterNotifications({ supported: false, enabled: false, permission: 'unavailable', detail: 'Checking this installed app…' });
+    setEncounterNotifications({ supported: false, enabled: false, permission: 'unavailable', detail: cairnText('settings-screen.checking-this-installed-app') });
     setEncounterNotificationsBusy(false);
   }, [renderedOwnerId]);
 
@@ -525,7 +526,7 @@ export function SettingsScreen() {
     } catch {
       if (settingsMounted.current && generation === reviewGeneration.current
         && currentOwnerId() === ownerId) {
-        setReviewError('Connect to review content issues and appeals.');
+        setReviewError(cairnText('settings-screen.connect-to-review-content-issues-and-appeals'));
       }
     } finally {
       if (settingsMounted.current && generation === reviewGeneration.current
@@ -594,19 +595,19 @@ export function SettingsScreen() {
           && passiveBackgroundConsent !== 'granted'
           && !passiveBackgroundEducationDismissed) {
           Alert.alert(
-            'Continue in the background?',
-            'Automatic exploration and encounters work in the foreground. Separately, Cairn can use a lower-frequency walking location service during normal screen lock or background use. Hike and Run recording remains separate.',
+            cairnText('settings-screen.continue-in-the-background'),
+            cairnText('settings-screen.automatic-exploration-and-encounters-work-in-the'),
             [
-              { text: 'Not now', style: 'cancel' },
+              { text: cairnText('settings-screen.not-now'), style: 'cancel' },
               {
-                text: "Don't show again",
+                text: cairnText('settings-screen.don-t-show-again'),
                 onPress: () => {
                   setMemorySetting('passiveBackgroundConsent', 'declined');
                   setMemorySetting('passiveBackgroundEducationDismissed', true);
                 },
               },
               {
-                text: 'Continue',
+                text: cairnText('common.continue'),
                 onPress: () => {
                   void (async () => {
                     const background = await Location.requestBackgroundPermissionsAsync();
@@ -627,11 +628,11 @@ export function SettingsScreen() {
         setMemorySetting('passiveExplorationEnabled', false);
         setMemorySetting('memoryLocationTransitionRequired', false);
         Alert.alert(
-          'Location permission is off',
-          'Cairn needs foreground location permission for automatic exploration and nearby encounters outside an Activity. Hike and Run permissions are handled separately when you record.',
+          cairnText('settings-screen.location-permission-is-off'),
+          cairnText('settings-screen.cairn-needs-foreground-location-permission-for-automatic'),
           [
-            { text: 'Not now', style: 'cancel' },
-            ...(!result.canAskAgain ? [{ text: 'Open Settings', onPress: () => void Linking.openSettings() }] : []),
+            { text: cairnText('settings-screen.not-now'), style: 'cancel' },
+            ...(!result.canAskAgain ? [{ text: cairnText('settings-screen.open-settings'), onPress: () => void Linking.openSettings() }] : []),
           ],
         );
       }
@@ -655,11 +656,11 @@ export function SettingsScreen() {
       return;
     }
     Alert.alert(
-      'Automatic exploration & encounters',
-      'When this is On, eligible real walking while Cairn is open can add places to your personal Memory and independently discover nearby Friends or Public Cairns. Hike and Run work either way. Encounter notifications only control alerts. Background walking stays off unless separately allowed.',
+      cairnText('settings-screen.automatic-exploration-encounters'),
+      cairnText('settings-screen.when-this-is-on-eligible-real-walking'),
       [
-        { text: 'Keep off', style: 'cancel' },
-        { text: 'Continue', onPress: () => void enableAutomaticExplorationAndEncounters() },
+        { text: cairnText('settings-screen.keep-off'), style: 'cancel' },
+        { text: cairnText('common.continue'), onPress: () => void enableAutomaticExplorationAndEncounters() },
       ],
     );
   };
@@ -691,16 +692,16 @@ export function SettingsScreen() {
       }, null, 2));
       if (currentOwnerId() !== ownerId) return;
       Alert.alert(
-        'Activity diagnostics copied',
+        cairnText('settings-screen.activity-diagnostics-copied'),
         diagnosticReplay
-          ? 'The latest opted-in Activity replay is on your clipboard. It includes precise coordinates and redacted provider evidence, stays local until you copy it, and contains no Mapbox token.'
+          ? cairnText('settings-screen.the-latest-opted-in-activity-replay-is')
           : ledger.clientActivityId
-          ? 'The latest local timing ledger is on your clipboard. No coordinate replay was enabled for that Activity.'
-          : 'No Activity timing events are stored on this device yet.',
+          ? cairnText('settings-screen.the-latest-local-timing-ledger-is-on')
+          : cairnText('settings-screen.no-activity-timing-events-are-stored-on'),
       );
     } catch {
       if (currentOwnerId() === ownerId) {
-        Alert.alert('Could not copy diagnostics', 'Try again after reopening CairnNZ.');
+        Alert.alert(cairnText('settings-screen.could-not-copy-diagnostics'), cairnText('settings-screen.try-again-after-reopening-cairnnz'));
       }
     } finally {
       if (currentOwnerId() === ownerId) setActivityDiagnosticsCopying(false);
@@ -741,7 +742,7 @@ export function SettingsScreen() {
     <View style={styles.header}>
       <BackButton
         variant="inline"
-        label="Back"
+        label={cairnText('navigation.back')}
         onPress={() => page === 'root' ? navigation.goBack() : setPage('root')}
         testID="settings-back"
       />
@@ -752,28 +753,28 @@ export function SettingsScreen() {
 
   const renderRoot = () => (
     <>
-      {renderHeader('Settings')}
+      {renderHeader(cairnText('settings-screen.settings'))}
       <ScrollView style={styles.pageScroll} testID="settings-root" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Account</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.account')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="User"
-            title={user?.name || 'Your account'}
-            detail={user?.email || 'Account identity and sign-in'}
-            value="Manage"
+            title={user?.name || cairnText('settings-screen.your-account')}
+            detail={user?.email || cairnText('settings-screen.account-identity-and-sign-in')}
+            value={cairnText('settings-screen.manage')}
             onPress={() => openPage('account')}
             testID="settings-account-row"
           />
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Preferences</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.preferences')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-preferences">
           <View style={styles.preferenceBlock}>
             <View style={styles.preferenceHeading}>
               <Icon name="Ruler" size={IconSize.sm} color={theme.icon} />
               <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, { color: theme.textPrimary }]}>Units</Text>
-                <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>Distance, elevation, speed and pace</Text>
+                <Text style={[styles.rowTitle, { color: theme.textPrimary }]}>{cairnText('settings-screen.units')}</Text>
+                <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>{cairnText('settings-screen.distance-elevation-speed-and-pace')}</Text>
               </View>
             </View>
             <SegmentedControl<UnitsPref>
@@ -788,8 +789,8 @@ export function SettingsScreen() {
             <View style={styles.preferenceHeading}>
               <Icon name="Sun" size={IconSize.sm} color={theme.icon} />
               <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, { color: theme.textPrimary }]}>Appearance</Text>
-                <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>Auto follows Cairn’s local daylight rhythm</Text>
+                <Text style={[styles.rowTitle, { color: theme.textPrimary }]}>{cairnText('settings-screen.appearance')}</Text>
+                <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>{cairnText('settings-screen.auto-follows-cairn-s-local-daylight-rhythm')}</Text>
               </View>
             </View>
             <SegmentedControl<AppearancePref>
@@ -802,8 +803,8 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <ToggleRow
             icon="Vibrate"
-            title="Haptics"
-            detail="Gentle feedback for Cairn actions"
+            title={cairnText('settings-screen.haptics')}
+            detail={cairnText('settings-screen.gentle-feedback-for-cairn-actions')}
             value={hapticFeedback}
             onChange={(value) => {
               updateSetting('hapticFeedback', value);
@@ -814,20 +815,20 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <ToggleRow
             icon="Compass"
-            title="Automatic exploration"
+            title={cairnText('settings-screen.automatic-exploration')}
             detail={!automaticExplorationEnabled
               ? memoryLocationTransitionRequired
-                ? 'Review how ordinary eligible walking feeds Memory and nearby Cairn discovery independently'
-                : 'Off · ordinary app use does not record exploration or scan for encounters; Hike and Run still work'
+                ? cairnText('settings-screen.review-how-ordinary-eligible-walking-feeds-memory')
+                : cairnText('settings-screen.off-ordinary-app-use-does-not-record')
               : permissionStatus === 'granted'
               ? passiveBackgroundCapability.supported
                 && passiveBackgroundConsent === 'granted'
                 && backgroundPermissionStatus === 'granted'
-                ? 'Eligible walks update Memory and scan for encounters; separately allowed through normal lock/background use'
+                ? cairnText('settings-screen.eligible-walks-update-memory-and-scan-for')
                 : passiveBackgroundCapability.supported
-                  ? 'Eligible walks update Memory and scan for encounters while Cairn is open; background is separate'
-                  : 'Eligible walks update Memory and scan for encounters while Cairn is open on this build'
-              : 'On, but waiting for foreground location permission; Hike and Run remain available'}
+                  ? cairnText('settings-screen.eligible-walks-update-memory-and-scan-for-6303fa5')
+                  : cairnText('settings-screen.eligible-walks-update-memory-and-scan-for-a12baa6')
+              : cairnText('settings-screen.on-but-waiting-for-foreground-location-permission')}
             value={automaticExplorationEnabled}
             disabled={permissionLoading}
             onChange={requestAutomaticExplorationChange}
@@ -836,7 +837,7 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <ToggleRow
             icon="MapPin"
-            title="Encounter notifications"
+            title={cairnText('settings-screen.encounter-notifications')}
             detail={encounterNotifications.detail}
             value={encounterNotifications.enabled}
             disabled={!encounterNotifications.supported || encounterNotificationsBusy}
@@ -849,11 +850,11 @@ export function SettingsScreen() {
                 setEncounterNotifications(result);
                 if (next && !result.enabled && result.permission === 'denied') {
                   Alert.alert(
-                    'Notifications are off',
-                    'Open system Settings to allow encounter notifications. Cairns will still save to Memory without them.',
+                    cairnText('settings-screen.notifications-are-off'),
+                    cairnText('settings-screen.open-system-settings-to-allow-encounter-notifications'),
                     [
-                      { text: 'Not now', style: 'cancel' },
-                      { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+                      { text: cairnText('settings-screen.not-now'), style: 'cancel' },
+                      { text: cairnText('settings-screen.open-settings'), onPress: () => void Linking.openSettings() },
                     ],
                   );
                 }
@@ -865,22 +866,22 @@ export function SettingsScreen() {
           />
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Privacy & Data</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.privacy-data')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
-          <Row icon="Shield" title="Privacy & Data" detail="Location, export and exploration history" value="Review" onPress={() => openPage('privacy')} testID="settings-privacy-row" />
+          <Row icon="Shield" title={cairnText('settings-screen.privacy-data')} detail={cairnText('settings-screen.location-export-and-exploration-history')} value={cairnText('settings-screen.review')} onPress={() => openPage('privacy')} testID="settings-privacy-row" />
           <Divider color={background.settingsCardBorderColor} />
-          <Row icon="FileText" title="Content issue / appeal" detail="Track reports and request review of an affected Cairn revision" value="Review" onPress={() => openPage('content-review')} testID="settings-content-review-row" />
+          <Row icon="FileText" title={cairnText('settings-screen.content-issue-appeal')} detail={cairnText('settings-screen.track-reports-and-request-review-of-an')} value={cairnText('settings-screen.review')} onPress={() => openPage('content-review')} testID="settings-content-review-row" />
           {offlineMapsFeatureEnabled() ? (
             <>
               <Divider color={background.settingsCardBorderColor} />
-              <Row icon="Download" title="Offline maps" detail="Download basemap areas to this device" value="Pilot" onPress={() => navigation.navigate('OfflineMaps')} testID="settings-offline-maps-row" />
+              <Row icon="Download" title={cairnText('settings-screen.offline-maps')} detail={cairnText('settings-screen.download-basemap-areas-to-this-device')} value={cairnText('settings-screen.pilot')} onPress={() => navigation.navigate('OfflineMaps')} testID="settings-offline-maps-row" />
             </>
           ) : null}
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Help & About</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.help-about')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
-          <Row icon="MessageSquare" title="Help & About" detail="Feedback, support, terms and app information" value="Open" onPress={() => openPage('help')} testID="settings-help-row" />
+          <Row icon="MessageSquare" title={cairnText('settings-screen.help-about')} detail={cairnText('settings-screen.feedback-support-terms-and-app-information')} value={cairnText('settings-screen.open')} onPress={() => openPage('help')} testID="settings-help-row" />
         </ContentSurface>
         <Pressable
           onPress={handleOwnerQaUnlock}
@@ -888,7 +889,7 @@ export function SettingsScreen() {
           testID="settings-owner-qa-unlock"
           style={styles.footerPressable}
         >
-          <Text style={[styles.footer, { color: theme.foreground }]}>Ngā mihi nui — thanks for using Cairn.</Text>
+          <Text style={[styles.footer, { color: theme.foreground }]}>{cairnText('settings-screen.ng-mihi-nui-thanks-for-using-cairn')}</Text>
         </Pressable>
       </ScrollView>
     </>
@@ -896,28 +897,28 @@ export function SettingsScreen() {
 
   const renderAccount = () => (
     <>
-      {renderHeader('Account')}
+      {renderHeader(cairnText('settings-screen.account'))}
       <ScrollView style={styles.pageScroll} testID="settings-account" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
-        <Text style={[styles.intro, { color: theme.foreground, textShadowColor: theme.surfaceElevated }]}>Your identity and account actions.</Text>
+        <Text style={[styles.intro, { color: theme.foreground, textShadowColor: theme.surfaceElevated }]}>{cairnText('settings-screen.your-identity-and-account-actions')}</Text>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
-          <Row icon="User" title={user?.name || 'Cairn user'} detail="Name" />
+          <Row icon="User" title={user?.name || cairnText('settings-screen.cairn-user')} detail={cairnText('settings-screen.name-a93fc9a')} />
           <Divider color={background.settingsCardBorderColor} />
-          <Row icon="Mail" title={user?.email || 'Email unavailable'} detail="Account email · not currently changeable in the app" />
+          <Row icon="Mail" title={user?.email || cairnText('settings-screen.email-unavailable')} detail={cairnText('settings-screen.account-email-not-currently-changeable-in-the')} />
           <Divider color={background.settingsCardBorderColor} />
           <Row
             icon="KeyRound"
-            title="Sign-in method"
+            title={cairnText('settings-screen.sign-in-method')}
             detail={providerSummary(user?.hasPassword, user?.providers)}
-            value={profileLoading ? 'Checking…' : undefined}
+            value={profileLoading ? cairnText('settings-screen.checking') : undefined}
           />
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Account actions</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.account-actions')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="Pencil"
-            title="Edit name"
-            detail="Change how your name appears in Cairn"
+            title={cairnText('settings-screen.edit-name')}
+            detail={cairnText('settings-screen.change-how-your-name-appears-in-cairn')}
             onPress={() => {
               setNameOwnerId(currentOwnerId());
               setNameDraft(user?.name || '');
@@ -931,8 +932,8 @@ export function SettingsScreen() {
               <Divider color={background.settingsCardBorderColor} />
               <Row
                 icon="KeyRound"
-                title="Change password"
-                detail="Requires your current Cairn password"
+                title={cairnText('settings-screen.change-password')}
+                detail={cairnText('settings-screen.requires-your-current-cairn-password')}
                 onPress={() => {
                   setPasswordOwnerId(currentOwnerId());
                   setCurrentPassword('');
@@ -949,21 +950,21 @@ export function SettingsScreen() {
               <Divider color={background.settingsCardBorderColor} />
               <Row
                 icon={user.providers?.includes('apple') ? 'Apple' : 'KeyRound'}
-                title="Password managed by your provider"
-                detail={`Use ${providerSummary(false, user.providers)} to manage sign-in security`}
+                title={cairnText('settings-screen.password-managed-by-your-provider')}
+                detail={cairnText('settings-screen.use-value-to-manage-sign-in-security', { value1: providerSummary(false, user.providers) })}
               />
             </>
           ) : null}
           <Divider color={background.settingsCardBorderColor} />
-          <Row icon="LogOut" title="Sign out" detail="Keep this account and its saved data" onPress={handleSignOut} testID="settings-sign-out" />
+          <Row icon="LogOut" title={cairnText('settings-screen.sign-out')} detail={cairnText('settings-screen.keep-this-account-and-its-saved-data')} onPress={handleSignOut} testID="settings-sign-out" />
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Delete account</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.delete-account')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="Trash2"
-            title="Delete account"
-            detail="Seven days to restore, then permanent deletion"
+            title={cairnText('settings-screen.delete-account')}
+            detail={cairnText('settings-screen.seven-days-to-restore-then-permanent-deletion')}
             destructive
             onPress={() => {
               setDeleteOwnerId(currentOwnerId());
@@ -980,18 +981,18 @@ export function SettingsScreen() {
 
   const renderExportState = () => {
     if (visibleExportLoading) {
-      return <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Checking export status…</Text></View>;
+      return <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>{cairnText('settings-screen.checking-export-status')}</Text></View>;
     }
     if (!latestExport) {
-      return <Text style={[styles.body, { color: theme.textSecondary }]}>No export has been requested on this account.</Text>;
+      return <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('settings-screen.no-export-has-been-requested-on-this')}</Text>;
     }
     if ((latestExport.status === 'ready' || latestExport.status === 'sent') && !exportExpired && latestExport.download_url) {
       return (
         <View style={styles.stackSmall}>
-          <Text style={[styles.statusStrong, { color: theme.textPrimary }]}>Ready to download</Text>
-          <Text style={[styles.body, { color: theme.textSecondary }]}>JSON · {formatBytes(latestExport.size_bytes) || 'size unavailable'} · link expires {new Date(latestExport.expires_at || '').toLocaleString()}</Text>
+          <Text style={[styles.statusStrong, { color: theme.textPrimary }]}>{cairnText('settings-screen.ready-to-download')}</Text>
+          <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('settings-screen.json-value-link-expires-value', { value1: formatBytes(latestExport.size_bytes) || cairnText('settings-screen.size-unavailable'), value2: formatCairnDate(new Date(latestExport.expires_at || ''), { dateStyle: 'medium', timeStyle: 'short' }) })}</Text>
           <PrimaryButton
-            label="Open download"
+            label={cairnText('settings-screen.open-download')}
             variant="secondary"
             onPress={() => {
               if (!settingsMounted.current
@@ -1005,64 +1006,64 @@ export function SettingsScreen() {
       );
     }
     if (latestExport.status === 'queued' || latestExport.status === 'building') {
-      return <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Preparing your export. You can leave this page and return later.</Text></View>;
+      return <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>{cairnText('settings-screen.preparing-your-export-you-can-leave-this')}</Text></View>;
     }
     if (latestExport.status === 'failed') {
-      return <Text style={[styles.statusText, { color: theme.destructive }]}>The export could not be prepared. Your data is unchanged; request it again.</Text>;
+      return <Text style={[styles.statusText, { color: theme.destructive }]}>{cairnText('settings-screen.the-export-could-not-be-prepared-your')}</Text>;
     }
     if (exportExpired || latestExport.status === 'expired') {
-      return <Text style={[styles.statusText, { color: theme.textSecondary }]}>The previous download expired. Request a fresh export when you need it.</Text>;
+      return <Text style={[styles.statusText, { color: theme.textSecondary }]}>{cairnText('settings-screen.the-previous-download-expired-request-a-fresh')}</Text>;
     }
-    return <Text style={[styles.statusText, { color: theme.textSecondary }]}>Export status: {latestExport.status}</Text>;
+    return <Text style={[styles.statusText, { color: theme.textSecondary }]}>{cairnText('settings-screen.export-status-value', { status: latestExport.status })}</Text>;
   };
 
   const renderPrivacy = () => (
     <>
-      {renderHeader('Privacy & Data')}
+      {renderHeader(cairnText('settings-screen.privacy-data'))}
       <ScrollView style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
-            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Your location stays under your control</Text>
-            <Text style={[styles.body, { color: theme.textSecondary }]}>Review permissions, export your records, or remove exploration history without affecting Activities, Routes or Cairns.</Text>
+            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>{cairnText('settings-screen.your-location-stays-under-your-control')}</Text>
+            <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('settings-screen.review-permissions-export-your-records-or-remove')}</Text>
           </View>
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Location</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.location')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="MapPin"
-            title="Foreground location"
+            title={cairnText('settings-screen.foreground-location')}
             detail={permissionStatus === 'granted'
-              ? 'Allowed by iOS for features used while Cairn is open'
+              ? cairnText('settings-screen.allowed-by-ios-for-features-used-while')
               : permissionStatus === 'denied'
-                ? 'Off in iOS; Cairn cannot override this permission'
-                : 'Permission status is unavailable'}
-            value={permissionStatus === 'granted' ? 'Allowed' : 'Off'}
+                ? cairnText('settings-screen.off-in-ios-cairn-cannot-override-this')
+                : cairnText('settings-screen.permission-status-is-unavailable')}
+            value={permissionStatus === 'granted' ? cairnText('settings-screen.allowed') : cairnText('settings-screen.off')}
           />
           {permissionStatus !== 'granted' && !permissionCanAskAgain ? (
             <>
               <Divider color={background.settingsCardBorderColor} />
-              <Row icon="ExternalLink" title="Open system Settings" detail="Review Cairn’s location permission in iOS" external onPress={() => void Linking.openSettings()} testID="settings-open-os-settings" />
+              <Row icon="ExternalLink" title={cairnText('settings-screen.open-system-settings')} detail={cairnText('settings-screen.review-cairn-s-location-permission-in-ios')} external onPress={() => void Linking.openSettings()} testID="settings-open-os-settings" />
             </>
           ) : null}
           <Divider color={background.settingsCardBorderColor} />
           <ToggleRow
             icon="Compass"
-            title="Automatic exploration"
+            title={cairnText('settings-screen.automatic-exploration')}
             detail={automaticExplorationEnabled && permissionStatus === 'granted'
               ? passiveBackgroundCapability.supported
                 && passiveBackgroundConsent === 'granted'
                 && backgroundPermissionStatus === 'granted'
-                ? 'On · ordinary eligible walks feed Memory and nearby Cairn discovery; background use is separately allowed'
+                ? cairnText('settings-screen.on-ordinary-eligible-walks-feed-memory-and')
                 : passiveBackgroundCapability.supported
-                  ? 'On in foreground · background walking was not separately allowed'
-                  : `On in foreground · background walking needs a newer native build than ${passiveBackgroundCapability.nativeBuild ?? 'this build'}`
+                  ? cairnText('settings-screen.on-in-foreground-background-walking-was-not')
+                  : cairnText('settings-screen.on-in-foreground-background-walking-needs-a', { value1: passiveBackgroundCapability.nativeBuild ?? cairnText('settings-screen.this-build') })
               : automaticExplorationEnabled
-                ? 'On in Cairn · waiting for foreground location permission in iOS'
+                ? cairnText('settings-screen.on-in-cairn-waiting-for-foreground-location')
                 : memoryLocationTransitionRequired
-                  ? 'Review required · existing Off choices stay Off'
-                  : 'Off · no ordinary-use exploration or encounter scanning; Activities still work'}
+                  ? cairnText('settings-screen.review-required-existing-off-choices-stay-off')
+                  : cairnText('settings-screen.off-no-ordinary-use-exploration-or-encounter')}
             value={automaticExplorationEnabled}
             disabled={permissionLoading}
             onChange={requestAutomaticExplorationChange}
@@ -1070,20 +1071,20 @@ export function SettingsScreen() {
           />
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Your data</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.your-data')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-export-card">
           <View style={styles.cardHeading}>
             <Icon name="Download" size={IconSize.md} color={theme.icon} />
             <View style={styles.rowCopy}>
-              <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Export your data</Text>
-              <Text style={[styles.body, { color: theme.textSecondary }]}>Request a JSON copy, track preparation here, then open the download when it is ready.</Text>
+              <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>{cairnText('settings-screen.export-your-data')}</Text>
+              <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('settings-screen.request-a-json-copy-track-preparation-here')}</Text>
             </View>
           </View>
           {renderExportState()}
           {visibleExportError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{visibleExportError}</Text> : null}
           {latestExport?.status !== 'queued' && latestExport?.status !== 'building' ? (
             <PrimaryButton
-              label={latestExport?.status === 'failed' || exportExpired ? 'Request fresh export' : 'Request export'}
+              label={latestExport?.status === 'failed' || exportExpired ? cairnText('settings-screen.request-fresh-export') : cairnText('settings-screen.request-export')}
               loading={visibleExportRequesting}
               onPress={() => void (async () => {
                 const ownerId = currentOwnerId();
@@ -1126,8 +1127,8 @@ export function SettingsScreen() {
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="FileText"
-            title="Copy Activity diagnostics"
-            detail="Owner Debug recordings include precise coordinates for local replay; access tokens are always removed"
+            title={cairnText('settings-screen.copy-activity-diagnostics')}
+            detail={cairnText('settings-screen.owner-debug-recordings-include-precise-coordinates-for')}
             onPress={() => void copyActivityDiagnostics()}
             disabled={activityDiagnosticsCopying}
             busy={activityDiagnosticsCopying}
@@ -1136,8 +1137,8 @@ export function SettingsScreen() {
           <Divider color={background.settingsCardBorderColor} />
           <Row
             icon="Trash2"
-            title="Delete exploration history"
-            detail="Deletes Memory points and derived explored regions; keeps Activities, Routes and Cairns"
+            title={cairnText('settings-screen.delete-exploration-history')}
+            detail={cairnText('settings-screen.deletes-memory-points-and-derived-explored-regions')}
             onPress={() => { setMemoryDeleteResult(''); setMemoryDeleteOpen(true); }}
             disabled={memoryDeleting}
             busy={memoryDeleting}
@@ -1147,15 +1148,15 @@ export function SettingsScreen() {
           {memoryDeleteResult ? <Text accessibilityLiveRegion="polite" style={[styles.deleteResult, { color: memoryDeleteResult.startsWith('Deleted') ? theme.textSecondary : theme.destructive }]}>{memoryDeleteResult}</Text> : null}
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Privacy</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.privacy')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
             icon="Info"
-            title="How Cairn uses data"
-            detail="Activities use location while recording. Automatic exploration remembers eligible ordinary walks in Memory and may encounter authorized nearby Cairns while Cairn is open. Hike and Run still work when it is Off; background or screen-lock use needs separate consent and OS permission. Encounter notifications control alerts, not discovery."
+            title={cairnText('settings-screen.how-cairn-uses-data')}
+            detail={cairnText('settings-screen.activities-use-location-while-recording-automatic-exploration')}
           />
           <Divider color={background.settingsCardBorderColor} />
-          <Row icon="Shield" title="Privacy Policy" detail="Read the full current policy" external onPress={() => void Linking.openURL(PRIVACY_URL)} testID="settings-privacy-policy" />
+          <Row icon="Shield" title={cairnText('settings-screen.privacy-policy')} detail={cairnText('settings-screen.read-the-full-current-policy')} external onPress={() => void Linking.openURL(PRIVACY_URL)} testID="settings-privacy-policy" />
         </ContentSurface>
       </ScrollView>
     </>
@@ -1163,17 +1164,17 @@ export function SettingsScreen() {
 
   const renderHelp = () => (
     <>
-      {renderHeader('Help & About')}
+      {renderHeader(cairnText('settings-screen.help-about'))}
       <ScrollView style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle} keyboardShouldPersistTaps="handled">
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="MessageSquare" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
-            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>How can we help?</Text>
-            <Text style={[styles.body, { color: theme.textSecondary }]}>Send feedback, contact support, or review Cairn’s current app and legal information.</Text>
+            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>{cairnText('settings-screen.how-can-we-help')}</Text>
+            <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('settings-screen.send-feedback-contact-support-or-review-cairn')}</Text>
           </View>
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Feedback</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.feedback')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-feedback-card">
           <SegmentedControl<FeedbackKind>
             value={feedbackKind}
@@ -1186,7 +1187,7 @@ export function SettingsScreen() {
           />
           <TextField
             testID="settings-feedback-input"
-            label={feedbackKind === 'bug' ? 'What went wrong?' : 'Your message'}
+            label={feedbackKind === 'bug' ? cairnText('settings-screen.what-went-wrong') : cairnText('settings-screen.your-message')}
             value={feedbackText}
             onChangeText={(value) => {
               setFeedbackText(value.slice(0, 2000));
@@ -1195,18 +1196,18 @@ export function SettingsScreen() {
             multiline
             textAlignVertical="top"
             inputStyle={styles.feedbackInput}
-            placeholder={feedbackKind === 'bug' ? 'Tell us what happened and what you expected.' : 'What would make Cairn better for you?'}
+            placeholder={feedbackKind === 'bug' ? cairnText('settings-screen.tell-us-what-happened-and-what-you') : cairnText('settings-screen.what-would-make-cairn-better-for-you')}
             error={feedbackState === 'failed' ? feedbackError : undefined}
           />
-          <Text style={[styles.counter, { color: theme.textMuted }]}>{feedbackText.trim().length}/2000</Text>
+          <Text style={[styles.counter, { color: theme.textMuted }]}>{cairnText('settings-screen.value-2000', { length: feedbackText.trim().length })}</Text>
           {feedbackState === 'sent' ? (
             <View accessibilityLiveRegion="polite" style={[styles.deliveryStatus, { backgroundColor: theme.recordSelected, borderColor: theme.borderStrong }]}>
               <Icon name="CircleCheck" size={IconSize.sm} color={theme.primary} />
-              <Text style={[styles.statusStrong, { color: theme.textPrimary }]}>Delivered to Cairn</Text>
+              <Text style={[styles.statusStrong, { color: theme.textPrimary }]}>{cairnText('settings-screen.delivered-to-cairn')}</Text>
             </View>
           ) : null}
           <PrimaryButton
-            label={feedbackState === 'failed' ? 'Retry delivery' : 'Send feedback'}
+            label={feedbackState === 'failed' ? cairnText('settings-screen.retry-delivery') : cairnText('settings-screen.send-feedback')}
             loading={feedbackState === 'sending'}
             disabled={feedbackText.trim().length < 3}
             renderIcon={(color) => <Icon name="Send" size={IconSize.sm} color={color} />}
@@ -1237,7 +1238,7 @@ export function SettingsScreen() {
                   haptic.notification('success');
                 } else {
                   setFeedbackState('failed');
-                  setFeedbackError(result.error || 'Feedback was not delivered. Try again.');
+                  setFeedbackError(result.error || cairnText('settings-screen.feedback-was-not-delivered-try-again'));
                 }
               } finally {
                 if (settingsMounted.current
@@ -1249,25 +1250,25 @@ export function SettingsScreen() {
             })()}
             testID="settings-feedback-send"
           />
-          <Text style={[styles.body, { color: theme.textMuted }]}>Feedback is not an emergency or monitored safety service.</Text>
+          <Text style={[styles.body, { color: theme.textMuted }]}>{cairnText('settings-screen.feedback-is-not-an-emergency-or-monitored')}</Text>
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Support & legal</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.support-legal')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
-          <Row icon="Mail" title="Contact support" detail="support@cairnapp.nz" external onPress={() => void Linking.openURL('mailto:support@cairnapp.nz')} testID="settings-support" />
+          <Row icon="Mail" title={cairnText('settings-screen.contact-support')} detail="support@cairnapp.nz" external onPress={() => void Linking.openURL('mailto:support@cairnapp.nz')} testID="settings-support" />
           <Divider color={background.settingsCardBorderColor} />
-          <Row icon="Shield" title="Privacy Policy" external onPress={() => void Linking.openURL(PRIVACY_URL)} />
+          <Row icon="Shield" title={cairnText('settings-screen.privacy-policy')} external onPress={() => void Linking.openURL(PRIVACY_URL)} />
           <Divider color={background.settingsCardBorderColor} />
-          <Row icon="FileText" title="Terms" detail="Apple Standard EULA" external onPress={() => void Linking.openURL(TERMS_URL)} testID="settings-terms" />
+          <Row icon="FileText" title={cairnText('settings-screen.terms')} detail="Apple Standard EULA" external onPress={() => void Linking.openURL(TERMS_URL)} testID="settings-terms" />
         </ContentSurface>
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>About</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.about')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-about">
           <Row
             icon="Info"
-            title="Cairn"
-            detail="A quiet record of the places you have moved through."
-            value={`v${Application.nativeApplicationVersion || '—'}${Application.nativeBuildVersion ? ` (${Application.nativeBuildVersion})` : ''}`}
+            title={cairnText('settings-screen.cairn')}
+            detail={cairnText('settings-screen.a-quiet-record-of-the-places-you')}
+            value={cairnText('settings-screen.v-value-value', { value1: Application.nativeApplicationVersion || '—', value2: Application.nativeBuildVersion ? ` (${Application.nativeBuildVersion})` : '' })}
           />
         </ContentSurface>
       </ScrollView>
@@ -1289,14 +1290,14 @@ export function SettingsScreen() {
             client_submission_id: Crypto.randomUUID(),
             case_type: 'appeal',
             category: 'other',
-            detail: 'Author requested review from Cairn Settings.',
+            detail: cairnText('settings-screen.author-requested-review-from-cairn-settings'),
           }),
         },
       );
       if (!response.ok) throw new Error('appeal_failed');
       await refreshReviewCases();
     } catch {
-      if (currentOwnerId() === ownerId) setReviewError('The appeal was not sent. Connect and try again.');
+      if (currentOwnerId() === ownerId) setReviewError(cairnText('settings-screen.the-appeal-was-not-sent-connect-and'));
     } finally {
       if (currentOwnerId() === ownerId) setAppealSubmittingRevisionId(null);
     }
@@ -1304,38 +1305,38 @@ export function SettingsScreen() {
 
   const renderContentReview = () => (
     <>
-      {renderHeader('Content issue / appeal')}
+      {renderHeader(cairnText('settings-screen.content-issue-appeal'))}
       <ScrollView style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
-            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Review states are separate from editing</Text>
-            <Text style={[styles.body, { color: theme.textSecondary }]}>Reports enter a manual queue. If one of your shared Cairn revisions is affected, request review here; editing cannot bypass a source freeze.</Text>
+            <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>{cairnText('settings-screen.review-states-are-separate-from-editing')}</Text>
+            <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('settings-screen.reports-enter-a-manual-queue-if-one')}</Text>
           </View>
         </ContentSurface>
 
-        {reviewLoading ? <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>Checking content review status…</Text></View> : null}
+        {reviewLoading ? <View style={styles.asyncRow}><ActivityIndicator color={theme.primary} /><Text style={[styles.statusText, { color: theme.textSecondary }]}>{cairnText('settings-screen.checking-content-review-status')}</Text></View> : null}
         {reviewError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{reviewError}</Text> : null}
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Affected Cairns</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.affected-cairns')}</SectionTitle>
         {affectedRevisions.length === 0 && !reviewLoading ? (
           <ContentSurface style={[styles.surface, surfaceStyle]}>
-            <Row icon="CircleCheck" title="No affected Cairn revisions" detail="Nothing on this account currently needs an author appeal." />
+            <Row icon="CircleCheck" title={cairnText('settings-screen.no-affected-cairn-revisions')} detail={cairnText('settings-screen.nothing-on-this-account-currently-needs-an')} />
           </ContentSurface>
         ) : affectedRevisions.map(revision => (
           <ContentSurface key={revision.revision_id} style={[styles.surface, surfaceStyle]}>
             <Row
               icon="FileText"
-              title={`Cairn ${revision.marker_id} · revision ${revision.content_revision}`}
+              title={cairnText('settings-screen.cairn-value-revision-value', { marker_id: revision.marker_id, content_revision: revision.content_revision })}
               detail={revision.content_state === 'under_review'
-                ? 'Under review · content is hidden while the case is open'
-                : 'Unavailable · request review if you believe this is an error'}
-              value={revision.appeal_pending ? 'Appeal pending' : undefined}
+                ? cairnText('settings-screen.under-review-content-is-hidden-while-the')
+                : cairnText('settings-screen.unavailable-request-review-if-you-believe-this')}
+              value={revision.appeal_pending ? cairnText('settings-screen.appeal-pending') : undefined}
             />
             {!revision.appeal_pending ? (
               <View style={styles.stackSmall}>
                 <PrimaryButton
-                  label="Request review"
+                  label={cairnText('settings-screen.request-review')}
                   variant="secondary"
                   loading={appealSubmittingRevisionId === revision.revision_id}
                   onPress={() => void submitAppeal(revision)}
@@ -1346,17 +1347,17 @@ export function SettingsScreen() {
           </ContentSurface>
         ))}
 
-        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>Your submitted cases</SectionTitle>
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.your-submitted-cases')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           {reviewCases.length === 0 && !reviewLoading ? (
-            <Row icon="FileText" title="No submitted cases" detail="Reports can be sent from acquired Cairn details." />
+            <Row icon="FileText" title={cairnText('settings-screen.no-submitted-cases')} detail={cairnText('settings-screen.reports-can-be-sent-from-acquired-cairn')} />
           ) : reviewCases.map((reviewCase, index) => (
             <React.Fragment key={reviewCase.id}>
               {index > 0 ? <Divider color={background.settingsCardBorderColor} /> : null}
               <Row
                 icon="FileText"
-                title={`${reviewCase.case_type === 'appeal' ? 'Appeal' : 'Report'} · Cairn ${reviewCase.marker_id}`}
-                detail={`Revision ${reviewCase.content_revision ?? 'unavailable'} · ${reviewCase.content_state.replace('_', ' ')}`}
+                title={cairnText('settings-screen.value-cairn-value', { value1: reviewCase.case_type === 'appeal' ? cairnText('common.action.appeal') : cairnText('common.action.report'), marker_id: reviewCase.marker_id })}
+                detail={cairnText('settings-screen.revision-value-value', { value1: reviewCase.content_revision ?? 'unavailable', value2: reviewCase.content_state.replace('_', ' ') })}
                 value={reviewCase.state}
               />
             </React.Fragment>
@@ -1364,7 +1365,7 @@ export function SettingsScreen() {
         </ContentSurface>
 
         <ContentSurface style={[styles.surface, surfaceStyle]}>
-          <Row icon="Mail" title="Contact support" detail="For rights requests or a content issue you cannot access in-app" external onPress={() => void Linking.openURL('mailto:support@cairnapp.nz')} />
+          <Row icon="Mail" title={cairnText('settings-screen.contact-support')} detail={cairnText('settings-screen.for-rights-requests-or-a-content-issue')} external onPress={() => void Linking.openURL('mailto:support@cairnapp.nz')} />
         </ContentSurface>
       </ScrollView>
     </>
@@ -1387,9 +1388,9 @@ export function SettingsScreen() {
       </SafeAreaView>
 
       <ModalCard visible={nameOpen} onDismiss={() => !nameSaving && setNameOpen(false)} dismissible={!nameSaving} testID="settings-name-modal">
-        <ModalCardHeader title="Edit name" body="This is how your name appears in Cairn." onClose={nameSaving ? undefined : () => setNameOpen(false)} />
+        <ModalCardHeader title={cairnText('settings-screen.edit-name')} body={cairnText('settings-screen.this-is-how-your-name-appears-in')} onClose={nameSaving ? undefined : () => setNameOpen(false)} />
         <TextField
-          label="Name"
+          label={cairnText('settings-screen.name')}
           value={nameDraft}
           onChangeText={(value) => { setNameDraft(value.slice(0, 32)); setNameError(''); }}
           autoCapitalize="words"
@@ -1397,16 +1398,16 @@ export function SettingsScreen() {
           testID="settings-name-input"
         />
         <View style={styles.modalActions}>
-          <PrimaryButton label="Cancel" variant="secondary" disabled={nameSaving} onPress={() => setNameOpen(false)} style={styles.flexButton} />
+          <PrimaryButton label={cairnText('common.cancel')} variant="secondary" disabled={nameSaving} onPress={() => setNameOpen(false)} style={styles.flexButton} />
           <PrimaryButton
-            label="Save"
+            label={cairnText('common.save')}
             loading={nameSaving}
             disabled={!nameDraft.trim() || !nameOwnerId || currentOwnerId() !== nameOwnerId}
             onPress={() => void (async () => {
               const ownerId = nameOwnerId;
               if (nameFlight.current) return;
               if (!ownerId || currentOwnerId() !== ownerId) {
-                setNameError('The signed-in account changed. Close this draft and try again.');
+                setNameError(cairnText('settings-screen.the-signed-in-account-changed-close-this'));
                 return;
               }
               nameFlight.current = true;
@@ -1422,7 +1423,7 @@ export function SettingsScreen() {
                 setUser({ ...currentUser, ...result.user });
                 setNameOpen(false);
               } else if (generation === nameGeneration.current && currentOwnerId() === ownerId) {
-                setNameError(result.error || 'Name could not be saved.');
+                setNameError(result.error || cairnText('settings-screen.name-could-not-be-saved'));
               }
               if (generation === nameGeneration.current) {
                 nameFlight.current = false;
@@ -1436,11 +1437,11 @@ export function SettingsScreen() {
       </ModalCard>
 
       <ModalCard visible={passwordOpen} onDismiss={() => !passwordSaving && setPasswordOpen(false)} dismissible={!passwordSaving} testID="settings-password-modal">
-        <ModalCardHeader title="Change password" body="Other signed-in devices will be signed out." onClose={passwordSaving ? undefined : () => setPasswordOpen(false)} />
+        <ModalCardHeader title={cairnText('settings-screen.change-password')} body={cairnText('settings-screen.other-signed-in-devices-will-be-signed')} onClose={passwordSaving ? undefined : () => setPasswordOpen(false)} />
         <View style={styles.stackSmall}>
-          <PasswordField label="Current password" value={currentPassword} onChangeText={(value) => { setCurrentPassword(value); setPasswordError(''); }} testID="settings-current-password" />
-          <PasswordField label="New password" value={nextPassword} onChangeText={(value) => { setNextPassword(value); setPasswordError(''); }} testID="settings-new-password" isNew />
-          <PasswordField label="Confirm new password" value={passwordConfirmation} onChangeText={(value) => { setPasswordConfirmation(value); setPasswordError(''); }} error={passwordError || undefined} testID="settings-confirm-password" isNew />
+          <PasswordField label={cairnText('settings-screen.current-password')} value={currentPassword} onChangeText={(value) => { setCurrentPassword(value); setPasswordError(''); }} testID="settings-current-password" />
+          <PasswordField label={cairnText('settings-screen.new-password')} value={nextPassword} onChangeText={(value) => { setNextPassword(value); setPasswordError(''); }} testID="settings-new-password" isNew />
+          <PasswordField label={cairnText('settings-screen.confirm-new-password')} value={passwordConfirmation} onChangeText={(value) => { setPasswordConfirmation(value); setPasswordError(''); }} error={passwordError || undefined} testID="settings-confirm-password" isNew />
           <View style={styles.passwordRules} testID="settings-password-rules">
             {PASSWORD_RULES.map((rule) => {
               const met = passwordRuleState(nextPassword)[rule.key];
@@ -1455,18 +1456,18 @@ export function SettingsScreen() {
         </View>
         <View style={styles.stackSmall}>
           <PrimaryButton
-            label="Update"
+            label={cairnText('settings-screen.update')}
             loading={passwordSaving}
             disabled={!currentPassword || Boolean(passwordPolicyError(nextPassword)) || passwordConfirmation.length < 8}
             onPress={() => void (async () => {
               if (passwordFlight.current) return;
               const ownerId = passwordOwnerId;
               if (!ownerId || currentOwnerId() !== ownerId) {
-                setPasswordError('The signed-in account changed. Close this form and try again.');
+                setPasswordError(cairnText('settings-screen.the-signed-in-account-changed-close-this-5bfa4f2'));
                 return;
               }
               if (nextPassword !== passwordConfirmation) {
-                setPasswordError('New passwords do not match.');
+                setPasswordError(cairnText('settings-screen.new-passwords-do-not-match'));
                 return;
               }
               const policyError = passwordPolicyError(nextPassword);
@@ -1483,9 +1484,9 @@ export function SettingsScreen() {
                 && generation === passwordGeneration.current;
               if (!ownerIsCurrent) return;
               if (result.commitState === 'unknown') {
-                setPasswordError(result.error || 'The result is unknown. Check which password works before trying again.');
+                setPasswordError(result.error || cairnText('settings-screen.the-result-is-unknown-check-which-password'));
               } else if (result.commitState !== 'committed') {
-                setPasswordError(result.error || 'Password could not be updated.');
+                setPasswordError(result.error || cairnText('settings-screen.password-could-not-be-updated'));
               }
               if (generation === passwordGeneration.current) {
                 passwordFlight.current = false;
@@ -1499,12 +1500,12 @@ export function SettingsScreen() {
 
       <ModalCard visible={deleteOpen} onDismiss={() => !deleteSaving && setDeleteOpen(false)} dismissible={!deleteSaving} testID="settings-delete-modal">
         <ModalCardHeader
-          title="Delete your account?"
-          body="Your account will be disabled now. You can restore server-backed data by signing in during the next seven days. After that, Cairn permanently deletes your profile, Activities, Routes, Cairns, Memory, friendships, exports, feedback and account-linked diagnostics. Account data on this device is cleared now; unsynced device-only data cannot be restored."
+          title={cairnText('settings-screen.delete-your-account')}
+          body={cairnText('settings-screen.your-account-will-be-disabled-now-you')}
           onClose={deleteSaving ? undefined : () => setDeleteOpen(false)}
         />
         <TextField
-          label="Type delete account to confirm"
+          label={cairnText('settings-screen.type-delete-account-to-confirm')}
           value={deletePhrase}
           onChangeText={(value) => { setDeletePhrase(value); setDeleteError(''); }}
           autoCapitalize="none"
@@ -1513,7 +1514,7 @@ export function SettingsScreen() {
         />
         <View style={styles.stackSmall}>
           <PrimaryButton
-            label="Delete account"
+            label={cairnText('settings-screen.delete-account')}
             variant="destructive"
             loading={deleteSaving}
             disabled={deletePhrase.trim().toLowerCase() !== 'delete account' || !user?.id}
@@ -1530,13 +1531,13 @@ export function SettingsScreen() {
                 || currentOwnerId() !== ownerId) return;
               if (result.commitState !== 'committed') {
                 setDeleteError(result.error === 'not_signed_in'
-                  ? 'Your session ended. Sign in again before deleting your account.'
-                  : (result.error || 'The deletion result could not be confirmed.'));
+                  ? cairnText('settings-screen.your-session-ended-sign-in-again-before')
+                  : (result.error || cairnText('settings-screen.the-deletion-result-could-not-be-confirmed')));
                 setDeleteSaving(false);
                 deleteFlight.current = false;
                 return;
               }
-              const deadline = result.restoreDeadline ? new Date(result.restoreDeadline).toLocaleString() : 'seven days from now';
+              const deadline = result.restoreDeadline ? formatCairnDate(new Date(result.restoreDeadline), { dateStyle: 'medium', timeStyle: 'short' }) : cairnText('settings.deletion.seven-days-from-now');
               if (generation === deleteGeneration.current) {
                 setDeleteOpen(false);
                 setDeleteSaving(false);
@@ -1544,16 +1545,16 @@ export function SettingsScreen() {
               }
               if (result.localCleanup !== 'complete' && result.durableCleanupScheduled === false) {
                 Alert.alert(
-                  'Account deletion accepted',
-                  'Cairn could not confirm that all account data was cleared from this installation. Do not sign another account into this installation; reinstall Cairn first.',
+                  cairnText('settings-screen.account-deletion-accepted'),
+                  cairnText('settings-screen.cairn-could-not-confirm-that-all-account'),
                 );
               } else if (result.localCleanup !== 'complete') {
                 Alert.alert(
-                  'Account scheduled for deletion',
-                  `The account that started this request was deleted on the server. You can restore it by signing in before ${deadline}. Its durable device cleanup remains pending; the current account was not signed out.`,
+                  cairnText('settings-screen.account-scheduled-for-deletion'),
+                  cairnText('settings-screen.the-account-that-started-this-request-was', { deadline: deadline }),
                 );
               } else {
-                Alert.alert('Account scheduled for deletion', `You can restore server-backed data by signing in before ${deadline}. After that it cannot be recovered.`);
+                Alert.alert(cairnText('settings-screen.account-scheduled-for-deletion'), cairnText('settings-screen.you-can-restore-server-backed-data-by', { deadline: deadline }));
               }
             })()}
             testID="settings-delete-confirm"
@@ -1563,13 +1564,13 @@ export function SettingsScreen() {
 
       <ModalCard visible={signOutOpen} onDismiss={() => setSignOutOpen(false)} testID="settings-signout-modal">
         <ModalCardHeader
-          title="Sign out?"
-          body="Your saved and recoverable Cairn data stays with this account. Explore beyond Activities will return to Off on this device."
+          title={cairnText('settings-screen.sign-out-1d3ce19')}
+          body={cairnText('settings-screen.your-saved-and-recoverable-cairn-data-stays')}
           onClose={() => setSignOutOpen(false)}
         />
         <View style={styles.stackSmall}>
           <PrimaryButton
-            label="Sign out"
+            label={cairnText('settings-screen.sign-out')}
             variant="destructive"
             onPress={() => void (async () => {
               const ownerId = currentOwnerId();
@@ -1578,10 +1579,10 @@ export function SettingsScreen() {
               try {
                 const tokenResult = await logout({ expectedUserId: ownerId });
                 if (tokenResult.ownerChanged || !tokenResult.cleared) {
-                  Alert.alert('Account changed', 'Sign out did not act on the newer account. Try again from its Settings screen.');
+                  Alert.alert(cairnText('settings-screen.account-changed'), cairnText('settings-screen.sign-out-did-not-act-on-the'));
                 }
               } catch {
-                Alert.alert('Could not sign out', 'Cairn could not safely stop the current account session. Please try again.');
+                Alert.alert(cairnText('settings-screen.could-not-sign-out'), cairnText('settings-screen.cairn-could-not-safely-stop-the-current'));
               }
             })()}
             testID="settings-signout-confirm"
@@ -1591,13 +1592,13 @@ export function SettingsScreen() {
 
       <ModalCard visible={memoryDeleteOpen} onDismiss={() => !memoryDeleting && setMemoryDeleteOpen(false)} dismissible={!memoryDeleting} testID="settings-delete-exploration-modal">
         <ModalCardHeader
-          title="Delete exploration history?"
-          body="This permanently removes your Memory points and explored-region progress from Cairn and this device. Activities, Routes and Cairns stay."
+          title={cairnText('settings-screen.delete-exploration-history-dc25a37')}
+          body={cairnText('settings-screen.this-permanently-removes-your-memory-points-and')}
         />
         <View style={styles.modalActions}>
-          <PrimaryButton label="Keep history" variant="secondary" disabled={memoryDeleting} onPress={() => setMemoryDeleteOpen(false)} style={styles.flexButton} />
+          <PrimaryButton label={cairnText('settings-screen.keep-history')} variant="secondary" disabled={memoryDeleting} onPress={() => setMemoryDeleteOpen(false)} style={styles.flexButton} />
           <PrimaryButton
-            label="Delete history"
+            label={cairnText('settings-screen.delete-history')}
             variant="destructive"
             loading={memoryDeleting}
             style={styles.flexButton}

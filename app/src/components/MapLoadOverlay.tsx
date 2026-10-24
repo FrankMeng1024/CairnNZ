@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { Icon } from './Icon';
 import { FontSize, Radius, Shadow, Spacing } from './tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { cairnText } from '../i18n/runtime';
 
 export type MapLoadState = 'loading' | 'slow' | 'error' | 'offline';
 
@@ -17,20 +18,20 @@ type Props = {
 
 const COPY: Record<MapLoadState, { title: string; body: string }> = {
   loading: {
-    title: 'Preparing your map',
-    body: 'Loading the first view for this place…',
+    get title() { return cairnText('map-load-overlay.preparing-your-map'); },
+    get body() { return cairnText('map-load-overlay.loading-the-first-view-for-this-place'); },
   },
   slow: {
-    title: 'The map is taking longer',
-    body: 'You can keep using Cairn while the map finishes loading.',
+    get title() { return cairnText('map-load-overlay.the-map-is-taking-longer'); },
+    get body() { return cairnText('map-load-overlay.you-can-keep-using-cairn-while-the'); },
   },
   error: {
-    title: 'Map unavailable',
-    body: 'Check your connection, then try loading the map again.',
+    get title() { return cairnText('map-load-overlay.map-unavailable'); },
+    get body() { return cairnText('map-load-overlay.check-your-connection-then-try-loading-the'); },
   },
   offline: {
-    title: 'Map offline',
-    body: 'The map will return when you are back online.',
+    get title() { return cairnText('map-load-overlay.map-offline'); },
+    get body() { return cairnText('map-load-overlay.the-map-will-return-when-you-are'); },
   },
 };
 
@@ -62,8 +63,8 @@ export function MapLoadOverlay({ state, recordingContinues = false, onRetry, tes
       accessibilityRole="summary"
       style={[styles.overlay, { backgroundColor: theme.background }]}
     >
-      <View style={[styles.card, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}> 
-        <View style={[styles.iconWrap, { backgroundColor: theme.controlSelected }]}> 
+      <View style={[styles.card, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]}>
+        <View style={[styles.iconWrap, { backgroundColor: theme.controlSelected }]}>
           {state === 'loading' || state === 'slow' ? (
             <ActivityIndicator size="small" color={theme.primary} />
           ) : (
@@ -71,18 +72,16 @@ export function MapLoadOverlay({ state, recordingContinues = false, onRetry, tes
           )}
         </View>
         <Text style={[styles.title, { color: theme.foreground }]}>{copy.title}</Text>
-        <Text style={[styles.body, { color: theme.foregroundSecondary }]}> 
-          {copy.body}{recordingContinues ? ' Your activity is still being recorded.' : ''}
-        </Text>
+        <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{cairnText('map-load-overlay.value-value', { body: copy.body, value2: recordingContinues ? cairnText('map-load-overlay.your-activity-is-still-being-recorded') : '' })}</Text>
         {showRetry ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Try loading the map again"
+            accessibilityLabel={cairnText('map-load-overlay.try-loading-the-map-again')}
             onPress={onRetry}
             style={({ pressed }) => [styles.retry, { backgroundColor: theme.primaryAction }, pressed && styles.pressed]}
           >
             <Icon name="RotateCcw" size={15} color={theme.onPrimary} strokeWidth={2.3} />
-            <Text style={[styles.retryText, { color: theme.onPrimary }]}>Try again</Text>
+            <Text style={[styles.retryText, { color: theme.onPrimary }]}>{cairnText('map-load-overlay.try-again')}</Text>
           </Pressable>
         ) : null}
       </View>

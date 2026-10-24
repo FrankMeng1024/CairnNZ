@@ -14,6 +14,7 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   const deleteDialog = read('src/features/cairns/CairnDeleteDialog.tsx');
   const webMapbox = read('src/features/memory/services/mapboxAdapter.web.tsx');
   const libraryControls = read('src/components/LibraryControls.tsx');
+  const catalog = read('src/i18n/cairnText.ts');
 
   test('Memory exposes a normal All Cairns route outside map/location branches', () => {
     expect(navigation).toContain('revisionIdsByMarker?: Record<string, string>');
@@ -26,9 +27,17 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   test('All Cairns is own-only, recent-first, searchable and opens the authoritative Detail', () => {
     expect(library).toContain('markersForVisibleWorkspace(storedMarkers, debugMode)');
     expect(library).toContain('mergeOwnedCairns(markers, remoteMarkers)');
-    expect(library).toContain('Search names and notes');
+    // REVISE_WITH_REASON: source contracts follow stable keys; the exact
+    // product wording remains asserted at the sole editable catalog.
+    expect(library).toContain("cairnText('all-cairns-screen.search-names-and-notes')");
+    expect(catalog).toContain("'en-NZ': 'Search names and notes'");
     expect(library).toContain('testID="all-cairns-filter"');
-    expect(library).toContain('options={AUDIENCE_FILTERS}');
+    // REVISE_WITH_REASON: locale-live labels are built inside the screen so a
+    // language switch does not freeze module-scope English.
+    expect(library).toContain('options={audienceFilters}');
+    for (const key of ['all', 'only-me', 'friends', 'public']) {
+      expect(library).toContain(`cairnText('all-cairns-screen.${key}')`);
+    }
     expect(libraryControls).toContain('testID={`${testID}-${option.key}`}');
     expect(library).toContain('all-cairns-sort');
     expect(library).toContain('(b.createdAt ?? 0) - (a.createdAt ?? 0)');
@@ -40,23 +49,24 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
 
   test('standalone and unavailable Activity provenance remain truthful', () => {
     expect(detail).toContain('testID="cairn-left-here-context"');
-    expect(detail).toContain('Left here {dateStr}');
+    expect(detail).toContain("cairnText('marker-detail-screen.left-here-value', { dateStr: dateStr })");
     expect(detail).toContain('testID="cairn-source-activity-unavailable"');
-    expect(detail).toContain('Activity link unavailable');
+    expect(detail).toContain("cairnText('marker-detail-screen.activity-link-unavailable')");
+    expect(catalog).toContain("'en-NZ': 'Activity link unavailable'");
   });
 
   test('owner acknowledgement is a restrained aggregate with no discoverer or visit details', () => {
     expect(markerStore).toContain('thanksCount: row.thanks_count == null ? undefined : Number(row.thanks_count)');
     expect(detail).toContain('testID="cairn-owner-thanks-acknowledgement"');
     expect(detail).toContain("Number(marker.thanksCount ?? 0) > 0");
-    expect(detail).toContain("'1 Thanks received'");
+    expect(detail).toContain("cairnText('marker-detail-screen.1-thanks-received')");
     expect(detail).not.toMatch(/thanks.*discoverer|thanks.*observed_at|thanks.*acquired_at/i);
   });
 
   test('incomplete retrieval never claims a global search-empty result', () => {
-    expect(library).toContain("coverage === 'complete' ? 'No matching Cairns' : 'No matches in available Cairns'");
-    expect(library).toContain('Some older Cairns may not appear yet.');
-    expect(library).toContain('Full history could not be checked.');
+    expect(library).toContain("coverage === 'complete' ? cairnText('all-cairns-screen.no-matching-cairns') : cairnText('all-cairns-screen.no-matches-in-available-cairns')");
+    expect(library).toContain("cairnText('all-cairns-screen.showing-downloaded-cairns-some-older-cairns-may')");
+    expect(library).toContain("cairnText('all-cairns-screen.showing-cairns-available-on-this-iphone-full')");
     expect(markerStore).toContain("libraryError: 'server-upgrade-required'");
   });
 
@@ -73,16 +83,16 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
     expect(detail).toContain('showVisibilityPicker');
     expect(detail).toContain('disableVisibilityPublic');
     expect(detail).toContain('permission: editPermission');
-    expect(detail).toContain('Your draft is still here so you can try again.');
-    expect(detail).toContain('Discard changes?');
+    expect(detail).toContain("cairnText('marker-detail-screen.changes-were-not-saved-your-draft-is')");
+    expect(detail).toContain("cairnText('marker-detail-screen.discard-changes')");
     expect(detail).toContain('disabled={!editDirty || Boolean(publicEditBlock)}');
-    expect(detail).toContain('This Cairn has no Activity source');
-    expect(detail).toContain('server confirms the linked completed Activity');
+    expect(detail).toContain("cairnText('marker-detail-screen.this-cairn-has-no-activity-source-so')");
+    expect(detail).toContain("cairnText('marker-detail-screen.saving-creates-a-new-version-it-can')");
     expect(detail).toContain('cairn-edit-public-block');
   });
 
   test('delete confirmation states non-cascade semantics and truthful queued deletion', () => {
-    expect(deleteDialog).toContain('Its source Activity, Routes, and ordinary personal Memory are unchanged.');
+    expect(deleteDialog).toContain("cairnText('cairns.cairn-delete-dialog.it-disappears-from-your-collection-and-cannot')");
     expect(detail).toContain("result.remoteState === 'queued'");
     [
       detail,
@@ -100,8 +110,8 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
   });
 
   test('Detail map is optional, has legal ornaments, and never exposes raw coordinate copy', () => {
-    expect(detail).toContain('Map unavailable');
-    expect(detail).toContain('Your Cairn is still available.');
+    expect(detail).toContain("cairnText('marker-detail-screen.map-unavailable')");
+    expect(detail).toContain("cairnText('marker-detail-screen.your-cairn-is-still-available')");
     expect(detail).toMatch(/attributionEnabled\s+logoEnabled/);
     expect(detail).not.toContain('marker.lat.toFixed');
     expect(detail).not.toContain('marker.lng.toFixed');

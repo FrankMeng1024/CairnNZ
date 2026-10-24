@@ -79,7 +79,7 @@ function queuedFeedbackContract(source: string): boolean {
   const actionFence = action.indexOf("if (!screenActionIsCurrent(ticket) || result.status === 'superseded') return;");
   const actionQueued = action.indexOf("if (result.status === 'queued_offline')");
   const actionFeedback = action.indexOf(
-    "showPublicActionFeedback(\n          selected === 'hide' ? 'Hidden here' : 'Blocked here',\n          'This change is saved on this device and will retry when you are connected.',\n        );",
+    "showPublicActionFeedback(\n          selected === 'hide' ? cairnText('public-cairn-detail-screen.hidden-here') : cairnText('public-cairn-detail-screen.blocked-here'),\n          cairnText('public-cairn-detail-screen.this-change-is-saved-on-this-device'),\n        );",
     actionQueued,
   );
   const actionUnavailable = action.indexOf("} else if (result.status === 'unavailable')", actionQueued);
@@ -90,12 +90,12 @@ function queuedFeedbackContract(source: string): boolean {
   return helper.includes("Platform.OS === 'web'")
     && helper.includes('browserGlobal.alert(`${title}\\n\\n${body}`)')
     && helper.includes('Alert.alert(title, body);')
-    && action.includes("selected === 'hide' ? 'Hidden here' : 'Blocked here'")
-    && action.includes('This change is saved on this device and will retry when you are connected.')
+    && action.includes("selected === 'hide' ? cairnText('public-cairn-detail-screen.hidden-here') : cairnText('public-cairn-detail-screen.blocked-here')")
+    && action.includes("cairnText('public-cairn-detail-screen.this-change-is-saved-on-this-device')")
     && actionFence >= 0 && actionFence < actionQueued
     && actionQueued < actionFeedback && actionFeedback < actionUnavailable
     && actionFeedback < navigation
-    && thanks.includes("showPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');")
+    && thanks.includes("showPublicActionFeedback(cairnText('public-cairn-detail-screen.thanks-saved'), cairnText('public-cairn-detail-screen.your-thanks-will-retry-when-you-are'));")
     && thanksFence >= 0 && thanksFence < thanksQueued && thanksQueued < thanksFeedback;
 }
 
@@ -607,11 +607,14 @@ describe('PublicCairnDetailScreen durable action feedback', () => {
 
   test('queued feedback source contract rejects removal, platform bypass, stale fence loss, and navigation-first order', () => {
     const source = fs.readFileSync(publicDetailSourcePath, 'utf8');
+    // REVISE_WITH_REASON: mutation anchors follow stable catalog keys, not
+    // duplicate English literals at the callsite. Negative mutations remain
+    // identical: feedback removal, platform bypass, fence loss and ordering.
     const withoutActionFeedback = replaceExact(source,
-      "        showPublicActionFeedback(\n          selected === 'hide' ? 'Hidden here' : 'Blocked here',\n          'This change is saved on this device and will retry when you are connected.',\n        );",
+      "        showPublicActionFeedback(\n          selected === 'hide' ? cairnText('public-cairn-detail-screen.hidden-here') : cairnText('public-cairn-detail-screen.blocked-here'),\n          cairnText('public-cairn-detail-screen.this-change-is-saved-on-this-device'),\n        );",
       "        removedPublicActionFeedback(\n          selected === 'hide' ? 'Hidden here' : 'Blocked here',\n          'This change is saved on this device and will retry when you are connected.',\n        );");
     const withoutThanksFeedback = replaceExact(source,
-      "        showPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');",
+      "        showPublicActionFeedback(cairnText('public-cairn-detail-screen.thanks-saved'), cairnText('public-cairn-detail-screen.your-thanks-will-retry-when-you-are'));",
       "        removedPublicActionFeedback('Thanks saved', 'Your Thanks will retry when you are connected.');");
     const withoutWebAlert = replaceExact(source,
       '    browserGlobal.alert(`${title}\\n\\n${body}`);',

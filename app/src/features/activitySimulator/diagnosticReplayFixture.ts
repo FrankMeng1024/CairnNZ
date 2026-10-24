@@ -8,6 +8,7 @@ import {
   snapLabRequestFingerprint,
   type SnapLabCassetteEntry,
 } from './snapLabTransport';
+import { cairnText } from '../../i18n/runtime';
 
 export interface DiagnosticEventTimelineReplay {
   events: Array<{
@@ -259,9 +260,9 @@ export function diagnosticReplayFixture(
     profile: 'captured-owner-diagnostic',
     seed: 1,
     contractIntent: {
-      scenario: 'Replay the copied Activity raw observations through the production tracking acceptance boundary.',
-      transportFixture: 'Captured provider responses only; exact signature mismatch fails closed.',
-      oracleRequirements: 'Exported canonical and Final geometry are comparison outputs, never replay inputs.',
+      scenario: cairnText('activity-simulator.diagnostic-replay-fixture.replay-the-copied-activity-raw-observations-through'),
+      transportFixture: cairnText('activity-simulator.diagnostic-replay-fixture.captured-provider-responses-only-exact-signature-mismatch'),
+      oracleRequirements: cairnText('activity-simulator.diagnostic-replay-fixture.exported-canonical-and-final-geometry-are-comparison'),
     },
     durationSeconds: Math.max(0, (observationEndMs - observationStartMs) / 1_000),
     clock: {

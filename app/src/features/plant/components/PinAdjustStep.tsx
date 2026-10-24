@@ -47,6 +47,7 @@ import { log } from '../../../services/appLog';
 import { Icon } from '../../../components/Icon';
 import { BackButton } from '../../../components/BackButton';
 import { CairnPinV10 } from '../../memory/components/CairnPinV10';
+import { cairnText } from '../../../i18n/runtime';
 
 interface Props {
   /** GPS-locked anchor — the immutable center of the 50m ring. Set
@@ -441,10 +442,8 @@ export function PinAdjustStep({
       <View style={styles.backRow}>
         <BackButton variant="inline" onPress={onBack} />
       </View>
-      <Text style={[styles.title, { color: theme.foreground }]}>Where's your cairn?</Text>
-      <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>
-        Drag the map to fine-tune. Tap Confirm when it feels right.
-      </Text>
+      <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('plant.pin-adjust-step.where-s-your-cairn')}</Text>
+      <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>{cairnText('plant.pin-adjust-step.drag-the-map-to-fine-tune-tap')}</Text>
 
       <View style={styles.mapWrap}>
         <MapView
@@ -539,9 +538,7 @@ export function PinAdjustStep({
         {/* hint banner when user drags past the max-nudge ring */}
         {hintVisible && (
           <View style={styles.hintBanner} pointerEvents="none">
-            <Text style={styles.hintBannerText}>
-              Pin stays within {PinNudgeConfig.maxNudgeMeters} m of your GPS spot.
-            </Text>
+            <Text style={styles.hintBannerText}>{cairnText('plant.pin-adjust-step.pin-stays-within-value-m-of-your', { maxNudgeMeters: PinNudgeConfig.maxNudgeMeters })}</Text>
           </View>
         )}
 
@@ -556,7 +553,7 @@ export function PinAdjustStep({
             onPress={onToggleStyle}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={mapStyle === 'outdoors' ? 'Switch to satellite view' : 'Switch to outdoor map'}
+            accessibilityLabel={mapStyle === 'outdoors' ? cairnText('plant.pin-adjust-step.switch-to-satellite-view') : cairnText('plant.pin-adjust-step.switch-to-outdoor-map')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon
@@ -572,7 +569,7 @@ export function PinAdjustStep({
             disabled={zoom >= MAX_ZOOM}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Zoom in"
+            accessibilityLabel={cairnText('plant.pin-adjust-step.zoom-in')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon
@@ -588,7 +585,7 @@ export function PinAdjustStep({
             disabled={zoom <= MIN_ZOOM}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Zoom out"
+            accessibilityLabel={cairnText('plant.pin-adjust-step.zoom-out')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon
@@ -607,7 +604,7 @@ export function PinAdjustStep({
               onPress={doRecenter}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Recenter on your location"
+              accessibilityLabel={cairnText('plant.pin-adjust-step.recenter-on-your-location')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Icon
@@ -662,7 +659,7 @@ export function PinAdjustStep({
             }}
           >
             <Text style={[styles.primaryBtnText, !canConfirm && styles.primaryBtnTextDisabled]}>
-              {canConfirm ? 'Confirm this spot' : `Pin too far — pan back within ${PinNudgeConfig.maxNudgeMeters} m`}
+              {canConfirm ? cairnText('plant.pin-adjust-step.confirm-this-spot') : cairnText('plant.pin-adjust-step.pin-too-far-pan-back-within-value', { maxNudgeMeters: PinNudgeConfig.maxNudgeMeters })}
             </Text>
           </TouchableOpacity>
         );
@@ -683,14 +680,14 @@ function PinAdjustFallback({
       <View style={styles.backRow}>
         <BackButton variant="inline" onPress={onBack} />
       </View>
-      <Text style={[styles.title, { color: theme.foreground }]}>Where's your cairn?</Text>
-      <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>Map preview not available on this platform.</Text>
+      <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('plant.pin-adjust-step.where-s-your-cairn')}</Text>
+      <Text style={[styles.sub, { color: theme.foregroundSecondary }]}>{cairnText('plant.pin-adjust-step.map-preview-not-available-on-this-platform')}</Text>
       <View style={styles.fallbackBox}>
-        <Text style={styles.fallbackCoord}>{lat.toFixed(6)}, {lng.toFixed(6)}</Text>
+        <Text style={styles.fallbackCoord}>{cairnText('plant.pin-adjust-step.value-value', { value1: lat.toFixed(6), value2: lng.toFixed(6) })}</Text>
       </View>
       <View style={{ flex: 1 }} />
       <TouchableOpacity style={styles.primaryBtn} onPress={onConfirm}>
-        <Text style={styles.primaryBtnText}>Confirm</Text>
+        <Text style={styles.primaryBtnText}>{cairnText('plant.pin-adjust-step.confirm')}</Text>
       </TouchableOpacity>
     </View>
   );

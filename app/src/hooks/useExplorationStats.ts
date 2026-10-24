@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react';
 import { useMemoryStore } from '../features/memory/store/useMemoryStore';
 import { resolveCurrentCountry } from '../services/countryService';
+import { cairnText, formatCairnNumber } from '../i18n/runtime';
 
 // Country area in km². Source: World Bank / geonames.
 // Only 15 seed countries; extend as we open new markets.
@@ -74,7 +75,7 @@ export function useExplorationStats(): ExplorationDisplay {
   if (!country) {
     return {
       countryName: null,
-      primaryText: cellCount === 0 ? '0 km²' : formatKm2(exploredKm2),
+      primaryText: formatKm2(exploredKm2),
       hasCountry: false,
     };
   }
@@ -85,7 +86,7 @@ export function useExplorationStats(): ExplorationDisplay {
   if (cellCount === 0) {
     return {
       countryName: country.name,
-      primaryText: '0 km²',
+      primaryText: formatKm2(0),
       hasCountry: true,
     };
   }
@@ -103,14 +104,14 @@ export function useExplorationStats(): ExplorationDisplay {
   if (pct >= 1) {
     return {
       countryName: country.name,
-      primaryText: `${pct.toFixed(1)}%`,
+      primaryText: formatCairnNumber(pct / 100, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }),
       hasCountry: true,
     };
   }
   if (pct >= 0.1) {
     return {
       countryName: country.name,
-      primaryText: `${pct.toFixed(2)}%`,
+      primaryText: formatCairnNumber(pct / 100, { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       hasCountry: true,
     };
   }
@@ -122,7 +123,6 @@ export function useExplorationStats(): ExplorationDisplay {
 }
 
 function formatKm2(km2: number): string {
-  if (km2 < 1) return `${km2.toFixed(1)} km²`;
-  if (km2 < 10) return `${km2.toFixed(1)} km²`;
-  return `${Math.round(km2)} km²`;
+  const rounded = km2 < 10 ? Number(km2.toFixed(1)) : Math.round(km2);
+  return cairnText('measurement.square-kilometres', { value: rounded });
 }

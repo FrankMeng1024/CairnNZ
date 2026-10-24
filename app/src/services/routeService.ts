@@ -5,6 +5,7 @@
 import { authenticatedFetch } from './apiService';
 import type { Route, RoutePoint, Waypoint } from '../store/useRouteStore';
 import type { OrderedRouteDraft } from '../features/route/orderedRouteDraft';
+import { cairnText } from '../i18n/runtime';
 
 export type RouteDeleteOutcome = 'deleted' | 'already-absent' | 'unsupported';
 
@@ -119,7 +120,7 @@ function sharedRemoteToLocal(remote: RemoteSharedRoute): Route {
   const detail = remote.route;
   return {
     id: `delivery:${remote.id}`,
-    name: detail?.name ?? remote.name ?? 'Shared Route',
+    name: detail?.name ?? remote.name ?? cairnText('route.default.shared'),
     description: detail?.description ?? undefined,
     createdAt: new Date(remote.delivered_at).getTime(),
     updatedAt: new Date(remote.delivered_at).getTime(),

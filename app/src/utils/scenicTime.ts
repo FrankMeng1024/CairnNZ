@@ -1,3 +1,6 @@
+
+import { cairnText, formatCairnDate } from '../i18n/runtime';
+
 export type ScenicTimeOfDay = 'day' | 'sunset' | 'night';
 export type ScenicAppearancePref = 'auto' | ScenicTimeOfDay;
 /** @deprecated Use ScenicAppearancePref. Kept as a source-compatible alias. */
@@ -210,14 +213,14 @@ export function resolveEffectiveScenicTime({
 }
 
 export function formatSolarTime(valueMs: number | null, timeZone?: string | null): string {
-  if (valueMs == null || !Number.isFinite(valueMs)) return 'Unavailable';
+  if (valueMs == null || !Number.isFinite(valueMs)) return cairnText('scenic-time.unavailable');
   try {
-    return new Date(valueMs).toLocaleTimeString([], {
+    return formatCairnDate(valueMs, {
       hour: '2-digit',
       minute: '2-digit',
       ...(timeZone ? { timeZone } : {}),
     });
   } catch {
-    return new Date(valueMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return formatCairnDate(valueMs, { hour: '2-digit', minute: '2-digit' });
   }
 }

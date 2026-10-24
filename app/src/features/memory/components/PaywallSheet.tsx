@@ -20,6 +20,7 @@ import { BottomSheetFrame } from '../../../components/BottomSheetFrame';
 import { AppButton } from '../../../components/AppButton';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { getOfferings, purchasePackage, restorePurchases, type OfferingPackage } from '../../../services/iapService';
+import { cairnText } from '../../../i18n/runtime';
 
 interface Props {
   visible: boolean;
@@ -48,7 +49,7 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
   }, [visible]);
 
   const primaryPkg = offerings[0] || null;
-  const priceLabel = primaryPkg?.priceString || 'NZ$5.99 / month';
+  const priceLabel = primaryPkg?.priceString || cairnText('memory.paywall-sheet.nz-5-99-month');
 
   const onSubscribe = async () => {
     if (!primaryPkg) {
@@ -56,9 +57,9 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
       // native module yet). Fall back to "coming soon" so the user isn't
       // stuck. Batch 6.10 Pre-Build gate flips this once the module is in.
       Alert.alert(
-        'Coming soon',
-        'Memory Pro will be available in the App Store release. For now, you have 5 friend slots.',
-        [{ text: 'OK', onPress: onClose }],
+        cairnText('memory.paywall-sheet.coming-soon'),
+        cairnText('memory.paywall-sheet.memory-pro-will-be-available-in-the'),
+        [{ text: cairnText('memory.paywall-sheet.ok'), onPress: onClose }],
       );
       return;
     }
@@ -67,11 +68,11 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
       const r = await purchasePackage(primaryPkg);
       if (r.cancelled) return;   // silent — user tapped X
       if (r.error) {
-        Alert.alert('Purchase failed', r.error, [{ text: 'OK' }]);
+        Alert.alert(cairnText('memory.paywall-sheet.purchase-failed'), r.error, [{ text: cairnText('memory.paywall-sheet.ok') }]);
         return;
       }
       if (r.hasEntitlement) {
-        Alert.alert('Welcome to Memory Pro', 'You now have unlimited friend slots. Thank you for supporting Cairn!', [{ text: 'OK' }]);
+        Alert.alert(cairnText('memory.paywall-sheet.welcome-to-memory-pro'), cairnText('memory.paywall-sheet.you-now-have-unlimited-friend-slots-thank'), [{ text: cairnText('memory.paywall-sheet.ok') }]);
         onEntitled?.();
         onClose();
       } else if (r.success) {
@@ -80,9 +81,9 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
         // or webhook lag). Give the user a clear status + a "try later"
         // path instead of a silent dead-end.
         Alert.alert(
-          'Purchase received',
-          'Thank you! Your subscription is being activated — this can take a minute. If you don\'t see access shortly, tap Restore purchases.',
-          [{ text: 'OK', onPress: onClose }],
+          cairnText('memory.paywall-sheet.purchase-received'),
+          cairnText('memory.paywall-sheet.thank-you-your-subscription-is-being-activated'),
+          [{ text: cairnText('memory.paywall-sheet.ok'), onPress: onClose }],
         );
       }
     } finally {
@@ -95,11 +96,11 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
     try {
       const r = await restorePurchases();
       if (r.hasEntitlement) {
-        Alert.alert('Restored', 'Your Memory Pro subscription is active.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('memory.paywall-sheet.restored'), cairnText('memory.paywall-sheet.your-memory-pro-subscription-is-active'), [{ text: cairnText('memory.paywall-sheet.ok') }]);
         onEntitled?.();
         onClose();
       } else {
-        Alert.alert('Nothing to restore', 'No active subscription found on this account.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('memory.paywall-sheet.nothing-to-restore'), cairnText('memory.paywall-sheet.no-active-subscription-found-on-this-account'), [{ text: cairnText('memory.paywall-sheet.ok') }]);
       }
     } finally {
       setPurchasing(false);
@@ -120,25 +121,22 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
             </View>
           </View>
 
-          <Text style={[styles.title, { color: theme.foreground }]}>See more of your friends' world</Text>
-          <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>
-            You've reached the free tier of 5 friend memories. Upgrade to see all your friends' fog,
-            marks, and routes on your map.
-          </Text>
+          <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('memory.paywall-sheet.see-more-of-your-friends-world')}</Text>
+          <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>{cairnText('memory.paywall-sheet.you-ve-reached-the-free-tier-of')}</Text>
 
           <View style={styles.valueList}>
-            <ValueRow icon="Map" text="Unlimited friend memories on your map" />
-            <ValueRow icon="Users" text="Switch between many friends instantly" />
-            <ValueRow icon="Heart" text="Support the makers of Cairn" />
+            <ValueRow icon="Map" text={cairnText('memory.paywall-sheet.unlimited-friend-memories-on-your-map')} />
+            <ValueRow icon="Users" text={cairnText('memory.paywall-sheet.switch-between-many-friends-instantly')} />
+            <ValueRow icon="Heart" text={cairnText('memory.paywall-sheet.support-the-makers-of-cairn')} />
           </View>
 
           <View style={styles.priceRow}>
-            <Text style={[styles.price, { color: theme.foreground }]}>{priceLabel.split(' ')[0] || 'NZ$5.99'}</Text>
-            <Text style={[styles.priceUnit, { color: theme.foregroundSecondary }]}>{primaryPkg?.packageType === 'ANNUAL' ? 'per year' : 'per month'}</Text>
+            <Text style={[styles.price, { color: theme.foreground }]}>{priceLabel.split(' ')[0] || cairnText('memory.paywall-sheet.nz-5-99')}</Text>
+            <Text style={[styles.priceUnit, { color: theme.foregroundSecondary }]}>{primaryPkg?.packageType === 'ANNUAL' ? cairnText('memory.paywall-sheet.per-year') : cairnText('memory.paywall-sheet.per-month')}</Text>
           </View>
 
           <AppButton
-            label={primaryPkg ? 'Subscribe' : 'Continue'}
+            label={primaryPkg ? cairnText('memory.paywall-sheet.subscribe') : cairnText('common.continue')}
             onPress={onSubscribe}
             disabled={purchasing || loading}
             loading={purchasing}
@@ -147,7 +145,7 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
           />
 
           <TouchableOpacity onPress={onRestore} disabled={purchasing} testID="paywall-restore">
-            <Text style={[styles.foot, { color: theme.muted }]}>Restore purchases · Privacy · Terms</Text>
+            <Text style={[styles.foot, { color: theme.muted }]}>{cairnText('memory.paywall-sheet.restore-purchases-privacy-terms')}</Text>
           </TouchableOpacity>
         </View>
     </BottomSheetFrame>

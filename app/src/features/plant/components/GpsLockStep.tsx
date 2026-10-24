@@ -25,6 +25,7 @@ import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { Icon } from '../../../components/Icon';
 import { useMemoryStore } from '../../memory/store/useMemoryStore';
 import { log } from '../../../services/appLog';
+import { cairnText } from '../../../i18n/runtime';
 
 export type PlantLocationProvenance = 'real' | 'simulator_test';
 export type PlantLocationCaptureMethod = 'gps_window' | 'watcher_recent' | 'last_known' | 'activity' | 'simulator_test';
@@ -262,10 +263,8 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Finding your ground</Text>
-      <Text style={styles.sub}>
-        Hold still for a moment while we get an accurate reading.
-      </Text>
+      <Text style={styles.title}>{cairnText('plant.gps-lock-step.finding-your-ground')}</Text>
+      <Text style={styles.sub}>{cairnText('plant.gps-lock-step.hold-still-for-a-moment-while-we')}</Text>
 
       <View style={styles.progressBox}>
         {/* R114 (2026-08-07): spinner color migrated to Colors.primary. */}
@@ -275,10 +274,10 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
         </View>
         <Text style={styles.progressText}>
           {busy
-            ? `${Math.max(0, GpsSamplingConfig.windowSeconds - Math.round(progress * GpsSamplingConfig.windowSeconds))}s remaining`
+            ? cairnText('plant.gps-lock-step.value-s-remaining', { value1: Math.max(0, GpsSamplingConfig.windowSeconds - Math.round(progress * GpsSamplingConfig.windowSeconds)) })
             : result?.ok
-            ? `Locked · accuracy ${result.accuracyMeters.toFixed(1)} m`
-            : 'Could not lock'}
+            ? cairnText('plant.gps-lock-step.locked-accuracy-value-m', { value1: result.accuracyMeters.toFixed(1) })
+            : cairnText('plant.gps-lock-step.could-not-lock')}
         </Text>
       </View>
 
@@ -305,26 +304,24 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
               </View>
               <Text style={styles.failSub}>{info.explainer}</Text>
               {showAccuracy && (
-                <Text style={styles.failDiag}>
-                  Current accuracy: ±{result!.accuracyMeters.toFixed(0)} m
-                </Text>
+                <Text style={styles.failDiag}>{cairnText('plant.gps-lock-step.current-accuracy-value-m', { value1: result!.accuracyMeters.toFixed(0) })}</Text>
               )}
               <TouchableOpacity
                 style={styles.retry}
                 onPress={() => setRetryToken((n) => n + 1)}
                 accessibilityRole="button"
-                accessibilityLabel="Search again"
+                accessibilityLabel={cairnText('plant.gps-lock-step.search-again')}
               >
-                <Text style={styles.retryText}>Search again</Text>
+                <Text style={styles.retryText}>{cairnText('plant.gps-lock-step.search-again')}</Text>
               </TouchableOpacity>
               {showSettings && (
                 <TouchableOpacity
                   style={styles.settingsBtn}
                   onPress={() => Linking.openSettings()}
                   accessibilityRole="button"
-                  accessibilityLabel="Open Settings"
+                  accessibilityLabel={cairnText('plant.gps-lock-step.open-settings')}
                 >
-                  <Text style={styles.settingsBtnText}>Open Settings</Text>
+                  <Text style={styles.settingsBtnText}>{cairnText('plant.gps-lock-step.open-settings')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -337,7 +334,7 @@ export function GpsLockStep({ onLocked, onCancel }: Props) {
 
       <View style={{ flex: 1 }} />
       <TouchableOpacity style={styles.cancel} onPress={onCancel}>
-        <Text style={styles.cancelText}>Cancel</Text>
+        <Text style={styles.cancelText}>{cairnText('common.cancel')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -351,28 +348,28 @@ function describeFailure(res: SampleResult | null): { title: string; explainer: 
   switch (res?.reason) {
     case 'accuracy-too-poor':
       return {
-        title: 'Weak GPS signal',
-        explainer: 'Move outside or away from buildings for a better lock.',
+        title: cairnText('plant.gps-lock-step.weak-gps-signal'),
+        explainer: cairnText('plant.gps-lock-step.move-outside-or-away-from-buildings-for'),
       };
     case 'too-jumpy':
       return {
-        title: 'GPS is drifting',
-        explainer: 'Stand still for a moment. Trees and cliffs can bounce the signal.',
+        title: cairnText('plant.gps-lock-step.gps-is-drifting'),
+        explainer: cairnText('plant.gps-lock-step.stand-still-for-a-moment-trees-and'),
       };
     case 'no-readings':
       return {
-        title: 'No GPS readings yet',
-        explainer: 'Check that Location is on for Cairn in Settings.',
+        title: cairnText('plant.gps-lock-step.no-gps-readings-yet'),
+        explainer: cairnText('plant.gps-lock-step.check-that-location-is-on-for-cairn'),
       };
     case 'permission-denied':
       return {
-        title: 'Location permission needed',
-        explainer: 'Open Settings → Cairn → Location and choose "While Using".',
+        title: cairnText('plant.gps-lock-step.location-permission-needed'),
+        explainer: cairnText('plant.gps-lock-step.open-settings-cairn-location-and-choose-while'),
       };
     default:
       return {
-        title: "Couldn't lock GPS",
-        explainer: 'Move to a more open spot and try again.',
+        title: cairnText('plant.gps-lock-step.couldn-t-lock-gps'),
+        explainer: cairnText('plant.gps-lock-step.move-to-a-more-open-spot-and'),
       };
   }
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { Alert, AppState } from 'react-native';
 import type { ActivityMode } from '../../store/useSessionStore';
 import { useTrackingStore } from '../../store/useTrackingStore';
+import { cairnText } from '../../i18n/runtime';
 
 // Screens remain separate and can coexist in a navigation stack. This module
 // guard prevents both hosts from presenting the same native recovery alert.
@@ -57,13 +58,13 @@ export function useActivitySaveLossRecovery(mode: ActivityMode): void {
     if (!current.saveLostSessionId || current.saveLostPayload?.activityMode !== mode) return;
     if (saveLossAlertVisible) return;
     saveLossAlertVisible = true;
-    const label = mode === 'running' ? 'run' : 'hike';
+    const label = mode === 'running' ? cairnText('activity.use-activity-save-loss-recovery.run') : cairnText('activity.use-activity-save-loss-recovery.hike');
     Alert.alert(
-      `We couldn't save this ${label}`,
-      `Your ${label} is still recorded on this device. Retry saving it, or discard it.`,
+      cairnText('activity.use-activity-save-loss-recovery.we-couldn-t-save-this-value', { label: label }),
+      cairnText('activity.use-activity-save-loss-recovery.your-value-is-still-recorded-on-this', { label: label }),
       [
         {
-          text: 'Discard',
+          text: cairnText('activity.use-activity-save-loss-recovery.discard'),
           style: 'destructive',
           onPress: () => {
             saveLossAlertVisible = false;
@@ -71,7 +72,7 @@ export function useActivitySaveLossRecovery(mode: ActivityMode): void {
             try { discardCurrentSession(); } catch { /* best effort */ }
           },
         },
-        { text: 'Retry', onPress: () => { void retry(); } },
+        { text: cairnText('common.retry'), onPress: () => { void retry(); } },
       ],
       { cancelable: false },
     );

@@ -24,6 +24,7 @@ import { FontSize, RadiusRole, Spacing } from './tokens';
 import { Icon } from './Icon';
 import { useOnlineOnly } from '../hooks/useOnlineOnly';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { cairnText } from '../i18n/runtime';
 
 export function OfflineBanner() {
   const theme = useVisualTheme();
@@ -62,7 +63,7 @@ export function OfflineBanner() {
     >
       <View style={[styles.bar, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}>
         <Icon name="CloudOff" size={14} color={theme.icon} strokeWidth={2} />
-        <Text style={[styles.text, { color: theme.textSecondary }]}>You&apos;re offline. Some actions will sync when you&apos;re back.</Text>
+        <Text style={[styles.text, { color: theme.textSecondary }]}>{cairnText('offline-banner.you-re-offline-some-actions-will-sync')}</Text>
       </View>
     </Animated.View>
   );

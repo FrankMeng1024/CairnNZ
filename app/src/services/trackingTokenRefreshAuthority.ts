@@ -1,3 +1,4 @@
+
 export interface TrackingTokenRefreshSnapshot {
   ownerUserId: string;
   sessionId: string;

@@ -11,6 +11,7 @@ import { hydrateActivitySimulatorForUser, useActivitySimulatorStore } from './us
 import { simulatorAccuracyMeters } from './useActivitySimulatorStore';
 import type { ActivityLocationSource, SimulatorActivityLease } from './types';
 import { alignSimulatorClockForRecovery } from './simulatorTime';
+import { cairnText } from '../../i18n/runtime';
 
 export interface ActivityProviderContext {
   clientActivityId: string;
@@ -59,7 +60,7 @@ export async function prepareSimulatorProvider(userId: string): Promise<boolean>
     && Number.isFinite(state.current.lat)
     && Number.isFinite(state.current.lng);
   if (!ready && state.enabled && !state.startConfigured) {
-    state.setLastFailure('Set a Simulator start point before starting the Activity.');
+    state.setLastFailure(cairnText('activity-simulator.activity-location-provider.set-a-simulator-start-point-before-starting'));
   }
   return ready;
 }

@@ -6,9 +6,13 @@ const read = (relative: string) => fs.readFileSync(path.resolve(__dirname, '..',
 describe('Owner 13 root-cause source contracts', () => {
   test('Memory entry exposes Cairn Library without renaming the technical route', () => {
     const memory = read('features/memory/screens/MemoryScreen.tsx');
-    expect(memory).toContain('Open Cairn Library');
+    const catalog = read('i18n/cairnText.ts');
+    // REVISE_WITH_REASON: assert runtime key wiring plus source copy instead
+    // of requiring a component-owned duplicate literal.
+    expect(memory).toContain("cairnText('memory.memory-screen.open-cairn-library')");
+    expect(catalog).toContain("'en-NZ': 'Open Cairn Library'");
     expect(memory).toContain('libraryActionLabel');
-    expect(memory).toContain('>Library</Text>');
+    expect(memory).toContain("cairnText('memory.memory-screen.library')");
     expect(memory).not.toContain('Open All Cairns');
     expect(memory).toContain("nav.navigate('AllCairns')");
   });

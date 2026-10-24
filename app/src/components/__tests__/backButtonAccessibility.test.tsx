@@ -115,7 +115,9 @@ describe('BackButton accessibility contract', () => {
 
     const unavailableBranch = source.slice(unavailableStart, authorizedStart);
     const authorizedBranch = source.slice(authorizedStart);
-    expect(unavailableBranch).toContain('Public Cairn unavailable');
+    // Display copy is now catalog-owned; this source contract verifies the
+    // semantic key without coupling navigation coverage to English wording.
+    expect(unavailableBranch).toContain("cairnText('public-cairn-detail-screen.public-cairn-unavailable')");
     expect(unavailableBranch).toContain('<BackButton variant="inline" />');
     expect(authorizedBranch).toContain('<BackButton variant="inline" />');
   });

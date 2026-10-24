@@ -8,6 +8,7 @@ import {
   memoryOperationFailure,
   type MemoryOperationFailure,
 } from '../services/friendMemoryFailure';
+import { cairnText } from '../../../i18n/runtime';
 
 export interface PreparedMemoryCoverageTile {
   id: string;
@@ -331,7 +332,9 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       });
       set({
         status: 'error',
-        error: timedOut ? 'Memory coverage timed out' : error?.message || 'Unavailable',
+        error: timedOut
+          ? cairnText('memory.use-prepared-memory-coverage-store.memory-coverage-timed-out')
+          : cairnText('memory.use-prepared-memory-coverage-store.unavailable'),
         lastFailure: failure,
         version: get().version + 1,
       });

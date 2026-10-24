@@ -17,6 +17,7 @@ import {
   setRouteDrawingDiagnosticsEnabled,
   type RouteDrawingTrace,
 } from '../features/routeDrawing/routeDrawingTrace';
+import { cairnText } from '../i18n/runtime';
 
 /**
  * Narrow Owner-test surface available in the installed production runtime.
@@ -47,12 +48,12 @@ export function RouteDrawingDiagnosticsScreen() {
   const exportLatest = useCallback(async () => {
     const latest = listRouteDrawingTraces(ownerUserId)[0];
     if (!latest) {
-      Alert.alert('No Route trace yet', 'Arm capture, reproduce the Route issue, then return here.');
+      Alert.alert(cairnText('route-drawing-diagnostics-screen.no-route-trace-yet'), cairnText('route-drawing-diagnostics-screen.arm-capture-reproduce-the-route-issue-then'));
       return;
     }
     const body = exportRouteDrawingTrace(latest.sessionId, ownerUserId);
     if (!body || !FileSystem.documentDirectory) {
-      Alert.alert('Export unavailable', 'Cairn could not create the local trace file.');
+      Alert.alert(cairnText('route-drawing-diagnostics-screen.export-unavailable'), cairnText('route-drawing-diagnostics-screen.cairn-could-not-create-the-local-trace'));
       return;
     }
     setExporting(true);
@@ -67,13 +68,13 @@ export function RouteDrawingDiagnosticsScreen() {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(path, {
           mimeType: 'application/json',
-          dialogTitle: `Cairn Route trace ${latest.sessionId}`,
+          dialogTitle: cairnText('route-drawing-diagnostics-screen.cairn-route-trace-value', { sessionId: latest.sessionId }),
         });
       } else {
-        Alert.alert('Trace saved locally', path);
+        Alert.alert(cairnText('route-drawing-diagnostics-screen.trace-saved-locally'), path);
       }
     } catch (error) {
-      Alert.alert('Export failed', String(error));
+      Alert.alert(cairnText('route-drawing-diagnostics-screen.export-failed'), String(error));
     } finally {
       setExporting(false);
       refresh();
@@ -94,38 +95,38 @@ export function RouteDrawingDiagnosticsScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <BackButton onPress={() => nav.goBack()} />
-          <Text style={[styles.title, { color: theme.foreground }]}>Route diagnostics</Text>
+          <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('route-drawing-diagnostics-screen.route-diagnostics')}</Text>
         </View>
         <ScrollView contentContainerStyle={styles.content}>
           <View style={[styles.card, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
             <View style={styles.switchRow}>
               <View style={styles.copy}>
-                <Text style={[styles.cardTitle, { color: theme.foreground }]}>Capture next Route session</Text>
-                <Text style={[styles.body, { color: theme.foregroundSecondary }]}>Arm, return to Trails, reproduce Draw or Point, then come back here.</Text>
+                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{cairnText('route-drawing-diagnostics-screen.capture-next-route-session')}</Text>
+                <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-diagnostics-screen.arm-return-to-trails-reproduce-draw-or')}</Text>
               </View>
               <Switch testID="route-owner-trace-toggle" value={armed} onValueChange={setCapture} />
             </View>
-            <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Local traces: {traces.length} / 8 · precise locations are never uploaded automatically.</Text>
+            <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-diagnostics-screen.local-traces-value-8-precise-locations-are', { length: traces.length })}</Text>
           </View>
 
           <View style={[styles.card, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{latest ? 'Latest captured session' : 'No captured session'}</Text>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{latest ? cairnText('route-drawing-diagnostics-screen.latest-captured-session') : cairnText('route-drawing-diagnostics-screen.no-captured-session')}</Text>
             {latest ? (
-              <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{latest.sessionId}\n{latest.events.length} events · {latest.droppedEvents} dropped · {latest.captureError ?? 'complete original geometry'}</Text>
+              <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-diagnostics-screen.value-n-value-events-value-dropped-value', { sessionId: latest.sessionId, length: latest.events.length, droppedEvents: latest.droppedEvents, value4: latest.captureError ?? cairnText('route-drawing-diagnostics-screen.complete-original-geometry') })}</Text>
             ) : (
-              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>Representative synthetic fixtures remain available in Replay.</Text>
+              <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-diagnostics-screen.representative-synthetic-fixtures-remain-available-in-replay')}</Text>
             )}
             <View style={styles.actions}>
               <TouchableOpacity
                 style={[styles.action, { backgroundColor: theme.primaryAction }]}
                 onPress={() => nav.navigate('RouteDrawingReplay', latest ? { sessionId: latest.sessionId } : { fixtureId: 'flattenV' })}
                 accessibilityRole="button"
-              ><Text style={[styles.actionText, { color: theme.onPrimary }]}>Replay</Text></TouchableOpacity>
+              ><Text style={[styles.actionText, { color: theme.onPrimary }]}>{cairnText('route-drawing-diagnostics-screen.replay')}</Text></TouchableOpacity>
               <TouchableOpacity style={[styles.action, { borderColor: theme.border, borderWidth: 1 }]} onPress={() => { void exportLatest(); }} disabled={exporting} accessibilityRole="button">
-                <Text style={[styles.actionText, { color: theme.foreground }]}>{exporting ? 'Exporting…' : 'Export'}</Text>
+                <Text style={[styles.actionText, { color: theme.foreground }]}>{exporting ? cairnText('route-drawing-diagnostics-screen.exporting') : cairnText('route-drawing-diagnostics-screen.export')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.action, { borderColor: theme.border, borderWidth: 1 }]} onPress={() => { clearRouteDrawingTraces(); setCapture(false); }} accessibilityRole="button">
-                <Text style={[styles.actionText, { color: theme.foreground }]}>Clear</Text>
+                <Text style={[styles.actionText, { color: theme.foreground }]}>{cairnText('route-drawing-diagnostics-screen.clear')}</Text>
               </TouchableOpacity>
             </View>
           </View>

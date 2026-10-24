@@ -21,6 +21,7 @@ import { log } from '../../../services/appLog';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { CairnPaper, CairnStoneMark } from '../../cairns/components/CairnPaper';
 import { CAIRN_TERMS, cairnAudienceCopy } from '../../cairns/cairnExperience';
+import { cairnText } from '../../../i18n/runtime';
 
 export interface MarkFormProps {
   // Values
@@ -87,7 +88,7 @@ export function MarkForm(props: MarkFormProps) {
           chip peeking under the edge of the viewport so users see there
           is more to scroll — otherwise the row looked like a fixed set. */}
       {showTypePicker ? <>
-      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Type</Text>
+      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>{cairnText('marks.mark-form.type')}</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -112,7 +113,7 @@ export function MarkForm(props: MarkFormProps) {
               }}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={`Type ${meta.label}`}
+              accessibilityLabel={cairnText('marks.mark-form.type-value', { label: meta.label })}
             >
               <Icon
                 name={meta.icon as IconName}
@@ -135,21 +136,21 @@ export function MarkForm(props: MarkFormProps) {
       </ScrollView>
       </> : null}
 
-      <CairnPaper style={styles.editorPaper} animated={mode === 'create'} accessibilityLabel="Cairn note">
+      <CairnPaper style={styles.editorPaper} animated={mode === 'create'} accessibilityLabel={cairnText('marks.mark-form.cairn-note')}>
         <View style={styles.paperHeading}>
           <CairnStoneMark size={30} tone={visibility === 'group' ? 'friends' : visibility === 'public' ? 'public' : 'owner'} />
           <View style={styles.paperHeadingCopy}>
-            <Text style={[styles.paperEyebrow, { color: theme.foregroundSecondary }]}>A NOTE FOR THIS PLACE</Text>
+            <Text style={[styles.paperEyebrow, { color: theme.foregroundSecondary }]}>{cairnText('marks.mark-form.a-note-for-this-place')}</Text>
             <Text style={[styles.paperPrompt, { color: theme.foreground }]}>{CAIRN_TERMS.notePrompt}</Text>
           </View>
         </View>
 
         {/* The note is the primary artifact; the short title is supporting
             context. Both remain optional for private/friends creation. */}
-        <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Note <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
+        <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>{cairnText('marks.mark-form.note-value', { value1: cairnText('marks.mark-form.optional') })}</Text>
         <TextInput
           style={[styles.input, styles.textArea, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
-          placeholder="Something worth noticing, remembering, or finding…"
+          placeholder={cairnText('marks.mark-form.something-worth-noticing-remembering-or-finding')}
           placeholderTextColor={theme.muted}
           maxLength={noteMaxChars}
           value={note}
@@ -159,7 +160,7 @@ export function MarkForm(props: MarkFormProps) {
           returnKeyType="default"
           blurOnSubmit={false}
           autoFocus={autoFocus === 'note'}
-          accessibilityLabel="Cairn note"
+          accessibilityLabel={cairnText('marks.mark-form.cairn-note')}
         />
         {note.length > 0 ? (
           <Text
@@ -169,22 +170,20 @@ export function MarkForm(props: MarkFormProps) {
               noteDanger && { color: Colors.danger },
             ]}
             accessibilityLiveRegion={noteWarn ? 'polite' : 'none'}
-          >
-            {note.length} / {noteMaxChars}
-          </Text>
+          >{cairnText('marks.mark-form.value-value', { length: note.length, noteMaxChars: noteMaxChars })}</Text>
         ) : null}
 
-        <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Short title <Text style={{ color: theme.muted, fontWeight: '400' }}>(optional)</Text></Text>
+        <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>{cairnText('marks.mark-form.short-title-value', { value1: cairnText('marks.mark-form.optional') })}</Text>
         <TextInput
           style={[styles.input, { backgroundColor: theme.inputSurface, borderColor: theme.border, color: theme.foreground }]}
-          placeholder="Name this moment"
+          placeholder={cairnText('marks.mark-form.name-this-moment')}
           placeholderTextColor={theme.muted}
           maxLength={titleMaxChars}
           value={title}
           onChangeText={onTitleChange}
           returnKeyType="done"
           autoFocus={autoFocus === 'title'}
-          accessibilityLabel="Short title"
+          accessibilityLabel={cairnText('marks.mark-form.short-title')}
         />
         {title.length > 0 ? (
           <Text
@@ -194,25 +193,23 @@ export function MarkForm(props: MarkFormProps) {
               titleDanger && { color: Colors.danger },
             ]}
             accessibilityLiveRegion={titleWarn ? 'polite' : 'none'}
-          >
-            {title.length} / {titleMaxChars}
-          </Text>
+          >{cairnText('marks.mark-form.value-value-a448e83', { length: title.length, titleMaxChars: titleMaxChars })}</Text>
         ) : null}
       </CairnPaper>
 
       {/* WHO CAN SEE THIS */}
       {showVisibilityPicker ? <>
-      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>Who can see this</Text>
+      <Text style={[styles.fieldLabel, { color: theme.foregroundSecondary }]}>{cairnText('marks.mark-form.who-can-see-this')}</Text>
       <View style={styles.visRow}>
         <VisChip
-          label="Only me"
+          label={cairnText('marks.mark-form.only-me')}
           iconName="Lock"
           active={visibility === 'personal'}
           activeTone="neutral"
           onPress={() => { haptic.selection(); onVisibilityChange('personal'); }}
         />
         <VisChip
-          label="Friends"
+          label={cairnText('marks.mark-form.friends')}
           iconName="Users"
           active={visibility === 'group'}
           activeTone="primary"
@@ -220,7 +217,7 @@ export function MarkForm(props: MarkFormProps) {
         />
         {!disableVisibilityPublic ? (
           <VisChip
-            label="Public"
+            label={cairnText('marks.mark-form.public')}
             iconName="Globe"
             active={visibility === 'public'}
             activeTone="info"
@@ -235,9 +232,7 @@ export function MarkForm(props: MarkFormProps) {
       {showLocationLockedNotice ? (
         <View style={styles.lockedField}>
           <Icon name="Lock" size={12} color={theme.iconInactive} strokeWidth={2} />
-          <Text style={[styles.lockedFieldText, { color: theme.muted }]}>
-            Location is fixed where you planted it.
-          </Text>
+          <Text style={[styles.lockedFieldText, { color: theme.muted }]}>{cairnText('marks.mark-form.location-is-fixed-where-you-planted-it')}</Text>
         </View>
       ) : null}
     </View>
@@ -276,7 +271,9 @@ function VisChip({ label, iconName, active, activeTone, disabled, onPress }: Vis
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ selected: active, disabled: !!disabled }}
-      accessibilityLabel={`Visibility ${label}${disabled ? ' (unavailable)' : ''}`}
+      accessibilityLabel={disabled
+        ? cairnText('marks.visibility.value-unavailable', { visibility: label })
+        : cairnText('marks.visibility.value', { visibility: label })}
     >
       <Icon
         name={iconName}

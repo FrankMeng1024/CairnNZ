@@ -8,6 +8,7 @@ import {
   advanceRawGpsModel,
   createRawGpsModelState,
 } from './rawGpsObservationModel';
+import { cairnText } from '../../i18n/runtime';
 
 export const SIMULATOR_SAMPLE_INTERVAL_MS = 1_000;
 // Acceleration is represented by ordered canonical evidence, not one giant
@@ -458,7 +459,7 @@ class ActivitySimulatorEngine {
 
       if (clock.limitReached && !state.clockLimitReached) {
         useActivitySimulatorStore.getState().setLastFailure(
-          'Accelerated clock reached its safe 12-hour virtual limit. Finish or discard this Activity.',
+          cairnText('activity-simulator.activity-simulator-engine.accelerated-clock-reached-its-safe-12-hour'),
         );
         appendSimulatorLog('ERROR', 'simulator_virtual_clock_limit_reached', {
           timeScale: effectiveTimeScale,

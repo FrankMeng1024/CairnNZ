@@ -1,3 +1,4 @@
+
 export type Build57StartupRecord = (
   phase: string,
   fields?: Record<string, unknown>,
@@ -87,4 +88,3 @@ export function installFirstBackendFetchProbe(
   }) as typeof fetch;
   return true;
 }
-

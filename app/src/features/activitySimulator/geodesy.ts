@@ -27,10 +27,10 @@ export function validateCoordinate(
   longitude: number,
 ): { ok: true; coordinate: GeoCoordinate } | { ok: false; reason: string } {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return { ok: false, reason: 'Latitude and longitude must be numbers.' };
+    return { ok: false, reason: cairnText('diagnostics.coordinate.must-be-numbers') };
   }
   if (latitude < -90 || latitude > 90) {
-    return { ok: false, reason: 'Latitude must be between -90 and 90.' };
+    return { ok: false, reason: cairnText('diagnostics.coordinate.latitude-range') };
   }
   return {
     ok: true,
@@ -99,3 +99,4 @@ export function initialBearingDegrees(a: GeoCoordinate, b: GeoCoordinate): numbe
     - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
   return ((toDegrees(Math.atan2(y, x)) % 360) + 360) % 360;
 }
+import { cairnText } from '../../i18n/runtime';

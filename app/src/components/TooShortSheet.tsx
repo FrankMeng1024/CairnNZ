@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { Icon } from './Icon';
+import { cairnText } from '../i18n/runtime';
 
 interface Props {
   visible: boolean;
@@ -66,13 +67,13 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
     ]).start(() => then?.());
   };
 
-  const label = activityMode === 'running' ? 'Run' : 'Hike';
+  const label = activityMode === 'running' ? cairnText('too-short-sheet.run') : cairnText('too-short-sheet.hike');
   // 2026-08-17 concept H3/R3: body copy matches the concept sheet word
   // for word. The verb ("Walk"/"Run") swaps with the activity so the
   // sentence still reads naturally, and the trailing clause drops the
   // previous "when you stop" hedge to match the concept exactly.
-  const verb = activityMode === 'running' ? 'Run' : 'Walk';
-  const bodyCopy = `We haven't captured enough GPS points to draw your path yet. ${verb} a few more seconds and your ${label.toLowerCase()} will save automatically.`;
+  const verb = activityMode === 'running' ? cairnText('too-short-sheet.run-7892841') : cairnText('too-short-sheet.walk');
+  const bodyCopy = cairnText('too-short-sheet.we-haven-t-captured-enough-gps-points', { verb: verb, value2: label.toLowerCase() });
 
   return (
     <Animated.View style={[styles.scrim, { opacity }]} pointerEvents="auto">
@@ -83,25 +84,25 @@ export function TooShortSheet({ visible, activityMode = 'hiking', onContinue, on
         <View style={[styles.stateIcon, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Icon name="Map" size={28} color={theme.iconActive} strokeWidth={1.8} />
         </View>
-        <Text style={[styles.title, { color: titleColor }]}>Keep going{'\n'}a little longer</Text>
+        <Text style={[styles.title, { color: titleColor }]}>{cairnText('too-short-sheet.keep-going-value-a-little-longer', { value1: '\n' })}</Text>
         <Text style={[styles.body, { color: bodyColor }]}>{bodyCopy}</Text>
         <TouchableOpacity
           style={[styles.btnPrimary, { backgroundColor: theme.primary }]}
           activeOpacity={0.85}
           onPress={() => dismiss(onContinue)}
           accessibilityRole="button"
-          accessibilityLabel="Got it — keep going"
+          accessibilityLabel={cairnText('too-short-sheet.got-it-keep-going')}
         >
-          <Text style={[styles.btnPrimaryText, { color: theme.onPrimary }]}>Got it — keep going</Text>
+          <Text style={[styles.btnPrimaryText, { color: theme.onPrimary }]}>{cairnText('too-short-sheet.got-it-keep-going')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.btnSecondary}
           activeOpacity={0.7}
           onPress={() => dismiss(onDiscard)}
           accessibilityRole="button"
-          accessibilityLabel={`End ${label.toLowerCase()} anyway`}
+          accessibilityLabel={cairnText('too-short-sheet.end-value-anyway', { value1: label.toLowerCase() })}
         >
-          <Text style={[styles.btnSecondaryText, { color: theme.foregroundSecondary }]}>End {label.toLowerCase()} anyway</Text>
+          <Text style={[styles.btnSecondaryText, { color: theme.foregroundSecondary }]}>{cairnText('too-short-sheet.end-value-anyway-25d84e2', { value1: label.toLowerCase() })}</Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>

@@ -28,6 +28,7 @@
  */
 import { Platform } from 'react-native';
 import { crashLogger } from './crashLogger';
+import { cairnText } from '../i18n/runtime';
 
 const ENTITLEMENT_ID = 'memory_pro';
 
@@ -161,14 +162,14 @@ export async function purchasePackage(pkg: OfferingPackage): Promise<{
   error?: string;
 }> {
   const Purchases = await tryLoadModule();
-  if (!Purchases || !initialized) return { success: false, error: 'sdk_unavailable' };
+  if (!Purchases || !initialized) return { success: false, error: cairnText('iap-service.sdk-unavailable') };
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg.raw);
     const hasEntitlement = !!customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
     return { success: true, hasEntitlement };
   } catch (err: any) {
     if (err?.userCancelled) return { success: false, cancelled: true };
-    return { success: false, error: err?.message || 'purchase_failed' };
+    return { success: false, error: cairnText('iap-service.purchase-failed') };
   }
 }
 

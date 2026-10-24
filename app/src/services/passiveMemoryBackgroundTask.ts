@@ -15,6 +15,7 @@ import {
   recordWalkingEncounterObservations,
 } from '../features/public/services/walkingEncounterEvidence';
 import type { RealGpsContinuityState, RealGpsObservation } from '../features/activity/realGpsContinuity';
+import { cairnText } from '../i18n/runtime';
 
 export const PASSIVE_MEMORY_BACKGROUND_TASK = 'cairn-passive-memory-location-v1';
 export const PASSIVE_MEMORY_ACTIVE_KEY = 'cairn:passive-memory:active:v1';
@@ -167,8 +168,8 @@ export async function startPassiveMemoryBackgroundUpdates(
         activityType: Location.ActivityType.Fitness,
         showsBackgroundLocationIndicator: false,
         foregroundService: Platform.OS === 'android' ? {
-          notificationTitle: 'Cairn Memory is active',
-          notificationBody: 'Recording explored places while you walk',
+          notificationTitle: cairnText('passive-memory-background-task.cairn-memory-is-active'),
+          notificationBody: cairnText('passive-memory-background-task.recording-explored-places-while-you-walk'),
           notificationColor: '#5D7C46',
         } : undefined,
       });

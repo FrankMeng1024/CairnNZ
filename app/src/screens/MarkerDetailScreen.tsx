@@ -82,6 +82,7 @@ import {
   useCairnPaperExit,
 } from '../features/cairns/components/CairnPaper';
 import { cairnPublicationTruth } from '../features/cairns/cairnExperience';
+import { cairnText } from '../i18n/runtime';
 
 let MapView: any = null;
 let CameraComponent: any = null;
@@ -120,9 +121,9 @@ type DetailRoute = RouteProp<RootStackParamList, 'MarkerDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const VISIBILITY_LABEL: Record<MarkerPermission, { label: string; iconName: IconName }> = {
-  personal: { label: 'Only me', iconName: 'Lock' },
-  group:    { label: 'Friends can discover', iconName: 'Users' },
-  public:   { label: 'Public',  iconName: 'Globe' },
+  personal: { get label() { return cairnText('marker-detail-screen.only-me'); }, iconName: 'Lock' },
+  group:    { get label() { return cairnText('marker-detail-screen.friends-can-discover'); }, iconName: 'Users' },
+  public:   { get label() { return cairnText('marker-detail-screen.public'); },  iconName: 'Globe' },
 };
 
 export function MarkerDetailScreen() {
@@ -232,10 +233,10 @@ export function MarkerDetailScreen() {
       setIsEditing(false);
     } catch (e: any) {
       const reason = e?.code === 'PUBLIC_SUSPENDED_EDIT_BLOCKED'
-        ? 'This Public version is paused by review. Choose Only me or Friends to withdraw it before changing the words.'
+        ? cairnText('marker-detail-screen.this-public-version-is-paused-by-review')
         : e?.code === 'CAIRN_SOURCE_FROZEN'
-          ? 'This Cairn is under review and cannot create a new version right now.'
-          : 'Changes were not saved. Your draft is still here so you can try again.';
+          ? cairnText('marker-detail-screen.this-cairn-is-under-review-and-cannot')
+          : cairnText('marker-detail-screen.changes-were-not-saved-your-draft-is');
       setSaveError(reason);
     } finally {
       setSaving(false);
@@ -258,15 +259,15 @@ export function MarkerDetailScreen() {
         else nav.replace('AllCairns');
         if (result.remoteState === 'queued') {
           Alert.alert(
-            'Delete queued',
-            'This Cairn is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
+            cairnText('marker-detail-screen.delete-queued'),
+            cairnText('marker-detail-screen.this-cairn-is-removed-from-this-iphone'),
           );
         }
       });
     } catch {
       resetPaperExit();
       setDeletionSnapshot(null);
-      Alert.alert('Could not delete', 'This Cairn is still here. Check your connection and try again.');
+      Alert.alert(cairnText('marker-detail-screen.could-not-delete'), cairnText('marker-detail-screen.this-cairn-is-still-here-check-your'));
     } finally {
       // A successful durable delete is terminal for this screen. Keeping the
       // busy snapshot through the navigation transition prevents a one-frame
@@ -282,10 +283,8 @@ export function MarkerDetailScreen() {
           <BackButton variant="inline" />
         </View>
         <View style={styles.notFoundBox}>
-          <Text style={[styles.notFoundTitle, { color: visualTheme.foreground }]}>Cairn not found</Text>
-          <Text style={[styles.notFoundSub, { color: visualTheme.foregroundSecondary }]}>
-            This cairn may have been removed or hasn't synced yet.
-          </Text>
+          <Text style={[styles.notFoundTitle, { color: visualTheme.foreground }]}>{cairnText('marker-detail-screen.cairn-not-found')}</Text>
+          <Text style={[styles.notFoundSub, { color: visualTheme.foregroundSecondary }]}>{cairnText('marker-detail-screen.this-cairn-may-have-been-removed-or')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -297,7 +296,7 @@ export function MarkerDetailScreen() {
   const publicationTruth = cairnPublicationTruth(marker);
   const publicStateLabel = publicationTruth?.label ?? null;
   const vis = marker.permission === 'public'
-    ? { label: publicStateLabel ?? 'Public', iconName: 'Globe' as IconName }
+    ? { label: publicStateLabel ?? cairnText('marker-detail-screen.public'), iconName: 'Globe' as IconName }
     : VISIBILITY_LABEL[marker.permission] ?? VISIBILITY_LABEL.personal;
   const localOnlyCairn = !marker.synced && Boolean(marker.clientCairnId ?? marker.localId);
   const dateStr = formatDate(marker.createdAt);
@@ -318,19 +317,19 @@ export function MarkerDetailScreen() {
   const publicEditBlock = editPermission !== 'public'
     ? null
     : !publicEnabled
-      ? 'Public is not available for this account right now. Choose Only me or Friends to save.'
+      ? cairnText('marker-detail-screen.public-is-not-available-for-this-account')
       : !marker.originActivityClientId
-        ? 'This Cairn has no Activity source, so it cannot enter Public review. Leave a new Public Cairn from an eligible Activity.'
+        ? cairnText('marker-detail-screen.this-cairn-has-no-activity-source-so')
         : !editHasUsefulText
-          ? 'Add useful words before saving a Public version.'
+          ? cairnText('marker-detail-screen.add-useful-words-before-saving-a-public')
           : marker.publicState === 'suspended' && editChangesWords
-            ? 'This Public version is paused by review. Choose Only me or Friends to withdraw it before changing the words.'
+            ? cairnText('marker-detail-screen.this-public-version-is-paused-by-review')
             : null;
   const publicEditTruth = sourceActivity
-    ? 'Saving creates a new version. It can enter review only after the server confirms the linked completed Activity; it is not Public until approved.'
+    ? cairnText('marker-detail-screen.saving-creates-a-new-version-it-can')
     : marker.originActivityClientId
-      ? 'Saving keeps Public intent, but the linked Activity is not yet confirmed as eligible. This version stays out of review and Public discovery until the server confirms eligibility and review approves it.'
-      : 'This Cairn cannot become Public because it has no Activity source.';
+      ? cairnText('marker-detail-screen.saving-keeps-public-intent-but-the-linked')
+      : cairnText('marker-detail-screen.this-cairn-cannot-become-public-because-it');
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: visualTheme.background }]} edges={['top', 'bottom']}>
@@ -407,8 +406,8 @@ export function MarkerDetailScreen() {
         ) : (
           <View style={[styles.mapFallback, { backgroundColor: visualTheme.background }]}>
             <Icon name="Map" size={24} color={visualTheme.iconInactive} strokeWidth={1.8} />
-            <Text style={[styles.mapFallbackTitle, { color: visualTheme.foreground }]}>Map unavailable</Text>
-            <Text style={[styles.mapFallbackText, { color: visualTheme.foregroundSecondary }]}>Your Cairn is still available.</Text>
+            <Text style={[styles.mapFallbackTitle, { color: visualTheme.foreground }]}>{cairnText('marker-detail-screen.map-unavailable')}</Text>
+            <Text style={[styles.mapFallbackText, { color: visualTheme.foregroundSecondary }]}>{cairnText('marker-detail-screen.your-cairn-is-still-available')}</Text>
           </View>
         )}
         {MapView && !mapReady ? (
@@ -456,7 +455,7 @@ export function MarkerDetailScreen() {
         >
           <View style={styles.notePaperHeader}>
             <CairnStoneMark size={36} tone={marker.permission === 'group' ? 'friends' : marker.permission === 'public' ? 'public' : 'owner'} />
-            <Text style={[styles.notePaperEyebrow, { color: visualTheme.foregroundSecondary }]}>YOUR CAIRN · LEFT HERE</Text>
+            <Text style={[styles.notePaperEyebrow, { color: visualTheme.foregroundSecondary }]}>{cairnText('marker-detail-screen.your-cairn-left-here')}</Text>
           </View>
           <Text
             style={[styles.title, !privateTitle && !privateBody && styles.titleEmpty, { color: privateTitle || privateBody ? visualTheme.foreground : visualTheme.muted }]}
@@ -482,7 +481,7 @@ export function MarkerDetailScreen() {
           >
             <Icon name="Heart" size={14} color={visualTheme.primary} strokeWidth={2} />
             <Text style={[styles.thanksAcknowledgementText, { color: visualTheme.foregroundSecondary }]}>
-              {Number(marker.thanksCount) === 1 ? '1 Thanks received' : `${Number(marker.thanksCount)} Thanks received`}
+              {Number(marker.thanksCount) === 1 ? cairnText('marker-detail-screen.1-thanks-received') : cairnText('marker-detail-screen.value-thanks-received', { value1: Number(marker.thanksCount) })}
             </Text>
           </View>
         ) : null}
@@ -502,7 +501,7 @@ export function MarkerDetailScreen() {
               state={marker.syncState}
               onPress={marker.syncState === 'failed'
                 ? () => { void retryMarkerSync(marker.id).catch(() => {
-                    Alert.alert('Still saved locally', 'Cairn will remain on this device. Try syncing again when you have a connection.');
+                    Alert.alert(cairnText('marker-detail-screen.still-saved-locally'), cairnText('marker-detail-screen.cairn-will-remain-on-this-device-try'));
                   }); }
                 : undefined}
             />
@@ -514,10 +513,10 @@ export function MarkerDetailScreen() {
 
         {/* 5. Date / location — with clear labels */}
         <View style={styles.metaList}>
-          <MetaRow iconName="Calendar" label="Planted" text={dateStr} />
-          {updatedDateStr ? <MetaRow iconName="Pencil" label="Updated" text={updatedDateStr} /> : null}
+          <MetaRow iconName="Calendar" label={cairnText('marker-detail-screen.planted')} text={dateStr} />
+          {updatedDateStr ? <MetaRow iconName="Pencil" label={cairnText('marker-detail-screen.updated')} text={updatedDateStr} /> : null}
           {marker.approximate ? (
-            <MetaRow iconName="MapPin" label="Accuracy" text="Approximate GPS location" />
+            <MetaRow iconName="MapPin" label={cairnText('marker-detail-screen.accuracy')} text={cairnText('marker-detail-screen.approximate-gps-location')} />
           ) : null}
         </View>
 
@@ -533,9 +532,9 @@ export function MarkerDetailScreen() {
           >
             <View style={styles.activityContextRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>FROM ACTIVITY</Text>
+                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>{cairnText('marker-detail-screen.from-activity')}</Text>
                 <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]} numberOfLines={1}>
-                  {sourceActivity.name || (sourceActivity.activityMode === 'running' ? 'Run' : 'Hike')}
+                  {sourceActivity.name || (sourceActivity.activityMode === 'running' ? cairnText('marker-detail-screen.run') : cairnText('marker-detail-screen.hike'))}
                 </Text>
               </View>
               <Icon name="ChevronRight" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
@@ -545,8 +544,8 @@ export function MarkerDetailScreen() {
           <ContentSurface level="record" style={styles.activityContext} testID="cairn-source-activity-unavailable">
             <View style={styles.activityContextRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>SOURCE</Text>
-                <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]}>Activity link unavailable</Text>
+                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>{cairnText('marker-detail-screen.source')}</Text>
+                <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]}>{cairnText('marker-detail-screen.activity-link-unavailable')}</Text>
               </View>
               <Icon name="Route" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
             </View>
@@ -555,8 +554,8 @@ export function MarkerDetailScreen() {
           <ContentSurface level="record" style={styles.activityContext} testID="cairn-left-here-context">
             <View style={styles.activityContextRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>LOCATION RECORD</Text>
-                <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]}>Left here {dateStr}</Text>
+                <Text style={[styles.activityContextLabel, { color: visualTheme.foregroundSecondary }]}>{cairnText('marker-detail-screen.location-record')}</Text>
+                <Text style={[styles.activityContextTitle, { color: visualTheme.foreground }]}>{cairnText('marker-detail-screen.left-here-value', { dateStr: dateStr })}</Text>
               </View>
               <Icon name="MapPin" size={16} color={visualTheme.iconInactive} strokeWidth={2} />
             </View>
@@ -570,11 +569,9 @@ export function MarkerDetailScreen() {
               <Text style={[styles.snapshotHeader, { color: visualTheme.foregroundSecondary }]}>{publicStateLabel}</Text>
             </View>
             <Text style={[styles.snapshotBody, { color: visualTheme.foreground }]}>
-              {publicationTruth?.explanation ?? 'Public status is not available yet.'}
+              {publicationTruth?.explanation ?? cairnText('marker-detail-screen.public-status-is-not-available-yet')}
             </Text>
-            <Text style={[styles.snapshotFootnote, { color: visualTheme.muted }]}>
-              A material edit or changing audience removes the approved version from new Public delivery.
-            </Text>
+            <Text style={[styles.snapshotFootnote, { color: visualTheme.muted }]}>{cairnText('marker-detail-screen.a-material-edit-or-changing-audience-removes')}</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -593,7 +590,7 @@ export function MarkerDetailScreen() {
             onPress={() => setDeleteConfirmOpen(true)}
             disabled={deleting}
             accessibilityRole="button"
-            accessibilityLabel="Delete Cairn"
+            accessibilityLabel={cairnText('marker-detail-screen.delete-cairn')}
           >
             <Icon name="Trash2" size={18} color={visualTheme.iconInactive} strokeWidth={2} />
           </TouchableOpacity>
@@ -604,7 +601,7 @@ export function MarkerDetailScreen() {
           >
             <Icon name="Pencil" size={14} color={visualTheme.onPrimary} strokeWidth={2} />
             <Text style={[styles.actionBtnPrimaryText, { color: visualTheme.onPrimary }]}>
-              {privateTitle || privateBody ? 'Edit Cairn' : 'Add a note'}
+              {privateTitle || privateBody ? cairnText('marker-detail-screen.edit-cairn') : cairnText('marker-detail-screen.add-a-note')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -617,8 +614,8 @@ export function MarkerDetailScreen() {
         testID="cairn-edit-sheet"
       >
         <BottomSheetHeader
-          title={privateTitle || privateBody ? 'Edit Cairn' : 'Add words to this Cairn'}
-          subtitle="Its original place, time, and Activity stay unchanged."
+          title={privateTitle || privateBody ? cairnText('marker-detail-screen.edit-cairn') : cairnText('marker-detail-screen.add-words-to-this-cairn')}
+          subtitle={cairnText('marker-detail-screen.its-original-place-time-and-activity-stay')}
           onClose={requestCloseEdit}
         />
         <BottomSheetContent
@@ -628,9 +625,9 @@ export function MarkerDetailScreen() {
         >
           <Text style={[styles.editVersionTruth, { color: visualTheme.foregroundSecondary }]}>
             {editPermission === 'personal'
-              ? 'Saving changes updates your private Cairn. Its place and original Activity stay fixed.'
+              ? cairnText('marker-detail-screen.saving-changes-updates-your-private-cairn-its')
               : editPermission === 'group'
-                ? 'Saving creates a new Friends version. Friends who genuinely pass nearby can encounter it; earlier acquired pages remain in Memory.'
+                ? cairnText('marker-detail-screen.saving-creates-a-new-friends-version-friends')
                 : publicEditTruth}
           </Text>
           {publicEditBlock ? (
@@ -671,14 +668,12 @@ export function MarkerDetailScreen() {
             noteMaxChars={ContentConfig.textMaxChars}
           />
           {!online && !localOnlyCairn ? (
-            <Text style={[styles.editBoundaryCopy, { color: visualTheme.foregroundSecondary }]}>
-              This synced Cairn needs a connection to save. Your draft stays here if saving fails.
-            </Text>
+            <Text style={[styles.editBoundaryCopy, { color: visualTheme.foregroundSecondary }]}>{cairnText('marker-detail-screen.this-synced-cairn-needs-a-connection-to')}</Text>
           ) : null}
         </BottomSheetContent>
         <View style={[styles.editFooter, { backgroundColor: visualTheme.sheetSurface, borderTopColor: visualTheme.borderSubtle }]}>
           <PrimaryButton
-            label={editPermission === 'public' ? 'Save Public version' : editPermission === 'personal' ? 'Save changes' : 'Save Friends version'}
+            label={editPermission === 'public' ? cairnText('marker-detail-screen.save-public-version') : editPermission === 'personal' ? cairnText('marker-detail-screen.save-changes') : cairnText('marker-detail-screen.save-friends-version')}
             onPress={() => { void saveEdit(); }}
             loading={saving}
             disabled={!editDirty || Boolean(publicEditBlock)}
@@ -692,11 +687,11 @@ export function MarkerDetailScreen() {
         onDismiss={() => setDiscardEditOpen(false)}
         testID="cairn-discard-edit-confirmation"
       >
-        <ModalCardHeader title="Discard changes?" body="Your unsaved Cairn draft will be removed." />
+        <ModalCardHeader title={cairnText('marker-detail-screen.discard-changes')} body={cairnText('marker-detail-screen.your-unsaved-cairn-draft-will-be-removed')} />
         <View style={styles.deleteActions}>
-          <PrimaryButton label="Keep editing" variant="secondary" onPress={() => setDiscardEditOpen(false)} style={styles.deleteAction} />
+          <PrimaryButton label={cairnText('marker-detail-screen.keep-editing')} variant="secondary" onPress={() => setDiscardEditOpen(false)} style={styles.deleteAction} />
           <PrimaryButton
-            label="Discard changes"
+            label={cairnText('marker-detail-screen.discard-changes-01ee2b4')}
             variant="destructive"
             onPress={() => { setDiscardEditOpen(false); closeEdit(); }}
             style={styles.deleteAction}
@@ -888,7 +883,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '600',
-    
+
     letterSpacing: 0.4,
   },
   snapshotBody: {

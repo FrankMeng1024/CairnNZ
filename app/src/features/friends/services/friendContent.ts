@@ -1,6 +1,7 @@
 import { authenticatedFetch } from '../../../services/apiService';
 import { storage } from '../../../store/storage';
 import { useAppStore } from '../../../store/useAppStore';
+import { cairnText } from '../../../i18n/runtime';
 
 const CACHE_PREFIX = 'cairn:friend-content:v2:';
 const MAX_OFFLINE_MS = 24 * 60 * 60 * 1000;
@@ -758,7 +759,7 @@ export async function leaseFriendRoute(route: FriendRoute): Promise<SharedRouteL
   const launch: SharedRouteLaunchData = {
     leaseId: String(body.lease_id), viewerId: fence.viewerId,
     ownerId: String(leased?.author?.id ?? route.author.id), routeId: String(leased?.id ?? route.id),
-    name: String(leased?.name ?? route.name ?? 'Shared Route'), points,
+    name: String(leased?.name ?? route.name ?? cairnText('route.default.shared')), points,
     distanceM: Number(leased?.distance_m ?? route.distanceM ?? 0),
     elevationGainM: Number(leased?.elevation_gain_m ?? route.elevationGainM ?? 0),
     resourceRevision,

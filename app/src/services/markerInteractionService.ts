@@ -15,6 +15,7 @@
  */
 import { authenticatedFetch } from './apiService';
 import { uuidv4 } from './offlineQueue';
+import { cairnText } from '../i18n/runtime';
 
 export class MarkerInteractionError extends Error {
   constructor(
@@ -143,7 +144,7 @@ export async function reportMarker(
 }
 
 async function handleVoteError(res: Response): Promise<never> {
-  let message = `Vote failed: ${res.status}`;
+  let message = cairnText('marker-interaction-service.vote-failed-value', { status: res.status });
   try {
     const data = await res.json();
     if (data.error) message = data.error;

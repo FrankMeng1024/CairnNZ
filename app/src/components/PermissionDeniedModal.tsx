@@ -22,6 +22,7 @@ import { Linking } from 'react-native';
 import { ModalCard } from './ModalCard';
 import { PrimaryButton } from './PrimaryButton';
 import { StateSurface } from './StateSurface';
+import { cairnText } from '../i18n/runtime';
 
 interface Props {
   visible: boolean;
@@ -41,12 +42,12 @@ export function PermissionDeniedModal({ visible, featureName, onDismiss }: Props
         variant="permission"
         material="embedded"
         alignment="center"
-        title={`${featureName} needs your location`}
-        body="Turn on location for Cairn in Settings to use this feature."
+        title={cairnText('permission-denied-modal.value-needs-your-location', { featureName: featureName })}
+        body={cairnText('permission-denied-modal.turn-on-location-for-cairn-in-settings')}
         actions={(
           <>
-            <PrimaryButton label="Open Settings" onPress={openSettings} />
-            <PrimaryButton label="Not now" onPress={onDismiss} variant="secondary" />
+            <PrimaryButton label={cairnText('permission-denied-modal.open-settings')} onPress={openSettings} />
+            <PrimaryButton label={cairnText('permission-denied-modal.not-now')} onPress={onDismiss} variant="secondary" />
           </>
         )}
       />

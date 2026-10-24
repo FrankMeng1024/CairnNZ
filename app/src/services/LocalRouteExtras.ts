@@ -8,6 +8,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { cairnText } from '../i18n/runtime';
 
 const KEY_PREFIX = '@cairn:route_extras:v1:';
 const BACKUP_KEY_PREFIX = '@cairn:route_extras_backup:';
@@ -147,7 +148,7 @@ export async function saveExtras(extras: Omit<RouteExtras, 'createdAt' | 'update
       await AsyncStorage.setItem(KEY_PREFIX + extras.routeId, JSON.stringify(payload));
       return { ok: true };
     } catch (err: any) {
-      return { ok: false, error: err?.message || 'AsyncStorage write failed' };
+      return { ok: false, error: err?.message || cairnText('local-route-extras.asyncstorage-write-failed') };
     }
   });
   saveExtrasChains.set(extras.routeId, next);
@@ -185,7 +186,7 @@ export async function backupExtras(routeId: string, snapshot: any): Promise<{ ok
     await AsyncStorage.setItem(BACKUP_KEY_PREFIX + routeId, JSON.stringify(payload));
     return { ok: true };
   } catch (err: any) {
-    return { ok: false, error: err?.message || 'Backup write failed' };
+    return { ok: false, error: err?.message || cairnText('local-route-extras.backup-write-failed') };
   }
 }
 

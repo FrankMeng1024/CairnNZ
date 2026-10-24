@@ -238,6 +238,7 @@ import {
   activateNativeGpsEvidenceScope,
   deactivateNativeGpsEvidenceScope,
 } from '../features/activity/nativeGpsEvidence';
+import { cairnText } from '../i18n/runtime';
 
 // Lazy import expo-location to avoid crash on web
 let Location: typeof import('expo-location') | null = null;
@@ -1728,7 +1729,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         (globalThis as unknown as { __cairnActivityStartFailure?: string | null }).__cairnActivityStartFailure = 'simulator-context-clear-failed';
       }
       if (locationProviderSource === 'simulator') {
-        useActivitySimulatorStore.getState().setLastFailure('Activity initialization failed: simulator context was not cleared.');
+        useActivitySimulatorStore.getState().setLastFailure(cairnText('use-tracking-store.activity-initialization-failed-simulator-context-was-not'));
       }
       await tombstoneActivity({ userId, clientActivityId: localSessionId });
       if (locationProviderSource === 'real') void deleteRemoteSessionByClientId(localSessionId);
@@ -1764,7 +1765,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       crashLogger.breadcrumb(`v409:hikeTrackWriter:startHikeTrack failed ${String(e).slice(0, 80)}`);
       if (locationProviderSource === 'simulator') {
         useActivitySimulatorStore.getState().setLastFailure(
-          `Activity journal initialization failed: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`,
+          cairnText('use-tracking-store.activity-journal-initialization-failed-value', { value1: String(e instanceof Error ? e.message : e).slice(0, 160) }),
         );
         appendSimulatorLog('ERROR', 'activity_journal_start_failed', {
           rejectionReason: String(e instanceof Error ? e.message : e).slice(0, 160),
@@ -1899,11 +1900,11 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               if (settled) return;
               try {
                 Alert.alert(
-                  'Keep recording when screen is off?',
-                  'Cairn keeps recording your hike when your screen is off or you switch apps. Set Location permission to "Always Allow" in Settings.',
+                  cairnText('use-tracking-store.keep-recording-when-screen-is-off'),
+                  cairnText('use-tracking-store.cairn-keeps-recording-your-hike-when-your'),
                   [
                     {
-                      text: 'Later',
+                      text: cairnText('use-tracking-store.later'),
                       style: 'cancel',
                       onPress: async () => {
                         if (!claim()) return;
@@ -1912,7 +1913,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                       },
                     },
                     {
-                      text: 'Open Settings',
+                      text: cairnText('use-tracking-store.open-settings'),
                       onPress: async () => {
                         if (!claim()) return;
                         try { await SecureStore.setItemAsync(KEY, '1'); } catch { /* silent */ }
@@ -2280,7 +2281,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       debugLogger.logError(err, 'startTracking');
       if (locationProviderSource === 'simulator') {
         useActivitySimulatorStore.getState().setLastFailure(
-          `Activity provider initialization failed: ${String(err instanceof Error ? err.message : err).slice(0, 160)}`,
+          cairnText('use-tracking-store.activity-provider-initialization-failed-value', { value1: String(err instanceof Error ? err.message : err).slice(0, 160) }),
         );
       }
       // Roll back every resource created during initialization. A failed
@@ -2339,7 +2340,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       // rollback so the next screen and external QA runner can diagnose it.
       if (locationProviderSource === 'simulator') {
         useActivitySimulatorStore.getState().setLastFailure(
-          `Activity provider initialization failed: ${String(err instanceof Error ? err.message : err).slice(0, 160)}`,
+          cairnText('use-tracking-store.activity-provider-initialization-failed-value', { value1: String(err instanceof Error ? err.message : err).slice(0, 160) }),
         );
       }
       set({ ...initialState, activityMode: mode, startError: 'initialization-failed' });
@@ -2477,8 +2478,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       if (stopEntry.status === 'tracking') startActivityLifecycleTimer(stopEntry.sessionId);
       crashLogger.breadcrumb(`activity:terminal_fence_failed ${String(terminalError).slice(0, 80)}`);
       Alert.alert(
-        'Activity not saved',
-        'CairnNZ could not safely close the recording journal. Your Activity is still available; please try Finish again.',
+        cairnText('use-tracking-store.activity-not-saved'),
+        cairnText('use-tracking-store.cairnnz-could-not-safely-close-the-recording'),
       );
       return null;
     }
@@ -2589,10 +2590,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         `activity:finish_reconciliation_failed released=${released} ${String(reconciliationError).slice(0, 80)}`,
       );
       Alert.alert(
-        'Activity not saved',
+        cairnText('use-tracking-store.activity-not-saved'),
         released
-          ? 'CairnNZ could not read the complete recording journal. Your Activity remains paused so you can try Finish again.'
-          : 'CairnNZ preserved the recording, but could not reopen its journal safely. Close and reopen CairnNZ before choosing Resume or Save.',
+          ? cairnText('use-tracking-store.cairnnz-could-not-read-the-complete-recording')
+          : cairnText('use-tracking-store.cairnnz-preserved-the-recording-but-could-not'),
       );
       return {
         status: 'recoverable-failure',
@@ -2732,7 +2733,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const yyyy = d.getFullYear();
-        const label = s.activityMode === 'running' ? 'Run' : 'Hike';
+        const label = s.activityMode === 'running' ? cairnText('use-tracking-store.run') : cairnText('use-tracking-store.hike');
         return `${label} — ${dd}/${mm}/${yyyy}`;
       })();
       const finalName = (sessionName && sessionName.trim().length > 0)
@@ -2773,8 +2774,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           activeSinceMs: null,
         }).catch(() => false);
         Alert.alert(
-          'Activity needs review',
-          'The saved evidence changed while CairnNZ was closing the recording. Your Activity is preserved and paused; try Finish again.',
+          cairnText('use-tracking-store.activity-needs-review'),
+          cairnText('use-tracking-store.the-saved-evidence-changed-while-cairnnz-was'),
         );
         return {
           status: 'recoverable-failure',
@@ -3155,10 +3156,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             savingHikeStep: null,
           });
           Alert.alert(
-            'QA Activity not saved',
+            cairnText('use-tracking-store.qa-activity-not-saved'),
             qaWalTerminalized
-              ? 'Snap Lab preserved a terminal WAL and local record, but could not verify every completion index. Reopen the QA shelf before running another case.'
-              : 'Snap Lab could not verify its isolated Activity record and terminal WAL. The recording remains paused so Finish can be retried.',
+              ? cairnText('use-tracking-store.snap-lab-preserved-a-terminal-wal-and')
+              : cairnText('use-tracking-store.snap-lab-could-not-verify-its-isolated'),
           );
           return {
             status: 'recoverable-failure',
@@ -3427,10 +3428,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           asynchronousRefinementOwnsFinal = true;
         } else {
           Alert.alert(
-            'Activity not saved',
+            cairnText('use-tracking-store.activity-not-saved'),
             recovery === 'resumable'
-              ? 'CairnNZ could not safely complete the local save. Your recorded Activity remains paused so you can try again.'
-              : 'CairnNZ preserved the recording, but could not reopen its journal safely. Close and reopen CairnNZ before choosing Resume or Save.',
+              ? cairnText('use-tracking-store.cairnnz-could-not-safely-complete-the-local')
+              : cairnText('use-tracking-store.cairnnz-preserved-the-recording-but-could-not'),
           );
           finishAcceptanceSnapshotClosed = false;
           set({
@@ -4024,10 +4025,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         // recovery journal, reset the store, or claim completion unless it
         // succeeded in full. The paused Activity remains available to retry.
         Alert.alert(
-          'Activity not saved',
+          cairnText('use-tracking-store.activity-not-saved'),
           recovery === 'resumable'
-            ? 'CairnNZ could not safely complete the local save. Your recorded Activity remains paused so you can try again.'
-            : 'CairnNZ preserved the recording, but could not reopen its journal safely. Close and reopen CairnNZ before choosing Resume or Save.',
+            ? cairnText('use-tracking-store.cairnnz-could-not-safely-complete-the-local')
+            : cairnText('use-tracking-store.cairnnz-preserved-the-recording-but-could-not'),
         );
         finishAcceptanceSnapshotClosed = false;
         set({
@@ -4054,7 +4055,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           // ACK so weak Mapbox/network conditions cannot turn Finish into the
           // former 20-second blocking transaction; the same idempotent payload
           // is persisted for the sync daemon on timeout.
-          set({ savingHikeStep: 'Uploading your hike…' });
+          set({ savingHikeStep: cairnText('use-tracking-store.uploading-your-hike') });
           v412Result = await new Promise<any>((resolve, reject) => {
             let done = false;
             const timer = setInterval(() => {
@@ -4069,7 +4070,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               // Update the step message with elapsed seconds — reassures
               // the user on long uploads that progress is happening.
               if (elapsed > 2000) {
-                set({ savingHikeStep: `Uploading your hike… (${Math.floor(elapsed / 1000)}s)` });
+                set({ savingHikeStep: cairnText('use-tracking-store.uploading-your-hike-value-s', { value1: Math.floor(elapsed / 1000) }) });
               }
             }, 500);
             saveHikeAtomic(remoteId, v412Payload, idempotencyKey, s.sessionId!, ownerUserId)
@@ -4081,7 +4082,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           recordSavePhase('server_save_request', serverRequestStartedAt, {
             acknowledged: true,
           });
-          set({ savingHikeStep: 'Finalising…' });
+          set({ savingHikeStep: cairnText('use-tracking-store.finalising') });
           v412Success = true;
           crashLogger.breadcrumb(`v412:save_atomic ok sid=${v412Result?.session_id} replay=${!!v412Result?.idempotent_replay} mem_acc=${v412Result?.memory?.accepted}`);
           // 服务器已把 memory 落库 → 标 client 端 memoryStore 里对应的点为 synced
@@ -4329,10 +4330,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             stopReason = serverSaveAcknowledged ? 'saved' : 'saved_pending';
           } else {
             Alert.alert(
-              'Activity not saved',
+              cairnText('use-tracking-store.activity-not-saved'),
               recovery === 'resumable'
-                ? 'CairnNZ could not safely complete the local save. Your recorded Activity remains paused so you can try again.'
-                : 'CairnNZ preserved the recording, but could not reopen its journal safely. Close and reopen CairnNZ before choosing Resume or Save.',
+                ? cairnText('use-tracking-store.cairnnz-could-not-safely-complete-the-local')
+                : cairnText('use-tracking-store.cairnnz-preserved-the-recording-but-could-not'),
             );
             finishAcceptanceSnapshotClosed = false;
             set({
@@ -4620,8 +4621,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     if (!pauseFenceDurable) {
       set({ locationAvailable: false, startError: 'initialization-failed' });
       Alert.alert(
-        'Recording paused',
-        'CairnNZ paused the visible GPS source but could not verify background storage. You can still Finish this Activity.',
+        cairnText('use-tracking-store.recording-paused'),
+        cairnText('use-tracking-store.cairnnz-paused-the-visible-gps-source-but'),
       );
       return;
     }
@@ -6402,8 +6403,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             }).catch(() => false);
           }
           Alert.alert(
-            'Recording paused',
-            'CairnNZ could not safely store the latest GPS sample. Your earlier recorded Activity is still preserved.',
+            cairnText('use-tracking-store.recording-paused'),
+            cairnText('use-tracking-store.cairnnz-could-not-safely-store-the-latest'),
           );
         }
         return reject(`durable-commit-failed:${reason}`);
@@ -8239,8 +8240,8 @@ async function activateBackgroundSource(expectedIntentEpoch?: number): Promise<b
       pausesUpdatesAutomatically: false,
       activityType: Location.ActivityType.Fitness,
       foregroundService: {
-        notificationTitle: 'Cairn is tracking',
-        notificationBody: 'Recording your route in the background.',
+        notificationTitle: cairnText('use-tracking-store.cairn-is-tracking'),
+        notificationBody: cairnText('use-tracking-store.recording-your-route-in-the-background'),
         notificationColor: '#5d7c46',
       },
     });

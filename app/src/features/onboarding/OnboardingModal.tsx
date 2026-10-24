@@ -58,6 +58,7 @@ import { storage } from '../../store/storage';
 import { haptic } from '../../services/hapticService';
 import { useAppStore } from '../../store/useAppStore';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
+import { cairnText } from '../../i18n/runtime';
 
 const LEGACY_STORAGE_KEY = 'cairn_onboarding_v1_done';
 
@@ -196,26 +197,26 @@ export function OnboardingModal({ visible, onFinish }: Props) {
     {
       key: 'discover',
       icon: <CairnLogo size={64} />,
-      title: 'Discover Cairn',
-      body: 'A cairn is a stack of stones — a trail marker left by hikers for those who come after. This app is your quiet companion for the outdoors.',
+      title: cairnText('onboarding.onboarding-modal.discover-cairn'),
+      body: cairnText('onboarding.onboarding-modal.a-cairn-is-a-stack-of-stones'),
     },
     {
       key: 'hiking',
       icon: <HikingIcon size={64} color={theme.iconActive} />,
-      title: 'Track every hike',
-      body: 'Cairn quietly records your route, distance, and elevation.\nNo chatter, no leaderboards.',
+      title: cairnText('onboarding.onboarding-modal.track-every-hike'),
+      body: cairnText('onboarding.onboarding-modal.cairn-quietly-records-your-route-distance-and'),
     },
     {
       key: 'cairns',
       icon: <FlagMarkerIcon size={64} stoneColor={Colors.flag} flagColor={theme.iconActive} />,
-      title: 'Leave a cairn',
-      body: 'Drop a small marker with a note.\nKeep it for yourself, or share with friends walking the same trail.',
+      title: cairnText('onboarding.onboarding-modal.leave-a-cairn'),
+      body: cairnText('onboarding.onboarding-modal.drop-a-small-marker-with-a-note'),
     },
     {
       key: 'memory',
       icon: <Icon name="Footprints" size={56} color={theme.iconActive} strokeWidth={1.5} />,
-      title: 'Uncover your map',
-      body: 'Every step reveals fog on your map.\nOver months, you build a personal atlas of where you have walked.',
+      title: cairnText('onboarding.onboarding-modal.uncover-your-map'),
+      body: cairnText('onboarding.onboarding-modal.every-step-reveals-fog-on-your-map'),
     },
   ];
 
@@ -258,7 +259,7 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                     onPress={() => jumpTo((i + 1) as 1 | 2 | 3 | 4)}
                     activeOpacity={0.6}
                     accessibilityRole="button"
-                    accessibilityLabel={`Go to screen ${i + 1}`}
+                    accessibilityLabel={cairnText('onboarding.onboarding-modal.go-to-screen-value', { value1: i + 1 })}
                     hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                   >
                     <View
@@ -273,10 +274,10 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                   onPress={isLastIntro ? requestLocation : advance}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={isLastIntro ? (locationGranted === true ? 'Done' : 'Enable Location') : 'Continue'}
+                  accessibilityLabel={isLastIntro ? (locationGranted === true ? cairnText('common.done') : cairnText('onboarding.onboarding-modal.enable-location')) : cairnText('common.continue')}
                 >
                   <Text style={[styles.ctaText, { color: theme.onPrimary }]}>
-                    {isLastIntro ? (locationGranted === true ? 'Done' : 'Enable Location') : 'Continue'}
+                    {isLastIntro ? (locationGranted === true ? cairnText('common.done') : cairnText('onboarding.onboarding-modal.enable-location')) : cairnText('common.continue')}
                   </Text>
                 </TouchableOpacity>
                 {/* R114 (2026-08-07): reserved-space hint slot. User reported
@@ -289,7 +290,7 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                     granted; the slot is always reserved. */}
                 <View style={styles.ctaHintSlot}>
                   {isLastIntro && locationGranted !== true ? (
-                    <Text style={[styles.ctaHint, { color: theme.muted }]}>iOS will ask for permission next.</Text>
+                    <Text style={[styles.ctaHint, { color: theme.muted }]}>{cairnText('onboarding.onboarding-modal.ios-will-ask-for-permission-next')}</Text>
                   ) : null}
                 </View>
               </View>
@@ -300,9 +301,9 @@ export function OnboardingModal({ visible, onFinish }: Props) {
               <View style={styles.iconWrap}>
                 <Icon name="MapPin" size={56} color={theme.iconInactive} strokeWidth={1.5} />
               </View>
-              <Text style={[styles.title, { color: theme.foreground }]}>You can still use Cairn</Text>
+              <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('onboarding.onboarding-modal.you-can-still-use-cairn')}</Text>
               <Text style={[styles.body, { color: theme.foregroundSecondary }]}>
-                {"Without location, we can't record your hikes or reveal your map.\nYou can turn on location later in Settings."}
+                {cairnText('onboarding.onboarding-modal.without-location-we-can-t-record-your')}
               </Text>
               <View style={styles.ctaWrap}>
                 <TouchableOpacity
@@ -310,18 +311,18 @@ export function OnboardingModal({ visible, onFinish }: Props) {
                   onPress={finish}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel="Continue"
+                  accessibilityLabel={cairnText('common.continue')}
                 >
-                  <Text style={[styles.ctaText, { color: theme.onPrimary }]}>Continue</Text>
+                  <Text style={[styles.ctaText, { color: theme.onPrimary }]}>{cairnText('common.continue')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.secondaryBtn}
                   onPress={openSettings}
                   activeOpacity={0.6}
                   accessibilityRole="button"
-                  accessibilityLabel="Open Settings"
+                  accessibilityLabel={cairnText('onboarding.onboarding-modal.open-settings')}
                 >
-                  <Text style={[styles.secondaryText, { color: theme.foregroundSecondary }]}>Open Settings</Text>
+                  <Text style={[styles.secondaryText, { color: theme.foregroundSecondary }]}>{cairnText('onboarding.onboarding-modal.open-settings')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

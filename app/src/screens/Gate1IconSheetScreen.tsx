@@ -1,20 +1,21 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CairnIcon, type CairnIconName } from '../components/CairnIcon';
+import { cairnText } from '../i18n/runtime';
 
 const ICONS: Array<{ name: CairnIconName; label: string }> = [
-  { name: 'world', label: 'World / cairn' },
-  { name: 'memory', label: 'Memory' },
-  { name: 'trails', label: 'Trails' },
-  { name: 'friends', label: 'Shared traces' },
-  { name: 'leaveCairn', label: 'Leave cairn' },
-  { name: 'hiking', label: 'Hiking' },
-  { name: 'running', label: 'Running' },
-  { name: 'layers', label: 'Layers' },
-  { name: 'compass', label: 'Compass' },
-  { name: 'personalTrace', label: 'Personal trace' },
-  { name: 'otherTrace', label: 'Other trace' },
-  { name: 'settings', label: 'Settings' },
+  { name: 'world', get label() { return cairnText('gate1-icon-sheet-screen.world-cairn'); } },
+  { name: 'memory', get label() { return cairnText('gate1-icon-sheet-screen.memory'); } },
+  { name: 'trails', get label() { return cairnText('gate1-icon-sheet-screen.trails'); } },
+  { name: 'friends', get label() { return cairnText('gate1-icon-sheet-screen.shared-traces'); } },
+  { name: 'leaveCairn', get label() { return cairnText('gate1-icon-sheet-screen.leave-cairn'); } },
+  { name: 'hiking', get label() { return cairnText('gate1-icon-sheet-screen.hiking'); } },
+  { name: 'running', get label() { return cairnText('gate1-icon-sheet-screen.running'); } },
+  { name: 'layers', get label() { return cairnText('gate1-icon-sheet-screen.layers'); } },
+  { name: 'compass', get label() { return cairnText('gate1-icon-sheet-screen.compass'); } },
+  { name: 'personalTrace', get label() { return cairnText('gate1-icon-sheet-screen.personal-trace'); } },
+  { name: 'otherTrace', get label() { return cairnText('gate1-icon-sheet-screen.other-trace'); } },
+  { name: 'settings', get label() { return cairnText('gate1-icon-sheet-screen.settings'); } },
 ];
 
 function StatePanel({ night = false }: { night?: boolean }) {
@@ -23,8 +24,8 @@ function StatePanel({ night = false }: { night?: boolean }) {
   const muted = night ? '#7F9296' : '#87958E';
   return (
     <View style={[s.panel, { backgroundColor: night ? '#182126' : '#F3F4EE', borderColor: night ? '#344147' : '#D8DED8' }]}>
-      <Text style={[s.panelTitle, { color: night ? '#F0F4F2' : '#17372D' }]}>{night ? 'NIGHT' : 'DAY'}</Text>
-      <Text style={[s.panelSub, { color: night ? '#9CACB0' : '#68766F' }]}>same geometry · semantic contrast</Text>
+      <Text style={[s.panelTitle, { color: night ? '#F0F4F2' : '#17372D' }]}>{night ? cairnText('gate1-icon-sheet-screen.night') : cairnText('gate1-icon-sheet-screen.day')}</Text>
+      <Text style={[s.panelSub, { color: night ? '#9CACB0' : '#68766F' }]}>{cairnText('gate1-icon-sheet-screen.same-geometry-semantic-contrast')}</Text>
       <View style={s.grid}>
         {ICONS.map((item, index) => {
           const isActive = index === 0 || index === 3 || index === 4 || index === 8;
@@ -45,30 +46,30 @@ function StatePanel({ night = false }: { night?: boolean }) {
 export function Gate1IconSheetScreen() {
   return (
     <ScrollView style={s.root} contentContainerStyle={s.content}>
-      <Text style={s.eyebrow}>CAIRNNZ · GATE 2</Text>
-      <Text style={s.title}>Navigation & field controls</Text>
-      <Text style={s.intro}>Mature trail pictograms: familiar operational silhouettes, precise CairnNZ route details, and restrained active information.</Text>
+      <Text style={s.eyebrow}>{cairnText('gate1-icon-sheet-screen.cairnnz-gate-2')}</Text>
+      <Text style={s.title}>{cairnText('gate1-icon-sheet-screen.navigation-field-controls')}</Text>
+      <Text style={s.intro}>{cairnText('gate1-icon-sheet-screen.mature-trail-pictograms-familiar-operational-silhouettes-precise')}</Text>
       <View style={s.panels}>
         <StatePanel />
         <StatePanel night />
       </View>
       <View style={s.scalePanel}>
         <View>
-          <Text style={s.scaleTitle}>OPTICAL SCALE</Text>
-          <Text style={s.scaleSub}>Optical weight is tuned at real size; touch geometry remains independent.</Text>
+          <Text style={s.scaleTitle}>{cairnText('gate1-icon-sheet-screen.optical-scale')}</Text>
+          <Text style={s.scaleSub}>{cairnText('gate1-icon-sheet-screen.optical-weight-is-tuned-at-real-size')}</Text>
         </View>
         <View style={s.scaleRow}>
           {[18, 20, 22, 24].map((size) => (
             <View key={size} style={s.scaleCell}>
               <CairnIcon name="memory" size={size} color="#31594A" accent="#2F684F" active />
-              <Text style={s.scaleLabel}>{size}px</Text>
+              <Text style={s.scaleLabel}>{cairnText('gate1-icon-sheet-screen.value-px', { size: size })}</Text>
             </View>
           ))}
         </View>
       </View>
       <View style={s.ruleRow}>
-        <Text style={s.rule}>ACTIVE adds a restrained semantic fill or endpoint—not bulk.</Text>
-        <Text style={s.rule}>DAY/NIGHT keep identical geometry and change only semantic contrast.</Text>
+        <Text style={s.rule}>{cairnText('gate1-icon-sheet-screen.active-adds-a-restrained-semantic-fill-or')}</Text>
+        <Text style={s.rule}>{cairnText('gate1-icon-sheet-screen.day-night-keep-identical-geometry-and-change')}</Text>
       </View>
     </ScrollView>
   );

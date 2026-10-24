@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { ModalCard, ModalCardHeader } from '../../components/ModalCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { Spacing } from '../../components/tokens';
+import { cairnText } from '../../i18n/runtime';
 
 export function CairnDeleteDialog({
   visible,
@@ -26,21 +27,21 @@ export function CairnDeleteDialog({
       testID="cairn-delete-confirmation"
     >
       <ModalCardHeader
-        title={hiding ? 'Hide this Cairn?' : 'Withdraw and delete this Cairn?'}
+        title={hiding ? cairnText('cairns.cairn-delete-dialog.hide-this-cairn') : cairnText('cairns.cairn-delete-dialog.withdraw-and-delete-this-cairn')}
         body={hiding
-          ? 'It will leave your Memory map. This does not remove the creator’s Cairn or your Friend Content access.'
-          : 'It disappears from your collection and cannot be encountered again. Versions already acquired by other people remain in their Memory. Its source Activity, Routes, and ordinary personal Memory are unchanged.'}
+          ? cairnText('cairns.cairn-delete-dialog.it-will-leave-your-memory-map-this')
+          : cairnText('cairns.cairn-delete-dialog.it-disappears-from-your-collection-and-cannot')}
       />
       <View style={styles.actions}>
         <PrimaryButton
-          label={hiding ? 'Keep visible' : 'Keep Cairn'}
+          label={hiding ? cairnText('cairns.cairn-delete-dialog.keep-visible') : cairnText('cairns.cairn-delete-dialog.keep-cairn')}
           variant="secondary"
           onPress={onDismiss}
           disabled={busy}
           style={styles.action}
         />
         <PrimaryButton
-          label={hiding ? 'Hide Cairn' : 'Withdraw & delete'}
+          label={hiding ? cairnText('cairns.cairn-delete-dialog.hide-cairn') : cairnText('cairns.cairn-delete-dialog.withdraw-delete')}
           variant="destructive"
           onPress={onConfirm}
           loading={busy}

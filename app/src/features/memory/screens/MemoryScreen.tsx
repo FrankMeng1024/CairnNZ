@@ -83,6 +83,7 @@ import {
 import { claimMemoryGuidance } from '../services/memoryGuidance';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
+import { cairnText, formatCairnDate } from '../../../i18n/runtime';
 // v427: hierarchy migrated to async /api/hierarchy — legacy static store deleted.
 
 interface FixState { lat: number; lng: number }
@@ -170,8 +171,8 @@ export function MemoryScreen() {
       .sort((a, b) => a - b);
     if (times.length === 0) return null;
     return {
-      first: new Date(times[0]).toLocaleDateString(),
-      last: new Date(times[times.length - 1]).toLocaleDateString(),
+      first: formatCairnDate(new Date(times[0])),
+      last: formatCairnDate(new Date(times[times.length - 1])),
     };
   }, [memoryPoints, presenceWitnesses, syntheticQaAuthority, syntheticTestPoints]);
   const firstVisitDone = useMemorySettingsStore((s) => s.firstVisitDone);
@@ -1100,11 +1101,11 @@ export function MemoryScreen() {
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={acquiredUnreadCount > 0
-              ? `Open Cairn Library, ${acquiredUnreadCount} unread Cairn groups`
-              : 'Open Cairn Library'}
+              ? cairnText('memory.memory-screen.open-cairn-library-value-unread-cairn-groups', { acquiredUnreadCount: acquiredUnreadCount })
+              : cairnText('memory.memory-screen.open-cairn-library')}
           >
             <Icon name="MapPin" size={17} color={theme.iconActive} strokeWidth={2.1} />
-            <Text style={[styles.libraryActionLabel, { color: theme.foreground }]}>Library</Text>
+            <Text style={[styles.libraryActionLabel, { color: theme.foreground }]}>{cairnText('memory.memory-screen.library')}</Text>
             {acquiredUnreadCount > 0 ? (
               <View style={[styles.libraryUnread, { backgroundColor: theme.primary }]}>
                 <Text style={[styles.libraryUnreadText, { color: theme.onPrimary }]}>
@@ -1122,11 +1123,11 @@ export function MemoryScreen() {
           pointerEvents="none"
           style={[styles.evidenceContext, { top: insets.top + 120, backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
         >
-          <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>Simulator test Memory</Text>
+          <Text style={[styles.evidenceContextTitle, { color: theme.foreground }]}>{cairnText('memory.memory-screen.simulator-test-memory')}</Text>
           <Text style={[styles.evidenceContextText, { color: theme.foregroundSecondary }]}>
             {memoryEvidenceContext
-              ? `Isolated synthetic evidence · first accepted ${memoryEvidenceContext.first} · latest ${memoryEvidenceContext.last}`
-              : 'Isolated synthetic evidence · no accepted movement yet.'}
+              ? cairnText('memory.memory-screen.isolated-synthetic-evidence-first-accepted-value-latest', { first: memoryEvidenceContext.first, last: memoryEvidenceContext.last })
+              : cairnText('memory.memory-screen.isolated-synthetic-evidence-no-accepted-movement-yet')}
           </Text>
         </View>
       ) : null}
@@ -1220,39 +1221,35 @@ export function MemoryScreen() {
         />
       ) : failReason === 'permission' ? (
         <View style={styles.emptyState}>
-          <MemoryStateMark label="LOCATION + MEMORY" />
-          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Location permission needed</Text>
-          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
-            Memory needs your location to draw the map.
-          </Text>
+          <MemoryStateMark label={cairnText('memory.memory-screen.location-memory')} />
+          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{cairnText('memory.memory-screen.location-permission-needed')}</Text>
+          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>{cairnText('memory.memory-screen.memory-needs-your-location-to-draw-the')}</Text>
           <TouchableOpacity
             style={[styles.emptyPrimaryBtn, { backgroundColor: theme.primary }]}
             onPress={() => Linking.openSettings()}
             activeOpacity={0.85}
           >
-            <Text style={[styles.emptyPrimaryBtnText, { color: theme.onPrimary }]}>Open Settings</Text>
+            <Text style={[styles.emptyPrimaryBtnText, { color: theme.onPrimary }]}>{cairnText('memory.memory-screen.open-settings')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.emptySecondaryBtn}
             onPress={() => setRefetchToken((n) => n + 1)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.emptySecondaryBtnText, { color: theme.foregroundSecondary }]}>Try again</Text>
+            <Text style={[styles.emptySecondaryBtnText, { color: theme.foregroundSecondary }]}>{cairnText('memory.memory-screen.try-again')}</Text>
           </TouchableOpacity>
         </View>
       ) : failReason === 'timeout' || failReason === 'error' ? (
         <View style={styles.emptyState}>
-          <MemoryStateMark label="MEMORY MAP" />
-          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>We couldn't find your location.</Text>
-          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>
-            Check that Location Services are on, then try again.
-          </Text>
+          <MemoryStateMark label={cairnText('memory.memory-screen.memory-map')} />
+          <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{cairnText('memory.memory-screen.we-couldn-t-find-your-location')}</Text>
+          <Text style={[styles.emptySub, { color: theme.foregroundSecondary }]}>{cairnText('memory.memory-screen.check-that-location-services-are-on-then')}</Text>
           <TouchableOpacity
             style={[styles.emptyPrimaryBtn, { backgroundColor: theme.primary }]}
             onPress={() => setRefetchToken((n) => n + 1)}
             activeOpacity={0.85}
           >
-            <Text style={[styles.emptyPrimaryBtnText, { color: theme.onPrimary }]}>Try again</Text>
+            <Text style={[styles.emptyPrimaryBtnText, { color: theme.onPrimary }]}>{cairnText('memory.memory-screen.try-again')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -1291,7 +1288,7 @@ export function MemoryScreen() {
           testID="memory-finding-location"
         >
           <ActivityIndicator color={theme.primary} size="small" />
-          <Text style={[styles.locationStatusText, { color: theme.foreground }]}>Finding your location…</Text>
+          <Text style={[styles.locationStatusText, { color: theme.foreground }]}>{cairnText('memory.memory-screen.finding-your-location')}</Text>
         </View>
       ) : null}
 
@@ -1300,11 +1297,11 @@ export function MemoryScreen() {
           style={[styles.locationStatusBanner, { top: insets.top + (syntheticQaAuthority ? 174 : 120), backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={() => setRefetchToken((n) => n + 1)}
           accessibilityRole="button"
-          accessibilityLabel="Try finding your location again"
+          accessibilityLabel={cairnText('memory.memory-screen.try-finding-your-location-again')}
           testID="memory-location-unavailable"
         >
           <Icon name="Target" size={16} color={theme.iconInactive} strokeWidth={2} />
-          <Text style={[styles.locationStatusText, { color: theme.foreground }]}>We couldn't find your location. Tap to try again.</Text>
+          <Text style={[styles.locationStatusText, { color: theme.foreground }]}>{cairnText('memory.memory-screen.we-couldn-t-find-your-location-tap')}</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -1317,7 +1314,7 @@ export function MemoryScreen() {
           }}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Recenter on current location"
+          accessibilityLabel={cairnText('memory.memory-screen.recenter-on-current-location')}
           testID="memory-recenter"
         >
           {/* v334: Target icon to match HikingScreen.tsx recenter pill
@@ -1338,7 +1335,7 @@ export function MemoryScreen() {
           ]}
           testID="memory-city-switcher"
           accessibilityRole="button"
-          accessibilityLabel="Browse explored cities"
+          accessibilityLabel={cairnText('memory.memory-screen.browse-explored-cities')}
           onPress={async () => {
             if (hierarchyOpen) {
               setHierarchyOpen(false);
@@ -1409,13 +1406,11 @@ export function MemoryScreen() {
           style={[styles.memoryRestoreBanner, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={handleRetryInitialMemory}
           accessibilityRole="button"
-          accessibilityLabel="Connect and retry restoring Memory"
+          accessibilityLabel={cairnText('memory.memory-screen.connect-and-retry-restoring-memory')}
           testID="memory-initial-reconcile-offline"
         >
           <Icon name="CloudOff" size={14} color={theme.iconInactive} strokeWidth={2.2} />
-          <Text style={[styles.slowBannerText, { color: theme.foregroundSecondary, marginLeft: 7 }]} numberOfLines={2}>
-            Connect to restore Memory · Tap to retry
-          </Text>
+          <Text style={[styles.slowBannerText, { color: theme.foregroundSecondary, marginLeft: 7 }]} numberOfLines={2}>{cairnText('memory.memory-screen.connect-to-restore-memory-tap-to-retry')}</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -1440,7 +1435,7 @@ export function MemoryScreen() {
               }
             }}
             accessibilityRole={fogUnavailable || targetFriendFailureVisible || cameraTransitionState === 'error' ? 'button' : undefined}
-            accessibilityLabel={fogUnavailable || targetFriendFailureVisible || cameraTransitionState === 'error' ? 'Retry loading map' : 'Loading map'}
+            accessibilityLabel={fogUnavailable || targetFriendFailureVisible || cameraTransitionState === 'error' ? cairnText('memory.memory-screen.retry-loading-map') : cairnText('memory.memory-screen.loading-map')}
             testID="memory-map-status"
           >
             {fogUnavailable || targetFriendFailureVisible || cameraTransitionState === 'error' ? (
@@ -1450,16 +1445,16 @@ export function MemoryScreen() {
             )}
             <Text style={[styles.mapStatusText, { color: theme.foreground }]} numberOfLines={2}>
               {cameraTransitionState === 'error'
-                ? 'Map tiles couldn’t load · Tap to retry'
+                ? cairnText('memory.memory-screen.map-tiles-couldn-t-load-tap-to')
                 : cameraTransitionState === 'loading'
-                    ? 'Loading this place…'
+                    ? cairnText('memory.memory-screen.loading-this-place')
                     : (selectionError ?? friendProjectionError) === 'offline'
-                ? 'Connect to load shared places · Tap to retry'
+                ? cairnText('memory.memory-screen.connect-to-load-shared-places-tap-to')
                 : (selectionError ?? friendProjectionError) === 'unauthorized'
-                  ? 'Shared places are no longer available · Tap to refresh'
+                  ? cairnText('memory.memory-screen.shared-places-are-no-longer-available-tap')
                   : fogUnavailable
-                    ? 'Shared map couldn’t load · Tap to retry'
-                    : 'Loading shared map…'}
+                    ? cairnText('memory.memory-screen.shared-map-couldn-t-load-tap-to')
+                    : cairnText('memory.memory-screen.loading-shared-map')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1503,25 +1498,18 @@ export function MemoryScreen() {
           style={[styles.slowBanner, { top: insets.top + 254, left: 80, right: 12, zIndex: 14 }]}
           onPress={() => setAcquiredClusterError(false)}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss cluster retry message"
+          accessibilityLabel={cairnText('memory.memory-screen.dismiss-cluster-retry-message')}
         >
           <Icon name="RotateCcw" size={13} color={theme.iconInactive} strokeWidth={2.2} />
-          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={2}>
-            Could not resolve every Cairn · Dismiss, then tap the cluster to retry
-          </Text>
+          <Text style={[styles.slowBannerText, { marginLeft: 6 }]} numberOfLines={2}>{cairnText('memory.memory-screen.could-not-resolve-every-cairn-dismiss-then')}</Text>
         </TouchableOpacity>
       ) : null}
 
       <ModalCard visible={showHint && isMemoryFocused} onDismiss={dismissHint} testID="memory-unlock-guidance">
           <View>
-            <Text style={[styles.hintTitle, { color: theme.foreground }]}>Walk to unlock your memory</Text>
-            <Text style={[styles.hintBody, { color: theme.foregroundSecondary }]}>
-              The map starts covered in fog. As you walk around, the fog clears
-              and the places you have been become part of your memory.
-              {'\n\n'}
-              Cairns left by you and others appear as you discover them.
-            </Text>
-            <AppButton label="Got it" onPress={dismissHint} />
+            <Text style={[styles.hintTitle, { color: theme.foreground }]}>{cairnText('memory.memory-screen.walk-to-unlock-your-memory')}</Text>
+            <Text style={[styles.hintBody, { color: theme.foregroundSecondary }]}>{cairnText('memory.memory-screen.the-map-starts-covered-in-fog-as', { value1: '\n\n' })}</Text>
+            <AppButton label={cairnText('memory.memory-screen.got-it')} onPress={dismissHint} />
           </View>
       </ModalCard>
 
@@ -1531,8 +1519,8 @@ export function MemoryScreen() {
         testID="memory-acquired-cairn-group"
       >
         <ModalCardHeader
-          title={`${acquiredGroupRows.length} Cairns here`}
-          body={`${acquiredGroupRows.filter(row => row.unread).length} unread · opening this list does not mark stories read`}
+          title={cairnText('memory.memory-screen.value-cairns-here', { length: acquiredGroupRows.length })}
+          body={cairnText('memory.memory-screen.value-unread-opening-this-list-does-not', { length: acquiredGroupRows.filter(row => row.unread).length })}
           onClose={() => setAcquiredGroupIds(null)}
         />
         <FlatList
@@ -1545,24 +1533,22 @@ export function MemoryScreen() {
           windowSize={7}
           renderItem={({ item: row }) => {
             const source = row.sourceAudience === 'friends'
-              ? (row.authorName ? `Friend · ${row.authorName}` : 'Friend Cairn')
-              : 'Public Cairn';
-            const acquired = row.acquiredAt ? new Date(row.acquiredAt).toLocaleDateString() : 'Saved in Memory';
+              ? (row.authorName ? cairnText('memory.cairn-source.friend-name', { name: row.authorName }) : cairnText('memory.cairn-source.friend'))
+              : cairnText('memory.cairn-source.public');
+            const acquired = row.acquiredAt ? formatCairnDate(new Date(row.acquiredAt)) : cairnText('memory.saved-in-memory');
             return (
               <TouchableOpacity
                 key={row.markerId}
                 style={[styles.acquiredGroupRow, { borderColor: theme.border }]}
                 onPress={() => nav.navigate('AcquiredCairnDetail', { markerId: row.markerId })}
                 accessibilityRole="button"
-                accessibilityLabel={`${source}, ${row.unread ? 'unread' : 'read'}, found ${acquired}`}
+                accessibilityLabel={cairnText('memory.memory-screen.value-value-found-value', { source: source, value2: row.unread ? cairnText('memory.cairn-state.unread') : cairnText('memory.cairn-state.read'), acquired: acquired })}
               >
                 <View style={styles.acquiredGroupCopy}>
                   <Text style={[styles.acquiredGroupTitle, { color: theme.foreground }]} numberOfLines={1}>
                     {row.title || row.preview || source}
                   </Text>
-                  <Text style={[styles.acquiredGroupMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>
-                    {source} · {acquired}{Number(row.revisionCount) > 1 ? ` · ${row.revisionCount} versions` : ''}
-                  </Text>
+                  <Text style={[styles.acquiredGroupMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{cairnText('memory.memory-screen.value-value-value', { source: source, acquired: acquired, value3: Number(row.revisionCount) > 1 ? cairnText('memory.memory-screen.value-versions', { revisionCount: Number(row.revisionCount) }) : '' })}</Text>
                   {row.title && row.preview ? (
                     <Text style={[styles.acquiredGroupPreview, { color: theme.muted }]} numberOfLines={2}>{row.preview}</Text>
                   ) : null}

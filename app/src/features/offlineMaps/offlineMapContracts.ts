@@ -1,4 +1,5 @@
-export const OFFLINE_MAP_PACK_PREFIX = 'cairn-offline-v1-';
+
+import { cairnText } from '../../i18n/runtime';export const OFFLINE_MAP_PACK_PREFIX = 'cairn-offline-v1-';
 export const OFFLINE_MAP_MIN_ZOOM = 10;
 export const OFFLINE_MAP_MAX_ZOOM = 15;
 export const OFFLINE_MAP_RADIUS_OPTIONS_KM = [2, 5, 10] as const;
@@ -94,8 +95,8 @@ export function isCairnOfflineMapPack(name: unknown): name is string {
 }
 
 export function formatOfflineMapBytes(value: number | null): string {
-  if (value == null || !Number.isFinite(value) || value < 0) return 'Size unavailable';
-  if (value < 1024) return `${Math.round(value)} B`;
-  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value == null || !Number.isFinite(value) || value < 0) return cairnText('offline-maps.offline-map-contracts.size-unavailable');
+  if (value < 1024) return cairnText('offline-maps.offline-map-contracts.value-b', { value1: Math.round(value) });
+  if (value < 1024 * 1024) return cairnText('offline-maps.offline-map-contracts.value-kb', { value1: Math.round(value / 1024) });
+  return cairnText('offline-maps.offline-map-contracts.value-mb', { value1: (value / (1024 * 1024)).toFixed(1) });
 }

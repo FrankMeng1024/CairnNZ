@@ -9,6 +9,7 @@ import { HomeProductIcon } from '../../components/home/HomeProductIcon';
 import { HomeActionCandidateIcon, type HikingIconCandidate, type RunningIconCandidate } from '../../components/home/HomeActionCandidateIcon';
 import { SunnyMotionLayer } from '../../components/home/SunnyMotionLayer';
 import { getRegisteredBackgroundLayout, type HomeBackgroundTokens } from '../../utils/homeBackground';
+import { cairnText } from '../../i18n/runtime';
 
 // Auto-generated from Home.spec.json  viewport 375x812
 // States: H0, H1
@@ -59,10 +60,10 @@ export function HomeScreen(props: {
   const nav = useNavigation<any>();
   const state = props.state ?? 'H0';
   const initial = props.initial ?? '?';
-  const greetingName = props.greetingName ?? 'Explorer';
-  const defaultActivityNoun = props.lastHikeMode === 'running' ? 'run' : 'hike';
-  const lastHikeTitle = props.lastHikeTitle ?? `Recent ${defaultActivityNoun}`;
-  const lastHikeEyebrow = props.lastHikeEyebrow ?? `Last ${defaultActivityNoun}`;
+  const greetingName = props.greetingName ?? cairnText('home-generated.home-screen-generated.explorer');
+  const defaultActivityNoun = props.lastHikeMode === 'running' ? cairnText('home-generated.home-screen-generated.run') : cairnText('home-generated.home-screen-generated.hike');
+  const lastHikeTitle = props.lastHikeTitle ?? cairnText('home-generated.home-screen-generated.recent-value', { defaultActivityNoun: defaultActivityNoun });
+  const lastHikeEyebrow = props.lastHikeEyebrow ?? cairnText('home-generated.home-screen-generated.last-value', { defaultActivityNoun: defaultActivityNoun });
   const lastHikeMeta = props.lastHikeMeta ?? '';
   const lastHikeDetails = props.lastHikeDetails ?? [];
   const countryName = props.countryName;
@@ -200,8 +201,8 @@ export function HomeScreen(props: {
     ? (percentOfCountry < 0.01 ? '0.01' : percentOfCountry.toFixed(2))
     : (km2 < 0.1 ? '0.1' : km2.toFixed(1));
   const unitText = showPercent
-    ? `% of ${countryName || 'the map'}`
-    : `km² of ${countryName || 'your world'}`;
+    ? cairnText('home-generated.home-screen-generated.of-value-b9d1fb6', { value1: countryName || cairnText('home.generated.the-map') })
+    : cairnText('home-generated.home-screen-generated.km-of-value', { value1: countryName || cairnText('home-generated.home-screen-generated.your-world') });
   const renderLastHikeCard = () => (
     <TouchableOpacity
       activeOpacity={props.onLastHikePress ? 0.85 : 1}
@@ -209,8 +210,8 @@ export function HomeScreen(props: {
       onPress={props.onLastHikePress}
       style={[styles.H1__last_hike_card, cardContainerOverride]}
       accessibilityRole={props.onLastHikePress ? 'button' : undefined}
-      accessibilityLabel={`${lastHikeEyebrow}: ${lastHikeTitle}`}
-      accessibilityHint={props.onLastHikePress ? 'Open this Activity without changing its recording state' : undefined}
+      accessibilityLabel={cairnText('home-generated.home-screen-generated.value-value', { lastHikeEyebrow: lastHikeEyebrow, lastHikeTitle: lastHikeTitle })}
+      accessibilityHint={props.onLastHikePress ? cairnText('home-generated.home-screen-generated.open-this-activity-without-changing-its-recording') : undefined}
     >
       <Text style={[styles.H1__last_hike_card__last_hike_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{lastHikeEyebrow}</Text>
       <Text style={[styles.H1__last_hike_card__last_hike_title, cardText ? { color: cardText } : null]}>{lastHikeTitle}</Text>
@@ -240,51 +241,51 @@ export function HomeScreen(props: {
           <Image source={bgAsset} style={[{ position: 'absolute' }, backgroundLayout]} resizeMode="cover" />
           {props.sunnyMotionEnabled ? <SunnyMotionLayer /> : null}
           <LinearGradient colors={scenicScrim} locations={[0, 0.34, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-          <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
+          <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{cairnText('home-generated.home-screen-generated.kia-ora')}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={props.onHikingPress ?? (() => nav.navigate('Hiking' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_hiking__icon}>{renderActionIcon('hiking')}</View>
-              <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
+              <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{cairnText('home-generated.home-screen-generated.hiking')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={props.onRunningPress ?? (() => nav.navigate('Running' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_running__icon}>{renderActionIcon('running')}</View>
-              <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
+              <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{cairnText('home-generated.home-screen-generated.running')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={props.onPlantPress ?? (() => nav.navigate('Plant' as never, { origin: { kind: 'standalone' } } as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_leave_cairn__icon}>{renderActionIcon('leaveCairn')}</View>
-              <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
+              <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{cairnText('home-generated.home-screen-generated.leave-a-cairn')}</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.shared__tab_bar, tabBarOverride]}>
             <TouchableOpacity style={styles.shared__tab_bar__tab_trails} onPress={() => nav.navigate('Routes' as never)}>
               <View style={styles.shared__tab_bar__tab_trails_icon_wrap}>{renderNavIcon('trails')}</View>
-              <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>Trails</Text>
+              <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.trails')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_friends} onPress={() => nav.navigate('Friends' as never)}>
               <View style={styles.shared__tab_bar__tab_friends_icon_wrap}>{renderNavIcon('friends')}</View>
-              <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
+              <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.friends')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)} accessibilityLabel={memoryUnreadCount > 0 ? `Memory, ${memoryUnreadCount} unread Cairn groups` : 'Memory'}>
+            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)} accessibilityLabel={memoryUnreadCount > 0 ? cairnText('home-generated.home-screen-generated.memory-value-unread-cairn-groups', { memoryUnreadCount: memoryUnreadCount }) : cairnText('home-generated.home-screen-generated.memory')}>
               <View style={styles.shared__tab_bar__tab_memory_icon_wrap}>{renderMemoryNavIcon()}</View>
-              <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
+              <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.memory')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>
               <View style={styles.shared__tab_bar__tab_settings_icon_wrap}>{renderNavIcon('settings')}</View>
-              <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>Settings</Text>
+              <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.settings')}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.H0__hero_invite_block}>
-            <Text style={[styles.H0__hero_invite_1, heroBigTextOverride]}>{countryName || 'Your world'}</Text>
-            <Text style={[styles.H0__hero_invite_2, heroBigTextOverride]}>{'is waiting.'}</Text>
-            <Text style={[styles.H0__hero_invite_sub, heroSubTextOverride]}>{'Every step becomes your map.'}</Text>
+            <Text style={[styles.H0__hero_invite_1, heroBigTextOverride]}>{countryName || cairnText('home-generated.home-screen-generated.your-world')}</Text>
+            <Text style={[styles.H0__hero_invite_2, heroBigTextOverride]}>{cairnText('home-generated.home-screen-generated.is-waiting')}</Text>
+            <Text style={[styles.H0__hero_invite_sub, heroSubTextOverride]}>{cairnText('home-generated.home-screen-generated.every-step-becomes-your-map')}</Text>
           </View>
           {props.onLastHikePress ? renderLastHikeCard() : (
             <View style={[styles.H0__first_journey_card, cardContainerOverride]}>
-              <Text style={[styles.H0__first_journey_card__first_journey_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{'Your first trail'}</Text>
-              <Text style={[styles.H0__first_journey_card__first_journey_title, cardText ? { color: cardText } : null]}>{'Head outside.'}</Text>
-              <Text style={[styles.H0__first_journey_card__first_journey_title2, cardText ? { color: cardText } : null]}>{'Unravel your world.'}</Text>
-              <Text style={[styles.H0__first_journey_card__first_journey_hint, cardTextMuted ? { color: cardTextMuted } : null]}>{'Tap an activity above to start.'}</Text>
+              <Text style={[styles.H0__first_journey_card__first_journey_eyebrow, cardTextMuted ? { color: cardTextMuted } : null]}>{cairnText('home-generated.home-screen-generated.your-first-trail')}</Text>
+              <Text style={[styles.H0__first_journey_card__first_journey_title, cardText ? { color: cardText } : null]}>{cairnText('home-generated.home-screen-generated.head-outside')}</Text>
+              <Text style={[styles.H0__first_journey_card__first_journey_title2, cardText ? { color: cardText } : null]}>{cairnText('home-generated.home-screen-generated.unravel-your-world')}</Text>
+              <Text style={[styles.H0__first_journey_card__first_journey_hint, cardTextMuted ? { color: cardTextMuted } : null]}>{cairnText('home-generated.home-screen-generated.tap-an-activity-above-to-start')}</Text>
             </View>
           )}
         </>
@@ -294,41 +295,41 @@ export function HomeScreen(props: {
           <Image source={bgAsset} style={[{ position: 'absolute' }, backgroundLayout]} resizeMode="cover" />
           {props.sunnyMotionEnabled ? <SunnyMotionLayer /> : null}
           <LinearGradient colors={scenicScrim} locations={[0, 0.34, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-          <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{'Kia ora,'}</Text>
+          <Text style={[styles.shared__greeting_eyebrow, heroSubTextOverride]}>{cairnText('home-generated.home-screen-generated.kia-ora')}</Text>
           <Text style={[styles.shared__greeting_name, heroBigTextOverride]}>{greetingName}</Text>
           <View style={styles.shared__action_row}>
             <TouchableOpacity style={[styles.shared__action_row__action_hiking, actionButtonOverride]} onPress={props.onHikingPress ?? (() => nav.navigate('Hiking' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_hiking__icon}>{renderActionIcon('hiking')}</View>
-              <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{'Hiking'}</Text>
+              <Text style={[styles.shared__action_row__action_hiking__label, actionText ? { color: actionText } : null]}>{cairnText('home-generated.home-screen-generated.hiking')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_running, actionButtonOverride]} onPress={props.onRunningPress ?? (() => nav.navigate('Running' as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_running__icon}>{renderActionIcon('running')}</View>
-              <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{'Running'}</Text>
+              <Text style={[styles.shared__action_row__action_running__label, actionText ? { color: actionText } : null]}>{cairnText('home-generated.home-screen-generated.running')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.shared__action_row__action_leave_cairn, actionButtonOverride]} onPress={props.onPlantPress ?? (() => nav.navigate('Plant' as never, { origin: { kind: 'standalone' } } as never))} activeOpacity={0.85}>
               <View style={styles.shared__action_row__action_leave_cairn__icon}>{renderActionIcon('leaveCairn')}</View>
-              <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{'Leave a Cairn'}</Text>
+              <Text style={[styles.shared__action_row__action_leave_cairn__label, actionText ? { color: actionText } : null]}>{cairnText('home-generated.home-screen-generated.leave-a-cairn')}</Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.shared__tab_bar, tabBarOverride]}>
             <TouchableOpacity style={styles.shared__tab_bar__tab_trails} onPress={() => nav.navigate('Routes' as never)}>
               <View style={styles.shared__tab_bar__tab_trails_icon_wrap}>{renderNavIcon('trails')}</View>
-              <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>Trails</Text>
+              <Text style={[styles.shared__tab_bar__tab_trails_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.trails')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_friends} onPress={() => nav.navigate('Friends' as never)}>
               <View style={styles.shared__tab_bar__tab_friends_icon_wrap}>{renderNavIcon('friends')}</View>
-              <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>Friends</Text>
+              <Text style={[styles.shared__tab_bar__tab_friends_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.friends')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)} accessibilityLabel={memoryUnreadCount > 0 ? `Memory, ${memoryUnreadCount} unread Cairn groups` : 'Memory'}>
+            <TouchableOpacity style={styles.shared__tab_bar__tab_memory} onPress={() => nav.navigate('Memory' as never)} accessibilityLabel={memoryUnreadCount > 0 ? cairnText('home-generated.home-screen-generated.memory-value-unread-cairn-groups', { memoryUnreadCount: memoryUnreadCount }) : cairnText('home-generated.home-screen-generated.memory')}>
               <View style={styles.shared__tab_bar__tab_memory_icon_wrap}>{renderMemoryNavIcon()}</View>
-              <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>Memory</Text>
+              <Text style={[styles.shared__tab_bar__tab_memory_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.memory')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shared__tab_bar__tab_settings} onPress={() => nav.navigate('Settings' as never)}>
               <View style={styles.shared__tab_bar__tab_settings_icon_wrap}>{renderNavIcon('settings')}</View>
-              <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>Settings</Text>
+              <Text style={[styles.shared__tab_bar__tab_settings_label, tabText ? { color: tabText } : null]}>{cairnText('home-generated.home-screen-generated.settings')}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={[styles.H1__hero_metric_eyebrow, heroSubTextOverride]}>{'You\'ve explored'}</Text>
+          <Text style={[styles.H1__hero_metric_eyebrow, heroSubTextOverride]}>{cairnText('home-generated.home-screen-generated.you-ve-explored')}</Text>
           {/* R21 (2026-08-17 user "数字+km 在一起, 数字右上角小切换按钮"):
               hero_metric_number + unit inline via absolute-positioned row,
               toggle button at top-right of that row. */}
@@ -345,7 +346,7 @@ export function HomeScreen(props: {
                 marginLeft: 6, marginTop: 12,
               }
             ]}>
-              {showPercent ? '%' : 'km²'}
+              {showPercent ? '%' : cairnText('home-generated.home-screen-generated.km')}
             </Text>
             {props.onToggleUnit && (
               <TouchableOpacity
@@ -356,7 +357,7 @@ export function HomeScreen(props: {
                   padding: 2,
                   backgroundColor: 'transparent',
                 }}
-                accessibilityLabel="Toggle km² / %"
+                accessibilityLabel={cairnText('home-generated.home-screen-generated.toggle-km')}
               >
                 <Icon name="ArrowLeftRight" size={14} color={textColor} strokeWidth={2.2} />
               </TouchableOpacity>
@@ -364,7 +365,7 @@ export function HomeScreen(props: {
           </View>
           {/* Subtitle line below the number: "of {city}" or "of the map" */}
           <Text style={[styles.H1__hero_metric_unit, heroSubTextOverride]}>
-            {showPercent ? `of ${countryName || 'the map'}` : `of ${countryName || 'your world'}`}
+            {showPercent ? cairnText('home-generated.home-screen-generated.of-value', { value1: countryName || cairnText('home.generated.the-map') }) : cairnText('home-generated.home-screen-generated.of-value', { value1: countryName || cairnText('home-generated.home-screen-generated.your-world') })}
           </Text>
           {/* R21 (2026-08-17): duplicate top-right toggle removed. The new
               inline toggle sits next to the km² label. */}

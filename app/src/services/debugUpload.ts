@@ -30,6 +30,7 @@ import * as Application from 'expo-application';
 import { API_BASE_URL } from '../config/api';
 import { OTA_VERSION } from '../components/OtaBadge';
 import { crashLogger } from './crashLogger';
+import { cairnText } from '../i18n/runtime';
 
 interface PickedPhoto {
   uri: string;
@@ -69,7 +70,7 @@ interface PickOpts {
 export async function pickDebugScreenshots(opts: PickOpts = {}): Promise<PickOutcome> {
   const limit = opts.selectionLimit ?? 3;
   if (Platform.OS === 'web') {
-    return { kind: 'error', message: 'Web upload not supported' };
+    return { kind: 'error', message: cairnText('debug-upload.web-upload-not-supported') };
   }
   try {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -95,7 +96,7 @@ export async function pickDebugScreenshots(opts: PickOpts = {}): Promise<PickOut
       })),
     };
   } catch (e: any) {
-    return { kind: 'error', message: e?.message ?? 'pick failed' };
+    return { kind: 'error', message: e?.message ?? cairnText('debug-upload.pick-failed') };
   }
 }
 
@@ -106,7 +107,7 @@ export async function uploadDebugScreenshots(
 ): Promise<UploadResult> {
   const total = photos.length;
   if (Platform.OS === 'web') {
-    return { okCount: 0, total, lastError: 'Web upload not supported' };
+    return { okCount: 0, total, lastError: cairnText('debug-upload.web-upload-not-supported-fa6c159') };
   }
   let okCount = 0;
   let lastError: string | null = null;
@@ -137,7 +138,7 @@ export async function uploadDebugScreenshots(
         },
       });
       if (uploadResult.status < 200 || uploadResult.status >= 300) {
-        let errText = `HTTP ${uploadResult.status}`;
+        let errText = cairnText('debug-upload.http-value', { status: uploadResult.status });
         try {
           const j = JSON.parse(uploadResult.body || '{}');
           if (j?.error) errText = j.error;
@@ -150,7 +151,7 @@ export async function uploadDebugScreenshots(
       crashLogger.breadcrumb(`debug-snapshot[${origin}] uploaded ${i + 1}/${total}: ${id}`);
       onProgress?.({ index: i + 1, total, ok: true });
     } catch (e: any) {
-      lastError = e?.message ?? 'upload failed';
+      lastError = e?.message ?? cairnText('debug-upload.upload-failed');
       crashLogger.breadcrumb(
         `debug-snapshot[${origin}] upload failed ${i + 1}/${total}: ${lastError}`,
       );

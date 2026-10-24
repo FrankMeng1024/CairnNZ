@@ -31,6 +31,7 @@ import {
   CairnStoneMark,
   useCairnPaperExit,
 } from '../features/cairns/components/CairnPaper';
+import { cairnText, formatCairnDate } from '../i18n/runtime';
 
 type DetailRoute = RouteProp<RootStackParamList, 'AcquiredCairnDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -103,7 +104,7 @@ export function AcquiredCairnDetailScreen() {
       if (!isCurrentOwner()) return;
       if (!acquiredCairnHistoryRequestIsCurrent(ownerId, route.params.markerId, requestEpoch)) {
         setRevisions([]);
-        setError('This acquired Cairn is unavailable right now.');
+        setError(cairnText('acquired-cairn-detail-screen.this-acquired-cairn-is-unavailable-right-now'));
         return;
       }
       const exactIndex = route.params.revisionId
@@ -111,7 +112,7 @@ export function AcquiredCairnDetailScreen() {
         : 0;
       if (route.params.revisionId && exactIndex < 0) {
         setRevisions([]);
-        setError('This exact encountered version is no longer available. Newer pages were not opened in its place.');
+        setError(cairnText('acquired-cairn-detail-screen.this-exact-encountered-version-is-no-longer'));
         return;
       }
       setRevisions(next);
@@ -121,7 +122,7 @@ export function AcquiredCairnDetailScreen() {
       const reason = cause instanceof Error ? cause.message : '';
       if (reason === 'KNOWN_UNAVAILABLE' || reason === 'AUTHORIZATION_UNCONFIRMED') {
         setRevisions([]);
-        setError('This acquired Cairn is unavailable right now.');
+        setError(cairnText('acquired-cairn-detail-screen.this-acquired-cairn-is-unavailable-right-now'));
       } else {
         const cached = await loadCachedAcquiredCairnHistory(ownerId, route.params.markerId).catch(() => null);
         if (!isCurrentOwner()) return;
@@ -133,8 +134,8 @@ export function AcquiredCairnDetailScreen() {
           setPageIndex(cachedExactIndex);
           setShowingOfflineCopy(true);
         } else if (route.params.revisionId) {
-          setError('This exact encountered version is unavailable right now. Reconnect to try again.');
-        } else setError('This acquired Cairn is unavailable right now.');
+          setError(cairnText('acquired-cairn-detail-screen.this-exact-encountered-version-is-unavailable-right'));
+        } else setError(cairnText('acquired-cairn-detail-screen.this-acquired-cairn-is-unavailable-right-now'));
       }
     } finally {
       if (isCurrentOwner()) setLoading(false);
@@ -169,7 +170,7 @@ export function AcquiredCairnDetailScreen() {
     }).then(response => {
       if (!active) return;
       if (!response.ok) {
-        setReviewMessage('Could not mark this page as read. It remains unread.');
+        setReviewMessage(cairnText('acquired-cairn-detail-screen.could-not-mark-this-page-as-read'));
         return;
       }
       const openedAt = new Date().toISOString();
@@ -179,7 +180,7 @@ export function AcquiredCairnDetailScreen() {
       void updateCachedAcquiredRevision(ownerId, route.params.markerId, revision.revision_id, { opened_at: openedAt });
       void useCairnPresentationStore.getState().refreshAcquiredMap();
     }).catch(() => {
-      if (active) setReviewMessage('Could not mark this page as read. It remains unread.');
+      if (active) setReviewMessage(cairnText('acquired-cairn-detail-screen.could-not-mark-this-page-as-read'));
     }).finally(() => actionFlights.current.delete(flightKey));
     return () => { active = false; };
   }, [ownerId, pageIndex, revisions, route.params.markerId]);
@@ -208,12 +209,12 @@ export function AcquiredCairnDetailScreen() {
         setManageOpen(false);
         setConfirmingRemove(false);
         setRevisions([]);
-        setError('This acquired Cairn is no longer available to this account.');
+        setError(cairnText('acquired-cairn-detail-screen.this-acquired-cairn-is-no-longer-available'));
       } else {
-        setActionError(`${action === 'archive' ? 'Archive' : 'Remove'} did not complete. The Cairn is still here; check your connection and try again.`);
+        setActionError(cairnText('acquired-cairn-detail-screen.value-did-not-complete-the-cairn-is', { value1: action === 'archive' ? cairnText('common.action.archive') : cairnText('common.action.remove') }));
       }
     } catch {
-      setActionError(`${action === 'archive' ? 'Archive' : 'Remove'} did not complete. The Cairn is still here; check your connection and try again.`);
+      setActionError(cairnText('acquired-cairn-detail-screen.value-did-not-complete-the-cairn-is', { value1: action === 'archive' ? cairnText('common.action.archive') : cairnText('common.action.remove') }));
     } finally {
       if (collectionFlight.current === flight) collectionFlight.current = null;
       if (!accepted && String(useAppStore.getState().user?.id ?? '') === ownerId) setCollectionAction(null);
@@ -242,8 +243,8 @@ export function AcquiredCairnDetailScreen() {
           ? { ...revision, thanked_at: revision.thanked_at || thankedAt }
           : revision));
         await updateCachedAcquiredRevision(ownerId, route.params.markerId, revisionId, { thanked_at: thankedAt });
-      } else setReviewMessage('Could not send Thanks. Try again later.');
-    } catch { setReviewMessage('Could not send Thanks. Try again later.'); }
+      } else setReviewMessage(cairnText('acquired-cairn-detail-screen.could-not-send-thanks-try-again-later'));
+    } catch { setReviewMessage(cairnText('acquired-cairn-detail-screen.could-not-send-thanks-try-again-later')); }
     finally { actionFlights.current.delete(flightKey); }
   };
 
@@ -261,8 +262,8 @@ export function AcquiredCairnDetailScreen() {
         }),
       });
       if (String(useAppStore.getState().user?.id ?? '') !== ownerId) return;
-      setReviewMessage(response.ok ? 'Report sent for review.' : 'Could not send the report. Try again later.');
-    } catch { setReviewMessage('Could not send the report. Try again later.'); }
+      setReviewMessage(response.ok ? cairnText('acquired-cairn-detail-screen.report-sent-for-review') : cairnText('acquired-cairn-detail-screen.could-not-send-the-report-try-again'));
+    } catch { setReviewMessage(cairnText('acquired-cairn-detail-screen.could-not-send-the-report-try-again')); }
     finally { actionFlights.current.delete(flightKey); }
   };
 
@@ -270,20 +271,20 @@ export function AcquiredCairnDetailScreen() {
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <BackButton variant="inline" onPress={closeWithPaper} testID="acquired-cairn-close" />
-        <Text style={[styles.title, { color: theme.foreground }]}>Found Cairn</Text>
-        <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>Versions you acquired during genuine visits remain in your Memory.</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('acquired-cairn-detail-screen.found-cairn')}</Text>
+        <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.versions-you-acquired-during-genuine-visits-remain')}</Text>
       </View>
       {loading ? <ActivityIndicator style={styles.loading} color={theme.primary} /> : error ? (
         <View style={styles.state}>
           <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{error}</Text>
-          <PrimaryButton label="Try again" onPress={() => void load()} />
+          <PrimaryButton label={cairnText('acquired-cairn-detail-screen.try-again')} onPress={() => void load()} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           {showingOfflineCopy ? (
             <View style={[styles.offlineNotice, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Icon name="CloudOff" size={16} color={theme.iconInactive} />
-              <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>Offline copy from this account. This device keeps up to the latest 100 acquired versions; reconnect for older history and new actions.</Text>
+              <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.offline-copy-from-this-account-this-device')}</Text>
             </View>
           ) : null}
           {revisions[pageIndex] ? (() => {
@@ -296,26 +297,26 @@ export function AcquiredCairnDetailScreen() {
                 <View style={styles.revisionIdentity}>
                   <CairnStoneMark size={34} tone={revision.source_audience === 'friends' ? 'friends' : 'public'} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.revisionTitle, { color: theme.foreground }]}>Found {new Date(revision.acquired_at).toLocaleDateString()}</Text>
-                    <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{revision.source_audience === 'friends' ? 'Left by a friend' : 'Left anonymously'}</Text>
+                    <Text style={[styles.revisionTitle, { color: theme.foreground }]}>{cairnText('acquired-cairn-detail-screen.found-value', { value1: formatCairnDate(new Date(revision.acquired_at)) })}</Text>
+                    <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{revision.source_audience === 'friends' ? cairnText('acquired-cairn-detail-screen.left-by-a-friend') : cairnText('acquired-cairn-detail-screen.left-anonymously')}</Text>
                   </View>
                 </View>
-                <CairnStatusPill label={pageIndex === 0 ? 'Latest found' : `Version ${revision.content_revision}`} tone="muted" />
+                <CairnStatusPill label={pageIndex === 0 ? cairnText('acquired-cairn-detail-screen.latest-found') : cairnText('acquired-cairn-detail-screen.version-value', { content_revision: revision.content_revision })} tone="muted" />
               </View>
               {revision.availability === 'available' ? (
                 <View style={styles.noteCopy}>
                   {words.title.trim() ? <Text style={[styles.noteTitle, { color: theme.foreground }]}>{words.title}</Text> : null}
                   <Text style={[styles.body, { color: words.body.trim() ? theme.foreground : theme.muted }]}>
-                    {words.body.trim() || (words.title.trim() ? '' : 'A quiet marker of this place.')}
+                    {words.body.trim() || (words.title.trim() ? '' : cairnText('acquired-cairn-detail-screen.a-quiet-marker-of-this-place'))}
                   </Text>
                 </View>
               ) : (
                 <View style={styles.unavailable}>
                   <Icon name="Shield" size={16} color={theme.iconInactive} />
-                  <Text style={[styles.body, { color: theme.foregroundSecondary }]}>Content {revision.availability === 'under_review' ? 'is under review' : 'is unavailable'}.</Text>
+                  <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.content-value', { value1: revision.availability === 'under_review' ? cairnText('acquired-cairn-detail-screen.is-under-review') : cairnText('acquired-cairn-detail-screen.is-unavailable') })}</Text>
                 </View>
               )}
-              <Text style={[styles.meta, { color: theme.muted }]}>Found {new Date(revision.acquired_at).toLocaleDateString()} · {revision.source_audience === 'friends' ? 'Friend' : 'Public'}</Text>
+              <Text style={[styles.meta, { color: theme.muted }]}>{cairnText('acquired-cairn-detail-screen.found-value-value', { value1: formatCairnDate(new Date(revision.acquired_at)), value2: revision.source_audience === 'friends' ? cairnText('acquired-cairn-detail-screen.friend') : cairnText('acquired-cairn-detail-screen.public') })}</Text>
               {revision.availability === 'available' ? (
                 <View style={styles.actions}>
                   <TouchableOpacity
@@ -325,11 +326,11 @@ export function AcquiredCairnDetailScreen() {
                     style={styles.thanks}
                   >
                     <Icon name="Heart" size={16} color={revision.thanked_at ? theme.iconInactive : theme.iconActive} />
-                    <Text style={[styles.thanksText, { color: revision.thanked_at ? theme.muted : theme.primary }]}>{revision.thanked_at ? 'Thanked' : 'Thanks'}</Text>
+                    <Text style={[styles.thanksText, { color: revision.thanked_at ? theme.muted : theme.primary }]}>{revision.thanked_at ? cairnText('acquired-cairn-detail-screen.thanked') : cairnText('acquired-cairn-detail-screen.thanks')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => void report(revision.revision_id)} style={styles.thanks} accessibilityRole="button">
                     <Icon name="Flag" size={16} color={theme.iconInactive} />
-                    <Text style={[styles.thanksText, { color: theme.foregroundSecondary }]}>Report</Text>
+                    <Text style={[styles.thanksText, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.report')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -345,16 +346,16 @@ export function AcquiredCairnDetailScreen() {
                 accessibilityRole="button"
                 style={[styles.pageButton, pageIndex >= revisions.length - 1 && styles.disabled]}
               >
-                <Text style={[styles.pageButtonText, { color: theme.foregroundSecondary }]}>Earlier</Text>
+                <Text style={[styles.pageButtonText, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.earlier')}</Text>
               </TouchableOpacity>
-              <Text style={[styles.meta, { color: theme.muted }]}>{pageIndex + 1} of {revisions.length}</Text>
+              <Text style={[styles.meta, { color: theme.muted }]}>{cairnText('acquired-cairn-detail-screen.value-of-value', { value1: pageIndex + 1, length: revisions.length })}</Text>
               <TouchableOpacity
                 disabled={pageIndex === 0}
                 onPress={() => setPageIndex(current => Math.max(0, current - 1))}
                 accessibilityRole="button"
                 style={[styles.pageButton, pageIndex === 0 && styles.disabled]}
               >
-                <Text style={[styles.pageButtonText, { color: theme.foregroundSecondary }]}>Newer</Text>
+                <Text style={[styles.pageButtonText, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.newer')}</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -365,12 +366,12 @@ export function AcquiredCairnDetailScreen() {
               setManageOpen(true);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Manage found Cairn"
-            accessibilityHint="Opens archive and remove controls"
+            accessibilityLabel={cairnText('acquired-cairn-detail-screen.manage-found-cairn')}
+            accessibilityHint={cairnText('acquired-cairn-detail-screen.opens-archive-and-remove-controls')}
             style={[styles.manageTrigger, { borderColor: theme.borderSubtle }]}
           >
             <Icon name="MoreHorizontal" size={18} color={theme.iconInactive} />
-            <Text style={[styles.manageTriggerText, { color: theme.foregroundSecondary }]}>Manage</Text>
+            <Text style={[styles.manageTriggerText, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.manage')}</Text>
           </TouchableOpacity>
           {reviewMessage ? <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{reviewMessage}</Text> : null}
         </ScrollView>
@@ -383,10 +384,10 @@ export function AcquiredCairnDetailScreen() {
         testID="acquired-cairn-manage-sheet"
       >
         <BottomSheetHeader
-          title={confirmingRemove ? 'Remove from my Memory?' : 'Manage found Cairn'}
+          title={confirmingRemove ? cairnText('acquired-cairn-detail-screen.remove-from-my-memory') : cairnText('acquired-cairn-detail-screen.manage-found-cairn')}
           subtitle={confirmingRemove
-            ? 'This affects only your acquired collection.'
-            : 'Choose how this Cairn appears in your Memory.'}
+            ? cairnText('acquired-cairn-detail-screen.this-affects-only-your-acquired-collection')
+            : cairnText('acquired-cairn-detail-screen.choose-how-this-cairn-appears-in-your')}
           onClose={collectionAction === null ? dismissManage : undefined}
         />
         <BottomSheetContent scrollable contentContainerStyle={styles.manageContent}>
@@ -394,7 +395,7 @@ export function AcquiredCairnDetailScreen() {
             <>
               <View style={[styles.consequenceCard, { backgroundColor: theme.destructiveSurface, borderColor: theme.destructive }]}>
                 <Icon name="Trash2" size={20} color={theme.destructive} />
-                <Text style={[styles.collectionHelp, { color: theme.foreground }]}>Remove hides every acquired page and blocks future automatic encounters. There is no in-app restore yet. It does not delete the author’s Cairn or change your Fog.</Text>
+                <Text style={[styles.collectionHelp, { color: theme.foreground }]}>{cairnText('acquired-cairn-detail-screen.remove-hides-every-acquired-page-and-blocks')}</Text>
               </View>
               {actionError ? (
                 <View style={[styles.actionError, { borderColor: theme.destructive }]}>
@@ -411,18 +412,18 @@ export function AcquiredCairnDetailScreen() {
                   accessibilityRole="button"
                   style={[styles.confirmationButton, { borderColor: theme.borderStrong }, collectionAction !== null && styles.disabled]}
                 >
-                  <Text style={[styles.collectionActionText, { color: theme.foreground }]}>Cancel</Text>
+                  <Text style={[styles.collectionActionText, { color: theme.foreground }]}>{cairnText('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => void updateCollection('remove')}
                   disabled={collectionAction !== null}
                   accessibilityRole="button"
-                  accessibilityLabel="Confirm remove from my Memory"
+                  accessibilityLabel={cairnText('acquired-cairn-detail-screen.confirm-remove-from-my-memory')}
                   accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'remove' }}
                   style={[styles.confirmationButton, { backgroundColor: theme.destructive, borderColor: theme.destructive }, collectionAction !== null && styles.disabled]}
                 >
                   {collectionAction === 'remove' ? <ActivityIndicator size="small" color={theme.onPrimary} /> : <Icon name="Trash2" size={16} color={theme.onPrimary} />}
-                  <Text style={[styles.collectionActionText, { color: theme.onPrimary }]}>{collectionAction === 'remove' ? 'Removing…' : 'Remove'}</Text>
+                  <Text style={[styles.collectionActionText, { color: theme.onPrimary }]}>{collectionAction === 'remove' ? cairnText('acquired-cairn-detail-screen.removing') : cairnText('acquired-cairn-detail-screen.remove')}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -432,8 +433,8 @@ export function AcquiredCairnDetailScreen() {
                 onPress={() => void updateCollection('archive')}
                 disabled={collectionAction !== null}
                 accessibilityRole="button"
-                accessibilityLabel="Archive from Current"
-                accessibilityHint="Keeps all acquired pages in Archived where they can be restored"
+                accessibilityLabel={cairnText('acquired-cairn-detail-screen.archive-from-current')}
+                accessibilityHint={cairnText('acquired-cairn-detail-screen.keeps-all-acquired-pages-in-archived-where')}
                 accessibilityState={{ disabled: collectionAction !== null, busy: collectionAction === 'archive' }}
                 style={[styles.managementOption, { backgroundColor: theme.secondaryAction, borderColor: theme.borderSubtle }, collectionAction !== null && styles.disabled]}
               >
@@ -441,8 +442,8 @@ export function AcquiredCairnDetailScreen() {
                   {collectionAction === 'archive' ? <ActivityIndicator size="small" color={theme.primary} /> : <Icon name="Layers" size={20} color={theme.icon} />}
                 </View>
                 <View style={styles.managementCopy}>
-                  <Text style={[styles.managementTitle, { color: theme.foreground }]}>{collectionAction === 'archive' ? 'Archiving…' : 'Archive'}</Text>
-                  <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Hide from Current. Every acquired page stays in Archived and can be restored.</Text>
+                  <Text style={[styles.managementTitle, { color: theme.foreground }]}>{collectionAction === 'archive' ? cairnText('acquired-cairn-detail-screen.archiving') : cairnText('acquired-cairn-detail-screen.archive')}</Text>
+                  <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.hide-from-current-every-acquired-page-stays')}</Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
@@ -452,16 +453,16 @@ export function AcquiredCairnDetailScreen() {
                 }}
                 disabled={collectionAction !== null}
                 accessibilityRole="button"
-                accessibilityLabel="Remove from my Memory"
-                accessibilityHint="Opens a confirmation before removing acquired pages"
+                accessibilityLabel={cairnText('acquired-cairn-detail-screen.remove-from-my-memory-0cc3927')}
+                accessibilityHint={cairnText('acquired-cairn-detail-screen.opens-a-confirmation-before-removing-acquired-pages')}
                 style={[styles.managementOption, { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle }, collectionAction !== null && styles.disabled]}
               >
                 <View style={[styles.managementIcon, { backgroundColor: theme.surfaceElevated }]}>
                   <Icon name="Trash2" size={20} color={theme.destructive} />
                 </View>
                 <View style={styles.managementCopy}>
-                  <Text style={[styles.managementTitle, { color: theme.destructive }]}>Remove</Text>
-                  <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>Hide all acquired pages and stop future automatic encounters. Confirmation required.</Text>
+                  <Text style={[styles.managementTitle, { color: theme.destructive }]}>{cairnText('acquired-cairn-detail-screen.remove')}</Text>
+                  <Text style={[styles.collectionHelp, { color: theme.foregroundSecondary }]}>{cairnText('acquired-cairn-detail-screen.hide-all-acquired-pages-and-stop-future')}</Text>
                 </View>
               </TouchableOpacity>
               {actionError ? (
@@ -469,7 +470,7 @@ export function AcquiredCairnDetailScreen() {
                   <Text accessibilityLiveRegion="polite" style={[styles.collectionHelp, { color: theme.destructive }]}>{actionError}</Text>
                 </View>
               ) : null}
-              <Text style={[styles.collectionFootnote, { color: theme.muted }]}>Neither action changes the author’s Cairn or your Fog.</Text>
+              <Text style={[styles.collectionFootnote, { color: theme.muted }]}>{cairnText('acquired-cairn-detail-screen.neither-action-changes-the-author-s-cairn')}</Text>
             </>
           )}
         </BottomSheetContent>

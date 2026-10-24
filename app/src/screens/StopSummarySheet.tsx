@@ -20,6 +20,7 @@ import { useDistance } from '../utils/distanceFormat';
 import { formatDate } from '../utils/dateFormat';
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import type { ActivityFinishProgress } from '../store/useTrackingStore';
+import { cairnText } from '../i18n/runtime';
 
 export type StopSummary = {
   distanceM: number;
@@ -225,13 +226,13 @@ export function StopSummarySheet({
         : finishProgress?.sync ?? 'pending';
   const routeReady = committed && (finishProgress?.route ?? 'ready') === 'ready';
   const heading = routeReady
-    ? (isRun ? 'Run complete' : 'Hike complete')
+    ? (isRun ? cairnText('stop-summary-sheet.run-complete') : cairnText('stop-summary-sheet.hike-complete'))
     : saving
-      ? (isRun ? 'Finishing run' : 'Finishing hike')
-      : (isRun ? 'Finish run' : 'Finish hike');
-  const label = isRun ? 'Run' : 'Hike';
+      ? (isRun ? cairnText('stop-summary-sheet.finishing-run') : cairnText('stop-summary-sheet.finishing-hike'))
+      : (isRun ? cairnText('stop-summary-sheet.finish-run') : cairnText('stop-summary-sheet.finish-hike'));
+  const label = isRun ? cairnText('stop-summary-sheet.run') : cairnText('stop-summary-sheet.hike');
   // O18 HIST-09: default name uses user-preferred date format.
-  const defaultName = `${label} — ${formatDate(summary.startedAt)}`;
+  const defaultName = cairnText('stop-summary-sheet.value-value', { label: label, value2: formatDate(summary.startedAt) });
 
   // Concept stat trio: distance / time / elevation gain. Uses the same
   // formatters as the live tracking bar so numbers are consistent.
@@ -270,9 +271,9 @@ export function StopSummarySheet({
         }
       : null;
   const progressRows = visibleProgress ? [
-    { key: 'hike', label: visibleProgress.hike === 'saved' ? `${label} saved` : `Saving ${label.toLowerCase()}`, state: visibleProgress.hike === 'saved' ? 'complete' : 'current' },
-    { key: 'route', label: visibleProgress.route === 'ready' ? 'Route ready' : 'Refining route', state: visibleProgress.route === 'ready' ? 'complete' : visibleProgress.route === 'refining' ? 'current' : 'pending' },
-    { key: 'sync', label: visibleProgress.sync === 'synced' ? 'Synced' : visibleProgress.sync === 'waiting' ? 'Sync · Waiting for connection' : visibleProgress.sync === 'attention' ? 'Sync · Needs attention' : visibleProgress.sync === 'syncing' ? 'Syncing' : 'Sync', state: visibleProgress.sync === 'synced' ? 'complete' : visibleProgress.sync === 'waiting' ? 'waiting' : visibleProgress.sync === 'attention' ? 'attention' : visibleProgress.sync === 'syncing' ? 'current' : 'pending' },
+    { key: 'hike', label: visibleProgress.hike === 'saved' ? cairnText('stop-summary-sheet.value-saved', { label: label }) : cairnText('stop-summary-sheet.saving-value', { value1: label.toLowerCase() }), state: visibleProgress.hike === 'saved' ? 'complete' : 'current' },
+    { key: 'route', label: visibleProgress.route === 'ready' ? cairnText('stop-summary-sheet.route-ready') : cairnText('stop-summary-sheet.refining-route'), state: visibleProgress.route === 'ready' ? 'complete' : visibleProgress.route === 'refining' ? 'current' : 'pending' },
+    { key: 'sync', label: visibleProgress.sync === 'synced' ? cairnText('stop-summary-sheet.synced') : visibleProgress.sync === 'waiting' ? cairnText('stop-summary-sheet.sync-waiting-for-connection') : visibleProgress.sync === 'attention' ? cairnText('stop-summary-sheet.sync-needs-attention') : visibleProgress.sync === 'syncing' ? cairnText('stop-summary-sheet.syncing') : cairnText('stop-summary-sheet.sync'), state: visibleProgress.sync === 'synced' ? 'complete' : visibleProgress.sync === 'waiting' ? 'waiting' : visibleProgress.sync === 'attention' ? 'attention' : visibleProgress.sync === 'syncing' ? 'current' : 'pending' },
   ] as const : [];
 
   return (
@@ -308,7 +309,7 @@ export function StopSummarySheet({
                 activeOpacity={0.6}
                 disabled={saving}
                 accessibilityRole="button"
-                accessibilityLabel={committed ? 'Close activity summary' : 'Close and keep tracking'}
+                accessibilityLabel={committed ? cairnText('stop-summary-sheet.close-activity-summary') : cairnText('stop-summary-sheet.close-and-keep-tracking')}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[stopSheetStyles.closeX, { color: titleInk }, saving && { opacity: 0.4 }]}>✕</Text>
@@ -337,7 +338,7 @@ export function StopSummarySheet({
                 </View>
               ))}
               {visibleProgress.roadRefinementPending ? (
-                <Text style={[stopSheetStyles.progressNote, { color: mutedInk }]}>Road refinement will continue when online</Text>
+                <Text style={[stopSheetStyles.progressNote, { color: mutedInk }]}>{cairnText('stop-summary-sheet.road-refinement-will-continue-when-online')}</Text>
               ) : null}
             </View>
           ) : null}
@@ -353,7 +354,7 @@ export function StopSummarySheet({
             </View>
             <View style={stopSheetStyles.statCol}>
               <Text style={[stopSheetStyles.statVal, { color: titleInk }]} numberOfLines={1}>{timeVal}</Text>
-              <Text style={[stopSheetStyles.statLbl, { color: mutedInk }]}>time</Text>
+              <Text style={[stopSheetStyles.statLbl, { color: mutedInk }]}>{cairnText('stop-summary-sheet.time')}</Text>
             </View>
             <View style={stopSheetStyles.statCol}>
               <Text style={[stopSheetStyles.statVal, { color: titleInk }]} numberOfLines={1}>{elevVal}</Text>
@@ -379,7 +380,7 @@ export function StopSummarySheet({
                 />
               )}
               <Text style={[stopSheetStyles.routePreviewLabel, { color: mutedInk }]}>
-                {committed ? 'Route ready' : 'Walked route preview'}
+                {committed ? cairnText('stop-summary-sheet.route-ready') : cairnText('stop-summary-sheet.walked-route-preview')}
               </Text>
             </View>
           )}
@@ -390,7 +391,7 @@ export function StopSummarySheet({
               activity in their history. */}
           {!committed ? (
             <>
-              <Text style={[stopSheetStyles.nameLabel, { color: mutedInk }]}>{isRun ? 'Name this run (optional)' : 'Name this hike (optional)'}</Text>
+              <Text style={[stopSheetStyles.nameLabel, { color: mutedInk }]}>{isRun ? cairnText('stop-summary-sheet.name-this-run-optional') : cairnText('stop-summary-sheet.name-this-hike-optional')}</Text>
               <TextInput
                 style={[stopSheetStyles.nameInput, { color: titleInk, borderColor: completeIsDark ? 'rgba(220,230,240,0.14)' : 'rgba(20,42,30,0.10)', backgroundColor: completeIsDark ? 'rgba(240,238,230,0.06)' : 'rgba(255,253,247,0.5)' }]}
                 placeholder={defaultName}
@@ -403,7 +404,7 @@ export function StopSummarySheet({
             </>
           ) : (
             <Text style={[stopSheetStyles.finalRouteNote, { color: mutedInk }]}>
-              {routeRefined ? 'Route refined' : refining ? 'Route ready' : 'Route saved on this device'}
+              {routeRefined ? cairnText('stop-summary-sheet.route-refined') : refining ? cairnText('stop-summary-sheet.route-ready') : cairnText('stop-summary-sheet.route-saved-on-this-device')}
             </Text>
           )}
 
@@ -428,17 +429,15 @@ export function StopSummarySheet({
             activeOpacity={0.85}
             disabled={saving}
             accessibilityRole="button"
-            accessibilityLabel={`Finish ${label.toLowerCase()} and view activity`}
+            accessibilityLabel={cairnText('stop-summary-sheet.finish-value-and-view-activity', { value1: label.toLowerCase() })}
           >
             {saving ? (
               <>
                 <ActivityIndicator size="small" color={PAPER_BG} />
-                <Text style={stopSheetStyles.saveText} numberOfLines={1}>
-                  Finishing…
-                </Text>
+                <Text style={stopSheetStyles.saveText} numberOfLines={1}>{cairnText('stop-summary-sheet.finishing')}</Text>
               </>
             ) : (
-              <Text style={stopSheetStyles.saveText}>{committed ? 'View activity' : `Finish ${label.toLowerCase()}`}</Text>
+              <Text style={stopSheetStyles.saveText}>{committed ? cairnText('stop-summary-sheet.view-activity') : cairnText('stop-summary-sheet.finish-value', { value1: label.toLowerCase() })}</Text>
             )}
           </TouchableOpacity>
         </Animated.View>

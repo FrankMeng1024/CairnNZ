@@ -35,6 +35,7 @@ import { API_BASE_URL } from './src/config/api';
 // via checkpoint drain (still have per-phase aliyun log events).
 import { markBootPhase } from './src/services/bootDiagnostics';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { cairnText, LocalizationBoundary } from './src/i18n/runtime';
 const DeferredRuntimeServices = React.lazy(() => import('./src/components/DeferredRuntimeServices'));
 import { activitySimulatorBuildCapable } from './src/features/activitySimulator/capability';
 import { hydrateActivitySimulatorForUser, useActivitySimulatorStore } from './src/features/activitySimulator/useActivitySimulatorStore';
@@ -913,9 +914,7 @@ function BootLoadingSplash() {
           color: '#ffffff', fontSize: 16, fontWeight: '600',
           marginTop: 20, letterSpacing: 0.2,
           textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 4,
-        }}>
-          Restoring your journey
-        </RNText>
+        }}>{cairnText('app.restoring-your-journey')}</RNText>
       </View>
     </View>
   );
@@ -936,7 +935,9 @@ export default function App() {
     <WebPhoneFrame>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <ErrorBoundary tag="app_root">
-          <AppRoot />
+          <LocalizationBoundary>
+            <AppRoot />
+          </LocalizationBoundary>
         </ErrorBoundary>
       </SafeAreaProvider>
     </WebPhoneFrame>

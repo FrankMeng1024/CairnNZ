@@ -7,6 +7,7 @@
 import { Colors } from '../components/tokens';
 import type { IconName } from '../components/Icon';
 import type { MarkerType } from './mockData';
+import { cairnText } from '../i18n/runtime';
 
 export type FlagTypeEntry = {
   id: MarkerType;
@@ -17,8 +18,8 @@ export type FlagTypeEntry = {
 };
 
 export const FLAG_TYPES: FlagTypeEntry[] = [
-  { id: 'danger',   icon: 'TriangleAlert', label: 'Danger',   color: Colors.danger,    bg: Colors.dangerBg          },
-  { id: 'cairn',    icon: 'Mountain',      label: 'Cairn',    color: Colors.info,      bg: Colors.infoBg            },
-  { id: 'water',    icon: 'Droplets',      label: 'Water',    color: Colors.success,   bg: Colors.successBg         },
-  { id: 'junction', icon: 'Navigation2',   label: 'Junction', color: Colors.docOrange, bg: Colors.severityWarningBg },
+  { id: 'danger',   icon: 'TriangleAlert', get label() { return cairnText('data.flag-types.danger'); },   color: Colors.danger,    bg: Colors.dangerBg          },
+  { id: 'cairn',    icon: 'Mountain',      get label() { return cairnText('data.flag-types.cairn'); },    color: Colors.info,      bg: Colors.infoBg            },
+  { id: 'water',    icon: 'Droplets',      get label() { return cairnText('data.flag-types.water'); },    color: Colors.success,   bg: Colors.successBg         },
+  { id: 'junction', icon: 'Navigation2',   get label() { return cairnText('data.flag-types.junction'); }, color: Colors.docOrange, bg: Colors.severityWarningBg },
 ];

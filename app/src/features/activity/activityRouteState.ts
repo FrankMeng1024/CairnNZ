@@ -1,5 +1,6 @@
 import type { TrackPoint, TrackingSession } from '../../store/useSessionStore';
 import { segmentTrace } from './activityContracts';
+import { cairnText } from '../../i18n/runtime';
 
 export type ActivityLocalReadiness = 'ready' | 'loading' | 'unavailable';
 export type ActivityServerSync = 'synced' | 'pending' | 'syncing'
@@ -83,45 +84,45 @@ export function activityRouteStateCopy(state: ActivityRouteState): {
   routeDetail: string;
 } {
   const savedLabel = state.localReadiness === 'ready'
-    ? 'Activity saved'
-    : state.localReadiness === 'loading' ? 'Loading saved activity…' : 'Activity route unavailable';
+    ? cairnText('activity.activity-route-state.activity-saved')
+    : state.localReadiness === 'loading' ? cairnText('activity.activity-route-state.loading-saved-activity') : cairnText('activity.activity-route-state.activity-route-unavailable');
   const syncLabel = state.serverSync === 'pending'
-    ? 'Waiting to sync'
+    ? cairnText('activity.activity-route-state.waiting-to-sync')
     : state.serverSync === 'syncing'
-      ? 'Syncing activity…'
-      : state.serverSync === 'retryable_error' ? 'Sync interrupted · tap to retry'
-        : state.serverSync === 'auth_required' ? 'Sign in to sync this saved Activity'
-          : state.serverSync === 'action_required' ? 'Saved on this device · sync needs review'
-            : state.serverSync === 'dependency' ? 'Saved on this device · another Activity needs resolution'
+      ? cairnText('activity.activity-route-state.syncing-activity')
+      : state.serverSync === 'retryable_error' ? cairnText('activity.activity-route-state.sync-interrupted-tap-to-retry')
+        : state.serverSync === 'auth_required' ? cairnText('activity.activity-route-state.sign-in-to-sync-this-saved-activity')
+          : state.serverSync === 'action_required' ? cairnText('activity.activity-route-state.saved-on-this-device-sync-needs-review')
+            : state.serverSync === 'dependency' ? cairnText('activity.activity-route-state.saved-on-this-device-another-activity-needs')
               : null;
   if (state.routeReadiness === 'missing_section') {
     return {
       savedLabel,
       syncLabel,
-      routeLabel: 'Missing section',
-      routeDetail: 'Your Activity keeps the GPS gap. You can choose a recorded section or explicitly reconnect a new Route.',
+      routeLabel: cairnText('activity.activity-route-state.missing-section'),
+      routeDetail: cairnText('activity.activity-route-state.your-activity-keeps-the-gps-gap-you'),
     };
   }
   if (state.routeReadiness === 'needs_review') {
     return {
       savedLabel,
       syncLabel,
-      routeLabel: 'Route needs review',
-      routeDetail: 'The recorded path is usable, but some sections have limited map or trail evidence.',
+      routeLabel: cairnText('activity.activity-route-state.route-needs-review'),
+      routeDetail: cairnText('activity.activity-route-state.the-recorded-path-is-usable-but-some'),
     };
   }
   if (state.routeReadiness === 'ready') {
     return {
       savedLabel,
       syncLabel,
-      routeLabel: 'Route ready',
-      routeDetail: 'Ready to save and edit as an independent Route.',
+      routeLabel: cairnText('activity.activity-route-state.route-ready'),
+      routeDetail: cairnText('activity.activity-route-state.ready-to-save-and-edit-as-an'),
     };
   }
   return {
     savedLabel,
     syncLabel,
-    routeLabel: 'Route unavailable',
-    routeDetail: 'There is not enough recorded geometry to create a Route.',
+    routeLabel: cairnText('activity.activity-route-state.route-unavailable'),
+    routeDetail: cairnText('activity.activity-route-state.there-is-not-enough-recorded-geometry-to'),
   };
 }

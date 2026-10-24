@@ -12,14 +12,16 @@ const qaSource = fs.readFileSync(
 
 describe('Friends production proof contract', () => {
   it('uses the accepted functional copy and removes unverified social metrics', () => {
-    expect(source).toContain("label: 'Requests'");
-    expect(source).toContain('Received · {visibleIncoming.length}');
-    expect(source).toContain('Sent · {visibleOutbound.length}');
-    expect(source).toContain('Loading friends…');
-    expect(source).toContain('Add someone by email to connect on CairnNZ.');
-    expect(source).toContain('Enter a valid email address.');
-    expect(source).toContain('No CairnNZ account uses that email yet.');
-    expect(source).toContain('You can’t send a request to your own account.');
+    // Copy moves through the single catalog; this source-level contract checks
+    // stable keys and state inputs instead of freezing editable English text.
+    expect(source).toContain("label: cairnText('friends-screen.requests')");
+    expect(source).toContain("cairnText('friends-screen.received-value'");
+    expect(source).toContain("cairnText('friends-screen.sent-value'");
+    expect(source).toContain("cairnText('friends-screen.loading-friends')");
+    expect(source).toContain("cairnText('friends-screen.add-someone-by-email-to-connect-on')");
+    expect(source).toContain("cairnText('friends-screen.enter-a-valid-email-address')");
+    expect(source).toContain("cairnText('friends.request.account-not-found')");
+    expect(source).toContain("cairnText('friends.request.self')");
     expect(source).not.toContain('Paths that cross yours');
     expect(source).not.toContain('YOUR CIRCLE');
     expect(source).not.toContain('QUIETLY CONNECTED');
@@ -27,7 +29,7 @@ describe('Friends production proof contract', () => {
   });
 
   it('has one Add friend entry and the shared top-right dismiss control', () => {
-    expect(source.match(/label="Add friend"/g)).toHaveLength(1);
+    expect(source.match(/label=\{cairnText\('friends-screen\.add-friend'\)\}/g)).toHaveLength(1);
     expect(source).toContain('testID="add-friend-close"');
     expect(source).toContain('right: Spacing.base');
     expect(source).not.toContain('style={s.f6Cancel}');
@@ -37,10 +39,10 @@ describe('Friends production proof contract', () => {
     expect(source).toContain('testID="friend-profile-remove-trigger"');
     expect(source).toContain('testID="friend-profile-remove-confirmation"');
     expect(source).toContain('testID="friend-profile-remove-region"');
-    expect(source).toContain('label="Remove friend"');
+    expect(source).toContain("label={cairnText('friends-screen.remove-friend')}");
     expect(source).toContain('variant="secondary"');
-    expect(source).toContain('You’ll lose access to routes, cairns, and explored areas shared by this friend. Your own exploration won’t be affected.');
-    expect(source.match(/label="Remove friend"/g)).toHaveLength(2);
+    expect(source).toContain("cairnText('friends-screen.you-ll-lose-access-to-routes-cairns')");
+    expect(source.match(/label=\{cairnText\('friends-screen\.remove-friend'\)\}/g)).toHaveLength(2);
     expect(source).not.toContain('label={`Remove ${firstNameOf(profileFriend.name)}`}');
     expect(source).toContain('variant="destructive"');
     expect(source).toContain('removeFriendAPI(profileFriend.id)');
@@ -79,10 +81,10 @@ describe('Friends production proof contract', () => {
     expect(source).toContain('>{toEmail}</Text>');
     expect(source).toContain("{status === 'declined'");
     expect(source).toContain('? <Icon name="X"');
-    expect(source).toContain('>Cancel request</Text>');
+    expect(source).toContain("cairnText('friends-screen.cancel-request')");
     expect(source).toContain('testID="cancel-request-modal"');
     expect(source).toContain('testID="cancel-request-confirm"');
-    expect(source).toContain('body="They won’t receive this friend request."');
+    expect(source).toContain("body={cairnText('friends-screen.they-won-t-receive-this-friend-request')}");
     expect(source).toContain("if (req.status === 'declined')");
     expect(source).toContain('void dismissDeclinedOutbound(req);');
     expect(source).not.toContain('Dismiss declined request from');
@@ -93,7 +95,7 @@ describe('Friends production proof contract', () => {
   });
 
   it('uses only directional per-friend sharing controls', () => {
-    expect(source).toContain('>Share my Memory</Text>');
+    expect(source).toContain("cairnText('friends-screen.share-my-memory')");
     expect(source).toContain('testID="friend-profile-memory-toggle"');
     expect(source).toContain("grant.friend_id === profileFriend.id)?.enabled");
     expect(source).not.toContain('MemorySharingSheet');
@@ -110,18 +112,18 @@ describe('Friends production proof contract', () => {
   });
 
   it('keeps Decline left of Accept and preserves independent recipient consent', () => {
-    expect(source.indexOf('accessibilityLabel="Decline friend request"'))
-      .toBeLessThan(source.indexOf('accessibilityLabel="Accept friend request"'));
+    expect(source.indexOf("accessibilityLabel={cairnText('friends-screen.decline-friend-request')}"))
+      .toBeLessThan(source.indexOf("accessibilityLabel={cairnText('friends-screen.accept-friend-request')}"));
     expect(source).toContain('onPress={() => onAccept(shareMemory)}');
     expect(source).toContain('value={shareMemory}');
-    expect(source).toContain('Will share their Memory');
+    expect(source).toContain("cairnText('friends-screen.will-share-their-memory')");
   });
 
   it('renders only populated request categories and one destination-level empty state', () => {
     expect(source).toContain("const pendingEmpty = requestContentState === 'empty'");
     expect(source).toContain('{showReceived && (');
     expect(source).toContain('{showSent && (');
-    expect(source).toContain('Received and sent requests will appear here.');
+    expect(source).toContain("cairnText('friends-screen.received-and-sent-requests-will-appear-here')");
     expect(source).not.toContain('No received requests');
     expect(source).not.toContain('No sent requests');
   });

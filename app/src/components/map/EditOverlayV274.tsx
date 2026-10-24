@@ -32,6 +32,7 @@ import { useDistance } from '../../utils/distanceFormat';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
 import { ModalCard, ModalCardHeader } from '../ModalCard';
 import { PrimaryButton } from '../PrimaryButton';
+import { cairnText } from '../../i18n/runtime';
 
 interface EditOverlayV274Props {
   onCancel: () => void;
@@ -126,14 +127,14 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
   // v276: status text shown above bottom buttons. One line, never blocks.
   const statusText: string | null = (() => {
     if (inErrorState) return null;          // error has its own red pill
-    if (isComputing) return 'Computing…';
+    if (isComputing) return cairnText('map.edit-overlay-v274.computing');
     if (hasUnpreviewedStrokes) {
-      if (safeTool === 'brush') return 'Drawing — start and end on the route';
-      if (safeTool === 'point') return 'Point — tap to continue, then Preview';
-      return `Drew ${strokeCount} stroke${strokeCount > 1 ? 's' : ''} · tap Preview to snap`;
+      if (safeTool === 'brush') return cairnText('map.edit-overlay-v274.drawing-start-and-end-on-the-route');
+      if (safeTool === 'point') return cairnText('map.edit-overlay-v274.point-tap-to-continue-then-preview');
+      return cairnText('map.edit-overlay-v274.drew-value-stroke-value-tap-preview-to', { strokeCount: strokeCount, value2: strokeCount > 1 ? 's' : '' });
     }
-    if (safeTool === 'brush') return 'Drawing — start and end on the route';
-    if (safeTool === 'point') return 'Point — tap the map to add a deliberate vertex';
+    if (safeTool === 'brush') return cairnText('map.edit-overlay-v274.drawing-start-and-end-on-the-route');
+    if (safeTool === 'point') return cairnText('map.edit-overlay-v274.point-tap-the-map-to-add-a');
     if (previewIsCurrent && strokeCount === 0) return null;
     return null;
   })();
@@ -163,10 +164,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
             !canUndo && styles.btnDisabled,
           ]}
           accessibilityRole="button"
-          accessibilityLabel="Undo last Route edit"
+          accessibilityLabel={cairnText('map.edit-overlay-v274.undo-last-route-edit')}
         >
           <Icon name="Undo2" size={16} color={theme.iconActive} strokeWidth={2.4} />
-          <Text style={[styles.utilityLabel, { color: theme.foreground }]}>Undo</Text>
+          <Text style={[styles.utilityLabel, { color: theme.foreground }]}>{cairnText('map.edit-overlay-v274.undo')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.85}
@@ -176,10 +177,10 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
             { backgroundColor: theme.destructiveSurface, borderColor: theme.borderSubtle, shadowColor: theme.shadow },
           ]}
           accessibilityRole="button"
-          accessibilityLabel="Reset Route edits"
+          accessibilityLabel={cairnText('map.edit-overlay-v274.reset-route-edits')}
         >
           <Icon name="RotateCcw" size={16} color={theme.destructive} strokeWidth={2.4} />
-          <Text style={[styles.utilityLabel, { color: theme.destructive }]}>Reset</Text>
+          <Text style={[styles.utilityLabel, { color: theme.destructive }]}>{cairnText('map.edit-overlay-v274.reset')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -236,9 +237,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
               onPress={() => pickTool('pan')}
             >
               <Icon name="Navigation2" size={26} color={safeTool === 'pan' ? Colors.surface : Colors.primary} strokeWidth={2.6} />
-              <Text style={[styles.bigCenterLabel, { color: safeTool === 'pan' ? Colors.surface : Colors.primary }]} numberOfLines={1}>
-                Move
-              </Text>
+              <Text style={[styles.bigCenterLabel, { color: safeTool === 'pan' ? Colors.surface : Colors.primary }]} numberOfLines={1}>{cairnText('map.edit-overlay-v274.move')}</Text>
             </TouchableOpacity>
 
             {/* v283 wheel (I1): 1/4 circle arc, R=90.
@@ -254,21 +253,21 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
             <SmallOrbit
               dx={-ORBIT_R}
               dy={0}
-              icon="RotateCcw" label="Reset"
+              icon="RotateCcw" label={cairnText('map.edit-overlay-v274.reset')}
               danger
               onPress={handleResetTap}
             />
             <SmallOrbit
               dx={-ORBIT_R * Math.SQRT1_2}
               dy={ORBIT_R * Math.SQRT1_2}
-              icon="Undo2" label="Undo"
+              icon="Undo2" label={cairnText('map.edit-overlay-v274.undo')}
               disabled={!canUndo}
               onPress={handleUndoTap}
             />
             <SmallOrbit
               dx={0}
               dy={ORBIT_R}
-              icon="Pencil" label="Draw"
+              icon="Pencil" label={cairnText('map.edit-overlay-v274.draw')}
               active={safeTool === 'brush'}
               activeBg="#c87941"
               onPress={() => pickTool('brush')}
@@ -329,7 +328,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                 <>
                   <Icon name="Eye" size={16} color={theme.primary} strokeWidth={2.5} />
                   <Text style={[styles.previewBtnText, { color: theme.foreground }]} numberOfLines={1}>
-                    {inErrorState ? 'Fix the stroke first' : 'Preview'}
+                    {inErrorState ? cairnText('map.edit-overlay-v274.fix-the-stroke-first') : cairnText('map.edit-overlay-v274.preview')}
                   </Text>
                 </>
               )}
@@ -343,11 +342,9 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                 <View style={[styles.trimPanel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle, shadowColor: theme.shadow }]} pointerEvents="auto">
                   <View style={styles.trimHeaderRow}>
                     <Icon name="Scissors" size={14} color={theme.iconActive} strokeWidth={2.5} />
-                    <Text style={[styles.trimHeaderText, { color: theme.foreground }]} numberOfLines={1}>Trim · drag handles</Text>
+                    <Text style={[styles.trimHeaderText, { color: theme.foreground }]} numberOfLines={1}>{cairnText('map.edit-overlay-v274.trim-drag-handles')}</Text>
                     {totalLengthM > 0 && (trimStartFrac > 0 || trimEndFrac < 1) && (
-                      <Text style={[styles.trimReadout, { color: theme.foregroundSecondary }]} numberOfLines={1}>
-                        {dist.format(editedLengthM, 2)} / {dist.format(totalLengthM, 2)} {dist.unit}
-                      </Text>
+                      <Text style={[styles.trimReadout, { color: theme.foregroundSecondary }]} numberOfLines={1}>{cairnText('map.edit-overlay-v274.value-value-value', { value1: dist.format(editedLengthM, 2), value2: dist.format(totalLengthM, 2), unit: dist.unit })}</Text>
                     )}
                   </View>
                   <TrimSlider
@@ -376,7 +373,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }]}>
                     <Icon name="Sparkles" size={22} color={theme.iconActive} strokeWidth={2.2} />
                   </View>
-                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }]}>Beautify</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }]}>{cairnText('map.edit-overlay-v274.beautify')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -387,7 +384,7 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, trimOpen && { backgroundColor: theme.primary }]}>
                     <Icon name="Scissors" size={22} color={trimOpen ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
                   </View>
-                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, trimOpen && { color: theme.primary, fontWeight: '800' }]}>Trim</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, trimOpen && { color: theme.primary, fontWeight: '800' }]}>{cairnText('map.edit-overlay-v274.trim')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -395,13 +392,13 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   style={[styles.toolTab, safeTool === 'brush' && styles.toolTabActive]}
                   onPress={() => { setTrimOpen(false); setActiveTool('brush'); }}
                   accessibilityRole="button"
-                  accessibilityLabel="Draw a Route adjustment"
+                  accessibilityLabel={cairnText('map.edit-overlay-v274.draw-a-route-adjustment')}
                   accessibilityState={{ selected: safeTool === 'brush' }}
                 >
                   <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'brush' && { backgroundColor: theme.primary }]}>
                     <Icon name="Pencil" size={22} color={safeTool === 'brush' ? theme.onPrimary : theme.iconActive} strokeWidth={2.2} />
                   </View>
-                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'brush' && { color: theme.primary, fontWeight: '800' }]}>Draw</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'brush' && { color: theme.primary, fontWeight: '800' }]}>{cairnText('map.edit-overlay-v274.draw')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -409,13 +406,13 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
                   style={[styles.toolTab, safeTool === 'point' && styles.toolTabActive]}
                   onPress={() => { setTrimOpen(false); setActiveTool('point'); }}
                   accessibilityRole="button"
-                  accessibilityLabel="Add deliberate Route points"
+                  accessibilityLabel={cairnText('map.edit-overlay-v274.add-deliberate-route-points')}
                   accessibilityState={{ selected: safeTool === 'point' }}
                 >
                   <View style={[styles.toolIconWrap, { backgroundColor: theme.controlSelected }, safeTool === 'point' && { backgroundColor: theme.primary }]}>
                     <Icon name="Plus" size={22} color={safeTool === 'point' ? theme.onPrimary : theme.iconActive} strokeWidth={2.4} />
                   </View>
-                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'point' && { color: theme.primary, fontWeight: '800' }]}>Point</Text>
+                  <Text style={[styles.toolTabLabel, { color: theme.foregroundSecondary }, safeTool === 'point' && { color: theme.primary, fontWeight: '800' }]}>{cairnText('map.edit-overlay-v274.point')}</Text>
                 </TouchableOpacity>
 
               </View>
@@ -446,17 +443,17 @@ export function EditOverlayV274(props: EditOverlayV274Props): React.JSX.Element 
         testID="route-reset-confirmation"
       >
         <ModalCardHeader
-          title="Reset Route edits?"
-          body="This clears Draw and Trim changes and restores the saved Route draft."
+          title={cairnText('map.edit-overlay-v274.reset-route-edits-c89771c')}
+          body={cairnText('map.edit-overlay-v274.this-clears-draw-and-trim-changes-and')}
         />
         <View style={styles.resetActions}>
           <PrimaryButton
-            label="Keep editing"
+            label={cairnText('map.edit-overlay-v274.keep-editing')}
             variant="secondary"
             onPress={() => setResetConfirmOpen(false)}
           />
           <PrimaryButton
-            label="Reset edits"
+            label={cairnText('map.edit-overlay-v274.reset-edits')}
             variant="destructive"
             onPress={() => { resetEdits(); setActiveTool('pan'); setResetConfirmOpen(false); }}
             testID="route-reset-confirm"

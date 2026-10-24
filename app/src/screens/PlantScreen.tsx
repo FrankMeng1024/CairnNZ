@@ -73,6 +73,7 @@ import {
   removePlantDraftIfSessionMatches,
   type PlantDraftScope,
 } from '../features/plant/plantDraftLifecycle';
+import { cairnText, formatCairnDate } from '../i18n/runtime';
 
 type Step = 'gps' | 'pin' | 'content';
 const MAX_PLANT_LOCATION_AGE_MS = 2 * 60 * 1000;
@@ -318,38 +319,38 @@ export function PlantScreen() {
     if (!plantedResult) return { title: '', body: '' };
     if (plantedResult.qa) {
       return {
-        title: 'Cairn saved for this test',
-        body: `It stays in the Simulator test workspace and will not sync to your real Cairns.${activitySuffix}`,
+        title: cairnText('plant-screen.cairn-saved-for-this-test'),
+        body: cairnText('plant-screen.it-stays-in-the-simulator-test-workspace', { activitySuffix: activitySuffix }),
       };
     }
     if (plantedMarker?.syncState === 'failed') {
       return {
-        title: 'Cairn saved on this iPhone',
-        body: `Sync needs attention, but your note and place are still saved here. Open the Cairn to retry.${activitySuffix}`,
+        title: cairnText('plant-screen.cairn-saved-on-this-iphone'),
+        body: cairnText('plant-screen.sync-needs-attention-but-your-note-and', { activitySuffix: activitySuffix }),
       };
     }
     const synced = plantedMarker?.synced === true || plantedMarker?.syncState === 'synced';
     if (!synced) {
       if (plantedResult.visibility === 'public' && plantedMarker) {
         const truth = cairnPublicationTruth(plantedMarker);
-        if (truth) return { title: truth.successTitle, body: `${truth.explanation}${activitySuffix}` };
+        if (truth) return { title: truth.successTitle, body: cairnText('plant-screen.value-value', { explanation: truth.explanation, activitySuffix: activitySuffix }) };
       }
       return {
-            title: 'Cairn saved on this iPhone',
-            body: `It is queued to sync. You can read it now, and retry from the Cairn if sync needs attention.${activitySuffix}`,
+            title: cairnText('plant-screen.cairn-saved-on-this-iphone'),
+            body: cairnText('plant-screen.it-is-queued-to-sync-you-can', { activitySuffix: activitySuffix }),
           };
     }
     if (plantedResult.visibility === 'public') {
       const truth = plantedMarker ? cairnPublicationTruth(plantedMarker) : null;
       return truth
-        ? { title: truth.successTitle, body: `${truth.explanation}${activitySuffix}` }
-        : { title: 'Cairn saved', body: `Public status is not available yet.${activitySuffix}` };
+        ? { title: truth.successTitle, body: cairnText('plant-screen.value-value', { explanation: truth.explanation, activitySuffix: activitySuffix }) }
+        : { title: cairnText('plant-screen.cairn-saved'), body: cairnText('plant-screen.public-status-is-not-available-yet-value', { activitySuffix: activitySuffix }) };
     }
     return {
-      title: 'Cairn left here',
+      title: cairnText('plant-screen.cairn-left-here'),
       body: plantedResult.fromActivity
-        ? 'It is synced with this Activity. Your Activity remains open.'
-        : 'It is synced in your Memory at this place.',
+        ? cairnText('plant-screen.it-is-synced-with-this-activity-your')
+        : cairnText('plant-screen.it-is-synced-in-your-memory-at'),
     };
   })();
 
@@ -529,9 +530,9 @@ export function PlantScreen() {
       if (!contextIsCurrent()) {
         if (activityContext && ownerIsCurrent()) {
           Alert.alert(
-            "Couldn't plant this cairn",
-            'The Activity changed while Plant was open. Return to the current Activity and try again.',
-            [{ text: 'OK' }],
+            cairnText('plant-screen.couldn-t-plant-this-cairn'),
+            cairnText('plant-screen.the-activity-changed-while-plant-was-open'),
+            [{ text: cairnText('plant-screen.ok') }],
           );
         }
         return;
@@ -596,17 +597,17 @@ export function PlantScreen() {
           const raw = String((error as any)?.message ?? '').toLowerCase();
           let body: string;
           if (raw.includes('rate') && raw.includes('limit')) {
-            body = 'You are creating cairns very quickly. Wait a minute and try again.';
+            body = cairnText('plant-screen.you-are-creating-cairns-very-quickly-wait');
           } else if (raw.includes('too close') || raw.includes('duplicate')) {
-            body = 'There is already a cairn near here. Try a different spot.';
+            body = cairnText('plant-screen.there-is-already-a-cairn-near-here');
           } else if (raw.includes('unauthor') || raw.includes('401')) {
-            body = 'Your session expired. Sign in again and your draft will be waiting.';
+            body = cairnText('plant-screen.your-session-expired-sign-in-again-and');
           } else if (raw.includes('network') || raw.includes('fetch')) {
-            body = 'Your draft is saved. We\'ll try again once you have signal.';
+            body = cairnText('plant-screen.your-draft-is-saved-we-ll-try');
           } else {
-            body = 'Your draft is saved — try again in a moment.';
+            body = cairnText('plant-screen.your-draft-is-saved-try-again-in');
           }
-          Alert.alert("Couldn't plant this cairn", body, [{ text: 'OK' }]);
+          Alert.alert(cairnText('plant-screen.couldn-t-plant-this-cairn'), body, [{ text: cairnText('plant-screen.ok') }]);
         },
         onCommitted: async result => {
           log('plant.commit_ok', { id: result.marker.id, projection: result.projection });
@@ -697,9 +698,9 @@ export function PlantScreen() {
         - final.locationCapturedAtMs;
     if (locationAgeMs < 0 || locationAgeMs > MAX_PLANT_LOCATION_AGE_MS) {
       Alert.alert(
-        'Refresh this place',
-        'Your position is no longer fresh enough to leave this Cairn accurately. Your note and audience are saved while Cairn confirms the place again.',
-        [{ text: 'Confirm position', onPress: () => beginLocationFlow('refresh', final) }],
+        cairnText('plant-screen.refresh-this-place'),
+        cairnText('plant-screen.your-position-is-no-longer-fresh-enough'),
+        [{ text: cairnText('plant-screen.confirm-position'), onPress: () => beginLocationFlow('refresh', final) }],
       );
       return;
     }
@@ -712,8 +713,8 @@ export function PlantScreen() {
         {!draftHydrated && !pendingResume ? (
           <View style={styles.hydrationState} testID="plant-draft-hydration">
             <ActivityIndicator color={visualTheme.primary} />
-            <Text style={[styles.hydrationTitle, { color: visualTheme.textPrimary }]}>Checking your saved note…</Text>
-            <Text style={[styles.hydrationBody, { color: visualTheme.textMuted }]}>Your words stay closed until the right place and Activity are confirmed.</Text>
+            <Text style={[styles.hydrationTitle, { color: visualTheme.textPrimary }]}>{cairnText('plant-screen.checking-your-saved-note')}</Text>
+            <Text style={[styles.hydrationBody, { color: visualTheme.textMuted }]}>{cairnText('plant-screen.your-words-stay-closed-until-the-right')}</Text>
           </View>
         ) : null}
         {draftHydrated && step === 'gps' && (
@@ -790,14 +791,14 @@ export function PlantScreen() {
       </View>
       <ModalCard visible={Boolean(pendingResume)} dismissible={false} testID="plant-resume-modal">
         <ModalCardHeader
-          title="Continue your saved note?"
+          title={cairnText('plant-screen.continue-your-saved-note')}
           body={pendingResume?.savedAtMs
-            ? `It still belongs to its original place and was saved ${new Date(pendingResume.savedAtMs).toLocaleString()}. You can refresh the position before leaving it.`
-            : 'It still belongs to its original place. You can refresh the position before leaving it.'}
+            ? cairnText('plant-screen.it-still-belongs-to-its-original-place', { value1: formatCairnDate(pendingResume.savedAtMs, { dateStyle: 'medium', timeStyle: 'short' }) })
+            : cairnText('plant-screen.it-still-belongs-to-its-original-place-b1cf914')}
         />
         <View style={styles.successActions}>
           <PrimaryButton
-            label="Continue saved note"
+            label={cairnText('plant-screen.continue-saved-note')}
             onPress={() => {
               if (!pendingResume) return;
               void applyResumedDraft(pendingResume.draft, pendingResume.sourceKey, pendingResume.sourceRaw);
@@ -805,7 +806,7 @@ export function PlantScreen() {
             testID="plant-resume-continue"
           />
           <PrimaryButton
-            label="Discard and start new"
+            label={cairnText('plant-screen.discard-and-start-new')}
             variant="secondary"
             onPress={() => {
               if (!pendingResume) return;
@@ -854,7 +855,7 @@ export function PlantScreen() {
         />
         <View style={styles.successActions}>
           <PrimaryButton
-            label="View your Cairn"
+            label={cairnText('plant-screen.view-your-cairn')}
             renderIcon={(color) => <Icon name="MapPin" size={17} color={color} strokeWidth={2.2} />}
             onPress={() => {
               if (!plantedResult) return;
@@ -864,7 +865,7 @@ export function PlantScreen() {
           />
           {plantedResult?.fromActivity ? (
             <PrimaryButton
-              label="Back to Activity"
+              label={cairnText('plant-screen.back-to-activity')}
               variant="secondary"
               onPress={() => {
                 setPlantedResult(null);

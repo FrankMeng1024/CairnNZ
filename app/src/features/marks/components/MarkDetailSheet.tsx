@@ -40,6 +40,7 @@ import {
 // which loses the title for any note that used the encodeTitleBody path).
 import { cairnDisplayTitle, splitTitleBody } from '../../plant/services/noteEncoding';
 import { CairnIdentityLine } from '../../cairns/CairnIdentityLine';
+import { cairnText } from '../../../i18n/runtime';
 
 interface Props {
   /** The mark to show. null = closed. */
@@ -79,13 +80,13 @@ function formatAge(createdAt: number): string {
   const days = Math.floor(ms / 86_400_000);
   if (days < 1) {
     const hours = Math.floor(ms / 3_600_000);
-    if (hours < 1) return 'just now';
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    if (hours < 1) return cairnText('marks.mark-detail-sheet.just-now');
+    return cairnText('marks.mark-detail-sheet.value-hour-value-ago', { hours: hours, value2: hours === 1 ? '' : 's' });
   }
-  if (days === 1) return '1 day ago';
-  if (days < 7) return `${days} days ago`;
-  if (days < 30) return `${Math.floor(days / 7)} week${days < 14 ? '' : 's'} ago`;
-  return `${Math.floor(days / 30)} month${days < 60 ? '' : 's'} ago`;
+  if (days === 1) return cairnText('marks.mark-detail-sheet.1-day-ago');
+  if (days < 7) return cairnText('marks.mark-detail-sheet.value-days-ago', { days: days });
+  if (days < 30) return cairnText('marks.mark-detail-sheet.value-week-value-ago', { value1: Math.floor(days / 7), value2: days < 14 ? '' : 's' });
+  return cairnText('marks.mark-detail-sheet.value-month-value-ago', { value1: Math.floor(days / 30), value2: days < 60 ? '' : 's' });
 }
 
 export function MarkDetailSheet(props: Props) {
@@ -168,7 +169,7 @@ export function MarkDetailSheet(props: Props) {
           {body ? (
             <Text style={[styles.body, { color: theme.foregroundSecondary }]}>{body}</Text>
           ) : (
-            <Text style={[styles.emptyBody, { color: theme.muted }]}>No note added.</Text>
+            <Text style={[styles.emptyBody, { color: theme.muted }]}>{cairnText('marks.mark-detail-sheet.no-note-added')}</Text>
           )}
 
           {/* Authorship and audience are intentionally separate facts. */}
@@ -187,20 +188,13 @@ export function MarkDetailSheet(props: Props) {
           {form === 'B' ? (
             <View style={styles.visitedBadge}>
               <Icon name="Check" size={12} color={Colors.success} strokeWidth={2.4} />
-              <Text style={styles.visitedText}>You visited here</Text>
+              <Text style={styles.visitedText}>{cairnText('marks.mark-detail-sheet.you-visited-here')}</Text>
             </View>
           ) : null}
 
           {/* Helper text (form C) */}
           {form === 'C' ? (
-            <Text style={[styles.helperText, { color: theme.muted }]} testID="mark-detail-helper-walk">
-              {/* UX-Med-3 fix (post-review UX round 2): reframed positively.
-                  Original "(Walk here to like or report)" read like a
-                  restriction. v4 §3 iron law 2 frames in-fog liking as
-                  authenticity (you can only vouch for places you've
-                  actually been). Copy now sells the rule. */}
-              Walk this spot to vouch for it.
-            </Text>
+            <Text style={[styles.helperText, { color: theme.muted }]} testID="mark-detail-helper-walk">{cairnText('marks.mark-detail-sheet.walk-this-spot-to-vouch-for-it')}</Text>
           ) : null}
 
           {/* Action surface */}
@@ -212,7 +206,7 @@ export function MarkDetailSheet(props: Props) {
                 testID="mark-detail-open-owned"
               >
                 <Icon name="ChevronRight" size={14} color={theme.iconActive} strokeWidth={2.2} />
-                <Text style={[styles.actionTextSecondary, { color: theme.primary }]}>View Cairn</Text>
+                <Text style={[styles.actionTextSecondary, { color: theme.primary }]}>{cairnText('marks.mark-detail-sheet.view-cairn')}</Text>
               </TouchableOpacity>
             ) : null}
 
@@ -222,15 +216,7 @@ export function MarkDetailSheet(props: Props) {
               testID={`mark-detail-delete-${deleteSemantic}`}
             >
               <Icon name="Trash2" size={14} color={theme.destructive} strokeWidth={2.2} />
-              <Text style={[styles.actionTextSecondary, { color: theme.destructive }]}>
-                {/* UX-Med-4 fix (post-review UX round 2): button vs modal
-                    tone aligned at medium. Pre-fix: button "Hide from view"
-                    (soft) → modal "Hide permanently?" (hard) felt like
-                    bait-and-switch. Now both at medium tone — button labels
-                    the action factually, modal explains the consequence
-                    without scare-word "permanently". */}
-                {deleteSemantic === 'own' ? 'Delete' : 'Hide from my map'}
-              </Text>
+              <Text style={[styles.actionTextSecondary, { color: theme.destructive }]}>{cairnText('marks.mark-detail-sheet.value', { value1: deleteSemantic === 'own' ? cairnText('marks.mark-detail-sheet.delete') : cairnText('marks.mark-detail-sheet.hide-from-my-map') })}</Text>
             </TouchableOpacity>
           </View>
 
@@ -256,7 +242,7 @@ export function MarkDetailSheet(props: Props) {
                   strokeWidth={2.2}
                 />
                 <Text style={[styles.likeText, liked && { color: Colors.danger }]}>
-                  {liked ? '1 Liked' : 'Like'}
+                  {liked ? cairnText('marks.mark-detail-sheet.1-liked') : cairnText('marks.mark-detail-sheet.like')}
                 </Text>
               </TouchableOpacity>
               {showReport ? (
@@ -266,7 +252,7 @@ export function MarkDetailSheet(props: Props) {
                   testID="mark-detail-report"
                 >
                   <Icon name="Flag" size={16} color={Colors.warning} strokeWidth={2.2} />
-                  <Text style={styles.reportText}>Report</Text>
+                  <Text style={styles.reportText}>{cairnText('marks.mark-detail-sheet.report')}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontSize, RadiusRole, Shadow, Spacing } from './tokens';
 import { DismissButton } from './DismissButton';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { cairnText } from '../i18n/runtime';
 
 interface Props {
   visible: boolean;
@@ -50,7 +51,7 @@ export function ModalCard({
           onPress={dismissible ? onDismiss : undefined}
           accessible={dismissible}
           accessibilityRole={dismissible ? 'button' : undefined}
-          accessibilityLabel={dismissible ? 'Dismiss dialog' : undefined}
+          accessibilityLabel={dismissible ? cairnText('modal-card.dismiss-dialog') : undefined}
         />
         <View
           testID={testID}
@@ -85,7 +86,7 @@ export function ModalCardHeader({ title, body, onClose, testID }: ModalCardHeade
         {body ? <Text style={[styles.body, { color: theme.textSecondary }]}>{body}</Text> : null}
       </View>
       {onClose ? (
-        <DismissButton onPress={onClose} label="Close dialog" style={styles.close} />
+        <DismissButton onPress={onClose} label={cairnText('modal-card.close-dialog')} style={styles.close} />
       ) : null}
     </View>
   );

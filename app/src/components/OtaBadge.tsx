@@ -24,6 +24,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { cairnText } from '../i18n/runtime';
 
 // Manual OTA version counter. Bump this by 1 every time we ship an
 // OTA update so the user can visually confirm they're running the
@@ -385,7 +386,7 @@ export const OTA_VERSION = 'O92';
  * to Expo Updates and diagnostics; it is not a user-facing success banner. */
 export function OtaReleaseMarker() {
   return (
-    <View style={styles.releaseMarker} pointerEvents="none" accessibilityLabel={`Cairn release ${OTA_VERSION}`}>
+    <View style={styles.releaseMarker} pointerEvents="none" accessibilityLabel={cairnText('ota-badge.cairn-release-value', { OTA_VERSION: OTA_VERSION })}>
       <Text style={styles.releaseMarkerText}>{OTA_VERSION}</Text>
     </View>
   );
@@ -616,12 +617,12 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
   switch (state) {
     case 'preview':
       dotColor = COLORS.dotGrey;
-      label = 'Web preview';
+      label = cairnText('ota-badge.web-preview');
       break;
     case 'checking':
       // Honest checking state — never pretend we already verified.
       dotColor = COLORS.dotGrey;
-      label = 'Checking for update';
+      label = cairnText('ota-badge.checking-for-update');
       showSpinner = true;
       break;
     case 'idle':
@@ -629,29 +630,29 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
       // is no newer bundle. This is the only state where "Up to date"
       // is truthful — never use it as a fallback for failures.
       dotColor = COLORS.dotGreen;
-      label = 'Up to date';
+      label = cairnText('ota-badge.up-to-date');
       break;
     case 'downloading':
       dotColor = COLORS.dotBlue;
-      label = 'Downloading update';
+      label = cairnText('ota-badge.downloading-update');
       showSpinner = true;
       break;
     case 'ready':
       // Should be brief — auto-reload kicks in 600ms after download.
       // Kept tappable as a manual fallback in case reload fails.
       dotColor = COLORS.dotAmber;
-      label = 'Update downloaded';
+      label = cairnText('ota-badge.update-downloaded-8fca2dc');
       interactive = true;
       break;
     case 'applying':
       dotColor = COLORS.dotBlue;
-      label = 'Restarting…';
+      label = cairnText('ota-badge.restarting');
       showSpinner = true;
       break;
     case 'error':
       // Honest failure state — do NOT mask as "Up to date".
       dotColor = COLORS.dotGrey;
-      label = "Couldn't check · tap to retry";
+      label = cairnText('ota-badge.couldn-t-check-tap-to-retry');
       interactive = true;
       break;
   }
@@ -674,7 +675,7 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
           ) : (
             <View style={[styles.dot, { backgroundColor: dotColor }]} />
           )}
-          <Text style={styles.label}>{`${OTA_VERSION} · ${label}`}</Text>
+          <Text style={styles.label}>{cairnText('ota-badge.value-value', { OTA_VERSION: OTA_VERSION, label: label })}</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -691,16 +692,14 @@ export function OtaBadge({ inline = false, idleHidden = false }: Props) {
               <View style={[styles.modalIconDot, { backgroundColor: COLORS.dotAmber, opacity: 0.5 }]} />
               <View style={[styles.modalIconDot, { backgroundColor: COLORS.dotAmber, opacity: 0.25 }]} />
             </View>
-            <Text style={styles.modalTitle}>Update downloaded</Text>
-            <Text style={styles.modalBody}>
-              The new version is ready. Restart now to apply — it only takes a second.
-            </Text>
+            <Text style={styles.modalTitle}>{cairnText('ota-badge.update-downloaded')}</Text>
+            <Text style={styles.modalBody}>{cairnText('ota-badge.the-new-version-is-ready-restart-now')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.btnSecondary} onPress={handleLater} activeOpacity={0.7}>
-                <Text style={styles.btnSecondaryText}>Later</Text>
+                <Text style={styles.btnSecondaryText}>{cairnText('ota-badge.later')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnPrimary} onPress={handleApply} activeOpacity={0.85}>
-                <Text style={styles.btnPrimaryText}>Restart now</Text>
+                <Text style={styles.btnPrimaryText}>{cairnText('ota-badge.restart-now')}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

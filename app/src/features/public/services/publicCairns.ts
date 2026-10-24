@@ -3,9 +3,12 @@ import * as Crypto from 'expo-crypto';
 import { authenticatedFetch } from '../../../services/apiService';
 import { useAppStore } from '../../../store/useAppStore';
 import { storage } from '../../../store/storage';
+import { cairnText } from '../../../i18n/runtime';
 
 const CACHE_PREFIX = 'cairn:public-cairns:v1:';
-const ANONYMOUS_PUBLIC_AUTHOR = { id: 'anonymous', name: 'Anonymous explorer' } as const;
+function anonymousPublicAuthor() {
+  return { id: 'anonymous', name: cairnText('public.anonymous-explorer') } as const;
+}
 
 export interface PublicCairnSummary {
   id: string;
@@ -173,11 +176,11 @@ async function loadSnapshot(viewerId: string): Promise<CacheSnapshot> {
         && parsed.entries && parsed.details && parsed.pendingActions) {
         const entries = Object.fromEntries(Object.entries(parsed.entries).map(([id, item]) => [
           id,
-          { ...(item as PublicCairnSummary), author: { ...ANONYMOUS_PUBLIC_AUTHOR } },
+          { ...(item as PublicCairnSummary), author: anonymousPublicAuthor() },
         ]));
         const details = Object.fromEntries(Object.entries(parsed.details).map(([id, item]) => [
           id,
-          { ...(item as PublicCairnDetail), author: { ...ANONYMOUS_PUBLIC_AUTHOR } },
+          { ...(item as PublicCairnDetail), author: anonymousPublicAuthor() },
         ]));
         // O84 stored real Public author identities. They are no longer part of
         // the client contract. Keep an id only while an already-queued legacy
@@ -227,7 +230,7 @@ function normalizeSummary(raw: any): PublicCairnSummary {
     id: String(raw.id),
     // Public discovery is intentionally anonymous even if a mixed-version
     // backend accidentally returns the retired identity fields.
-    author: { ...ANONYMOUS_PUBLIC_AUTHOR },
+    author: anonymousPublicAuthor(),
     type: String(raw.type || 'cairn'),
     lat: Number(raw.lat), lng: Number(raw.lng), approximate: Boolean(raw.approximate),
     createdAt: Date.parse(raw.created_at), encounteredAt: Date.parse(raw.encountered_at), readOnly: true,
@@ -436,7 +439,7 @@ export const usePublicCairnStore = create<PublicCairnState>((set, get) => ({
       await get().refreshScene();
     } catch (error) {
       if (stillCurrent()) {
-        const publicError = error instanceof PublicCairnError && error.code === 'auth' ? 'auth' : 'offline';
+        const publicError: PublicError = error instanceof PublicCairnError && error.code === 'auth' ? 'auth' : 'offline';
         set({ enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: publicError });
         publishState(viewerId, snapshot, { enabled: snapshot.pilotEnabled, capabilityChecked: true, loading: false, error: publicError });
       }

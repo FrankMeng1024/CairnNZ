@@ -86,7 +86,9 @@ describe('Route Detail / editor / use source contracts', () => {
 
   test('Detail owns direct Use, Edit, acknowledged rename/delete, source, and explicit unavailable states', () => {
     expect(detail).toContain('routeMatchesIdentity(item, targetRouteId)');
-    expect(detail).toContain("'Route unavailable'");
+    // REVISE_WITH_REASON: UI copy is keyed at source and English remains in
+    // the single catalog rather than Route component literals.
+    expect(detail).toContain("cairnText('map-history-screen.route-unavailable')");
     expect(detail).toContain('await useRouteStore.getState().updateRoute');
     expect(detail).toContain('await useRouteStore.getState().deleteRoute');
     expect(detail).toContain('routeSourceLabel(selectedRoute)');
@@ -98,9 +100,9 @@ describe('Route Detail / editor / use source contracts', () => {
   });
 
   test('Route sharing is friend-directed snapshot delivery and unresolved gaps stay blocked', () => {
-    expect(detail).toContain('title="Send an independent Route"');
+    expect(detail).toContain("title={cairnText('map-history-screen.send-an-independent-route')}");
     expect(detail).toContain('shareRouteSnapshot(serverRouteId, recipients, attempt.key)');
-    expect(detail).toContain('Retry uses the same request identity');
+    expect(detail).toContain("cairnText('map-history-screen.delivery-was-not-confirmed-retry-uses-the')");
     expect(detail).toContain('key: attempt.key');
     expect(detail).toContain("signature: `${serverRouteId}|${failedRecipients.join(',')}`");
     expect(detail).toContain('disabled={!routeCanBeUsed(selectedRoute)}');
@@ -116,7 +118,7 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(editor).not.toContain('saveRoutePlannerDraft({');
     expect(editor).toContain('loadActivityFinalArtifact(ownerId, clientActivityId)');
     expect(editor).toContain('createImportedOrderedDraft');
-    expect(editor).toContain("'This Route changed while the edit was being reviewed");
+    expect(editor).toContain("cairnText('ordered-route-editor-screen.this-route-changed-while-the-edit-was')");
     expect(editor).toContain('rawTarget: selection.rawTarget');
     expect(editor).toContain('effectiveTarget: selection.effectiveTarget');
     expect(editor).toContain('animateAcceptedPoint(committedPart?.points ?? points');
@@ -136,8 +138,8 @@ describe('Route Detail / editor / use source contracts', () => {
   });
 
   test('Detail uses ordinary metrics and direct compact Hike/Run actions without a mode confirmation modal', () => {
-    expect(detail).toContain('Use for Hike');
-    expect(detail).toContain('Use for Run');
+    expect(detail).toContain("cairnText('map-history-screen.use-for-hike')");
+    expect(detail).toContain("cairnText('map-history-screen.use-for-run')");
     expect(detail).not.toContain('title="Use this Route"');
     expect(detail).not.toContain('route-use-hike');
     expect(detail).not.toContain('route-use-run');
@@ -146,9 +148,12 @@ describe('Route Detail / editor / use source contracts', () => {
   });
 
   test('Hike and Run select the Route pre-start and capture its recording reference only inside Start', () => {
-    for (const source of [hike, run]) {
+    for (const [source, referenceKey] of [
+      [hike, 'hiking-screen.this-route-is-shown-on-the-map'],
+      [run, 'running-screen.this-route-is-shown-on-the-map'],
+    ] as const) {
       expect(source).toContain('captureActivityRouteReference(selectedRoute)');
-      expect(source).toContain('This Route is shown on the map for reference.');
+      expect(source).toContain(`cairnText('${referenceKey}')`);
       expect(source).not.toContain('setFollowingRoute(');
       const startHandler = Math.max(
         source.indexOf('async function handleStart()'),

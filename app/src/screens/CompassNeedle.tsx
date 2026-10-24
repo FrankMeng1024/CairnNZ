@@ -9,6 +9,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import Svg, { Path, Circle as SvgCircle } from 'react-native-svg';
 import { Colors } from '../components/tokens';
+import { cairnText } from '../i18n/runtime';
 
 type Props = {
   heading: number | null;
@@ -31,10 +32,10 @@ export function CompassNeedle({ heading, size = 22 }: Props) {
           Previously only N was shown, which made it impossible to read
           a bearing once the device was off-axis. Adding E/S/W gives a
           full directional reference. */}
-      <Text style={[cardinal, { top: -2 }]}>N</Text>
-      <Text style={[cardinalMuted, { right: -2, top: '50%' as any, marginTop: -4 }]}>E</Text>
-      <Text style={[cardinalMuted, { bottom: -2 }]}>S</Text>
-      <Text style={[cardinalMuted, { left: -2, top: '50%' as any, marginTop: -4 }]}>W</Text>
+      <Text style={[cardinal, { top: -2 }]}>{cairnText('compass-needle.n')}</Text>
+      <Text style={[cardinalMuted, { right: -2, top: '50%' as any, marginTop: -4 }]}>{cairnText('compass-needle.e')}</Text>
+      <Text style={[cardinalMuted, { bottom: -2 }]}>{cairnText('compass-needle.s')}</Text>
+      <Text style={[cardinalMuted, { left: -2, top: '50%' as any, marginTop: -4 }]}>{cairnText('compass-needle.w')}</Text>
       {/* Rotating two-colour needle */}
       <View style={{ transform: [{ rotate: `${angle}deg` }] }}>
         <Svg width={size} height={size} viewBox="0 0 24 24">

@@ -2,12 +2,16 @@
  * Locale-aware display formatting. Wire/storage values remain ISO/timestamps.
  */
 
-/** Cairn V1 product copy is English regardless of the device locale. */
-export const PRODUCT_LOCALE = 'en-NZ';
+import { getCairnLocale } from '../i18n/runtime';
+
+/** Locale used only for display formatting; storage and protocol values stay stable. */
+export function productLocale(): 'en-NZ' | 'ja-JP' {
+  return getCairnLocale() === 'ja-JP' ? 'ja-JP' : 'en-NZ';
+}
 
 export function formatDate(input: Date | number): string {
   const d = typeof input === 'number' ? new Date(input) : input;
-  return new Intl.DateTimeFormat(PRODUCT_LOCALE, {
+  return new Intl.DateTimeFormat(productLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -16,7 +20,7 @@ export function formatDate(input: Date | number): string {
 
 export function formatProductTime(input: Date | number): string {
   const d = typeof input === 'number' ? new Date(input) : input;
-  return new Intl.DateTimeFormat(PRODUCT_LOCALE, {
+  return new Intl.DateTimeFormat(productLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   }).format(d);

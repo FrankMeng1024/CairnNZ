@@ -175,6 +175,8 @@ function buildFromPending(pending: PendingHike): AlmostDoneCloneV1 {
     provenance: {
       schemaVersion: 1,
       reviewOnly: true,
+      // Protocol/provenance identifier, not display copy. Its literal type is
+      // part of the retained QA clone contract and must not vary by locale.
       label: 'QA / SNAP REVIEW CLONE',
       cloneId: ALMOST_DONE_CLONE_V1_ID,
       sourceClientActivityId: ALMOST_DONE_SOURCE_CLIENT_ID,

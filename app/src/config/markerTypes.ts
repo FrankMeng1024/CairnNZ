@@ -18,6 +18,7 @@
 
 import { Colors } from '../components/tokens';
 import type { IconName } from '../components/Icon';
+import { cairnText } from '../i18n/runtime';
 
 export type MarkerType =
   | 'danger'
@@ -44,45 +45,45 @@ export const MARKER_TYPES: Record<MarkerType, MarkerTypeMeta> = {
   danger: {
     id: 'danger',
     icon: 'TriangleAlert',
-    label: 'Danger',
+    get label() { return cairnText('config.marker-types.danger'); },
     color: Colors.danger,
     bg: Colors.dangerBg,
-    hint: 'Flooded crossing, slip, hazard ahead',
+    get hint() { return cairnText('config.marker-types.flooded-crossing-slip-hazard-ahead'); },
   },
   junction: {
     id: 'junction',
     icon: 'Navigation2',
-    label: 'Junction',
+    get label() { return cairnText('config.marker-types.junction'); },
     color: Colors.docOrange,
     bg: Colors.severityWarningBg,
-    hint: 'Track split or turn-off',
+    get hint() { return cairnText('config.marker-types.track-split-or-turn-off'); },
   },
   water: {
     id: 'water',
     icon: 'Droplets',
-    label: 'Water',
+    get label() { return cairnText('config.marker-types.water'); },
     color: Colors.success,
     bg: Colors.successBg,
-    hint: 'Drinkable stream, hut tank',
+    get hint() { return cairnText('config.marker-types.drinkable-stream-hut-tank'); },
   },
   hut: {
     id: 'hut',
     // 'House' is the lucide icon for DOC backcountry hut shelter.
     icon: 'House',
-    label: 'Hut',
+    get label() { return cairnText('config.marker-types.hut'); },
     color: Colors.trail, // sepia brown — natural shelter colour
     bg: 'rgba(181,130,61,0.10)',
-    hint: 'DOC hut, shelter, campsite',
+    get hint() { return cairnText('config.marker-types.doc-hut-shelter-campsite'); },
   },
   cairn: {
     id: 'cairn',
     // 'Mountain' is the closest lucide approximation; real rendering uses
     // <CairnStoneIcon> SVG so this is only used as a fallback in pickers.
     icon: 'Mountain',
-    label: 'Cairn',
+    get label() { return cairnText('config.marker-types.cairn'); },
     color: Colors.trail, // sepia brown #b5823d — neutral, not severity
     bg: 'rgba(181,130,61,0.10)',
-    hint: 'A note, photo, or memory for whoever comes next',
+    get hint() { return cairnText('config.marker-types.a-note-photo-or-memory-for-whoever'); },
   },
 };
 

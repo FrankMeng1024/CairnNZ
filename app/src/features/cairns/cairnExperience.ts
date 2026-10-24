@@ -1,4 +1,5 @@
 import type { Marker, MarkerPermission } from '../../store/useMarkerStore';
+import { cairnText } from '../../i18n/runtime';
 
 /**
  * User-facing Cairn language lives here so the current working name can be
@@ -7,9 +8,9 @@ import type { Marker, MarkerPermission } from '../../store/useMarkerStore';
 export const CAIRN_TERMS = {
   object: 'Cairn',
   objectPlural: 'Cairns',
-  leaveTitle: 'Leave a Cairn',
-  notePrompt: 'What would you leave here?',
-  encounterTitle: 'A note was waiting here',
+  get leaveTitle() { return cairnText('cairns.cairn-experience.leave-a-cairn'); },
+  get notePrompt() { return cairnText('cairns.cairn-experience.what-would-you-leave-here'); },
+  get encounterTitle() { return cairnText('cairns.cairn-experience.a-note-was-waiting-here'); },
 } as const;
 
 export const CAIRN_MOTION = {
@@ -31,25 +32,25 @@ export type CairnAudienceCopy = {
 export function cairnAudienceCopy(permission: MarkerPermission): CairnAudienceCopy {
   if (permission === 'group') {
     return {
-      label: 'Friends',
-      shortLabel: 'Friends',
-      action: 'Leave for friends',
-      summary: 'Friends can encounter this version only when they genuinely pass nearby. It is not a live-location broadcast.',
+      label: cairnText('cairns.cairn-experience.friends'),
+      shortLabel: cairnText('cairns.cairn-experience.friends-1c861a2'),
+      action: cairnText('cairns.cairn-experience.leave-for-friends'),
+      summary: cairnText('cairns.cairn-experience.friends-can-encounter-this-version-only-when'),
     };
   }
   if (permission === 'public') {
     return {
-      label: 'Public',
-      shortLabel: 'Public',
-      action: 'Submit for review',
-      summary: 'Requires useful text, an eligible completed Activity here, and review. Strangers see you anonymously; current friends may recognize you. Acquired copies can remain.',
+      label: cairnText('cairns.cairn-experience.public'),
+      shortLabel: cairnText('cairns.cairn-experience.public-b8be570'),
+      action: cairnText('cairns.cairn-experience.submit-for-review'),
+      summary: cairnText('cairns.cairn-experience.requires-useful-text-an-eligible-completed-activity'),
     };
   }
   return {
-    label: 'Only me',
-    shortLabel: 'Only me',
-    action: 'Save privately',
-    summary: 'Saved to your own Memory and visible only to you.',
+    label: cairnText('cairns.cairn-experience.only-me'),
+    shortLabel: cairnText('cairns.cairn-experience.only-me-e541b24'),
+    action: cairnText('cairns.cairn-experience.save-privately'),
+    summary: cairnText('cairns.cairn-experience.saved-to-your-own-memory-and-visible'),
   };
 }
 
@@ -60,9 +61,9 @@ export function publicCreationBlockReason(args: {
   hasUsefulText: boolean;
 }): string | null {
   if (args.permission !== 'public') return null;
-  if (!args.publicEnabled) return 'Public is not available for this account.';
-  if (!args.activityLocation) return 'Public Cairns currently need an eligible Activity recorded at this place.';
-  if (!args.hasUsefulText) return 'Add a useful note before submitting this version for review.';
+  if (!args.publicEnabled) return cairnText('cairns.cairn-experience.public-is-not-available-for-this-account');
+  if (!args.activityLocation) return cairnText('cairns.cairn-experience.public-cairns-currently-need-an-eligible-activity');
+  if (!args.hasUsefulText) return cairnText('cairns.cairn-experience.add-a-useful-note-before-submitting-this');
   return null;
 }
 
@@ -94,36 +95,36 @@ export function cairnPublicationTruth(marker: Pick<
 >): CairnPublicationTruth | null {
   if (marker.permission !== 'public') return null;
   if (marker.syncState === 'failed') return {
-    state: 'sync_failed', label: 'Public · Sync needs attention', successTitle: 'Cairn saved on this iPhone',
-    explanation: 'This version is saved locally, but it has not reached Public review. Open the Cairn to retry sync.',
+    state: 'sync_failed', label: cairnText('cairns.cairn-experience.public-sync-needs-attention'), successTitle: cairnText('cairns.cairn-experience.cairn-saved-on-this-iphone'),
+    explanation: cairnText('cairns.cairn-experience.this-version-is-saved-locally-but-it'),
   };
   if (marker.syncState === 'pending') return {
-    state: 'syncing', label: 'Public · Waiting to sync', successTitle: 'Cairn saved on this iPhone',
-    explanation: 'This version is saved locally and queued to sync. It has not been submitted for review yet.',
+    state: 'syncing', label: cairnText('cairns.cairn-experience.public-waiting-to-sync'), successTitle: cairnText('cairns.cairn-experience.cairn-saved-on-this-iphone'),
+    explanation: cairnText('cairns.cairn-experience.this-version-is-saved-locally-and-queued'),
   };
   if (marker.synced !== true && marker.syncState !== 'synced') return {
-    state: 'local_saved', label: 'Public · Saved locally', successTitle: 'Cairn saved on this iPhone',
-    explanation: 'This version is saved locally. It has not been submitted for review yet.',
+    state: 'local_saved', label: cairnText('cairns.cairn-experience.public-saved-locally'), successTitle: cairnText('cairns.cairn-experience.cairn-saved-on-this-iphone'),
+    explanation: cairnText('cairns.cairn-experience.this-version-is-saved-locally-it-has'),
   };
   if (marker.publicSubmissionCode === 'PUBLIC_ELIGIBLE_ACTIVITY_REQUIRED') return {
     state: 'waiting_activity',
-    label: marker.originActivityClientId ? 'Public · Activity not confirmed' : 'Public · Activity required',
-    successTitle: 'Cairn saved',
+    label: marker.originActivityClientId ? cairnText('cairns.cairn-experience.public-activity-not-confirmed') : cairnText('cairns.cairn-experience.public-activity-required'),
+    successTitle: cairnText('cairns.cairn-experience.cairn-saved'),
     explanation: marker.originActivityClientId
       ? 'The linked Activity is not yet confirmed as eligible. This version is not in review or Public discovery; it can proceed only after the server confirms a completed eligible Activity.'
       : 'This Cairn has no Activity source, so this version cannot enter Public review. Choose another audience, or leave a new Public Cairn from an eligible Activity.',
   };
   if (marker.publicSubmissionCode === 'PUBLIC_TEXT_REQUIRED') return {
-    state: 'not_submitted', label: 'Public · Useful text required', successTitle: 'Cairn saved privately',
-    explanation: 'This Cairn is saved, but Public discovery needs useful text before it can be submitted.',
+    state: 'not_submitted', label: cairnText('cairns.cairn-experience.public-useful-text-required'), successTitle: cairnText('cairns.cairn-experience.cairn-saved-privately'),
+    explanation: cairnText('cairns.cairn-experience.this-cairn-is-saved-but-public-discovery'),
   };
   switch (marker.publicState) {
-    case 'pending': return { state: 'pending_review', label: 'Public · In review', successTitle: 'Submitted for review', explanation: 'This exact version is waiting for moderation. It is not published yet.' };
-    case 'published': return { state: 'published', label: 'Public · Published', successTitle: 'Cairn published', explanation: 'Qualified people nearby can discover this exact approved version.' };
-    case 'rejected': return { state: 'rejected', label: 'Public · Not approved', successTitle: 'Cairn not published', explanation: 'This version was not approved for Public discovery. Your personal Cairn remains saved.' };
-    case 'suspended': return { state: 'suspended', label: 'Public · Paused by review', successTitle: 'Public delivery paused', explanation: 'Public delivery of this version is paused. Your personal Cairn remains saved.' };
-    case 'withdrawn': return { state: 'withdrawn', label: 'Public · Withdrawn', successTitle: 'Cairn withdrawn', explanation: 'This version is no longer available for new Public encounters. Your personal Cairn remains saved.' };
-    case 'not_public': return { state: 'not_submitted', label: 'Public · Not submitted', successTitle: 'Cairn saved privately', explanation: 'This version is not in Public review or Public discovery.' };
-    default: return { state: 'unknown', label: 'Public · Status unavailable', successTitle: 'Cairn saved', explanation: 'Cairn cannot confirm the Public status of this version yet. It is not being described as submitted or published.' };
+    case 'pending': return { state: 'pending_review', label: cairnText('cairns.cairn-experience.public-in-review'), successTitle: cairnText('cairns.cairn-experience.submitted-for-review'), explanation: cairnText('cairns.cairn-experience.this-exact-version-is-waiting-for-moderation') };
+    case 'published': return { state: 'published', label: cairnText('cairns.cairn-experience.public-published'), successTitle: cairnText('cairns.cairn-experience.cairn-published'), explanation: cairnText('cairns.cairn-experience.qualified-people-nearby-can-discover-this-exact') };
+    case 'rejected': return { state: 'rejected', label: cairnText('cairns.cairn-experience.public-not-approved'), successTitle: cairnText('cairns.cairn-experience.cairn-not-published'), explanation: cairnText('cairns.cairn-experience.this-version-was-not-approved-for-public') };
+    case 'suspended': return { state: 'suspended', label: cairnText('cairns.cairn-experience.public-paused-by-review'), successTitle: cairnText('cairns.cairn-experience.public-delivery-paused'), explanation: cairnText('cairns.cairn-experience.public-delivery-of-this-version-is-paused') };
+    case 'withdrawn': return { state: 'withdrawn', label: cairnText('cairns.cairn-experience.public-withdrawn'), successTitle: cairnText('cairns.cairn-experience.cairn-withdrawn'), explanation: cairnText('cairns.cairn-experience.this-version-is-no-longer-available-for') };
+    case 'not_public': return { state: 'not_submitted', label: cairnText('cairns.cairn-experience.public-not-submitted'), successTitle: cairnText('cairns.cairn-experience.cairn-saved-privately'), explanation: cairnText('cairns.cairn-experience.this-version-is-not-in-public-review') };
+    default: return { state: 'unknown', label: cairnText('cairns.cairn-experience.public-status-unavailable'), successTitle: cairnText('cairns.cairn-experience.cairn-saved'), explanation: cairnText('cairns.cairn-experience.cairn-cannot-confirm-the-public-status-of') };
   }
 }

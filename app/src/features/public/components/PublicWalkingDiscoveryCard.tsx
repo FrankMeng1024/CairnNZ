@@ -10,6 +10,7 @@ import { CAIRN_MOTION, CAIRN_TERMS } from '../../cairns/cairnExperience';
 import { haptic } from '../../../services/hapticService';
 import { resolveCairnPresentationDestinations } from '../../cairns/cairnPresentationNavigation';
 import { scheduleVisibleFrame, useAppIsActive } from '../../../hooks/useAppIsActive';
+import { cairnText } from '../../../i18n/runtime';
 
 const encounteredThisProcess = new Set<string>();
 
@@ -116,12 +117,12 @@ export function PublicWalkingDiscoveryCard({
     && visible.eventCount > 0
     && visible.updatedEventCount === visible.eventCount;
   const provenanceLabel = visible.sourceAudience === 'friends'
-    ? 'FRIENDS CAIRN · ENCOUNTERED HERE'
+    ? cairnText('public.public-walking-discovery-card.friends-cairn-encountered-here')
     : visible.sourceAudience === 'public'
-      ? 'PUBLIC CAIRN · ENCOUNTERED HERE'
+      ? cairnText('public.public-walking-discovery-card.public-cairn-encountered-here')
       : visible.sourceAudience === 'mixed'
-        ? 'FRIENDS + PUBLIC · ENCOUNTERED HERE'
-        : 'CAIRN · ENCOUNTERED HERE';
+        ? cairnText('public.public-walking-discovery-card.friends-public-encountered-here')
+        : cairnText('public.public-walking-discovery-card.cairn-encountered-here');
   return (
     <Animated.View
       testID={`walking-discovery-group-${visible.token}`}
@@ -141,7 +142,7 @@ export function PublicWalkingDiscoveryCard({
         },
       ]}
       accessibilityRole="alert"
-      accessibilityLabel={`${count} ${count === 1 ? 'Cairn' : 'Cairns'} found and saved in Memory`}
+      accessibilityLabel={cairnText('memory.discovery.cairns-found', { count })}
     >
       <View style={[styles.icon, { backgroundColor: theme.controlSelected }]}>
         {visible.sourceAudience === 'mixed' ? (
@@ -159,11 +160,13 @@ export function PublicWalkingDiscoveryCard({
       <View style={styles.copy}>
         <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>{provenanceLabel}</Text>
         <Text style={[styles.title, { color: theme.foreground }]}>
-          {updatedOnly ? 'A familiar Cairn has new words'
-            : count === 1 ? CAIRN_TERMS.encounterTitle : `${count} notes were waiting here`}
+          {updatedOnly ? cairnText('public.public-walking-discovery-card.a-familiar-cairn-has-new-words')
+            : count === 1 ? CAIRN_TERMS.encounterTitle : cairnText('public.public-walking-discovery-card.value-notes-were-waiting-here', { count: count })}
         </Text>
         <Text style={[styles.author, { color: theme.foregroundSecondary }]} numberOfLines={1}>
-          Saved in Memory{surface === 'hike' || surface === 'run' ? ' · Recording continues' : ''}
+          {surface === 'hike' || surface === 'run'
+            ? cairnText('public.public-walking-discovery-card.saved-in-memory-recording-continues')
+            : cairnText('memory.saved-in-memory')}
         </Text>
         <View style={styles.actions}>
           <TouchableOpacity
@@ -203,19 +206,19 @@ export function PublicWalkingDiscoveryCard({
             }}
             accessibilityRole="button"
             accessibilityState={{ busy: opening, disabled: opening }}
-            accessibilityLabel={count === 1 ? 'Open found Cairn' : 'Open found Cairns'}
+            accessibilityLabel={count === 1 ? cairnText('public.public-walking-discovery-card.open-found-cairn') : cairnText('public.public-walking-discovery-card.open-found-cairns')}
           >
-            <Text style={[styles.openText, { color: theme.onPrimary }]}>{opening ? 'Opening…' : openError ? 'Retry' : 'Open'}</Text>
+            <Text style={[styles.openText, { color: theme.onPrimary }]}>{opening ? cairnText('public.public-walking-discovery-card.opening') : openError ? cairnText('common.retry') : cairnText('public.public-walking-discovery-card.open')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.laterAction}
             onPress={() => useCairnPresentationStore.getState().release(surface)}
             accessibilityRole="button"
           >
-            <Text style={[styles.laterText, { color: theme.foregroundSecondary }]}>Later</Text>
+            <Text style={[styles.laterText, { color: theme.foregroundSecondary }]}>{cairnText('public.public-walking-discovery-card.later')}</Text>
           </TouchableOpacity>
         </View>
-        {openError ? <Text accessibilityLiveRegion="polite" style={[styles.openError, { color: theme.destructive }]}>Could not open this exact group. It is still here; try again.</Text> : null}
+        {openError ? <Text accessibilityLiveRegion="polite" style={[styles.openError, { color: theme.destructive }]}>{cairnText('public.public-walking-discovery-card.could-not-open-this-exact-group-it')}</Text> : null}
       </View>
     </Animated.View>
   );

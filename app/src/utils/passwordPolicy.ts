@@ -1,7 +1,8 @@
-export const PASSWORD_RULES = [
-  { key: 'length', label: 'At least 8 characters' },
-  { key: 'uppercase', label: 'One uppercase letter' },
-  { key: 'number', label: 'One number' },
+
+import { cairnText } from '../i18n/runtime';export const PASSWORD_RULES = [
+  { key: 'length', get label() { return cairnText('password-policy.at-least-8-characters'); } },
+  { key: 'uppercase', get label() { return cairnText('password-policy.one-uppercase-letter'); } },
+  { key: 'number', get label() { return cairnText('password-policy.one-number'); } },
 ] as const;
 
 export type PasswordRuleKey = typeof PASSWORD_RULES[number]['key'];
@@ -16,10 +17,10 @@ export function passwordRuleState(value: string): Record<PasswordRuleKey, boolea
 
 export function passwordPolicyError(value: string): string {
   const rules = passwordRuleState(value);
-  if (!value) return 'Password is required';
-  if (!rules.length) return 'Password must be at least 8 characters';
-  if (!rules.uppercase) return 'Password must contain an uppercase letter';
-  if (!rules.number) return 'Password must contain a number';
+  if (!value) return cairnText('password-policy.password-is-required');
+  if (!rules.length) return cairnText('password-policy.password-must-be-at-least-8-characters');
+  if (!rules.uppercase) return cairnText('password-policy.password-must-contain-an-uppercase-letter');
+  if (!rules.number) return cairnText('password-policy.password-must-contain-a-number');
   return '';
 }
 

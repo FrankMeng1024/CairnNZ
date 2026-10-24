@@ -11,6 +11,7 @@ describe('shared Hike and Run recording UI contracts', () => {
   const hikeFinish = read('src/screens/StopSummarySheet.tsx');
   const settings = read('src/screens/SettingsScreen.tsx');
   const activityDetail = read('src/screens/MapHistoryScreen.tsx');
+  const catalog = read('src/i18n/cairnText.ts');
 
   test.each([
     ['Hike', hike, 'hike'],
@@ -25,13 +26,15 @@ describe('shared Hike and Run recording UI contracts', () => {
   });
 
   test('tracking actions stay visible and paused Resume is primary', () => {
-    expect(shared).toContain("phase === 'resuming' ? 'Resuming…'");
-    expect(shared).toContain("phase === 'pausing' ? 'Pausing…'");
-    expect(shared).toContain("paused ? 'Resume' : 'Pause'");
+    // REVISE_WITH_REASON: keep state-to-copy semantics keyed while English is
+    // authoritative only in cairnText.ts.
+    expect(shared).toContain("phase === 'resuming' ? cairnText('activity.activity-recording-chrome.resuming')");
+    expect(shared).toContain("phase === 'pausing' ? cairnText('activity.activity-recording-chrome.pausing')");
+    expect(shared).toContain("paused ? cairnText('activity.activity-recording-chrome.resume') : cairnText('activity.activity-recording-chrome.pause')");
     expect(shared).toContain('styles.primaryControl');
-    expect(shared).toContain("accessibilityLabel={`Finish ${mode}`}");
-    expect(shared).toContain("mode === 'run' ? 'Cairn' : 'Plant'");
-    expect(shared).toContain("paused ? 'Activity paused' : 'Recording activity'");
+    expect(shared).toContain("cairnText('activity.activity-recording-chrome.finish-value'");
+    expect(shared).toContain("mode === 'run' ? cairnText('activity.activity-recording-chrome.cairn') : cairnText('activity.activity-recording-chrome.plant')");
+    expect(shared).toContain("paused ? cairnText('activity.activity-recording-chrome.activity-paused') : cairnText('activity.activity-recording-chrome.recording-activity')");
     expect(run).toContain('{!showSaveSheet ? (');
     expect(run).toContain('{!showSaveSheet && !runFollowUser ? (');
     expect(hike).toContain('{!stopSummary ? (');
@@ -46,28 +49,28 @@ describe('shared Hike and Run recording UI contracts', () => {
   });
 
   test('metric hierarchy deliberately differs inside one family', () => {
-    expect(hike).toContain("primaryMetric={{ label: 'DISTANCE'");
-    expect(hike).toContain("{ label: 'ACTIVE TIME'");
-    expect(hike).toContain("{ label: 'ELEVATION'");
-    expect(run).toContain("primaryMetric={{ label: 'LIVE PACE'");
-    expect(run).toContain("{ label: 'ACTIVE TIME'");
+    expect(hike).toContain("primaryMetric={{ label: cairnText('hiking-screen.distance')");
+    expect(hike).toContain("{ label: cairnText('hiking-screen.active-time')");
+    expect(hike).toContain("{ label: cairnText('hiking-screen.elevation')");
+    expect(run).toContain("primaryMetric={{ label: cairnText('running-screen.live-pace')");
+    expect(run).toContain("{ label: cairnText('running-screen.active-time')");
     expect(shared).toContain("mode === 'run' ? Colors.running");
   });
 
   test('real background permission is presented truthfully', () => {
     expect(hike).toContain("backgroundLocationPermission === 'foreground-only'");
     expect(run).toContain("backgroundLocationPermission === 'foreground-only'");
-    expect(hike).toContain('Background location is off');
-    expect(run).toContain('Background location is off');
+    expect(hike).toContain("cairnText('hiking-screen.background-location-is-off-keep-cairnnz-open')");
+    expect(run).toContain("cairnText('running-screen.background-location-is-off-keep-cairnnz-open')");
     expect(shared).toContain('CloudOff');
-    expect(shared).toContain('Settings');
+    expect(shared).toContain("cairnText('activity.activity-recording-chrome.settings')");
   });
 
   test('GPS degraded states remain concise and operational', () => {
-    expect(hike).toContain("? 'Signal lost'");
-    expect(run).toContain("? 'Signal lost'");
-    expect(hike).toContain('No location update for');
-    expect(run).toContain('No location update for');
+    expect(hike).toContain("? cairnText('hiking-screen.signal-lost')");
+    expect(run).toContain("? cairnText('running-screen.signal-lost')");
+    expect(hike).toContain("cairnText('hiking-screen.no-location-update-for-value-min'");
+    expect(run).toContain("cairnText('running-screen.no-location-update-for-value-min'");
     expect(hike).not.toContain('route truth is recorded from accepted GPS');
     expect(shared).not.toContain('GPS evidence is saved as you move');
     expect(shared).toContain('notices.slice(0, 2)');
@@ -78,7 +81,7 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(shared).toContain("icon: 'hiking' as CairnIconName");
     expect(shared).toContain("icon: 'running' as CairnIconName");
     expect(shared).toContain('<CairnIcon name={modeMeta.icon}');
-    expect(shared).toContain('ROUTE');
+    expect(shared).toContain("cairnText('activity.activity-recording-chrome.route')");
   });
 
   test('Mapbox route styling keeps explicit Hike/Run identity and a readability casing', () => {
@@ -100,10 +103,10 @@ describe('shared Hike and Run recording UI contracts', () => {
   });
 
   test('finish intent stays honest, calm, and above live controls', () => {
-    expect(hikeFinish).toContain("? (isRun ? 'Finishing run' : 'Finishing hike')");
-    expect(hikeFinish).toContain("? (isRun ? 'Run complete' : 'Hike complete')");
-    expect(hikeFinish).toContain(": (isRun ? 'Finish run' : 'Finish hike')");
-    expect(hikeFinish).toContain("{committed ? 'View activity' : `Finish ${label.toLowerCase()}`}");
+    expect(hikeFinish).toContain("? (isRun ? cairnText('stop-summary-sheet.finishing-run') : cairnText('stop-summary-sheet.finishing-hike'))");
+    expect(hikeFinish).toContain("? (isRun ? cairnText('stop-summary-sheet.run-complete') : cairnText('stop-summary-sheet.hike-complete'))");
+    expect(hikeFinish).toContain(": (isRun ? cairnText('stop-summary-sheet.finish-run') : cairnText('stop-summary-sheet.finish-hike'))");
+    expect(hikeFinish).toContain("{committed ? cairnText('stop-summary-sheet.view-activity') : cairnText('stop-summary-sheet.finish-value'");
     expect(hikeFinish).toContain('if (committed) onViewActivity?.()');
     expect(hikeFinish).not.toContain('complete-hero.png');
     expect(run).toContain('<StopSummarySheet');
@@ -116,18 +119,18 @@ describe('shared Hike and Run recording UI contracts', () => {
   test('shows the walked route before Save and the selected Route afterward', () => {
     expect(hikeFinish).toContain('{summary.trackPoints.length >= 2 && (');
     expect(hikeFinish).not.toContain('{committed && summary.trackPoints.length >= 2 && (');
-    expect(hikeFinish).toContain("committed ? 'Route ready' : 'Walked route preview'");
+    expect(hikeFinish).toContain("committed ? cairnText('stop-summary-sheet.route-ready') : cairnText('stop-summary-sheet.walked-route-preview')");
   });
 
   test('Finish exposes exactly Hike saved, Route and Sync concepts', () => {
     expect(hikeFinish).toContain('activity-finish-progress-rail');
-    expect(hikeFinish).toContain('`${label} saved`');
-    expect(hikeFinish).toContain('`Saving ${label.toLowerCase()}`');
-    expect(hikeFinish).toContain("'Route ready'");
-    expect(hikeFinish).toContain("'Refining route'");
-    expect(hikeFinish).toContain("'Sync · Waiting for connection'");
-    expect(hikeFinish).toContain("'Synced'");
-    expect(hikeFinish).toContain("'Sync · Needs attention'");
+    expect(hikeFinish).toContain("cairnText('stop-summary-sheet.value-saved'");
+    expect(hikeFinish).toContain("cairnText('stop-summary-sheet.saving-value'");
+    expect(hikeFinish).toContain("cairnText('stop-summary-sheet.route-ready')");
+    expect(hikeFinish).toContain("cairnText('stop-summary-sheet.refining-route')");
+    expect(hikeFinish).toContain("cairnText('stop-summary-sheet.sync-waiting-for-connection')");
+    expect(hikeFinish).toContain("cairnText('stop-summary-sheet.synced')");
+    expect(hikeFinish).toContain("cairnText('stop-summary-sheet.sync-needs-attention')");
     expect(hikeFinish).not.toContain('Step 2 of 3');
     expect(hikeFinish).not.toContain("'Base Final'");
     expect(hikeFinish).not.toContain("'Refined Final'");
@@ -135,14 +138,15 @@ describe('shared Hike and Run recording UI contracts', () => {
   });
 
   test('Settings exposes one owner-bound export and accurately discloses opted-in coordinates', () => {
-    expect(settings).toContain('title="Copy Activity diagnostics"');
+    expect(settings).toContain("title={cairnText('settings-screen.copy-activity-diagnostics')}");
     expect(settings).toContain('testID="settings-copy-activity-diagnostics"');
     expect(settings).toContain('exportLatestActivityStageLedger(ownerId)');
     expect(settings).toContain('exportActivityDiagnosticReplayIfPresent({');
     expect(settings).toContain('clientActivityId: ledger.clientActivityId');
     expect(settings).toContain('currentOwnerId() !== ownerId');
-    expect(settings).toContain('includes precise coordinates and redacted provider evidence');
-    expect(settings).toContain('contains no Mapbox token');
+    expect(settings).toContain("detail={cairnText('settings-screen.owner-debug-recordings-include-precise-coordinates-for')}");
+    expect(catalog).toContain('includes precise coordinates and redacted provider evidence');
+    expect(catalog).toContain('contains no Mapbox token');
   });
 
   test('debug Activity Detail exports the explicitly selected historical Activity', () => {

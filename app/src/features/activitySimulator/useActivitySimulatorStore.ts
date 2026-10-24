@@ -22,6 +22,7 @@ import {
 } from './rawGpsObservationModel';
 import { resolveSimulatorContinuityLock } from './simulatorContinuity';
 import type { UnfinishedActivityRecord } from '../activity/activityRegistry';
+import { cairnText } from '../../i18n/runtime';
 
 const STORAGE_VERSION = 1;
 // A walking Directions geometry is intentionally kept as a bounded queue.
@@ -529,7 +530,7 @@ const actions = {
   },
   setCustomSpeed(speedKmh: number): boolean {
     if (!Number.isFinite(speedKmh) || speedKmh < 0.1 || speedKmh > 60) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Speed must be between 0.1 and 60 km/h.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.speed-must-be-between-0-1-and') });
       return false;
     }
     useActivitySimulatorStore.setState({ speedPreset: 'custom', speedKmh, lastFailure: null });
@@ -538,7 +539,7 @@ const actions = {
   },
   setAltitude(altitudeM: number): boolean {
     if (!Number.isFinite(altitudeM) || altitudeM < -500 || altitudeM > 9_000) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Altitude must be between -500 and 9,000 m.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.altitude-must-be-between-500-and-9') });
       return false;
     }
     useActivitySimulatorStore.setState({ altitudeM, lastFailure: null });
@@ -554,7 +555,7 @@ const actions = {
   },
   setVerticalRate(verticalRateMPerHour: number): boolean {
     if (!Number.isFinite(verticalRateMPerHour) || verticalRateMPerHour < -3_000 || verticalRateMPerHour > 3_000) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Vertical rate must be between -3,000 and 3,000 m/h.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.vertical-rate-must-be-between-3-000') });
       return false;
     }
     useActivitySimulatorStore.setState({ altitudeMode: 'custom', verticalRateMPerHour, lastFailure: null });
@@ -572,7 +573,7 @@ const actions = {
       return true;
     }
     if (!Number.isFinite(customAccuracyM) || customAccuracyM < 1 || customAccuracyM > 500) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Accuracy must be between 1 and 500 m.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.accuracy-must-be-between-1-and-500') });
       return false;
     }
     useActivitySimulatorStore.setState({ customAccuracyM, lastFailure: null });
@@ -585,7 +586,7 @@ const actions = {
   },
   setTimeScale(timeScale: SimulatorTimeScale): boolean {
     if (![1, 2, 5, 10, 30, 60, 120].includes(timeScale)) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Time scale must be 1×, 2×, 5×, 10×, 30×, 60×, or 120×.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.time-scale-must-be-1-2-5') });
       return false;
     }
     if (
@@ -593,7 +594,7 @@ const actions = {
       && timeScale > RAW_GPS_MAX_TIME_SCALE
     ) {
       useActivitySimulatorStore.setState({
-        lastFailure: `Raw GPS supports up to ${RAW_GPS_MAX_TIME_SCALE}× so calibrated cadence remains bounded.`,
+        lastFailure: cairnText('activity-simulator.use-activity-simulator-store.raw-gps-supports-up-to-value-so', { RAW_GPS_MAX_TIME_SCALE: RAW_GPS_MAX_TIME_SCALE }),
       });
       return false;
     }
@@ -604,7 +605,7 @@ const actions = {
   setObservationMode(observationMode: SimulatorObservationMode): boolean {
     const state = useActivitySimulatorStore.getState();
     if (state.boundActivityClientId) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Finish or discard the Activity before changing SIM MODE.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.finish-or-discard-the-activity-before-changing') });
       return false;
     }
     useActivitySimulatorStore.setState({
@@ -628,11 +629,11 @@ const actions = {
   setDeterministicSeed(seed: number): boolean {
     const state = useActivitySimulatorStore.getState();
     if (state.boundActivityClientId) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Finish or discard the Activity before changing the Raw GPS seed.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.finish-or-discard-the-activity-before-changing-46ac80d') });
       return false;
     }
     if (!Number.isFinite(seed)) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Seed must be a whole number.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.seed-must-be-a-whole-number') });
       return false;
     }
     const deterministicSeed = (Math.trunc(seed) >>> 0) || 1;
@@ -686,7 +687,7 @@ const actions = {
     }
     const state = useActivitySimulatorStore.getState();
     if (state.waypoints.length >= MAX_SIMULATOR_AUTOPILOT_POINTS) {
-      useActivitySimulatorStore.setState({ lastFailure: `Waypoint queue is limited to ${MAX_SIMULATOR_AUTOPILOT_POINTS}.` });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.waypoint-queue-is-limited-to-value', { MAX_SIMULATOR_AUTOPILOT_POINTS: MAX_SIMULATOR_AUTOPILOT_POINTS }) });
       return false;
     }
     useActivitySimulatorStore.setState({
@@ -912,7 +913,7 @@ const actions = {
       activityInProgress = activityInProgress || tracking.status !== 'idle' || Boolean(tracking.sessionId);
     } catch { /* bound identity remains the fail-safe */ }
     if (activityInProgress) {
-      useActivitySimulatorStore.setState({ lastFailure: 'Finish or discard the active Activity before resetting Simulator.' });
+      useActivitySimulatorStore.setState({ lastFailure: cairnText('activity-simulator.use-activity-simulator-store.finish-or-discard-the-active-activity-before') });
       return false;
     }
     useActivitySimulatorStore.setState({

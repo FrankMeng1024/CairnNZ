@@ -17,6 +17,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import type { SyncState } from '../services/offlineEntity';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { cairnText } from '../i18n/runtime';
 
 interface Props {
   state: SyncState;
@@ -39,20 +40,20 @@ export function SyncBadge({ state, hideWhenSynced = true, onPress, compact = fal
   switch (state) {
     case 'pending':
       dotColor = theme.accent;
-      label = compact ? '' : 'Saved locally';
+      label = compact ? '' : cairnText('sync-badge.saved-locally');
       break;
     case 'syncing':
       dotColor = theme.primary;
-      label = compact ? '' : 'Syncing…';
+      label = compact ? '' : cairnText('sync-badge.syncing');
       showSpinner = true;
       break;
     case 'synced':
       dotColor = theme.primary;
-      label = compact ? '' : 'Synced';
+      label = compact ? '' : cairnText('sync-badge.synced');
       break;
     case 'failed':
       dotColor = theme.destructive;
-      label = compact ? '' : 'Retry sync';
+      label = compact ? '' : cairnText('sync-badge.retry-sync');
       break;
   }
 

@@ -744,6 +744,7 @@ import {
   baselineSlice,
   // O1 batch 40: spliceBCEF, BcefItem removed — 0 actual call sites (only in comments)
 } from './brush/bcef';
+import { cairnText } from '../i18n/runtime';
 
 /**
  * Splice snapped polyline back into originalPoints over [arcStart, arcEnd].
@@ -1093,7 +1094,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const t0 = Date.now();
     const flags = getFlagsSync();
     if (!flags.editModeEnabled) {
-      set({ lastError: 'Edit mode is disabled' });
+      set({ lastError: cairnText('use-route-edit-store.edit-mode-is-disabled') });
       return;
     }
     const { routeId, routePoints, routeUpdatedAt, resumeFrom } = args;
@@ -1111,7 +1112,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const failResult = result as Extract<MigrationResult, { ok: false }>;
         logMigratorFailure({ routeId, error: failResult.error, retry: failResult.retry });
         set({
-          lastError: `Migration failed: ${failResult.error}`,
+          lastError: cairnText('use-route-edit-store.migration-failed-value', { error: failResult.error }),
           migratorRetry: { error: failResult.error, retry: failResult.retry },
           pendingBeginArgs: failResult.retry ? args : null,
         });
@@ -1123,7 +1124,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (!extras) {
       logMigratorFailure({ routeId, error: 'extras null after migration', retry: true });
       set({
-        lastError: 'Failed to load route extras',
+        lastError: cairnText('use-route-edit-store.failed-to-load-route-extras'),
         migratorRetry: { error: 'extras null after migration', retry: true },
         pendingBeginArgs: args,
       });
@@ -1240,7 +1241,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     set({
       migratorRetry: null,
       pendingBeginArgs: null,
-      lastError: 'Migration skipped — edit disabled for this route',
+      lastError: cairnText('use-route-edit-store.migration-skipped-edit-disabled-for-this-route'),
     });
     chainSessionWrite(() => clearSession()).catch(() => {});
   },
@@ -1269,10 +1270,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     // OR any existing brush stroke. Lets the user continue from a
     // previous stroke's end without going back to the original line.
     if (!isPointAcceptableEndpoint(firstPoint, state.walkedIndex, state.brushStrokes)) {
-      set({ lastError: 'Brush must start on the route or an existing stroke' });
+      const message = cairnText('use-route-edit-store.brush-must-start-on-the-route-or');
+      set({ lastError: message });
       setTimeout(() => {
         const live = get();
-        if (live.lastError === 'Brush must start on the route or an existing stroke') {
+        if (live.lastError === message) {
           set({ lastError: null });
         }
       }, LAST_ERROR_AUTO_CLEAR_MS);
@@ -1373,17 +1375,18 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     // Endpoint check on END only (start was already validated by beginStroke).
     if (stroke.points.length < 2 ||
         !isPointAcceptableEndpoint(lastPt, state.walkedIndex, otherStrokes)) {
+      const message = cairnText('use-route-edit-store.end-on-the-route-or-an-existing');
       // Discard this stroke entirely. Toast + auto-dismiss.
       set(s => ({
         ...s,
         brushStrokes: otherStrokes,
         activeStrokeId: null,
         editOpSeq: s.editOpSeq + 1,
-        lastError: 'End on the route or an existing brush stroke',
+        lastError: message,
       }));
       setTimeout(() => {
         const live = get();
-        if (live.lastError === 'End on the route or an existing brush stroke') {
+        if (live.lastError === message) {
           set({ lastError: null });
         }
       }, LAST_ERROR_AUTO_CLEAR_MS);
@@ -1401,16 +1404,17 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const anchorsToBaseline = isPointOnBaseline(firstPt, state.walkedIndex)
       || isPointOnBaseline(lastPt, state.walkedIndex);
     if (!anchorsToBaseline) {
+      const message = cairnText('use-route-edit-store.one-end-must-be-on-the-route');
       set(s => ({
         ...s,
         brushStrokes: otherStrokes,
         activeStrokeId: null,
         editOpSeq: s.editOpSeq + 1,
-        lastError: 'One end must be on the route — chain drifted too far',
+        lastError: message,
       }));
       setTimeout(() => {
         const live = get();
-        if (live.lastError === 'One end must be on the route — chain drifted too far') {
+        if (live.lastError === message) {
           set({ lastError: null });
         }
       }, LAST_ERROR_AUTO_CLEAR_MS);
@@ -1720,7 +1724,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   setTrimStart(frac) {
     const state = get();
     if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait.' });
+      set({ lastError: cairnText('use-route-edit-store.save-in-progress-please-wait') });
       return;
     }
     const startSid = state.sessionId ?? undefined;
@@ -1742,7 +1746,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   setTrimEnd(frac) {
     const state = get();
     if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait.' });
+      set({ lastError: cairnText('use-route-edit-store.save-in-progress-please-wait') });
       return;
     }
     const startSid = state.sessionId ?? undefined;
@@ -1764,7 +1768,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   resetEdits() {
     const state = get();
     if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait.' });
+      set({ lastError: cairnText('use-route-edit-store.save-in-progress-please-wait') });
       return;
     }
     if (state.isComputing) return;
@@ -1827,11 +1831,11 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   undo() {
     const state = get();
     if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait.' });
+      set({ lastError: cairnText('use-route-edit-store.save-in-progress-please-wait') });
       return;
     }
     if (state.isComputing) {
-      set({ lastError: 'Computing — please wait' });
+      set({ lastError: cairnText('use-route-edit-store.computing-please-wait') });
       return;
     }
     const stack = state.undoStack;
@@ -2034,7 +2038,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         }));
         return { ok: true };
       } catch (e: any) {
-        set({ isComputing: false, lastError: e?.message ?? 'Beautify failed' });
+        set({ isComputing: false, lastError: e?.message ?? cairnText('use-route-edit-store.beautify-failed') });
         return { ok: false, error: e?.message ?? 'Beautify failed' };
       }
     }
@@ -2054,7 +2058,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const baseLine = state.originalPoints;
     const v = validateStrokes(state.brushStrokes, baseLine, state.walkedIndex);
     if (!v.ok) {
-      set({ validationErrors: v.errors, lastError: v.errors[0] ?? 'Invalid brush strokes.' });
+      set({ validationErrors: v.errors, lastError: v.errors[0] ?? cairnText('use-route-edit-store.invalid-brush-strokes') });
       return { ok: false, error: v.errors[0] ?? 'invalid-brushes' };
     }
     set({ validationErrors: [], isComputing: true, lastError: null });
@@ -2155,7 +2159,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         if (!g0.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
           // Plan §4.5: short, product-friendly reject copy (English).
-          firstRejectReason ??= 'Brush stroke is too short or too long';
+          firstRejectReason ??= cairnText('route.edit.brush-length-invalid');
           sendEditDiag('brush_gate_failure', {
             gate: g0.gate,
             reason: g0.reason,
@@ -2172,7 +2176,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const simRes = simplifyStroke(pts);
         if (simRes.reason === 'rejected_too_long') {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Brush stroke is too long';
+          firstRejectReason ??= cairnText('route.edit.brush-too-long');
           sendEditDiag('brush_gate_failure', {
             gate: 'G0',
             reason: 'too_long',
@@ -2188,7 +2192,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const g0p = checkG0PostSimplify(simRes.points);
         if (!g0p.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Brush shape is invalid';
+          firstRejectReason ??= cairnText('route.edit.brush-shape-invalid');
           sendEditDiag('brush_gate_failure', {
             gate: g0p.gate,
             reason: g0p.reason,
@@ -2215,7 +2219,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const corridor = strokeWithinCorridor(pts, state.originalPoints);
         if (!corridor.ok) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= `Brush is outside the ${CORRIDOR_M}m range — stay closer to the original route`;
+          firstRejectReason ??= cairnText('route.edit.brush-outside-corridor', { distance: CORRIDOR_M });
           sendEditDiag('brush_gate_failure', {
             gate: 'corridor_v260',
             reason: 'beyond_corridor',
@@ -2233,7 +2237,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         const projC = projectPointOntoBaseline(pts[pts.length - 1], baseLine);
         if (!projB || !projC) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Reference line is invalid';
+          firstRejectReason ??= cairnText('route.edit.reference-line-invalid');
           continue;
         }
         const B = projB.pt, C = projC.pt;
@@ -2241,7 +2245,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         // can't reliably handle closed inputs; UX is "draw two strokes".
         if (haversineMetersLocal(B, C) < LOOP_MIN_M) {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Cannot draw a loop in one stroke — split into two strokes';
+          firstRejectReason ??= cairnText('route.edit.loop-needs-two-strokes');
           sendEditDiag('brush_gate_failure', {
             gate: 'loop_v260',
             reason: 'B_eq_C',
@@ -2328,7 +2332,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           if (fallbackDecision.status === 'accepted') acceptDrawingDecision(vs, fallbackDecision);
           else {
             rejectedStrokeIds.push(vs.stroke.id);
-            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+            firstRejectReason ??= cairnText('route.edit.attachment-ambiguous');
           }
           continue;
         }
@@ -2353,7 +2357,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
             acceptDrawingDecision(vs, fallbackDecision);
           } else {
             rejectedStrokeIds.push(vs.stroke.id);
-            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+            firstRejectReason ??= cairnText('route.edit.attachment-ambiguous');
           }
           continue;
         }
@@ -2379,7 +2383,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           if (fallbackDecision.status === 'accepted') acceptDrawingDecision(vs, fallbackDecision);
           else {
             rejectedStrokeIds.push(vs.stroke.id);
-            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+            firstRejectReason ??= cairnText('route.edit.attachment-ambiguous');
           }
           continue;
         }
@@ -2436,7 +2440,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           if (fallbackDecision.status === 'accepted') acceptDrawingDecision(vs, fallbackDecision);
           else {
             rejectedStrokeIds.push(vs.stroke.id);
-            firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+            firstRejectReason ??= cairnText('route.edit.attachment-ambiguous');
           }
           continue;
         }
@@ -2562,7 +2566,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         });
         if (decision.status !== 'accepted') {
           rejectedStrokeIds.push(vs.stroke.id);
-          firstRejectReason ??= 'Attachment is ambiguous — the original Route was preserved';
+          firstRejectReason ??= cairnText('route.edit.attachment-ambiguous');
           sendEditDiag('brush_gate_failure', {
             strokeId: vs.stroke.id,
             gate: 'intent_attachment',
@@ -2595,7 +2599,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
           rejected: rejectedStrokeIds.length,
           ms_taken: Date.now() - previewT0,
         });
-        const errMsg = firstRejectReason ?? 'Could not match this route';
+        const errMsg = firstRejectReason ?? cairnText('route.edit.could-not-match');
         set({
           lastError: errMsg,
           // Drop the rejected strokes from the canvas (plan §4.3).
@@ -2734,7 +2738,9 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
         return live.sessionId !== startSid || live.editOpSeq !== startSeq;
       })();
       if (fenceTrip) return { ok: false, error: 'state-changed' };
-      const errMsg = e?.name === 'AbortError' ? 'Network is slow, please retry' : 'Could not match this route';
+      const errMsg = e?.name === 'AbortError'
+        ? cairnText('route.edit.network-slow')
+        : cairnText('route.edit.could-not-match');
       set({ lastError: errMsg });
       setTimeout(() => {
         const live = get();
@@ -2762,7 +2768,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     // For pure trim or no-edit case (no strokes), the original is the
     // preview and we can save directly.
     if (state.brushStrokes.length > 0 && !state.previewIsCurrent) {
-      set({ lastError: 'Preview your edits first.' });
+      set({ lastError: cairnText('use-route-edit-store.preview-your-edits-first') });
       return { ok: false, error: 'preview-required' };
     }
 
@@ -2776,7 +2782,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const newWorking = deriveWorking(finalMatched, writeTs, writeTe);
 
     if (newWorking.length < 2 || polylineLengthM(newWorking) < 1) {
-      set({ lastError: 'Route is too short to save.' });
+      set({ lastError: cairnText('use-route-edit-store.route-is-too-short-to-save') });
       return { ok: false, error: 'too-short' };
     }
 
@@ -2803,7 +2809,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     } catch (err: any) {
       logRouteSaveFailure({ routeId: writeRouteId, error: String(err?.message ?? err).slice(0, 100) });
       set({
-        lastError: `Save failed: ${String(err?.message ?? err).slice(0, 100)}`,
+        lastError: cairnText('use-route-edit-store.save-failed-value', { value1: String(err?.message ?? err).slice(0, 100) }),
         isSaving: false,
       });
       return { ok: false, error: String(err?.message ?? err) };
@@ -2811,7 +2817,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     if (!result.ok) {
       logRouteSaveFailure({ routeId: writeRouteId, error: result.error ?? 'unknown' });
       set({
-        lastError: `Save failed: ${result.error ?? 'unknown'}`,
+        lastError: cairnText('use-route-edit-store.save-failed-value', { value1: result.error ?? 'unknown' }),
         isSaving: false,
       });
       return { ok: false, error: result.error };
@@ -2883,7 +2889,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const state = get();
     if (state.isSaving) return { ok: false, error: 'busy' };
     if (state.brushStrokes.length > 0 && !state.previewIsCurrent) {
-      set({ lastError: 'Preview your edits first.' });
+      set({ lastError: cairnText('use-route-edit-store.preview-your-edits-first') });
       return { ok: false, error: 'preview-required' };
     }
     if (!state.routeId) return { ok: false, error: 'no-route-id' };
@@ -2891,7 +2897,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
     const finalMatched = state.previewMatchedPoints ?? state.matchedPoints;
     const newWorking = deriveWorking(finalMatched, state.trimStartFrac, state.trimEndFrac);
     if (newWorking.length < 2 || polylineLengthM(newWorking) < 1) {
-      set({ lastError: 'Route is too short to commit.' });
+      set({ lastError: cairnText('use-route-edit-store.route-is-too-short-to-commit') });
       return { ok: false, error: 'too-short' };
     }
 
@@ -2925,7 +2931,7 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
   cancelEdit(opts?: { keepDraft?: boolean }) {
     const state = get();
     if (state.isSaving) {
-      set({ lastError: 'Save in progress — please wait before cancelling.' });
+      set({ lastError: cairnText('use-route-edit-store.save-in-progress-please-wait-before-cancelling') });
       return;
     }
     sendEditDiag('brush_cancelled', {
@@ -3015,21 +3021,23 @@ export const useRouteEditStore = create<EditState>((set, get) => ({
 
 // Persistence-failure subscription.
 declare const globalThis: { __cairnSaveFailureSubscribed?: boolean } & typeof global;
+let persistenceFailureWarning: string | null = null;
 if (!globalThis.__cairnSaveFailureSubscribed) {
   globalThis.__cairnSaveFailureSubscribed = true;
   onSaveSessionFailure((count) => {
     const state = useRouteEditStore.getState();
     if (!state.isOpen) return;
     if (count >= 3) {
+      persistenceFailureWarning = cairnText('use-route-edit-store.unable-to-save-edit-progress-in-the');
       useRouteEditStore.setState({
-        lastWarning:
-          'Unable to save edit progress in the background. Please save your edits soon to avoid losing them.',
+        lastWarning: persistenceFailureWarning,
       });
     } else if (count === 0) {
       const live = useRouteEditStore.getState();
-      if (live.lastWarning?.startsWith('Unable to save')) {
+      if (persistenceFailureWarning !== null && live.lastWarning === persistenceFailureWarning) {
         useRouteEditStore.setState({ lastWarning: null });
       }
+      persistenceFailureWarning = null;
     }
   });
 }

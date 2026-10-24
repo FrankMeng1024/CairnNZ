@@ -18,6 +18,7 @@ import {
   type FriendMemoryFailure,
   type MemoryOperationFailure,
 } from '../services/friendMemoryFailure';
+import { cairnText } from '../../../i18n/runtime';
 
 interface MemorySubscription {
   friend_id: number;
@@ -276,7 +277,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
             availableSources: reconcileAvailableMemorySources(previousSources, nextSources),
           } : {}),
           loading: false,
-          error: `Could not load Memory friends (HTTP ${res.status}).`,
+          error: cairnText('memory.use-memory-subscriptions-store.could-not-load-memory-friends-http-value', { status: res.status }),
         });
         // The sources endpoint is the grant authority. Even if the parallel
         // subscriptions list failed, consume a successful source response so
@@ -304,7 +305,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
           availableSources: withIntents.sources,
         } : {}),
         loading: false,
-        error: sourcesBody ? null : `Could not refresh available friends (HTTP ${sourcesResponse.status}).`,
+        error: sourcesBody ? null : cairnText('memory.use-memory-subscriptions-store.could-not-refresh-available-friends-http-value', { status: sourcesResponse.status }),
         ...(nextSources ? { authorityValidatedAtMs: Date.now() } : {}),
       });
       // A durable Fog cache is never self-authorizing. A fresh sources read

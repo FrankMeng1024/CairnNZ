@@ -1,6 +1,7 @@
 import type { RoutePoint } from '../../store/useRouteStore';
 import type { CanonicalRouteGeometry } from './canonicalRouteGeometry';
 import { routePointDistanceM } from './orderedRouteDraft';
+import { cairnText } from '../../i18n/runtime';
 
 export interface RouteDisplayLine {
   id: string;
@@ -498,7 +499,7 @@ export function buildRouteDisplayGeometry(
       return {
         id: `repeat-label:${lane.id}`,
         coordinate,
-        text: `${lane.multiplicity} passes`,
+        text: cairnText('route.route-display-geometry.value-passes', { multiplicity: lane.multiplicity }),
         occurrenceIds: [...lane.occurrenceIds],
         direction: lane.direction,
       };

@@ -12,6 +12,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { crashLogger } from '../services/crashLogger';
+import { cairnText } from '../i18n/runtime';
 
 interface Props {
   /** Tag included in breadcrumb / fallback so we know which boundary fired. */
@@ -68,9 +69,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
       return (
         <View style={styles.banner} pointerEvents="none">
-          <Text style={styles.text}>
-            {this.props.tag} render failed: {this.state.message?.slice(0, 80)}
-          </Text>
+          <Text style={styles.text}>{cairnText('error-boundary.value-render-failed-value', { tag: this.props.tag, value2: this.state.message?.slice(0, 80) })}</Text>
         </View>
       );
     }

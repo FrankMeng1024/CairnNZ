@@ -43,6 +43,7 @@ import { memoryCoverageViewport, type MemoryCoverageViewport } from '../services
 import { memoryFogPaintEvidenceReady } from '../services/memoryFogReadiness';
 import { memoryMinePreviewCanCapture } from '../services/memoryEntryPresentation';
 import { memoryCameraAtTarget, memoryCameraCenterFromEvent } from '../services/memoryCameraTransition';
+import { cairnText } from '../../../i18n/runtime';
 
 let memoryMapHasRendered = false;
 
@@ -567,8 +568,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     return (
       <View style={[styles.webStub, { backgroundColor: theme.background }]}>
         <Icon name="Map" size={24} color={theme.iconInactive} strokeWidth={1.8} />
-        <Text style={[styles.webStubTitle, { color: theme.foreground }]}>Map unavailable</Text>
-        <Text style={[styles.webStubText, { color: theme.foregroundSecondary }]}>Your saved Memory is still available.</Text>
+        <Text style={[styles.webStubTitle, { color: theme.foreground }]}>{cairnText('memory.memory-map.map-unavailable')}</Text>
+        <Text style={[styles.webStubText, { color: theme.foregroundSecondary }]}>{cairnText('memory.memory-map.your-saved-memory-is-still-available')}</Text>
       </View>
     );
   }

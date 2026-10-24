@@ -14,6 +14,8 @@
     "verify:route:fast": "node scripts/verify-activity.mjs --gate=route --skip-typecheck",
     "verify:activity:gps": "node scripts/verify-activity.mjs --gate=gps",
     "verify:activity:core": "node scripts/verify-activity.mjs --gate=core",
+    "check:text": "node scripts/cairn-text-check.mjs && node scripts/cairn-text-extract.mjs --check && node scripts/cairn-text-mixed-extract.mjs --check && node scripts/cairn-text-static-getters.mjs --check && node scripts/cairn-native-text-check.mjs",
+    "report:text-routes": "node scripts/cairn-text-routes-report.mjs",
     "verify:full": "node scripts/verify-activity.mjs --gate=full",
     "test:public:focused": "jest src/features/public/__tests__/publicCairnCache.test.ts --runInBand",
     "qa:public:web": "node scripts/public-pilot-qa.mjs",
@@ -39,6 +41,7 @@
     ],
     "moduleNameMapper": {
       "^expo-location$": "<rootDir>/__mocks__/expo-location.ts",
+      "^expo-localization$": "<rootDir>/__mocks__/expo-localization.ts",
       "^expo-file-system/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.ts",
       "^expo-speech$": "<rootDir>/__mocks__/expo-speech.ts",
       "^@react-native-async-storage/async-storage$": "<rootDir>/__mocks__/async-storage.ts"

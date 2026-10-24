@@ -81,6 +81,7 @@ import { ActivityOwnershipGuard } from '../components/activity/ActivityOwnership
 import { resolveActivityScreenOwnership } from '../features/activity/activityScreenOwnership';
 import { PublicWalkingDiscoveryCard } from '../features/public/components/PublicWalkingDiscoveryCard';
 import { StopSummarySheet, type StopSummary } from './StopSummarySheet';
+import { cairnText } from '../i18n/runtime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -478,7 +479,7 @@ export function RunningScreen() {
 
   const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
     ? sharedRouteLease.name
-    : [...routes, ...sharedRoutes].find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Run';
+    : [...routes, ...sharedRoutes].find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? cairnText('running-screen.free-run-7184591');
 
   useFocusEffect(React.useCallback(() => {
     setRunFollowUser(true);
@@ -544,10 +545,10 @@ export function RunningScreen() {
         borrowedUse = (await authorizeBorrowedRouteStart(sharedRouteLease, requestedActivityId)).identity;
       } catch (error: any) {
         Alert.alert(
-          'Shared Route unavailable',
+          cairnText('running-screen.shared-route-unavailable'),
           error?.code === 'expired'
-            ? 'The offline use authorization has expired. Connect and reopen this Route from your friend.'
-            : 'Connect and reopen this Route from your friend before starting.',
+            ? cairnText('running-screen.the-offline-use-authorization-has-expired-connect')
+            : cairnText('running-screen.connect-and-reopen-this-route-from-your'),
         );
         return;
       }
@@ -561,7 +562,7 @@ export function RunningScreen() {
         borrowedUse,
       });
     } else if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
-      Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
+      Alert.alert(cairnText('running-screen.route-unavailable'), cairnText('running-screen.this-route-is-not-ready-on-this'));
       return;
     }
     if (!selectedRoute) clearActivityRouteReference();
@@ -663,20 +664,25 @@ export function RunningScreen() {
     && !signalLost && !canonicalDegraded;
   const simulatorGpsActive = status === 'tracking' && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
-    ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
+    ? cairnText('running-screen.sim-value', { value1: {
+      normal: cairnText('common.status.good'),
+      poor: cairnText('common.status.poor'),
+      lost: cairnText('common.status.lost'),
+      frozen: cairnText('common.status.frozen'),
+    }[simulatorSignal] })
     : transitionState === 'resuming' || realLocationHealth.foregroundRecoveryActive
-      ? 'Restoring GPS'
+      ? cairnText('running-screen.restoring-gps')
     : status === 'paused'
-      ? 'GPS held'
+      ? cairnText('running-screen.gps-held')
       : signalLost
-        ? 'Signal lost'
+        ? cairnText('running-screen.signal-lost')
         : canonicalDegraded
-          ? 'Location issue'
+          ? cairnText('running-screen.location-issue')
         : gpsFixHealthy
-          ? 'GPS good'
+          ? cairnText('running-screen.gps-good')
           : permissionBlocked
-            ? 'Location off'
-            : 'Finding GPS';
+            ? cairnText('running-screen.location-off')
+            : cairnText('running-screen.finding-gps');
   const gpsStatusTone: ActivityStatusTone = simulatorGpsActive
     ? simulatorSignal === 'normal' ? 'healthy'
       : simulatorSignal === 'poor' ? 'warning'
@@ -691,18 +697,18 @@ export function RunningScreen() {
             : 'warning';
   const backgroundTrackingWarning = locationProviderSource === 'real'
     && backgroundLocationPermission === 'foreground-only'
-    ? 'Background location is off — keep CairnNZ open'
+    ? cairnText('running-screen.background-location-is-off-keep-cairnnz-open')
     : null;
   const runNotices: ActivityNoticePresentation[] = [];
   if (signalLost) {
     runNotices.push({
-      label: signalLostMin >= 1 ? `No location update for ${signalLostMin} min` : 'GPS signal lost',
+      label: signalLostMin >= 1 ? cairnText('running-screen.no-location-update-for-value-min', { signalLostMin: signalLostMin }) : cairnText('running-screen.gps-signal-lost'),
       tone: 'danger',
       icon: 'CloudOff',
     });
   } else if (canonicalDegraded) {
     runNotices.push({
-      label: 'Location signal is too weak to map reliably',
+      label: cairnText('running-screen.location-signal-is-too-weak-to-map'),
       tone: 'warning',
       icon: 'Navigation',
     });
@@ -711,7 +717,7 @@ export function RunningScreen() {
   // 2026-08-17 concept R0: pace reads as `5'52"/km` with the unit inline
   // (tiny). paceDisplay itself returns just the numeric portion; the
   // stat row is responsible for rendering the unit via StatItem.label.
-  const paceUnit = dist.imperial ? '/mi' : '/km';
+  const paceUnit = dist.imperial ? cairnText('running-screen.mi') : cairnText('running-screen.km');
   const paceDisplay = (() => {
     const live = deriveLivePace({
       points: trackPoints,
@@ -777,12 +783,12 @@ export function RunningScreen() {
           phase={operationalState === 'starting' ? 'starting' : 'ready'}
           safeTop={insets.top}
           gpsLabel={simulatorLocationAuthoritative
-            ? 'SIM ready'
+            ? cairnText('running-screen.sim-ready')
             : permissionBlocked
-              ? 'Location off'
+              ? cairnText('running-screen.location-off-cf68d32')
               : foregroundGranted
-                ? 'GPS ready'
-                : 'Checking GPS'}
+                ? cairnText('running-screen.gps-ready')
+                : cairnText('running-screen.checking-gps')}
           gpsTone={simulatorLocationAuthoritative || foregroundGranted
             ? 'healthy'
             : permissionBlocked ? 'danger' : 'warning'}
@@ -796,14 +802,14 @@ export function RunningScreen() {
           mode="run"
           safeBottom={insets.bottom}
           routeName={selectedRouteName}
-          routeDescription={selectedRoute ? 'This Route is shown on the map for reference.' : 'Run freely without a planned route'}
+          routeDescription={selectedRoute ? cairnText('running-screen.this-route-is-shown-on-the-map') : cairnText('running-screen.run-freely-without-a-planned-route')}
           readinessLabel={simulatorLocationAuthoritative
-            ? 'Simulator origin ready'
+            ? cairnText('running-screen.simulator-origin-ready')
             : permissionBlocked
-              ? 'Location permission is needed before recording'
+              ? cairnText('running-screen.location-permission-is-needed-before-recording')
               : foregroundGranted
-                ? 'Location ready · pace begins once your movement is clear'
-                : 'Checking location readiness'}
+                ? cairnText('running-screen.location-ready-pace-begins-once-your-movement')
+                : cairnText('running-screen.checking-location-readiness')}
           readinessTone={simulatorLocationAuthoritative || foregroundGranted
             ? 'healthy'
             : permissionBlocked ? 'danger' : 'warning'}
@@ -823,7 +829,7 @@ export function RunningScreen() {
             <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRoutePicker} activeOpacity={1} />
             <Animated.View style={[preStyles.routePickerSheet, { backgroundColor: runTheme.surfaceElevated, borderTopColor: runTheme.border, transform: [{ translateY: routePickerSlide }] }]}>
               <View style={[preStyles.routePickerHandle, { backgroundColor: runTheme.border }]} />
-              <Text style={[preStyles.routePickerTitle, { color: runTheme.muted }]}>Choose a route</Text>
+              <Text style={[preStyles.routePickerTitle, { color: runTheme.muted }]}>{cairnText('running-screen.choose-a-route')}</Text>
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }} contentContainerStyle={{ gap: Spacing.sm }}>
                 {/* Free Run */}
                 <TouchableOpacity
@@ -839,8 +845,8 @@ export function RunningScreen() {
                     <Icon name="Target" size={16} color={runTheme.iconActive} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[preStyles.routePickerName, { color: runTheme.foreground }]}>Free Run</Text>
-                    <Text style={[preStyles.routePickerMeta, { color: runTheme.foregroundSecondary }]}>No route · explore freely</Text>
+                    <Text style={[preStyles.routePickerName, { color: runTheme.foreground }]}>{cairnText('running-screen.free-run')}</Text>
+                    <Text style={[preStyles.routePickerMeta, { color: runTheme.foregroundSecondary }]}>{cairnText('running-screen.no-route-explore-freely')}</Text>
                   </View>
                   {selectedRoute === null && <Icon name="Check" size={16} color={runTheme.iconActive} strokeWidth={2.5} />}
                 </TouchableOpacity>
@@ -862,11 +868,7 @@ export function RunningScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[preStyles.routePickerName, { color: runTheme.foreground }]}>{r.name}</Text>
-                      <Text style={[preStyles.routePickerMeta, { color: runTheme.foregroundSecondary }]}>
-                        {dist.format(r.distanceM, 1)} {dist.unit}
-                        {r.elevationGainM > 0 ? ` · ↑${dist.formatElevation(r.elevationGainM)}${dist.elevUnit}` : ''}
-                        {r.runCount > 0 ? ` · ${r.runCount}× done` : ''}
-                      </Text>
+                      <Text style={[preStyles.routePickerMeta, { color: runTheme.foregroundSecondary }]}>{cairnText('running-screen.value-value-value-value', { value1: dist.format(r.distanceM, 1), unit: dist.unit, value3: r.elevationGainM > 0 ? cairnText('running-screen.value-value', { value1: dist.formatElevation(r.elevationGainM), elevUnit: dist.elevUnit }) : '', value4: r.runCount > 0 ? cairnText('running-screen.value-done', { runCount: r.runCount }) : '' })}</Text>
                     </View>
                     {selectedRoute === r.id && <Icon name="Check" size={16} color={runTheme.iconActive} strokeWidth={2.5} />}
                   </TouchableOpacity>
@@ -962,10 +964,10 @@ export function RunningScreen() {
           if (nav.canGoBack()) nav.goBack();
           else nav.navigate('Home' as never);
         }}
-        primaryMetric={{ label: 'LIVE PACE', value: paceDisplay, unit: paceDisplay === '--' ? undefined : paceUnit }}
+        primaryMetric={{ label: cairnText('running-screen.live-pace'), value: paceDisplay, unit: paceDisplay === '--' ? undefined : paceUnit }}
         secondaryMetrics={[
-          { label: 'DISTANCE', value: distDisplay, unit: dist.unit },
-          { label: 'ACTIVE TIME', value: durationDisplay },
+          { label: cairnText('running-screen.distance'), value: distDisplay, unit: dist.unit },
+          { label: cairnText('running-screen.active-time'), value: durationDisplay },
         ]}
         notices={runNotices}
       />
@@ -995,7 +997,7 @@ export function RunningScreen() {
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
           syncWarning={remoteStartConflict
-            ? 'Saved locally · another unfinished Activity must be resolved before sync'
+            ? cairnText('running-screen.saved-locally-another-unfinished-activity-must-be')
             : null}
           onPauseResume={() => {
             haptic.impact('light');

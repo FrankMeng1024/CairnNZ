@@ -30,6 +30,7 @@ import {
   cairnMatchesIdentity,
   mergeOwnedCairns,
 } from '../features/cairns/cairnIdentity';
+import { cairnText } from '../i18n/runtime';
 
 // Sprint 6 review C3 (2026-07-30): serialize concurrent hydrate() calls
 // so a race between login + focus + nav can't overwrite user A's markers
@@ -420,7 +421,7 @@ export const useMarkerStore = create<MarkerState>((set, get) => ({
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const tracking = require('./useTrackingStore').useTrackingStore.getState();
         if (tracking.locationProviderSource === 'simulator') {
-          const reason = `Cairn local commit failed: ${String(err).slice(0, 100)}`;
+          const reason = cairnText('use-marker-store.cairn-local-commit-failed-value', { value1: String(err).slice(0, 100) });
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           require('../features/activitySimulator/useActivitySimulatorStore').useActivitySimulatorStore.getState().setLastFailure(reason);
           // eslint-disable-next-line @typescript-eslint/no-require-imports

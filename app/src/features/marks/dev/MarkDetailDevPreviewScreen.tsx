@@ -21,6 +21,7 @@ import { Colors, Spacing, Radius, FontSize } from '../../../components/tokens';
 import { MarkDetailSheet } from '../components/MarkDetailSheet';
 import { useMarkLikeStore } from '../store/useMarkLikeStore';
 import { PaywallSheet } from '../../memory/components/PaywallSheet';
+import { cairnText } from '../../../i18n/runtime';
 
 type ScenarioId = 'A-personal' | 'A-public' | 'B-friend' | 'B-public' | 'C' | 'D-personal' | 'D-far-public';
 
@@ -41,8 +42,8 @@ const SCENARIOS: ReadonlyArray<{
 }> = [
   {
     id: 'A-personal',
-    label: 'A. My Personal mark',
-    description: 'Edit + Delete only (no Like/Report — not Public)',
+    get label() { return cairnText('dev.mark-detail-dev-preview-screen.a-my-personal-mark'); },
+    get description() { return cairnText('dev.mark-detail-dev-preview-screen.edit-delete-only-no-like-report-not'); },
     marker: {
       id: 'dev-A-personal', type: 'cairn', regionCode: 'nz',
       lat: 31.23, lng: 121.43, note: 'Hidden viewpoint\nBehind the rocks, quiet…',
@@ -55,8 +56,8 @@ const SCENARIOS: ReadonlyArray<{
   },
   {
     id: 'A-public',
-    label: 'A. My Public mark',
-    description: 'Edit + Delete + Like/Report (because Public)',
+    get label() { return cairnText('dev.mark-detail-dev-preview-screen.a-my-public-mark'); },
+    get description() { return cairnText('dev.mark-detail-dev-preview-screen.edit-delete-like-report-because-public'); },
     marker: {
       id: 'dev-A-public', type: 'cairn', regionCode: 'nz',
       lat: 31.23, lng: 121.43, note: 'Summit cairn\nBig rock at the top',
@@ -69,8 +70,8 @@ const SCENARIOS: ReadonlyArray<{
   },
   {
     id: 'B-friend',
-    label: 'B. Friend\'s mark + I visited',
-    description: 'Author name (LDY) + visited ✓ + Like + Report + Delete-from-view',
+    get label() { return cairnText('dev.mark-detail-dev-preview-screen.b-friend-s-mark-i-visited'); },
+    get description() { return cairnText('dev.mark-detail-dev-preview-screen.author-name-ldy-visited-like-report-delete'); },
     marker: {
       id: 'dev-B-friend', type: 'cairn', regionCode: 'nz',
       lat: 31.23, lng: 121.43, note: 'Coastal viewpoint\nBest sunset spot on island',
@@ -84,8 +85,8 @@ const SCENARIOS: ReadonlyArray<{
   },
   {
     id: 'B-public',
-    label: 'B. Stranger Public + I visited',
-    description: 'ANONYMOUS (no author name) + Like + Report + Delete-from-view',
+    get label() { return cairnText('dev.mark-detail-dev-preview-screen.b-stranger-public-i-visited'); },
+    get description() { return cairnText('dev.mark-detail-dev-preview-screen.anonymous-no-author-name-like-report-delete'); },
     marker: {
       id: 'dev-B-public', type: 'cairn', regionCode: 'nz',
       lat: 31.23, lng: 121.43, note: 'Hidden mural\nBy the old wall',
@@ -99,8 +100,8 @@ const SCENARIOS: ReadonlyArray<{
   },
   {
     id: 'C',
-    label: 'C. Friend\'s mark via fog + NOT visited',
-    description: 'Author name (LDY) + "(Walk here to like/report)" + Delete-from-view ONLY',
+    get label() { return cairnText('dev.mark-detail-dev-preview-screen.c-friend-s-mark-via-fog-not'); },
+    get description() { return cairnText('dev.mark-detail-dev-preview-screen.author-name-ldy-walk-here-to-like'); },
     marker: {
       id: 'dev-C', type: 'cairn', regionCode: 'nz',
       lat: 31.23, lng: 121.43, note: 'Stream crossing\nCold but worth it',
@@ -114,8 +115,8 @@ const SCENARIOS: ReadonlyArray<{
   },
   {
     id: 'D-personal',
-    label: 'D. Friend\'s Personal mark (blocked)',
-    description: 'Sheet must NOT open — iron law 1 visibility deny',
+    get label() { return cairnText('dev.mark-detail-dev-preview-screen.d-friend-s-personal-mark-blocked'); },
+    get description() { return cairnText('dev.mark-detail-dev-preview-screen.sheet-must-not-open-iron-law-1'); },
     marker: {
       id: 'dev-D-personal', type: 'cairn', regionCode: 'nz',
       lat: 31.23, lng: 121.43, note: 'Friend\'s private note',
@@ -128,8 +129,8 @@ const SCENARIOS: ReadonlyArray<{
   },
   {
     id: 'D-far-public',
-    label: 'D. Stranger Public + not visited',
-    description: 'Sheet must NOT open — outside fog + no subscription',
+    get label() { return cairnText('dev.mark-detail-dev-preview-screen.d-stranger-public-not-visited'); },
+    get description() { return cairnText('dev.mark-detail-dev-preview-screen.sheet-must-not-open-outside-fog-no'); },
     marker: {
       id: 'dev-D-far', type: 'cairn', regionCode: 'nz',
       lat: 31.23, lng: 121.43, note: 'Distant public mark',
@@ -168,10 +169,8 @@ export function MarkDetailDevPreviewScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>MarkDetailSheet — Dev Preview</Text>
-        <Text style={styles.subtitle}>
-          Sprint 68 STORY-00532 + STORY-00533 — verify all 4 forms per v4 §4.11.
-        </Text>
+        <Text style={styles.title}>{cairnText('dev.mark-detail-dev-preview-screen.markdetailsheet-dev-preview')}</Text>
+        <Text style={styles.subtitle}>{cairnText('dev.mark-detail-dev-preview-screen.sprint-68-story-00532-story-00533-verify')}</Text>
         {SCENARIOS.map((s) => (
           <TouchableOpacity
             key={s.id}
@@ -182,16 +181,13 @@ export function MarkDetailDevPreviewScreen() {
             <View style={styles.cardHeader}>
               <Text style={styles.cardLabel}>{s.label}</Text>
               <View style={[styles.formBadge, s.expectedForm === 'D' && styles.formBadgeD]}>
-                <Text style={styles.formBadgeText}>Form {s.expectedForm}</Text>
+                <Text style={styles.formBadgeText}>{cairnText('dev.mark-detail-dev-preview-screen.form-value', { expectedForm: s.expectedForm })}</Text>
               </View>
             </View>
             <Text style={styles.cardDesc}>{s.description}</Text>
           </TouchableOpacity>
         ))}
-        <Text style={styles.foot}>
-          Tap a scenario to render the sheet. Form D scenarios should produce NO sheet (the
-          component renders null).
-        </Text>
+        <Text style={styles.foot}>{cairnText('dev.mark-detail-dev-preview-screen.tap-a-scenario-to-render-the-sheet')}</Text>
 
         {/* Sprint 70 STORY-00542 UX evidence trigger (post-review):
             imperatively open the Paywall sheet for visual verification. */}
@@ -200,7 +196,7 @@ export function MarkDetailDevPreviewScreen() {
           onPress={() => setPaywallOpen(true)}
           testID="dev-paywall-trigger"
         >
-          <Text style={styles.paywallBtnText}>Open Paywall sheet (Sprint 70)</Text>
+          <Text style={styles.paywallBtnText}>{cairnText('dev.mark-detail-dev-preview-screen.open-paywall-sheet-sprint-70')}</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -214,18 +210,18 @@ export function MarkDetailDevPreviewScreen() {
         inMyFog={activeScenario ? activeScenario.inMyFog : (() => false)}
         isLiked={isMarkLiked}
         onClose={() => setActive(null)}
-        onEdit={(m) => Alert.alert('Edit', `Edit triggered for ${m.id}`, [{ text: 'OK' }])}
+        onEdit={(m) => Alert.alert(cairnText('dev.mark-detail-dev-preview-screen.edit'), cairnText('dev.mark-detail-dev-preview-screen.edit-triggered-for-value', { id: m.id }), [{ text: cairnText('dev.mark-detail-dev-preview-screen.ok') }])}
         onLike={(m) => { likeToggle(m.id); }}
-        onReport={(_m) => Alert.alert('Thank you', 'Thank you for reporting.', [{ text: 'OK' }])}
+        onReport={(_m) => Alert.alert(cairnText('dev.mark-detail-dev-preview-screen.thank-you'), cairnText('dev.mark-detail-dev-preview-screen.thank-you-for-reporting'), [{ text: cairnText('dev.mark-detail-dev-preview-screen.ok') }])}
         onDelete={(m, semantic) =>
           Alert.alert(
-            semantic === 'own' ? 'Delete this cairn?' : 'Hide this cairn permanently?',
+            semantic === 'own' ? cairnText('dev.mark-detail-dev-preview-screen.delete-this-cairn') : cairnText('dev.mark-detail-dev-preview-screen.hide-this-cairn-permanently'),
             semantic === 'own'
-              ? 'This cannot be undone.'
-              : "You won't see it again on your map. (Other users still see it.)",
+              ? cairnText('dev.mark-detail-dev-preview-screen.this-cannot-be-undone')
+              : cairnText('dev.mark-detail-dev-preview-screen.you-won-t-see-it-again-on'),
             [
-              { text: 'Cancel', style: 'cancel' },
-              { text: semantic === 'own' ? 'Delete' : 'Hide', style: 'destructive', onPress: () => {
+              { text: cairnText('common.cancel'), style: 'cancel' },
+              { text: semantic === 'own' ? cairnText('dev.mark-detail-dev-preview-screen.delete') : cairnText('dev.mark-detail-dev-preview-screen.hide'), style: 'destructive', onPress: () => {
                 if (semantic === 'hide') {
                   // Sprint 68 STORY-00534: dev preview now exercises the real
                   // hideMark action so the flow can be tested end-to-end.

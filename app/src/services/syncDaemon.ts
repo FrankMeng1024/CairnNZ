@@ -59,6 +59,7 @@ import {
   persistActivityRemoteStartConflict,
 } from '../features/activity/activityRemoteConflictStore';
 import { flushWalkingEncounterEvidence } from '../features/public/services/walkingEncounterEvidence';
+import { cairnText } from '../i18n/runtime';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -683,7 +684,7 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
             kind: 'dependency',
             status: 409,
             code: start.code,
-            message: 'Another unfinished Activity owns the server slot.',
+            message: cairnText('sync-daemon.another-unfinished-activity-owns-the-server-slot'),
           });
           try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -719,7 +720,7 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
           kind: startFailureKind,
           status: start.status,
           code: start.code,
-          message: 'Unable to create the matching server Activity.',
+          message: cairnText('sync-daemon.unable-to-create-the-matching-server-activity'),
         });
         if (!start.retryable) {
           try {

@@ -22,6 +22,7 @@ import { Icon } from './Icon';
 import { Colors, Spacing, Radius, FontSize, Shadow } from './tokens';
 import { useDistance } from '../utils/distanceFormat';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { cairnText } from '../i18n/runtime';
 
 interface UnfinishedData {
   sessionId: string;
@@ -45,10 +46,10 @@ interface Props {
 
 function formatRelative(pastMs: number): string {
   const diffMs = Date.now() - pastMs;
-  if (diffMs < 60_000) return 'just now';
-  if (diffMs < 3600_000) return `${Math.floor(diffMs / 60_000)} min ago`;
-  if (diffMs < 86400_000) return `${Math.floor(diffMs / 3600_000)} hr ago`;
-  return `${Math.floor(diffMs / 86400_000)} days ago`;
+  if (diffMs < 60_000) return cairnText('unfinished-recovery-modal.just-now');
+  if (diffMs < 3600_000) return cairnText('unfinished-recovery-modal.value-min-ago', { value1: Math.floor(diffMs / 60_000) });
+  if (diffMs < 86400_000) return cairnText('unfinished-recovery-modal.value-hr-ago', { value1: Math.floor(diffMs / 3600_000) });
+  return cairnText('unfinished-recovery-modal.value-days-ago', { value1: Math.floor(diffMs / 86400_000) });
 }
 
 function formatDuration(s: number): string {
@@ -115,7 +116,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
 
   if (!visible || !data) return null;
 
-  const label = data.activityMode === 'running' ? 'Run' : 'Hike';
+  const label = data.activityMode === 'running' ? cairnText('unfinished-recovery-modal.run') : cairnText('unfinished-recovery-modal.hike');
   const distText = dist.format(data.distanceM, 2);
 
   const runAction = async (action: () => Promise<boolean>) => {
@@ -125,10 +126,10 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
     try {
       const completed = await action();
       if (!completed) {
-        setActionError('That action could not be completed. Your Activity is still safe — try again.');
+        setActionError(cairnText('unfinished-recovery-modal.that-action-could-not-be-completed-your'));
       }
     } catch {
-      setActionError('That action could not be completed. Your Activity is still safe — try again.');
+      setActionError(cairnText('unfinished-recovery-modal.that-action-could-not-be-completed-your'));
     } finally {
       setActionPending(false);
     }
@@ -149,12 +150,10 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
         <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
           <Icon name="MapPin" size={28} color={iconColor} strokeWidth={2} />
         </View>
-        <Text style={[styles.title, { color: primaryText }]}>Your previous {label.toLowerCase()} wasn’t finished.</Text>
+        <Text style={[styles.title, { color: primaryText }]}>{cairnText('unfinished-recovery-modal.your-previous-value-wasn-t-finished', { value1: label.toLowerCase() })}</Text>
         {/* O18 SAF-06: subtitle makes it explicit the hike was preserved
             through a force-quit / crash so users know their data is safe. */}
-        <Text style={[styles.subtitle, { color: mutedText }]}>
-          Everything through the last accepted GPS fix is safe. Resume it, save the recorded portion, or discard the Activity.
-        </Text>
+        <Text style={[styles.subtitle, { color: mutedText }]}>{cairnText('unfinished-recovery-modal.everything-through-the-last-accepted-gps-fix')}</Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: primaryText }]}>{distText}</Text>
@@ -162,11 +161,11 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
           </View>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: primaryText }]}>{formatDuration(data.durationS)}</Text>
-            <Text style={[styles.statLabel, { color: mutedText }]}>duration</Text>
+            <Text style={[styles.statLabel, { color: mutedText }]}>{cairnText('unfinished-recovery-modal.duration')}</Text>
           </View>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: primaryText }]}>{formatRelative(data.lastPointAt)}</Text>
-            <Text style={[styles.statLabel, { color: mutedText }]}>last point</Text>
+            <Text style={[styles.statLabel, { color: mutedText }]}>{cairnText('unfinished-recovery-modal.last-point')}</Text>
           </View>
         </View>
         <TouchableOpacity
@@ -178,7 +177,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
         >
           {actionPending
             ? <ActivityIndicator size="small" color="#FFFFFF" />
-            : <Text style={styles.btnPrimaryText}>Resume {label}</Text>}
+            : <Text style={styles.btnPrimaryText}>{cairnText('unfinished-recovery-modal.resume-value', { label: label })}</Text>}
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btnSecondary, data.saveEligible === false && styles.btnDisabled]}
@@ -187,7 +186,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
           onPress={() => { void runAction(onSave); }}
           testID="unfinished-save"
         >
-          <Text style={[styles.btnSecondaryText, { color: primaryText }]}>Save {label}</Text>
+          <Text style={[styles.btnSecondaryText, { color: primaryText }]}>{cairnText('unfinished-recovery-modal.save-value', { label: label })}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.btnSecondary}
@@ -196,7 +195,7 @@ export function UnfinishedRecoveryModal({ visible, data, onContinue, onSave, onD
           onPress={() => { void runAction(onDiscard); }}
           testID="unfinished-discard"
         >
-          <Text style={[styles.btnSecondaryText, { color: mutedText }]}>Discard {label}</Text>
+          <Text style={[styles.btnSecondaryText, { color: mutedText }]}>{cairnText('unfinished-recovery-modal.discard-value', { label: label })}</Text>
         </TouchableOpacity>
         {actionError ? (
           <Text accessibilityRole="alert" testID="unfinished-action-error" style={[styles.actionError, { color: theme.destructive }]}>{actionError}</Text>

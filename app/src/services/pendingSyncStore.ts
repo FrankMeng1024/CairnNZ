@@ -1,4 +1,5 @@
-/**
+
+import { cairnText } from '../i18n/runtime';/**
  * pendingSyncStore — v412 已 Save 未同步的 hike 持久化
  *
  * 目的:
@@ -599,7 +600,7 @@ export async function resetForResync(localId: string): Promise<boolean> {
       hike.failureKind = 'retryable';
       hike.failureStatus = null;
       hike.failureCode = 'RESYNC_READY';
-      hike.failureMessage = 'Server Activity identity will be recreated.';
+      hike.failureMessage = cairnText('pending-sync-store.server-activity-identity-will-be-recreated');
     });
     breadcrumb(`pendingSync:resetForResync localId=${localId} newKey=${newKey.slice(0, 8)}`);
     return true;

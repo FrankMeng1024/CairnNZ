@@ -52,23 +52,24 @@ import {
   type ActivityModeFilter,
   type TrailsTab,
 } from '../features/trails/trailsLibrary';
+import { cairnText } from '../i18n/runtime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const TABS = [
-  { key: 'activities', label: 'Activities' },
-  { key: 'routes', label: 'Routes' },
+  { key: 'activities', get label() { return cairnText('routes-screen.activities'); } },
+  { key: 'routes', get label() { return cairnText('routes-screen.routes'); } },
 ] as const;
 
 function LibraryIntro({ tab, count }: { tab: TrailsTab; count: number }) {
   const theme = useVisualTheme();
-  const noun = tab === 'activities' ? (count === 1 ? 'activity' : 'activities') : (count === 1 ? 'route' : 'routes');
+  const noun = tab === 'activities' ? (count === 1 ? cairnText('routes-screen.activity') : cairnText('routes-screen.activities-57c58a1')) : (count === 1 ? cairnText('routes-screen.route') : cairnText('routes-screen.routes-baf847a'));
   return (
     <View style={styles.libraryIntro}>
       <Text style={[styles.libraryEyebrow, { color: theme.textMuted }]}>
-        {tab === 'activities' ? 'WHAT YOU HAVE DONE' : 'WHAT YOU MAY WANT TO REPEAT'}
+        {tab === 'activities' ? cairnText('routes-screen.what-you-have-done') : cairnText('routes-screen.what-you-may-want-to-repeat')}
       </Text>
-      <Text style={[styles.libraryCount, { color: theme.textSecondary }]}>{count} {noun}</Text>
+      <Text style={[styles.libraryCount, { color: theme.textSecondary }]}>{cairnText('routes-screen.value-value-97cc998', { count: count, noun: noun })}</Text>
     </View>
   );
 }
@@ -95,16 +96,16 @@ function EmptyLibraryState({
         <Icon name={isActivities ? 'Map' : 'Route'} size={IconSize.lg} color={theme.iconActive} strokeWidth={1.8} />
       </View>
       <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
-        {isActivities ? 'Your first journey starts outside' : 'No routes saved yet'}
+        {isActivities ? cairnText('routes-screen.your-first-journey-starts-outside') : cairnText('routes-screen.no-routes-saved-yet')}
       </Text>
       <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>
         {isActivities
-          ? 'Record a Hike or Run. When you finish, the journey will be waiting here.'
-          : 'Create a plan from an empty map, or import an Activity as an independent editable Route.'}
+          ? cairnText('routes-screen.record-a-hike-or-run-when-you')
+          : cairnText('routes-screen.create-a-plan-from-an-empty-map')}
       </Text>
       <View style={styles.emptyActions}>
         <PrimaryButton
-          label={isActivities ? 'Start a Hike' : 'Create Route'}
+          label={isActivities ? cairnText('routes-screen.start-a-hike') : cairnText('routes-screen.create-route')}
           onPress={onPrimary}
           renderIcon={color => <Icon name={isActivities ? 'Navigation' : 'Map'} size={17} color={color} strokeWidth={2} />}
           style={styles.emptyPrimary}
@@ -117,7 +118,7 @@ function EmptyLibraryState({
             accessibilityRole="button"
           >
             <RunningIcon size={16} color={theme.iconActive} />
-            <Text style={[styles.emptySecondaryText, { color: theme.primary }]}>Start a Run</Text>
+            <Text style={[styles.emptySecondaryText, { color: theme.primary }]}>{cairnText('routes-screen.start-a-run')}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -130,10 +131,10 @@ function NoResults({ kind, onClear }: { kind: TrailsTab; onClear: () => void }) 
   return (
     <View style={styles.noResults} testID={`trails-${kind}-no-results`}>
       <Icon name="Search" size={22} color={theme.iconInactive} strokeWidth={1.8} />
-      <Text style={[styles.noResultsTitle, { color: theme.textPrimary }]}>No matching {kind}</Text>
-      <Text style={[styles.noResultsBody, { color: theme.textSecondary }]}>Try another name or clear the filter.</Text>
+      <Text style={[styles.noResultsTitle, { color: theme.textPrimary }]}>{cairnText('routes-screen.no-matching-value', { kind: kind })}</Text>
+      <Text style={[styles.noResultsBody, { color: theme.textSecondary }]}>{cairnText('routes-screen.try-another-name-or-clear-the-filter')}</Text>
       <TouchableOpacity onPress={onClear} accessibilityRole="button">
-        <Text style={[styles.clearText, { color: theme.primary }]}>Clear search and filters</Text>
+        <Text style={[styles.clearText, { color: theme.primary }]}>{cairnText('routes-screen.clear-search-and-filters')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -148,8 +149,8 @@ function ActivityRecord({ session, onOpen, onRetry }: { session: TrackingSession
       <PressBtn
         style={styles.recordTap}
         onPress={onOpen}
-        accessibilityLabel={`${isRun ? 'Run' : 'Hike'}: ${activityDisplayName(session)}`}
-        accessibilityHint="Opens Activity Detail"
+        accessibilityLabel={cairnText('routes-screen.value-value', { value1: isRun ? cairnText('common.activity.run') : cairnText('common.activity.hike'), value2: activityDisplayName(session) })}
+        accessibilityHint={cairnText('routes-screen.opens-activity-detail')}
         testID={`activity-record-${session.id}`}
       >
         <View style={styles.recordIcon}>
@@ -160,12 +161,9 @@ function ActivityRecord({ session, onOpen, onRetry }: { session: TrackingSession
         <View style={styles.recordContent}>
           <View style={styles.recordTitleRow}>
             <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{activityDisplayName(session)}</Text>
-            <Text style={[styles.objectKind, { color: theme.textMuted }]}>{isRun ? 'RUN' : 'HIKE'}</Text>
+            <Text style={[styles.objectKind, { color: theme.textMuted }]}>{isRun ? cairnText('routes-screen.run') : cairnText('routes-screen.hike')}</Text>
           </View>
-          <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>
-            {activityDateLabel(session.startedAt)} · {dist.format(session.distanceM, 1)} {dist.unit} · {formatDuration(session.durationS)}
-            {session.elevationGainM > 0 ? ` · +${dist.formatElevation(session.elevationGainM)}${dist.elevUnit}` : ''}
-          </Text>
+          <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>{cairnText('routes-screen.value-value-value-value-value', { value1: activityDateLabel(session.startedAt), value2: dist.format(session.distanceM, 1), unit: dist.unit, value4: formatDuration(session.durationS), value5: session.elevationGainM > 0 ? cairnText('routes-screen.value-value-4487757', { value1: dist.formatElevation(session.elevationGainM), elevUnit: dist.elevUnit }) : '' })}</Text>
         </View>
         <Icon name="ChevronRight" size={16} color={theme.iconInactive} strokeWidth={2} />
       </PressBtn>
@@ -186,8 +184,8 @@ function RouteRecord({ route, onOpen, onRetry }: { route: Route; onOpen: () => v
       <PressBtn
         style={styles.recordTap}
         onPress={onOpen}
-        accessibilityLabel={`Route: ${route.name}`}
-        accessibilityHint="Opens Route Detail"
+        accessibilityLabel={cairnText('routes-screen.route-value', { name: route.name })}
+        accessibilityHint={cairnText('routes-screen.opens-route-detail')}
         testID={`route-record-${route.id}`}
       >
         <View style={[styles.routeIcon, { backgroundColor: theme.surfaceSecondary, borderColor: theme.borderSubtle }]}>
@@ -195,14 +193,10 @@ function RouteRecord({ route, onOpen, onRetry }: { route: Route; onOpen: () => v
         </View>
         <View style={styles.recordContent}>
           <View style={styles.recordTitleRow}>
-            <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{route.name || 'Saved route'}</Text>
+            <Text style={[styles.recordTitle, { color: theme.textPrimary }]} numberOfLines={1}>{route.name || cairnText('routes-screen.saved-route')}</Text>
             <Text style={[styles.routeSource, { color: theme.textMuted }]} numberOfLines={1}>{routeSourceLabel(route)}</Text>
           </View>
-          <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>
-            {dist.format(route.distanceM, 1)} {dist.unit}
-            {route.elevationGainM > 0 ? ` · +${dist.formatElevation(route.elevationGainM)}${dist.elevUnit}` : ''}
-            {` · ${routeStatusLabel(route)}`}
-          </Text>
+          <Text style={[styles.recordMeta, { color: theme.textSecondary }]} numberOfLines={1}>{cairnText('routes-screen.value-value-value-value', { value1: dist.format(route.distanceM, 1), unit: dist.unit, value3: route.elevationGainM > 0 ? cairnText('routes-screen.value-value-4487757', { value1: dist.formatElevation(route.elevationGainM), elevUnit: dist.elevUnit }) : '', value4: cairnText('routes-screen.value', { value1: routeStatusLabel(route) }) })}</Text>
         </View>
         <View style={styles.routeOpenCue}>
           <Icon name="ChevronRight" size={16} color={theme.iconInactive} strokeWidth={2} />
@@ -247,13 +241,13 @@ function ActivitiesLibrary() {
             <LibrarySearchField
               value={query}
               onChange={setQuery}
-              placeholder="Find an Activity"
-              label="Search Activities"
+              placeholder={cairnText('routes-screen.find-an-activity')}
+              label={cairnText('routes-screen.search-activities')}
               testID="activity-search"
             />
             <LibraryFilterRow
               value={mode}
-              options={[{ key: 'all', label: 'All' }, { key: 'hiking', label: 'Hikes' }, { key: 'running', label: 'Runs' }]}
+              options={[{ key: 'all', label: cairnText('routes-screen.all') }, { key: 'hiking', label: cairnText('routes-screen.hikes') }, { key: 'running', label: cairnText('routes-screen.runs') }]}
               onChange={setMode}
               testID="activity-mode-filter"
             />
@@ -282,9 +276,9 @@ function RouteLoadNotice({ onRetry }: { onRetry: () => void }) {
   return (
     <View style={[styles.loadNotice, { backgroundColor: theme.recordSurface, borderColor: theme.borderSubtle }]} testID="routes-load-error">
       <Icon name="CloudOff" size={17} color={theme.iconInactive} strokeWidth={2} />
-      <Text style={[styles.loadNoticeText, { color: theme.textSecondary }]}>Couldn’t check the server. Routes on this device are still available.</Text>
+      <Text style={[styles.loadNoticeText, { color: theme.textSecondary }]}>{cairnText('routes-screen.couldn-t-check-the-server-routes-on')}</Text>
       <TouchableOpacity onPress={onRetry} accessibilityRole="button">
-        <Text style={[styles.retryText, { color: theme.primary }]}>Try again</Text>
+        <Text style={[styles.retryText, { color: theme.primary }]}>{cairnText('routes-screen.try-again')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -317,7 +311,7 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
     return (
       <View style={styles.loadingState} testID="trails-routes-loading">
         <ActivityIndicator color={theme.primary} />
-        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Looking for your saved routes…</Text>
+        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>{cairnText('routes-screen.looking-for-your-saved-routes')}</Text>
       </View>
     );
   }
@@ -328,9 +322,9 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
         <View style={[styles.emptyTrace, { backgroundColor: theme.recordSurface, borderColor: theme.borderSubtle }]}>
           <Icon name="CloudOff" size={IconSize.lg} color={theme.iconInactive} strokeWidth={1.8} />
         </View>
-        <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Routes couldn’t be checked</Text>
-        <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>Nothing saved on this device yet. Check your connection and try again.</Text>
-        <PrimaryButton label="Try again" onPress={retryLoad} variant="secondary" style={styles.emptyPrimary} />
+        <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>{cairnText('routes-screen.routes-couldn-t-be-checked')}</Text>
+        <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>{cairnText('routes-screen.nothing-saved-on-this-device-yet-check')}</Text>
+        <PrimaryButton label={cairnText('routes-screen.try-again')} onPress={retryLoad} variant="secondary" style={styles.emptyPrimary} />
       </View>
     );
   }
@@ -355,13 +349,13 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
             <LibrarySearchField
               value={query}
               onChange={setQuery}
-              placeholder="Find a Route"
-              label="Search Routes"
+              placeholder={cairnText('routes-screen.find-a-route')}
+              label={cairnText('routes-screen.search-routes')}
               testID="route-search"
             />
             <LibraryFilterRow
               value={ownership}
-              options={[{ key: 'all', label: 'All' }, { key: 'mine', label: 'Mine' }, { key: 'received', label: 'Received' }]}
+              options={[{ key: 'all', label: cairnText('routes-screen.all') }, { key: 'mine', label: cairnText('routes-screen.mine') }, { key: 'received', label: cairnText('routes-screen.received') }]}
               onChange={setOwnership}
               testID="route-ownership-filter"
               trailing={(
@@ -369,11 +363,11 @@ function RoutesLibrary({ onCreate }: { onCreate: () => void }) {
                   style={[styles.inlineCreateButton, { backgroundColor: theme.primaryAction }]}
                   onPress={onCreate}
                   accessibilityRole="button"
-                  accessibilityLabel="Create Route"
+                  accessibilityLabel={cairnText('routes-screen.create-route')}
                   testID="routes-create"
                   hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                 >
-                  <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>+ Create</Text>
+                  <Text style={[styles.inlineCreateLabel, { color: theme.onPrimary }]}>{cairnText('routes-screen.create')}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -447,8 +441,8 @@ export function RoutesScreen() {
       <View style={styles.header}>
         <BackButton variant="inline" onPress={() => nav.goBack()} />
         <View style={styles.headerCopy}>
-          <Text style={[styles.title, { color: theme.textPrimary }]}>Trails</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Your journeys, ready to revisit</Text>
+          <Text style={[styles.title, { color: theme.textPrimary }]}>{cairnText('routes-screen.trails')}</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>{cairnText('routes-screen.your-journeys-ready-to-revisit')}</Text>
         </View>
         <View style={styles.headerBalance} />
       </View>
@@ -478,17 +472,17 @@ export function RoutesScreen() {
       {createStep === 'source' ? (
         <>
           <ModalCardHeader
-            title="Create Route"
-            body="Choose one starting source. Both open the same editor with Draw and Point."
+            title={cairnText('routes-screen.create-route')}
+            body={cairnText('routes-screen.choose-one-starting-source-both-open-the')}
           />
           <PrimaryButton
-            label="Plan a route"
+            label={cairnText('routes-screen.plan-a-route')}
             onPress={() => leaveCreateFlow({ creationSource: 'plan' })}
             renderIcon={color => <Icon name="Map" size={18} color={color} strokeWidth={2} />}
             testID="route-create-plan"
           />
           <PrimaryButton
-            label="Use an Activity"
+            label={cairnText('routes-screen.use-an-activity')}
             variant="secondary"
             onPress={() => setCreateStep('activity')}
             renderIcon={color => <Icon name="Footprints" size={18} color={color} strokeWidth={2} />}
@@ -499,20 +493,20 @@ export function RoutesScreen() {
       ) : (
         <>
           <ModalCardHeader
-            title="Use an Activity"
-            body="The factual Activity stays read-only. Cairn creates a separate editable Route copy with its recorded path and real gaps."
+            title={cairnText('routes-screen.use-an-activity')}
+            body={cairnText('routes-screen.the-factual-activity-stays-read-only-cairn')}
           />
           <TouchableOpacity
             style={styles.pickerBack}
             onPress={() => setCreateStep('source')}
             accessibilityRole="button"
-            accessibilityLabel="Back to Route sources"
+            accessibilityLabel={cairnText('routes-screen.back-to-route-sources')}
           >
             <Icon name="ChevronLeft" size={16} color={theme.iconActive} strokeWidth={2} />
-            <Text style={[styles.pickerBackLabel, { color: theme.primary }]}>Sources</Text>
+            <Text style={[styles.pickerBackLabel, { color: theme.primary }]}>{cairnText('routes-screen.sources')}</Text>
           </TouchableOpacity>
           {sessions.length === 0 ? (
-            <Text style={[styles.pickerEmpty, { color: theme.textSecondary }]}>No saved Activities are available yet.</Text>
+            <Text style={[styles.pickerEmpty, { color: theme.textSecondary }]}>{cairnText('routes-screen.no-saved-activities-are-available-yet')}</Text>
           ) : (
             <FlatList
               data={sessions}

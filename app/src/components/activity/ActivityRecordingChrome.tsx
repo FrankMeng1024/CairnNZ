@@ -10,6 +10,7 @@ import { CairnIcon, type CairnIconName } from '../CairnIcon';
 import { Colors, FontSize, RadiusRole, Shadow, Spacing } from '../tokens';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
 import { BackButton } from '../BackButton';
+import { cairnText } from '../../i18n/runtime';
 
 export type ActivityRecordingMode = 'hike' | 'run';
 export type ActivityRecordingPhase = 'ready' | 'starting' | 'tracking' | 'paused' | 'finishing';
@@ -31,33 +32,33 @@ export interface ActivityNoticePresentation {
 export function activityStartErrorMessage(error: string | null): string | null {
   switch (error) {
     case 'permission-denied':
-      return 'Location permission is needed to start.';
+      return cairnText('activity.activity-recording-chrome.location-permission-is-needed-to-start');
     case 'previous-sync-pending':
-      return 'Your previous Activity is safely saved and still syncing. Try again when sync completes.';
+      return cairnText('activity.activity-recording-chrome.your-previous-activity-is-safely-saved-and');
     case 'previous-cleanup-pending':
-      return 'Your previous discard is still clearing from the server. Try again in a moment.';
+      return cairnText('activity.activity-recording-chrome.your-previous-discard-is-still-clearing-from');
     case 'unfinished-exists':
-      return 'Finish or discard the unfinished Activity before starting another.';
+      return cairnText('activity.activity-recording-chrome.finish-or-discard-the-unfinished-activity-before');
     case null:
       return null;
     default:
-      return 'Couldn’t start GPS. Check location settings and try again.';
+      return cairnText('activity.activity-recording-chrome.couldn-t-start-gps-check-location-settings');
   }
 }
 
 function modePresentation(mode: ActivityRecordingMode, themePrimary: string) {
   return mode === 'run'
-    ? { label: 'Run', icon: 'running' as CairnIconName, color: Colors.running }
-    : { label: 'Hike', icon: 'hiking' as CairnIconName, color: themePrimary };
+    ? { label: cairnText('activity.activity-recording-chrome.run'), icon: 'running' as CairnIconName, color: Colors.running }
+    : { label: cairnText('activity.activity-recording-chrome.hike'), icon: 'hiking' as CairnIconName, color: themePrimary };
 }
 
 function phaseLabel(phase: ActivityRecordingPhase) {
   switch (phase) {
-    case 'starting': return 'Starting';
-    case 'tracking': return 'Recording';
-    case 'paused': return 'Paused';
-    case 'finishing': return 'Finishing';
-    default: return 'Ready';
+    case 'starting': return cairnText('activity.activity-recording-chrome.starting-4c5b0f3');
+    case 'tracking': return cairnText('activity.activity-recording-chrome.recording');
+    case 'paused': return cairnText('activity.activity-recording-chrome.paused');
+    case 'finishing': return cairnText('activity.activity-recording-chrome.finishing');
+    default: return cairnText('activity.activity-recording-chrome.ready');
   }
 }
 
@@ -116,7 +117,7 @@ export function ActivityTopChrome({
           <BackButton
             variant="inline"
             onPress={onBack}
-            accessibilityLabel={`Back from ${modeMeta.label}`}
+            accessibilityLabel={cairnText('activity.activity-recording-chrome.back-from-value', { label: modeMeta.label })}
           />
         </View>
 
@@ -137,7 +138,7 @@ export function ActivityTopChrome({
 
         <View
           style={[styles.signalChip, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}
-          accessibilityLabel={`Location status: ${gpsLabel}`}
+          accessibilityLabel={cairnText('activity.activity-recording-chrome.location-status-value', { gpsLabel: gpsLabel })}
         >
           <View style={[styles.signalDot, { backgroundColor: signalColor }]} />
           <Text style={[styles.signalLabel, { color: theme.foreground }]} numberOfLines={1}>
@@ -267,15 +268,13 @@ export function ActivityStartDock({
           activeOpacity={0.82}
           style={styles.routeChoice}
           accessibilityRole="button"
-          accessibilityLabel={`Choose route. Current selection: ${routeName}`}
+          accessibilityLabel={cairnText('activity.activity-recording-chrome.choose-route-current-selection-value', { routeName: routeName })}
         >
-          <View style={[styles.modeGlyph, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}> 
+          <View style={[styles.modeGlyph, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}>
             <CairnIcon name={modeMeta.icon} size={23} color={modeMeta.color} />
           </View>
           <View style={styles.routeText}>
-            <Text style={[styles.routeEyebrow, { color: modeMeta.color }]}>
-              ROUTE
-            </Text>
+            <Text style={[styles.routeEyebrow, { color: modeMeta.color }]}>{cairnText('activity.activity-recording-chrome.route')}</Text>
             <Text style={[styles.routeName, { color: theme.foreground }]} numberOfLines={1}>
               {routeName}
             </Text>
@@ -283,12 +282,12 @@ export function ActivityStartDock({
               {routeDescription}
             </Text>
           </View>
-          <View style={[styles.routeChevron, { backgroundColor: theme.surfaceSecondary }]}> 
+          <View style={[styles.routeChevron, { backgroundColor: theme.surfaceSecondary }]}>
             <Icon name="ChevronUp" size={18} color={theme.icon} strokeWidth={2.2} />
           </View>
         </TouchableOpacity>
 
-        <View style={[styles.readinessRow, { borderTopColor: theme.border }]}> 
+        <View style={[styles.readinessRow, { borderTopColor: theme.border }]}>
           <View style={[styles.readinessDot, { backgroundColor: readinessColor }]} />
           <Text style={[styles.readinessText, { color: theme.foregroundSecondary }]} numberOfLines={1}>
             {readinessLabel}
@@ -308,7 +307,7 @@ export function ActivityStartDock({
             <Text style={[styles.backgroundWarningText, { color: theme.foreground }]} numberOfLines={2}>
               {backgroundWarning}
             </Text>
-            {onOpenSettings ? <Text style={[styles.settingsLabel, { color: modeMeta.color }]}>Settings</Text> : null}
+            {onOpenSettings ? <Text style={[styles.settingsLabel, { color: modeMeta.color }]}>{cairnText('activity.activity-recording-chrome.settings')}</Text> : null}
           </TouchableOpacity>
         ) : null}
 
@@ -322,11 +321,11 @@ export function ActivityStartDock({
           ]}
           accessibilityRole="button"
           accessibilityState={{ disabled: starting, busy: starting }}
-          accessibilityLabel={starting ? `Starting ${mode}` : `Start ${mode}`}
+          accessibilityLabel={starting ? cairnText('activity.activity-recording-chrome.starting-value', { mode: mode }) : cairnText('activity.activity-recording-chrome.start-value', { mode: mode })}
         >
           <Icon name="Play" size={19} color={starting ? theme.disabledText : startForeground} strokeWidth={2.5} />
-          <Text style={[styles.startButtonText, { color: starting ? theme.disabledText : startForeground }]}> 
-            {starting ? 'Starting…' : mode === 'run' ? 'Start Running' : 'Start Hiking'}
+          <Text style={[styles.startButtonText, { color: starting ? theme.disabledText : startForeground }]}>
+            {starting ? cairnText('activity.activity-recording-chrome.starting') : mode === 'run' ? cairnText('activity.activity-recording-chrome.start-running') : cairnText('activity.activity-recording-chrome.start-hiking')}
           </Text>
         </TouchableOpacity>
 
@@ -392,11 +391,11 @@ export function ActivityControlDock({
               { backgroundColor: paused || transitioning ? Colors.severityWarning : finishing ? theme.iconInactive : modeMeta.color },
             ]}
           />
-          <Text style={[styles.recordingStateTitle, { color: theme.foreground }]}> 
-            {finishing ? 'Completing activity' : phase === 'resuming' ? 'Resuming activity' : phase === 'pausing' ? 'Pausing activity' : paused ? 'Activity paused' : 'Recording activity'}
+          <Text style={[styles.recordingStateTitle, { color: theme.foreground }]}>
+            {finishing ? cairnText('activity.activity-recording-chrome.completing-activity') : phase === 'resuming' ? cairnText('activity.activity-recording-chrome.resuming-activity') : phase === 'pausing' ? cairnText('activity.activity-recording-chrome.pausing-activity') : paused ? cairnText('activity.activity-recording-chrome.activity-paused') : cairnText('activity.activity-recording-chrome.recording-activity')}
           </Text>
           <Text style={[styles.recordingStateHint, { color: theme.muted }]} numberOfLines={1}>
-            {finishing ? 'Securing your route' : phase === 'resuming' ? 'Restoring recording · Finish is available' : phase === 'pausing' ? 'Securing the pause point' : paused ? 'Time and route are held' : 'Your path is saved as you move'}
+            {finishing ? cairnText('activity.activity-recording-chrome.securing-your-route') : phase === 'resuming' ? cairnText('activity.activity-recording-chrome.restoring-recording-finish-is-available') : phase === 'pausing' ? cairnText('activity.activity-recording-chrome.securing-the-pause-point') : paused ? cairnText('activity.activity-recording-chrome.time-and-route-are-held') : cairnText('activity.activity-recording-chrome.your-path-is-saved-as-you-move')}
           </Text>
         </View>
 
@@ -429,7 +428,7 @@ export function ActivityControlDock({
             ]}
             accessibilityRole="button"
             accessibilityState={{ disabled: finishing || transitioning, busy: transitioning }}
-            accessibilityLabel={phase === 'resuming' ? `Resuming ${mode}` : phase === 'pausing' ? `Pausing ${mode}` : paused ? `Resume ${mode}` : `Pause ${mode}`}
+            accessibilityLabel={phase === 'resuming' ? cairnText('activity.activity-recording-chrome.resuming-value', { mode: mode }) : phase === 'pausing' ? cairnText('activity.activity-recording-chrome.pausing-value', { mode: mode }) : paused ? cairnText('activity.activity-recording-chrome.resume-value', { mode: mode }) : cairnText('activity.activity-recording-chrome.pause-value', { mode: mode })}
           >
             <Icon
               name={paused || phase === 'resuming' ? 'Play' : 'Pause'}
@@ -438,7 +437,7 @@ export function ActivityControlDock({
               strokeWidth={2.4}
             />
             <Text style={[styles.primaryControlText, { color: finishing || transitioning ? theme.disabledText : primaryForeground }]}>
-              {phase === 'resuming' ? 'Resuming…' : phase === 'pausing' ? 'Pausing…' : paused ? 'Resume' : 'Pause'}
+              {phase === 'resuming' ? cairnText('activity.activity-recording-chrome.resuming') : phase === 'pausing' ? cairnText('activity.activity-recording-chrome.pausing') : paused ? cairnText('activity.activity-recording-chrome.resume') : cairnText('activity.activity-recording-chrome.pause')}
             </Text>
           </TouchableOpacity>
 
@@ -456,11 +455,11 @@ export function ActivityControlDock({
             ]}
             accessibilityRole="button"
             accessibilityState={{ disabled: cairnDisabled || finishing || transitioning }}
-            accessibilityLabel={mode === 'run' ? 'Quick Cairn' : 'Plant a Cairn'}
+            accessibilityLabel={mode === 'run' ? cairnText('activity.activity-recording-chrome.quick-cairn') : cairnText('activity.activity-recording-chrome.plant-a-cairn')}
           >
             <CairnIcon name="leaveCairn" size={19} color={modeMeta.color} />
-            <Text style={[styles.secondaryControlText, { color: theme.foreground }]}> 
-              {mode === 'run' ? 'Cairn' : 'Plant'}
+            <Text style={[styles.secondaryControlText, { color: theme.foreground }]}>
+              {mode === 'run' ? cairnText('activity.activity-recording-chrome.cairn') : cairnText('activity.activity-recording-chrome.plant')}
             </Text>
           </TouchableOpacity>
 
@@ -475,10 +474,10 @@ export function ActivityControlDock({
             ]}
             accessibilityRole="button"
             accessibilityState={{ disabled: finishing }}
-            accessibilityLabel={`Finish ${mode}`}
+            accessibilityLabel={cairnText('activity.activity-recording-chrome.finish-value', { mode: mode })}
           >
             <Icon name="Square" size={17} color={theme.foregroundSecondary} strokeWidth={2.3} />
-            <Text style={[styles.finishControlText, { color: theme.foregroundSecondary }]}>Finish</Text>
+            <Text style={[styles.finishControlText, { color: theme.foregroundSecondary }]}>{cairnText('activity.activity-recording-chrome.finish')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -513,7 +512,7 @@ export function ActivityRecenterButton({
         },
       ]}
       accessibilityRole="button"
-      accessibilityLabel="Recenter map on current location"
+      accessibilityLabel={cairnText('activity.activity-recording-chrome.recenter-map-on-current-location')}
       testID={`activity-${mode}-recenter`}
     >
       <Icon name="Target" size={21} color={modeMeta.color} strokeWidth={2.2} />

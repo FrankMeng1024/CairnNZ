@@ -27,6 +27,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../../../components/t
 import { Icon } from '../../../components/Icon';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
+import { cairnText } from '../../../i18n/runtime';
 
 interface Props {
   /** When provided, a Pick icon is shown as a third segment that
@@ -60,8 +61,8 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
   const expandOpacity = expand;
 
   const opts: { id: MemoryScope; label: string }[] = [
-    { id: 'self', label: 'Mine' },
-    { id: 'combined', label: 'Friends' },
+    { id: 'self', label: cairnText('memory.memory-scope-toggle.mine') },
+    { id: 'combined', label: cairnText('memory.memory-scope-toggle.friends') },
   ];
 
   return (
@@ -111,7 +112,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
             importantForAccessibility={scope !== 'self' ? 'yes' : 'no-hide-descendants'}
             testID="memory-scope-pick"
             accessibilityRole="button"
-            accessibilityLabel="Choose which friends to show"
+            accessibilityLabel={cairnText('memory.memory-scope-toggle.choose-which-friends-to-show')}
           >
             <Icon name="Users" size={16} color={theme.iconActive} strokeWidth={2.2} />
           </TouchableOpacity>

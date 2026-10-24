@@ -23,6 +23,7 @@ import {
   type AccountTransitionKind,
 } from './accountTransitionAuthority';
 import { crashLogger } from './crashLogger';
+import { cairnText } from '../i18n/runtime';
 
 export interface UserProfile {
   id: string;
@@ -39,6 +40,7 @@ export interface AuthResult {
   user?: UserProfile;
   token?: string;
   error?: string;
+  errorCode?: string;
   hint?: string;                    // 'age_gate' | 'use_oauth' | 'pending_deletion'
   restoreDeadline?: string;         // ISO — only when hint='pending_deletion'
   // 2-step registration: backend sent a code, frontend shows verify screen
@@ -169,36 +171,40 @@ export async function register(
     const res = await post('/api/auth/register', { name, email, password, dateOfBirth });
     const data = await res.json();
     if (!res.ok) {
-      return { error: data?.details?.[0]?.message || data?.error || data?.message || 'Registration failed.', hint: data?.hint };
+      return {
+        error: cairnText('auth-service.registration-failed'),
+        errorCode: String(data?.code || (res.status === 409 ? 'EMAIL_ALREADY_REGISTERED' : 'REGISTRATION_FAILED')),
+        hint: data?.hint,
+      };
     }
     // Backend sends a verification code — frontend must show the verify screen
     // dev_code is only present in non-production builds
     return { step: 'verify', email: data.email, devCode: data.dev_code };
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
 export async function verifyCode(email: string, code: string): Promise<AuthResult> {
   const transition = startTransition({ kind: 'verify-registration' });
-  if (!transition) return { error: 'Another account change is already in progress.' };
+  if (!transition) return { error: cairnText('auth-service.another-account-change-is-already-in-progress') };
   try {
     await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/verify', { email, code });
     const data = await res.json();
     if (!res.ok) {
       finishAccountTransition(transition);
-      return { error: data?.error || 'Verification failed.' };
+      return { error: cairnText('auth-service.verification-failed'), errorCode: String(data?.code || 'VERIFICATION_FAILED') };
     }
     const tokenAuthority = await commitUnauthenticatedToken(transition, data);
     if (!tokenAuthority) {
       finishAccountTransition(transition);
-      return { error: 'This sign-in attempt no longer owns the device session.' };
+      return { error: cairnText('auth-service.this-sign-in-attempt-no-longer-owns') };
     }
     return { user: data.user, token: data.token, tokenAuthority, transitionAuthority: transition };
   } catch {
     finishAccountTransition(transition);
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
@@ -206,28 +212,32 @@ export async function resendCode(email: string): Promise<{ error?: string }> {
   try {
     const res = await post('/api/auth/resend', { email });
     const data = await res.json();
-    if (!res.ok) return { error: data?.error || 'Could not resend code.' };
+    if (!res.ok) return { error: cairnText('auth-service.could-not-resend-code') };
     return {};
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
 export async function login(email: string, password: string): Promise<AuthResult> {
   const transition = startTransition({ kind: 'login' });
-  if (!transition) return { error: 'Another account change is already in progress.' };
+  if (!transition) return { error: cairnText('auth-service.another-account-change-is-already-in-progress') };
   try {
     await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/login', { email, password });
     const data = await res.json();
     if (!res.ok) {
       finishAccountTransition(transition);
-      return { error: data?.error || data?.message || 'Sign in failed. Check your email and password.', hint: data?.hint };
+      return {
+        error: cairnText('auth-service.sign-in-failed-check-your-email-and'),
+        errorCode: String(data?.code || (res.status === 401 ? 'INVALID_CREDENTIALS' : 'LOGIN_FAILED')),
+        hint: data?.hint,
+      };
     }
     const tokenAuthority = await commitUnauthenticatedToken(transition, data);
     if (!tokenAuthority) {
       finishAccountTransition(transition);
-      return { error: 'This sign-in attempt no longer owns the device session.' };
+      return { error: cairnText('auth-service.this-sign-in-attempt-no-longer-owns') };
     }
     const reconciledOwner = data?.user?.id == null ? null : String(data.user.id);
     if (reconciledOwner) {
@@ -241,7 +251,7 @@ export async function login(email: string, password: string): Promise<AuthResult
       } catch {
         await clearTokenIfCurrent(tokenAuthority);
         finishAccountTransition(transition);
-        return { error: 'This account was verified, but its earlier deletion result could not be reconciled safely.' };
+        return { error: cairnText('auth-service.this-account-was-verified-but-its-earlier') };
       }
     }
     // O18 AUTH-01: backend surfaces hint='pending_deletion' when the account
@@ -257,7 +267,7 @@ export async function login(email: string, password: string): Promise<AuthResult
     };
   } catch {
     finishAccountTransition(transition);
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
@@ -308,26 +318,26 @@ export async function getMe(
 
 export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
   const transition = startTransition({ kind: 'google-login' });
-  if (!transition) return { error: 'Another account change is already in progress.' };
+  if (!transition) return { error: cairnText('auth-service.another-account-change-is-already-in-progress') };
   try {
     await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/google', { id_token: idToken });
     const data = await res.json();
     if (!res.ok) {
       finishAccountTransition(transition);
-      return { error: data?.error || 'Google sign-in failed. Please try again.', hint: data?.hint };
+      return { error: cairnText('auth-service.google-sign-in-failed-please-try-again'), errorCode: String(data?.code || 'GOOGLE_LOGIN_FAILED'), hint: data?.hint };
     }
     const tokenAuthority = await commitUnauthenticatedToken(transition, data);
     if (!tokenAuthority) {
       finishAccountTransition(transition);
-      return { error: 'This sign-in attempt no longer owns the device session.' };
+      return { error: cairnText('auth-service.this-sign-in-attempt-no-longer-owns') };
     }
     try {
       await reconcileDeletionAfterLogin(String(data.user.id), data.hint);
     } catch {
       await clearTokenIfCurrent(tokenAuthority);
       finishAccountTransition(transition);
-      return { error: 'This account was verified, but its earlier deletion result could not be reconciled safely.' };
+      return { error: cairnText('auth-service.this-account-was-verified-but-its-earlier') };
     }
     // Sprint 6 round-10 review R10B7 fix: forward pending_deletion +
     // restoreDeadline from backend so AuthScreen's restore_confirm view
@@ -344,7 +354,7 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult> {
     };
   } catch {
     finishAccountTransition(transition);
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
@@ -362,7 +372,7 @@ export async function loginWithApple(
   rawNonce?: string,
 ): Promise<AuthResult> {
   const transition = startTransition({ kind: 'apple-login' });
-  if (!transition) return { error: 'Another account change is already in progress.' };
+  if (!transition) return { error: cairnText('auth-service.another-account-change-is-already-in-progress') };
   try {
     await resumeCommittedDeletionBeforeAuth(transition);
     const res = await post('/api/auth/apple', {
@@ -373,19 +383,19 @@ export async function loginWithApple(
     const data = await res.json();
     if (!res.ok) {
       finishAccountTransition(transition);
-      return { error: data?.error || 'Apple sign-in failed. Please try again.', hint: data?.hint };
+      return { error: cairnText('auth-service.apple-sign-in-failed-please-try-again'), errorCode: String(data?.code || 'APPLE_LOGIN_FAILED'), hint: data?.hint };
     }
     const tokenAuthority = await commitUnauthenticatedToken(transition, data);
     if (!tokenAuthority) {
       finishAccountTransition(transition);
-      return { error: 'This sign-in attempt no longer owns the device session.' };
+      return { error: cairnText('auth-service.this-sign-in-attempt-no-longer-owns') };
     }
     try {
       await reconcileDeletionAfterLogin(String(data.user.id), data.hint);
     } catch {
       await clearTokenIfCurrent(tokenAuthority);
       finishAccountTransition(transition);
-      return { error: 'This account was verified, but its earlier deletion result could not be reconciled safely.' };
+      return { error: cairnText('auth-service.this-account-was-verified-but-its-earlier') };
     }
     return {
       user: data.user,
@@ -397,7 +407,7 @@ export async function loginWithApple(
     };
   } catch {
     finishAccountTransition(transition);
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
@@ -470,15 +480,15 @@ export async function passwordResetRequest(email: string): Promise<{ error?: str
     const data = await res.json();
     if (res.status === 429 && data?.rateLimited) {
       return {
-        error: data.error || 'Too many code requests. Please wait a bit.',
+        error: cairnText('auth-service.too-many-code-requests-please-wait-a'),
         rateLimited: true,
         retryAfterSeconds: data.retryAfterSeconds || 900,
       };
     }
-    if (!res.ok) return { error: data?.error || 'Could not send reset code.' };
+    if (!res.ok) return { error: cairnText('auth-service.could-not-send-reset-code') };
     return { devCode: data.dev_code };
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
@@ -492,7 +502,7 @@ export async function passwordResetVerify(
   const reconciliationKey = `password-reset:${email.trim().toLowerCase()}`;
   const transition = startTransition({ kind: 'password-reset', reconciliationKey });
   if (!transition) return {
-    error: 'The previous reset result is still unresolved. Sign in with the new password before requesting another reset.',
+    error: cairnText('auth-service.the-previous-reset-result-is-still-unresolved'),
     hint: 'commit_unknown',
   };
   try {
@@ -505,18 +515,18 @@ export async function passwordResetVerify(
       if (res.status >= 500) {
         markAccountTransitionResultUnknown(transition);
         return {
-          error: 'The reset reached Cairn, but the final result is unknown. Try signing in with the new password; do not submit the reset again.',
+          error: cairnText('auth-service.the-reset-reached-cairn-but-the-final'),
           hint: 'commit_unknown',
           commitState: 'unknown',
         };
       }
       finishAccountTransition(transition);
-      return { error: data?.details?.[0]?.message || data?.error || 'Reset failed.', hint: data?.hint };
+      return { error: cairnText('auth-service.reset-failed'), errorCode: String(data?.code || 'RESET_FAILED'), hint: data?.hint };
     }
     const tokenAuthority = await commitUnauthenticatedToken(transition, data);
     if (!tokenAuthority) {
       finishAccountTransition(transition);
-      return { error: 'Password reset committed, but this device could not install the returned session. Sign in with the new password.', commitState: 'committed' };
+      return { error: cairnText('auth-service.password-reset-committed-but-this-device-could'), commitState: 'committed' };
     }
     return {
       user: data.user,
@@ -528,7 +538,7 @@ export async function passwordResetVerify(
   } catch {
     markAccountTransitionResultUnknown(transition);
     return {
-      error: 'The reset result is unknown. Try signing in with the new password; do not submit the reset again.',
+      error: cairnText('auth-service.the-reset-result-is-unknown-try-signing'),
       hint: 'commit_unknown',
       commitState: 'unknown',
     };
@@ -553,7 +563,7 @@ export async function deleteAccount(expectedUserId?: string): Promise<{
     reconciliationKey: `delete-account:${expectedUserId}`,
   });
   if (!transition) return {
-    error: 'A previous account deletion result is unresolved or another account change is in progress.',
+    error: cairnText('auth-service.a-previous-account-deletion-result-is-unresolved'),
   };
   const authority = await getTokenAuthority();
   if (!authorityOwns(authority, expectedUserId)) {
@@ -587,12 +597,12 @@ export async function deleteAccount(expectedUserId?: string): Promise<{
         markAccountTransitionResultUnknown(transition);
         return {
           commitState: 'unknown',
-          error: 'Cairn received the deletion request, but its result is unknown. Do not retry until this account is reconciled.',
+          error: cairnText('auth-service.cairn-received-the-deletion-request-but-its'),
         };
       }
       await localData.clearDeletedAccountPurgeAfterReconciliation(expectedUserId);
       finishAccountTransition(transition);
-      return { error: data?.error || 'Could not delete account.' };
+      return { error: cairnText('auth-service.could-not-delete-account') };
     }
 
     serverCommitObserved = true;
@@ -661,14 +671,14 @@ export async function deleteAccount(expectedUserId?: string): Promise<{
         localCleanup: 'pending',
         durableCleanupScheduled,
         error: durableCleanupScheduled
-          ? 'Account deletion committed. On-device cleanup is pending and will resume safely.'
-          : 'Account deletion committed, but this device could not schedule durable local cleanup. Keep the app open and contact support before using another account.',
+          ? cairnText('auth-service.account-deletion-committed-on-device-cleanup-is')
+          : cairnText('auth-service.account-deletion-committed-but-this-device-could'),
       };
     }
     if (!dispatched) {
       try { await localData.clearDeletedAccountPurgeReservation(expectedUserId); } catch { /* cold boot also releases RESERVED */ }
       finishAccountTransition(transition);
-      return { error: 'Cairn could not reserve safe on-device deletion cleanup. No deletion was sent; an earlier unresolved deletion may require reconciliation.' };
+      return { error: cairnText('auth-service.cairn-could-not-reserve-safe-on-device') };
     }
     // Any thrown outcome after dispatch may be a committed server mutation.
     // Persist UNKNOWN when possible; never release the durable slot as a
@@ -677,7 +687,7 @@ export async function deleteAccount(expectedUserId?: string): Promise<{
     markAccountTransitionResultUnknown(transition);
     return {
       commitState: 'unknown',
-      error: 'The account deletion result is unknown. Do not submit another deletion until this account is reconciled.',
+      error: cairnText('auth-service.the-account-deletion-result-is-unknown-do'),
     };
   }
 }
@@ -691,19 +701,19 @@ export async function changePassword(
   commitState?: 'committed' | 'unknown';
   sessionTransitioned?: boolean;
 }> {
-  if (!expectedUserId) return { error: 'The signed-in account is required.' };
+  if (!expectedUserId) return { error: cairnText('auth-service.the-signed-in-account-is-required') };
   const transition = startTransition({
     kind: 'change-password',
     expectedOwnerUserId: expectedUserId,
     reconciliationKey: `change-password:${expectedUserId}`,
   });
   if (!transition) return {
-    error: 'The previous password result is unresolved or another account change is in progress.',
+    error: cairnText('auth-service.the-previous-password-result-is-unresolved-or'),
   };
   const authority = await getTokenAuthority();
   if (!authorityOwns(authority, expectedUserId)) {
     finishAccountTransition(transition);
-    return { error: 'The signed-in account changed. Open Password again for the current account.' };
+    return { error: cairnText('auth-service.the-signed-in-account-changed-open-password') };
   }
   let dispatched = false;
   let serverCommitObserved = false;
@@ -723,11 +733,11 @@ export async function changePassword(
         markAccountTransitionResultUnknown(transition);
         return {
           commitState: 'unknown',
-          error: 'Cairn received the password change, but its result is unknown. Check which password works before trying again.',
+          error: cairnText('auth-service.cairn-received-the-password-change-but-its'),
         };
       }
       finishAccountTransition(transition);
-      return { error: data?.details?.[0]?.message || data?.error || 'Password could not be updated.' };
+      return { error: cairnText('auth-service.password-could-not-be-updated') };
     }
     serverCommitObserved = true;
     // A credential change ends every session, including this device. During
@@ -764,7 +774,7 @@ export async function changePassword(
       sessionTransitioned: false,
       error: signedOut.cleared && !signedOut.ownerChanged
         ? undefined
-        : 'Password updated. Cairn could not fully clear this device session; close the app before another account signs in.',
+        : cairnText('auth-service.password-updated-cairn-could-not-fully-clear'),
     };
   } catch {
     if (serverCommitObserved) {
@@ -775,7 +785,7 @@ export async function changePassword(
       return {
         commitState: 'committed',
         sessionTransitioned: false,
-        error: 'Password updated on the server, but this device could not finish the local session transition. Sign in again; do not retry the password change.',
+        error: cairnText('auth-service.password-updated-on-the-server-but-this'),
       };
     }
     if (!dispatched) finishAccountTransition(transition);
@@ -783,8 +793,8 @@ export async function changePassword(
     return {
       commitState: dispatched ? 'unknown' : undefined,
       error: dispatched
-        ? 'The password result is unknown. Check which password works before trying again.'
-        : 'The password request was not sent. Please try again.',
+        ? cairnText('auth-service.the-password-result-is-unknown-check-which')
+        : cairnText('auth-service.the-password-request-was-not-sent-please'),
     };
   }
 }
@@ -809,7 +819,7 @@ export async function restoreAccount(
     ? suppliedTransition
     : startTransition({ kind: 'restore-account' });
   if (!transition) return {
-    error: 'The previous restore result is unresolved or another account change is in progress.',
+    error: cairnText('auth-service.the-previous-restore-result-is-unresolved-or'),
     hint: 'commit_unknown',
   };
   const ownsTransition = !usingSuppliedTransition;
@@ -827,7 +837,7 @@ export async function restoreAccount(
     || !authority.ownerUserId
     || !(await isTokenAuthorityCurrent(authority))) {
     finishAccountTransition(transition);
-    return { error: 'Your session ended. Please sign in again to restore your account.', hint: 'session_missing' };
+    return { error: cairnText('auth-service.your-session-ended-please-sign-in-again'), hint: 'session_missing' };
   }
   const reconciliationKey = `restore-account:${authority.ownerUserId}`;
   let res: Response;
@@ -842,7 +852,7 @@ export async function restoreAccount(
     await clearTokenIfCurrent(authority);
     markAccountTransitionResultUnknown(transition, reconciliationKey);
     return {
-      error: 'The restore result is unknown. Sign in again to reconcile this account; do not retry Restore now.',
+      error: cairnText('auth-service.the-restore-result-is-unknown-sign-in'),
       hint: 'commit_unknown',
       commitState: 'unknown',
     };
@@ -855,14 +865,13 @@ export async function restoreAccount(
     // Either way, the account is gone. Surface a distinct hint so the
     // modal shows an actionable "Sign in" button rather than looping on
     // a generic "Restore failed" Alert.
-    const backendMsg = data?.error || data?.message || '';
     const isAccountGone =
       res.status === 404 ||
-      (res.status === 401 && /account\s*not\s*found/i.test(backendMsg));
+      data?.code === 'ACCOUNT_NOT_FOUND';
     if (isAccountGone) {
       finishAccountTransition(transition);
       return {
-        error: 'This account has been permanently deleted. Please sign in with a different account or create a new one.',
+        error: cairnText('auth-service.this-account-has-been-permanently-deleted-please'),
         hint: 'account_gone',
       };
     }
@@ -870,13 +879,13 @@ export async function restoreAccount(
       await clearTokenIfCurrent(authority);
       markAccountTransitionResultUnknown(transition, reconciliationKey);
       return {
-        error: 'Cairn received the restore request, but its result is unknown. Sign in again to reconcile; do not retry Restore now.',
+        error: cairnText('auth-service.cairn-received-the-restore-request-but-its'),
         hint: 'commit_unknown',
         commitState: 'unknown',
       };
     }
     if (ownsTransition) finishAccountTransition(transition);
-    return { error: backendMsg || 'Restore failed.' };
+    return { error: cairnText('auth-service.restore-failed'), errorCode: String(data?.code || 'RESTORE_FAILED') };
   }
   if (data.token) {
     const replacement = await replaceTokenIfCurrent(
@@ -897,7 +906,7 @@ export async function restoreAccount(
       await clearTokenIfCurrent(authority);
       finishAccountTransition(transition);
       return {
-        error: 'Restore succeeded on server but we couldn\'t save the new session. Please sign in with email + password to continue.',
+        error: cairnText('auth-service.restore-succeeded-on-server-but-we-couldn'),
         hint: 'save_token_failed',
         commitState: 'committed',
       };
@@ -920,7 +929,7 @@ export async function restoreAccount(
       await clearTokenIfCurrent(replacement);
       finishAccountTransition(transition);
       return {
-        error: 'Restore succeeded, but this device could not retire its deletion marker. Sign in again after checking device storage.',
+        error: cairnText('auth-service.restore-succeeded-but-this-device-could-not'),
         hint: 'save_token_failed',
         commitState: 'committed',
       };
@@ -942,7 +951,7 @@ export async function restoreAccount(
   });
   finishAccountTransition(transition);
   return {
-    error: 'Restore succeeded on the server, but no replacement session was returned. Sign in again; do not retry Restore.',
+    error: cairnText('auth-service.restore-succeeded-on-the-server-but-no'),
     hint: 'save_token_failed',
     commitState: 'committed',
   };
@@ -964,14 +973,14 @@ export async function requestDataExport(): Promise<{
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
-    if (!res.ok) return { error: data?.error || 'Could not request export.' };
+    if (!res.ok) return { error: cairnText('auth-service.could-not-request-export') };
     return {
       status: data.status,
       downloadUrl: data.download_url ?? null,
       expiresAt: data.expires_at,
     };
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
@@ -996,17 +1005,17 @@ export async function fetchExportHistory(): Promise<{
   error?: string;
 }> {
   const token = await getCurrentOwnedToken();
-  if (!token) return { exports: [], error: 'Your session ended. Please sign in again.' };
+  if (!token) return { exports: [], error: cairnText('auth-service.your-session-ended-please-sign-in-again-d3827fd') };
   try {
     const res = await fetch(`${API_BASE_URL}/api/account/exports`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      return { exports: [], error: data?.error || 'Export status could not be loaded.' };
+      return { exports: [], error: cairnText('auth-service.export-status-could-not-be-loaded') };
     }
     const rows = await res.json();
-    if (!Array.isArray(rows)) return { exports: [], error: 'Export status could not be read.' };
+    if (!Array.isArray(rows)) return { exports: [], error: cairnText('auth-service.export-status-could-not-be-read') };
     return { exports: rows.map((r: any) => ({
       id: Number(r.id),
       status: String(r.status ?? ''),
@@ -1019,7 +1028,7 @@ export async function fetchExportHistory(): Promise<{
       error_msg: r.error_msg ?? null,
     })) };
   } catch {
-    return { exports: [], error: 'Unable to connect. Export status is unchanged.' };
+    return { exports: [], error: cairnText('auth-service.unable-to-connect-export-status-is-unchanged') };
   }
 }
 
@@ -1030,7 +1039,7 @@ export async function submitFeedback(input: {
   appVersion?: string | null;
 }): Promise<{ acknowledged: boolean; error?: string }> {
   const token = await getCurrentOwnedToken();
-  if (!token) return { acknowledged: false, error: 'Your session ended. Please sign in again.' };
+  if (!token) return { acknowledged: false, error: cairnText('auth-service.your-session-ended-please-sign-in-again-d3827fd') };
   try {
     const res = await fetch(`${API_BASE_URL}/api/account/feedback`, {
       method: 'POST',
@@ -1047,11 +1056,11 @@ export async function submitFeedback(input: {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok || data?.acknowledged !== true) {
-      return { acknowledged: false, error: data?.error || 'Feedback could not be delivered.' };
+      return { acknowledged: false, error: cairnText('auth-service.feedback-could-not-be-delivered') };
     }
     return { acknowledged: true };
   } catch {
-    return { acknowledged: false, error: 'Unable to connect. Your message is still here—try again when you are online.' };
+    return { acknowledged: false, error: cairnText('auth-service.unable-to-connect-your-message-is-still') };
   }
 }
 // O18 AUTH-06: legacy DOB backfill (users who registered before this
@@ -1080,13 +1089,13 @@ export async function patchDob(dateOfBirth: string): Promise<AuthResult> {
     crashLogger.breadcrumb(`patchdob:json_parsed has_user=${!!data?.user} has_error=${!!data?.error}`);
     if (!res.ok) {
       crashLogger.breadcrumb(`patchdob:not_ok err=${String(data?.error).slice(0, 60)}`);
-      return { error: data?.error || 'Could not save date of birth.', hint: data?.hint };
+      return { error: cairnText('auth-service.could-not-save-date-of-birth'), errorCode: String(data?.code || 'DOB_UPDATE_FAILED'), hint: data?.hint };
     }
     crashLogger.breadcrumb('patchdob:success');
     return { user: data.user };
   } catch (err: any) {
     crashLogger.breadcrumb(`patchdob:catch ${String(err?.message || err).slice(0, 80)}`);
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 
@@ -1141,10 +1150,10 @@ export async function patchName(name: string, expectedUserId?: string): Promise<
       body: JSON.stringify({ name }),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data?.error || 'Could not save name.' };
+    if (!res.ok) return { error: cairnText('auth-service.could-not-save-name'), errorCode: String(data?.code || 'NAME_UPDATE_FAILED') };
     return { user: data.user };
   } catch {
-    return { error: 'Unable to connect. Please try again.' };
+    return { error: cairnText('auth-service.unable-to-connect-please-try-again') };
   }
 }
 

@@ -6,7 +6,11 @@ const read = (relative: string) => fs.readFileSync(path.resolve(__dirname, '..',
 describe('Owner device Batch 01 source contracts', () => {
   test('auth entry is responsive, private and uses native OTP semantics', () => {
     const source = read('screens/AuthScreen.tsx');
-    expect(source).toContain('Opening sign in…');
+    const catalog = read('i18n/cairnText.ts');
+    // REVISE_WITH_REASON: visible copy now has one catalog authority; the
+    // source contract must assert the key wiring rather than duplicate English.
+    expect(source).toContain("cairnText('auth-screen.opening-sign-in')");
+    expect(catalog).toContain("'en-NZ': 'Opening sign in…'");
     expect(source).toContain("handleViewChange('login')");
     expect(source).toContain('login_auth_state_published');
     expect(source).not.toContain('login_settimeout_fired');
@@ -47,11 +51,13 @@ describe('Owner device Batch 01 source contracts', () => {
   test('Home uses actionable balanced recent activity language', () => {
     const home = read('screens/HomeScreen.tsx');
     const generated = read('screens/home_generated/HomeScreen.generated.tsx');
+    const catalog = read('i18n/cairnText.ts');
     expect(home).toContain("case 'paused'");
     expect(home).toContain("case 'resuming'");
     expect(home).toContain("case 'finishing'");
     expect(home).not.toContain("['Interrupted', 'Resume'");
-    expect(home).toContain("return `${minutes} min ago`");
+    expect(home).toContain("return cairnText('home-screen.value-min-ago', { minutes: minutes })");
+    expect(catalog).toContain("'en-NZ': '{minutes} min ago'");
     expect(generated).not.toContain('lastHikeAction');
     expect(generated).toContain('H1__last_hike_card__action');
   });
@@ -93,8 +99,8 @@ describe('Owner device Batch 01 source contracts', () => {
     );
     const redirect = history.slice(history.indexOf('function TrailsIndexRedirect'));
     expect(sessionCard).toContain('testID="pending-activity-discard-confirmation"');
-    expect(sessionCard).toContain('label="Keep Activity"');
-    expect(sessionCard).toContain('label="Discard Activity"');
+    expect(sessionCard).toContain("label={cairnText('map-history-screen.keep-activity')}");
+    expect(sessionCard).toContain("label={cairnText('map-history-screen.discard-activity')}");
     expect(redirect).not.toContain('pending-activity-discard-confirmation');
   });
 });

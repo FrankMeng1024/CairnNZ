@@ -75,7 +75,7 @@ import {
   linkedCairnsForActivity,
 } from '../features/activity/activityDetailPresentation';
 import { routeCanBeUsed, routeMatchesIdentity } from '../features/route/routeContracts';
-import { routeSourceLabel, routeStatusLabel } from '../features/trails/trailsLibrary';
+import { routeHasReadyStatus, routeSourceLabel, routeStatusLabel } from '../features/trails/trailsLibrary';
 import {
   canonicalRouteBounds,
   canonicalRouteGeometry,
@@ -99,6 +99,7 @@ import {
   saveSnapLabRouteSnapshot,
   type SnapLabActivityRecord,
 } from '../features/activitySimulator/snapLabActivityStore';
+import { cairnText } from '../i18n/runtime';
 
 const HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE = 248;
 
@@ -548,10 +549,10 @@ function TrackPolyline({ session, planned = false }: { session: TrackingSession;
     const hasRecordedDistance = (session as any).distanceM > 0
       || (session as any).distance_m > 0;
     const label = hasRecordedDistance
-      ? 'Route data unavailable'
+      ? cairnText('map-history-screen.route-data-unavailable')
       : pts.length === 0
-        ? 'Activity too short to record path'
-        : 'Only one GPS sample — keep moving longer to record a path';
+        ? cairnText('map-history-screen.activity-too-short-to-record-path')
+        : cairnText('map-history-screen.only-one-gps-sample-keep-moving-longer');
     return (
       <View style={trackStyles.noGpsWrap}>
         <View style={[trackStyles.noGpsLine, { borderColor: color }]} />
@@ -649,7 +650,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
   // Display label prefers the user-assigned name; falls back to type
   // when no name was set. Earlier versions hardcoded 'Run' / 'Hike'
   // here, dropping whatever the user typed in the stop-summary sheet.
-  const actLabel = session.name || (isRun ? 'Run' : 'Hike');
+  const actLabel = session.name || (isRun ? cairnText('map-history-screen.run-cf91a63') : cairnText('map-history-screen.hike-2103d15'));
   const actColor = isRun ? Colors.running : theme.iconActive;
   const actLightBg = isRun ? Colors.runningLight : Colors.primaryLight;
   const actDeepBg = isRun
@@ -743,7 +744,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
           onPress={onViewOnMap}
           onLongPress={handleLongPressAbandon}
           delayLongPress={800}
-          accessibilityLabel="Open saved Activity. Long-press to discard."
+          accessibilityLabel={cairnText('map-history-screen.open-saved-activity-long-press-to-discard')}
         >
           <View style={[cardStyles.routeCard, { opacity: 0.62, backgroundColor: theme.surface, borderColor: theme.border }]}>
             <LinearGradient
@@ -757,25 +758,23 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[cardStyles.routeCardTitle, { color: theme.foreground }]} numberOfLines={1}>{actLabel}</Text>
-                  <Text style={[cardStyles.routeCardSubtitle, { color: theme.muted }]}>
-                    {distStr} · {durationStr}
-                  </Text>
+                  <Text style={[cardStyles.routeCardSubtitle, { color: theme.muted }]}>{cairnText('map-history-screen.value-value-58ec54d', { distStr: distStr, durationStr: durationStr })}</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <Icon name="CloudOff" size={12} color={theme.iconInactive} strokeWidth={2} />
                 <Text style={{ color: theme.foregroundSecondary, fontSize: FontSize.caption }}>
                   {session.syncState === 'syncing'
-                    ? 'Syncing…'
+                    ? cairnText('map-history-screen.syncing')
                     : session.syncState === 'sync_error'
                       ? session.syncFailureKind === 'auth_required'
-                        ? 'Saved here · Sign in to sync'
+                        ? cairnText('map-history-screen.saved-here-sign-in-to-sync')
                         : session.syncFailureKind === 'action_required'
-                          ? 'Saved here · Sync needs review'
+                          ? cairnText('map-history-screen.saved-here-sync-needs-review')
                           : session.syncFailureKind === 'dependency'
-                            ? 'Saved here · Resolve other Activity'
-                            : 'Saved here · Tap to retry sync'
-                      : 'Waiting to sync'}
+                            ? cairnText('map-history-screen.saved-here-resolve-other-activity')
+                            : cairnText('map-history-screen.saved-here-tap-to-retry-sync')
+                      : cairnText('map-history-screen.waiting-to-sync')}
                 </Text>
               </View>
             </LinearGradient>
@@ -802,7 +801,7 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
             {/* Primary stat: duration */}
             <Text style={[cardStyles.routePrimary, { color: theme.foreground }]}>{durationStr}</Text>
             {/* Secondary line: date · distance */}
-            <Text style={[cardStyles.routeMeta, { color: theme.muted }]}>{dateStr} · {distStr}</Text>
+            <Text style={[cardStyles.routeMeta, { color: theme.muted }]}>{cairnText('map-history-screen.value-value-9186cbb', { dateStr: dateStr, distStr: distStr })}</Text>
           </View>
           <View style={cardStyles.routeChevron}>
             <Icon
@@ -826,15 +825,15 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
           </View>
           <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.running, backgroundColor: theme.surfaceElevated }]}>
             <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>{durationStr}</Text>
-            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>time</Text>
+            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>{cairnText('map-history-screen.time')}</Text>
           </View>
           <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.severityCaution, backgroundColor: theme.surfaceElevated }]}>
-            <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>+{dist.formatElevation(session.elevationGainM ?? 0)}{dist.elevUnit}</Text>
-            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>elev</Text>
+            <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>{cairnText('map-history-screen.value-value-bd4ab4e', { value1: dist.formatElevation(session.elevationGainM ?? 0), elevUnit: dist.elevUnit })}</Text>
+            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>{cairnText('map-history-screen.elev')}</Text>
           </View>
           <View style={[cardStyles.expandedCapsule, { borderLeftColor: Colors.flag, backgroundColor: theme.surfaceElevated }]}>
             <Text style={[cardStyles.expandedStatVal, { color: theme.foreground }]}>{session.markerIds?.length ?? 0}</Text>
-            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>flags</Text>
+            <Text style={[cardStyles.expandedStatLbl, { color: theme.muted }]}>{cairnText('map-history-screen.flags')}</Text>
           </View>
         </View>
         </Animated.View>
@@ -858,14 +857,14 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
             </View>
           </View>
           {/* Route label — STORY-00108: renamed from "Route Preview" */}
-          <Text style={[cardStyles.previewLabel, { color: theme.foregroundSecondary }]}>Preview</Text>
+          <Text style={[cardStyles.previewLabel, { color: theme.foregroundSecondary }]}>{cairnText('map-history-screen.preview')}</Text>
         </View>
         </Animated.View>
 
         <Animated.View style={{ opacity: ctaOpacity, transform: [{ translateY: ctaTransY }] }}>
         <TouchableOpacity style={[cardStyles.viewOnMapBtn, { backgroundColor: theme.primary }]} onPress={onViewOnMap}>
           <Icon name="Map" size={14} color={theme.onPrimary} strokeWidth={2} />
-          <Text style={[cardStyles.viewOnMapText, { color: theme.onPrimary }]}>View on Map</Text>
+          <Text style={[cardStyles.viewOnMapText, { color: theme.onPrimary }]}>{cairnText('map-history-screen.view-on-map')}</Text>
         </TouchableOpacity>
         </Animated.View>
       </Animated.View>
@@ -878,19 +877,19 @@ function SessionCard({ session, isSelected, isExpanded, onPress, onViewOnMap }: 
       testID="pending-activity-discard-confirmation"
     >
       <ModalCardHeader
-        title={`Discard saved ${isRun ? 'Run' : 'Hike'}?`}
-        body="This Activity is stored on this device and has not been confirmed by the server. Discarding removes the only retained copy and cannot be undone."
+        title={cairnText('map-history-screen.discard-saved-value', { value1: isRun ? cairnText('common.activity.run') : cairnText('common.activity.hike') })}
+        body={cairnText('map-history-screen.this-activity-is-stored-on-this-device')}
       />
       <View style={styles.deleteModalActions}>
         <PrimaryButton
-          label="Discard Activity"
+          label={cairnText('map-history-screen.discard-activity')}
           variant="destructive"
           onPress={() => { void discardPendingActivity(); }}
           loading={discardPending}
           testID="pending-activity-discard-confirm"
         />
         <PrimaryButton
-          label="Keep Activity"
+          label={cairnText('map-history-screen.keep-activity')}
           variant="secondary"
           onPress={() => setDiscardOpen(false)}
           disabled={discardPending}
@@ -958,17 +957,17 @@ function FlagDetailSheet({ marker, onClose, onDelete }: {
           <Text style={[sheetStyles.typeBadgeText, { color: meta.color }]}>{meta.label}</Text>
         </View>
         {/* Note */}
-        <Text style={[sheetStyles.noteLabel, { color: theme.foregroundSecondary }]}>Note</Text>
-        <Text style={[sheetStyles.noteText, { color: theme.foreground }]} numberOfLines={4}>{marker.note || 'No note yet'}</Text>
+        <Text style={[sheetStyles.noteLabel, { color: theme.foregroundSecondary }]}>{cairnText('map-history-screen.note')}</Text>
+        <Text style={[sheetStyles.noteText, { color: theme.foreground }]} numberOfLines={4}>{marker.note || cairnText('map-history-screen.no-note-yet')}</Text>
         {/* Date */}
-        <Text style={[sheetStyles.dateLine, { color: theme.muted }]}>Planted: {dateStr}</Text>
+        <Text style={[sheetStyles.dateLine, { color: theme.muted }]}>{cairnText('map-history-screen.planted-value', { dateStr: dateStr })}</Text>
         {/* Delete */}
         <TouchableOpacity
           style={[sheetStyles.deleteBtn, { backgroundColor: theme.surface, borderColor: theme.destructive }]}
           onPress={() => setDeleteConfirm(true)}
         >
           <Icon name="Trash2" size={IconSize.sm} color={theme.destructive} strokeWidth={2} />
-          <Text style={[sheetStyles.deleteBtnText, { color: theme.destructive }]}>Delete Cairn</Text>
+          <Text style={[sheetStyles.deleteBtnText, { color: theme.destructive }]}>{cairnText('map-history-screen.delete-cairn')}</Text>
         </TouchableOpacity>
       </Animated.View>
       <CairnDeleteDialog
@@ -1082,29 +1081,29 @@ function MapHistoryObjectScreen() {
         : routeState.routes.find(item => routeMatchesIdentity(item, selectedRoute.id));
       if (!ready || ready.points.length < 2) {
         Alert.alert(
-          'Route unavailable',
-          'This route’s path is not available on this device yet. Check your connection and try again.',
+          cairnText('map-history-screen.route-unavailable'),
+          cairnText('map-history-screen.this-route-s-path-is-not-available'),
         );
         return;
       }
       if (!routeCanBeUsed(ready)) {
-        Alert.alert('Route needs repair', 'Connect every unknown gap before using this Route for a Hike or Run.');
+        Alert.alert(cairnText('map-history-screen.route-needs-repair'), cairnText('map-history-screen.connect-every-unknown-gap-before-using-this'));
         return;
       }
       const tracking = useTrackingStore.getState();
       if (tracking.status !== 'idle') {
         Alert.alert(
-          'Activity already in progress',
-          'Finish or discard the current Activity before choosing another Route.',
+          cairnText('map-history-screen.activity-already-in-progress'),
+          cairnText('map-history-screen.finish-or-discard-the-current-activity-before'),
           [
             {
-              text: 'Return to Activity',
+              text: cairnText('map-history-screen.return-to-activity'),
               onPress: () => {
                 routeUseInFlightRef.current = false;
                 nav.navigate(tracking.activityMode === 'running' ? 'Running' : 'Hiking');
               },
             },
-            { text: 'Stay here', style: 'cancel', onPress: () => { routeUseInFlightRef.current = false; } },
+            { text: cairnText('map-history-screen.stay-here'), style: 'cancel', onPress: () => { routeUseInFlightRef.current = false; } },
           ],
         );
         return;
@@ -1112,7 +1111,7 @@ function MapHistoryObjectScreen() {
       captureActivityRouteReference(ready.id);
       nav.navigate(mode === 'running' ? 'Running' : 'Hiking', { routeId: ready.id });
     } catch {
-      Alert.alert('Route unavailable', 'The route could not be prepared. Check your connection and try again.');
+      Alert.alert(cairnText('map-history-screen.route-unavailable'), cairnText('map-history-screen.the-route-could-not-be-prepared-check'));
     } finally {
       routeUseInFlightRef.current = false;
       setRouteUseLoading(false);
@@ -1242,7 +1241,7 @@ function MapHistoryObjectScreen() {
       Keyboard.dismiss();
       setRenameEditing(false);
     } catch {
-      setRouteActionError('The Route name was not saved. Your draft is still here.');
+      setRouteActionError(cairnText('map-history-screen.the-route-name-was-not-saved-your'));
     } finally {
       routeRenameInFlightRef.current = false;
       setRenameSaving(false);
@@ -1259,7 +1258,7 @@ function MapHistoryObjectScreen() {
       setRouteDeleteConfirm(false);
       nav.goBack();
     } catch {
-      setRouteActionError('The Route was not deleted. Try again when you are ready.');
+      setRouteActionError(cairnText('map-history-screen.the-route-was-not-deleted-try-again'));
       setRouteDeleteConfirm(false);
     } finally {
       routeDeleteInFlightRef.current = false;
@@ -1277,7 +1276,7 @@ function MapHistoryObjectScreen() {
       setRouteDeleteConfirm(false);
       nav.goBack();
     } catch {
-      setRouteActionError('The received Route was not removed. Try again when connected.');
+      setRouteActionError(cairnText('map-history-screen.the-received-route-was-not-removed-try'));
       setRouteDeleteConfirm(false);
     } finally {
       routeDeleteInFlightRef.current = false;
@@ -1288,7 +1287,7 @@ function MapHistoryObjectScreen() {
   const openRouteShare = useCallback(() => {
     if (!selectedRoute) return;
     if (!routeCanBeUsed(selectedRoute)) {
-      setRouteActionError('Connect every unknown gap before sharing this Route.');
+      setRouteActionError(cairnText('map-history-screen.connect-every-unknown-gap-before-sharing-this'));
       return;
     }
     setRouteActionError(null);
@@ -1303,7 +1302,7 @@ function MapHistoryObjectScreen() {
     const serverRouteId = selectedRoute.remoteId
       ?? (/^\d+$/.test(selectedRoute.id) ? selectedRoute.id : null);
     if (!serverRouteId) {
-      setRouteShareMessage('This Route must finish syncing before it can be delivered.');
+      setRouteShareMessage(cairnText('map-history-screen.this-route-must-finish-syncing-before-it'));
       return;
     }
     const recipients = [...new Set(routeShareRecipients)].sort();
@@ -1319,8 +1318,8 @@ function MapHistoryObjectScreen() {
       const delivered = result.delivered.length;
       const failed = result.failed.length;
       setRouteShareMessage(failed
-        ? `${delivered} delivered; ${failed} could not be delivered. No existing copy was overwritten.`
-        : `${delivered} independent Route ${delivered === 1 ? 'snapshot' : 'snapshots'} delivered.`);
+        ? cairnText('map-history-screen.value-delivered-value-could-not-be-delivered', { delivered: delivered, failed: failed })
+        : cairnText('routes.snapshot-delivered', { count: delivered }));
       if (failed) {
         // Retain the same operation identity and retry only recipients that
         // did not receive this snapshot. Already delivered friends are not
@@ -1336,8 +1335,8 @@ function MapHistoryObjectScreen() {
       }
     } catch (cause: any) {
       setRouteShareMessage(cause?.code === 'ROUTE_UNRESOLVED_GAPS'
-        ? 'Connect every unknown gap before sharing this Route.'
-        : 'Delivery was not confirmed. Retry uses the same request identity so it cannot duplicate the same snapshot.');
+        ? cairnText('map-history-screen.connect-every-unknown-gap-before-sharing-this')
+        : cairnText('map-history-screen.delivery-was-not-confirmed-retry-uses-the'));
     } finally {
       setRouteShareLoading(false);
     }
@@ -1401,15 +1400,15 @@ function MapHistoryObjectScreen() {
       return;
     }
     const message = result.reason === 'syncing'
-      ? 'This Activity is syncing. Try renaming again when sync completes.'
+      ? cairnText('map-history-screen.this-activity-is-syncing-try-renaming-again')
       : result.reason === 'pending-missing'
-        ? 'The pending Activity save could not be found. Rename was not applied.'
+        ? cairnText('map-history-screen.the-pending-activity-save-could-not-be')
         : result.reason === 'identity-conflict'
-          ? 'This Activity has a server identity conflict. Its name was not changed so another Activity cannot be modified by mistake.'
+          ? cairnText('map-history-screen.this-activity-has-a-server-identity-conflict')
         : result.reason === 'not-found'
-          ? 'This Activity no longer exists. Rename was not applied.'
-          : 'Rename could not be saved. Check your connection and try again.';
-    Alert.alert('Rename failed', message);
+          ? cairnText('map-history-screen.this-activity-no-longer-exists-rename-was')
+          : cairnText('map-history-screen.rename-could-not-be-saved-check-your');
+    Alert.alert(cairnText('map-history-screen.rename-failed'), message);
   }, [invalidatedSessionId, renameSaving, renameSession, renameText, selectedSessionId]);
 
   const deleteSelectedActivity = useCallback(async () => {
@@ -1434,13 +1433,13 @@ function MapHistoryObjectScreen() {
       }));
       if (result.remoteState === 'queued') {
         Alert.alert(
-          'Delete queued',
-          'The Activity is removed from this iPhone. Cairn will finish deleting the server copy when you are online.',
+          cairnText('map-history-screen.delete-queued'),
+          cairnText('map-history-screen.the-activity-is-removed-from-this-iphone'),
         );
       }
     } catch {
       setInvalidatedSessionId(null);
-      Alert.alert('Delete failed', 'The Activity could not be deleted. Try again.');
+      Alert.alert(cairnText('map-history-screen.delete-failed'), cairnText('map-history-screen.the-activity-could-not-be-deleted-try'));
     } finally {
       setDeleteSaving(false);
     }
@@ -1693,9 +1692,9 @@ function MapHistoryObjectScreen() {
       selectedSession.id,
       `${selectedSession.name || 'QA Activity'} route`,
     ).then(() => {
-      Alert.alert('QA Route snapshot saved', 'The selected Final was copied inside Snap Lab only. No product Route or server data was created.');
+      Alert.alert(cairnText('map-history-screen.qa-route-snapshot-saved'), cairnText('map-history-screen.the-selected-final-was-copied-inside-snap'));
     }).catch(() => {
-      Alert.alert('QA Route snapshot failed', 'The Snap Lab Activity remains saved. Try the QA action again.');
+      Alert.alert(cairnText('map-history-screen.qa-route-snapshot-failed'), cairnText('map-history-screen.the-snap-lab-activity-remains-saved-try'));
     }).finally(() => setRouteDraftOpening(false));
   }, [routeDraftOpening, selectedSession]);
 
@@ -1744,14 +1743,14 @@ function MapHistoryObjectScreen() {
         diagnosticReplay,
       }, null, 2));
       Alert.alert(
-        'Activity diagnostics copied',
+        cairnText('map-history-screen.activity-diagnostics-copied'),
         diagnosticReplay
-          ? 'This selected Activity’s opted-in replay and exact-ID ledgers are on your clipboard. Precise coordinates are included.'
-          : 'This selected Activity’s exact-ID timing ledgers are on your clipboard. Coordinate replay was not enabled for it.',
+          ? cairnText('map-history-screen.this-selected-activity-s-opted-in-replay')
+          : cairnText('map-history-screen.this-selected-activity-s-exact-id-timing'),
       );
     } catch {
       if (useSessionStore.getState().currentUserId === ownerUserId) {
-        Alert.alert('Could not copy diagnostics', 'Try again after reopening this Activity.');
+        Alert.alert(cairnText('map-history-screen.could-not-copy-diagnostics'), cairnText('map-history-screen.try-again-after-reopening-this-activity'));
       }
     } finally {
       if (useSessionStore.getState().currentUserId === ownerUserId) {
@@ -1804,10 +1803,10 @@ function MapHistoryObjectScreen() {
             {routeDetailState === 'loading' ? <ActivityIndicator color={visualTheme.primary} /> : null}
             <Text style={[trackStyles.noGpsLabel, { color: visualTheme.foregroundSecondary }]}>
               {routeDetailState === 'not-found'
-                ? 'Route unavailable'
+                ? cairnText('map-history-screen.route-unavailable')
                 : routeDetailState === 'error'
-                  ? 'Route map unavailable — details remain accessible offline'
-                  : 'Preparing Route map…'}
+                  ? cairnText('map-history-screen.route-map-unavailable-details-remain-accessible-offline')
+                  : cairnText('map-history-screen.preparing-route-map')}
             </Text>
           </View>
         ) : sessionRender ? (
@@ -1887,11 +1886,11 @@ function MapHistoryObjectScreen() {
           {isRouteDetail ? (
             <View pointerEvents="none" style={styles.routeHeaderTitleWrap}>
               <View style={[styles.routeHeaderTitleChip, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}>
-                <Text style={[styles.routeHeaderTitleText, { color: visualTheme.foreground }]}>{'Route'}</Text>
+                <Text style={[styles.routeHeaderTitleText, { color: visualTheme.foreground }]}>{cairnText('map-history-screen.route')}</Text>
               </View>
             </View>
           ) : (
-            <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{targetSessionId ? 'Activity Detail' : (tab === 'flags' ? 'Cairns' : 'Routes')}</Text>
+            <Text style={[styles.topTitle, { color: visualTheme.foreground }]}>{targetSessionId ? cairnText('map-history-screen.activity-detail') : (tab === 'flags' ? cairnText('map-history-screen.cairns') : cairnText('map-history-screen.routes'))}</Text>
           )}
           {/* User decision 2026-08-16: Plan button removed from Trails top row.
               Also drop the right-side spacer — nothing to balance now. */}
@@ -1900,7 +1899,7 @@ function MapHistoryObjectScreen() {
               style={[styles.routeHeaderMore, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}
               onPress={() => setRouteMoreOpen(value => !value)}
               accessibilityRole="button"
-              accessibilityLabel="More Route actions"
+              accessibilityLabel={cairnText('map-history-screen.more-route-actions')}
               accessibilityState={{ expanded: routeMoreOpen }}
               testID="route-detail-header-more"
             ><Icon name="MoreHorizontal" size={20} color={visualTheme.iconActive} /></TouchableOpacity>
@@ -1916,9 +1915,7 @@ function MapHistoryObjectScreen() {
               onPress={() => setTab('routes')}
             >
               <Icon name="Route" size={14} color={tab === 'routes' ? Colors.primary : Colors.textSecondary} strokeWidth={2} />
-              <Text style={[styles.tabText, tab === 'routes' && styles.tabTextActive]}>
-                Routes{sessions.length > 0 ? ` (${sessions.length})` : ''}
-              </Text>
+              <Text style={[styles.tabText, tab === 'routes' && styles.tabTextActive]}>{cairnText('map-history-screen.routes-value', { value1: sessions.length > 0 ? cairnText('map-history-screen.value', { length: sessions.length }) : '' })}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1953,14 +1950,14 @@ function MapHistoryObjectScreen() {
                   editable={!renameSaving}
                   onSubmitEditing={() => { void commitRouteRename(); }}
                   returnKeyType="done"
-                  placeholder="Route name"
+                  placeholder={cairnText('map-history-screen.route-name')}
                   placeholderTextColor={visualTheme.muted}
                 />
                 <TouchableOpacity
                   onPress={() => { void commitRouteRename(); }}
                   disabled={renameSaving || !renameText.trim()}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Save new route name"
+                  accessibilityLabel={cairnText('map-history-screen.save-new-route-name')}
                 >
                   {renameSaving
                     ? <ActivityIndicator size="small" color={visualTheme.primary} />
@@ -1969,7 +1966,7 @@ function MapHistoryObjectScreen() {
                 <TouchableOpacity
                   onPress={() => { renameInputRef.current?.blur(); Keyboard.dismiss(); setRenameEditing(false); }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Cancel rename"
+                  accessibilityLabel={cairnText('map-history-screen.cancel-rename')}
                 >
                   <Icon name="X" size={20} color={visualTheme.iconInactive} strokeWidth={2.5} />
                 </TouchableOpacity>
@@ -1978,15 +1975,15 @@ function MapHistoryObjectScreen() {
               <TouchableOpacity
                 disabled={isQaReviewClone || Boolean(targetSharedDeliveryId)}
                 onPress={() => {
-                  setRenameText(selectedRoute.name || 'Route');
+                  setRenameText(selectedRoute.name || cairnText('map-history-screen.route'));
                   setRenameEditing(true);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Rename route"
+                accessibilityLabel={cairnText('map-history-screen.rename-route')}
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.routeDetailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{selectedRoute.name || 'Route'}</Text>
+                  <Text style={[styles.routeDetailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{selectedRoute.name || cairnText('map-history-screen.route')}</Text>
                   {!targetSharedDeliveryId ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
                 </View>
               </TouchableOpacity>
@@ -2005,10 +2002,10 @@ function MapHistoryObjectScreen() {
               {selectedRoute.syncState === 'failed' ? (
                 <Text style={[styles.routeStateText, { color: visualTheme.foregroundSecondary }]} testID="route-sync-failure-detail">
                   {selectedRoute.syncErrorCode === 'SOURCE_ACTIVITY_DELETED'
-                    ? 'The source Activity was deleted before this Route could sync. This Route remains saved on this device.'
+                    ? cairnText('map-history-screen.the-source-activity-was-deleted-before-this')
                     : selectedRoute.syncErrorCode === 'SOURCE_ACTIVITY_UNAUTHORIZED'
-                      ? 'The source Activity is not available to this account. This Route remains saved on this device.'
-                      : 'This Route is saved on this device. Retry when your connection is available.'}
+                      ? cairnText('map-history-screen.the-source-activity-is-not-available-to')
+                      : cairnText('map-history-screen.this-route-is-saved-on-this-device')}
                 </Text>
               ) : null}
             </View>
@@ -2019,20 +2016,15 @@ function MapHistoryObjectScreen() {
             </Text>
           ) : null}
           <View style={styles.routeOriginBlock} testID="route-origin-context">
-            <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>
-              {targetSharedDeliveryId
-                ? `${routeSourceLabel(selectedRoute)} · Received ${formatDate(selectedRoute.createdAt)}`
-                : `${selectedRoute.creationOrigin === 'activity' ? 'From Activity' : 'Planned Route'} · Saved ${formatDate(selectedRoute.createdAt)}`}
-              {routeStatusLabel(selectedRoute) === 'Ready' ? '' : ` · ${routeStatusLabel(selectedRoute)}`}
-            </Text>
+            <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.value-value-7e51f13', { value1: targetSharedDeliveryId
+                ? cairnText('map-history-screen.value-received-value', { value1: routeSourceLabel(selectedRoute), value2: formatDate(selectedRoute.createdAt) })
+                : cairnText('map-history-screen.value-saved-value', { value1: selectedRoute.creationOrigin === 'activity' ? cairnText('map-history-screen.from-activity') : cairnText('map-history-screen.planned-route'), value2: formatDate(selectedRoute.createdAt) }), value2: routeHasReadyStatus(selectedRoute) ? '' : cairnText('map-history-screen.value-7455c9a', { value1: routeStatusLabel(selectedRoute) }) })}</Text>
             {selectedRoute.originPersistence === 'legacy-local' ? (
-              <Text style={[styles.routeStateText, { color: Colors.warning }]}>Origin is saved on this device; server support is pending.</Text>
+              <Text style={[styles.routeStateText, { color: Colors.warning }]}>{cairnText('map-history-screen.origin-is-saved-on-this-device-server')}</Text>
             ) : null}
           </View>
           {!routeCanBeUsed(selectedRoute) ? (
-            <Text style={[styles.routeStateText, { color: Colors.warning }]} testID="route-unresolved-gap-notice">
-              This draft contains unknown gaps. Repair them before Use for Hike or sharing; the dashed connectors are not part of the Route distance.
-            </Text>
+            <Text style={[styles.routeStateText, { color: Colors.warning }]} testID="route-unresolved-gap-notice">{cairnText('map-history-screen.this-draft-contains-unknown-gaps-repair-them')}</Text>
           ) : null}
           <View style={styles.singleSessionStats}>
             <View style={styles.singleStat}>
@@ -2041,8 +2033,8 @@ function MapHistoryObjectScreen() {
             </View>
             {selectedRoute.elevationGainM > 0 ? (
               <View style={styles.singleStat}>
-                <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>+{dist.formatElevation(selectedRoute.elevationGainM)}{dist.elevUnit}</Text>
-                <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>elevation</Text>
+                <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{cairnText('map-history-screen.value-value-bd4ab4e', { value1: dist.formatElevation(selectedRoute.elevationGainM), elevUnit: dist.elevUnit })}</Text>
+                <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.elevation')}</Text>
               </View>
             ) : null}
           </View>
@@ -2053,11 +2045,11 @@ function MapHistoryObjectScreen() {
                 onPress={() => { void useSelectedRoute('hiking'); }}
                 disabled={routeUseLoading || !routeCanBeUsed(selectedRoute)}
                 accessibilityRole="button"
-                accessibilityLabel="Use route for Hike"
+                accessibilityLabel={cairnText('map-history-screen.use-route-for-hike')}
                 testID="route-use-action"
               >
                 {routeUseLoading ? <ActivityIndicator size="small" color={visualTheme.onPrimary} /> : <Icon name="Navigation" size={IconSize.sm} color={visualTheme.onPrimary} strokeWidth={2} />}
-                <Text style={[styles.routeMaintenanceText, { color: visualTheme.onPrimary }]}>Use for Hike</Text>
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.onPrimary }]}>{cairnText('map-history-screen.use-for-hike')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
@@ -2067,10 +2059,10 @@ function MapHistoryObjectScreen() {
                     : { routeId: selectedRoute.id });
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Edit route"
+                accessibilityLabel={cairnText('map-history-screen.edit-route')}
               >
                 <Icon name="Edit3" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} />
-                <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Edit</Text>
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>{cairnText('map-history-screen.edit')}</Text>
               </TouchableOpacity>
               {!targetSharedDeliveryId ? (
                 <TouchableOpacity
@@ -2078,17 +2070,17 @@ function MapHistoryObjectScreen() {
                   onPress={openRouteShare}
                   disabled={!routeCanBeUsed(selectedRoute)}
                   accessibilityRole="button"
-                  accessibilityLabel="Share route with friends"
+                  accessibilityLabel={cairnText('map-history-screen.share-route-with-friends')}
                 >
                   <Icon name="Share2" size={IconSize.sm} color={routeCanBeUsed(selectedRoute) ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2} />
-                  <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>Share</Text>
+                  <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.share')}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
             {routeMoreOpen ? (
               <View style={[styles.routeCompactMenu, { backgroundColor: visualTheme.surface, borderColor: visualTheme.borderSubtle }]} testID="route-detail-more-menu">
-                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); void useSelectedRoute('running'); }} disabled={!routeCanBeUsed(selectedRoute)} accessibilityRole="button" accessibilityLabel="Use Route for Run" accessibilityState={{ disabled: !routeCanBeUsed(selectedRoute) }}><Icon name="Footprints" size={16} color={visualTheme.iconActive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>Use for Run</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); setRouteDeleteConfirm(true); }} disabled={deleteSaving} accessibilityRole="button" accessibilityLabel={targetSharedDeliveryId ? 'Remove received Route' : 'Delete Route'} accessibilityState={{ disabled: deleteSaving }}><Icon name="Trash2" size={16} color={visualTheme.destructive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>{targetSharedDeliveryId ? 'Remove received Route' : 'Delete Route'}</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); void useSelectedRoute('running'); }} disabled={!routeCanBeUsed(selectedRoute)} accessibilityRole="button" accessibilityLabel={cairnText('map-history-screen.use-route-for-run')} accessibilityState={{ disabled: !routeCanBeUsed(selectedRoute) }}><Icon name="Footprints" size={16} color={visualTheme.iconActive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>{cairnText('map-history-screen.use-for-run')}</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); setRouteDeleteConfirm(true); }} disabled={deleteSaving} accessibilityRole="button" accessibilityLabel={targetSharedDeliveryId ? cairnText('map-history-screen.remove-received-route') : cairnText('map-history-screen.delete-route')} accessibilityState={{ disabled: deleteSaving }}><Icon name="Trash2" size={16} color={visualTheme.destructive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>{targetSharedDeliveryId ? cairnText('map-history-screen.remove-received-route') : cairnText('map-history-screen.delete-route')}</Text></TouchableOpacity>
               </View>
             ) : null}
           </View>
@@ -2100,13 +2092,13 @@ function MapHistoryObjectScreen() {
           testID="route-share-friend-picker"
         >
           <ModalCardHeader
-            title="Send an independent Route"
-            body="Each selected friend receives a complete snapshot in Shared Routes. Later edits to your Route do not alter their copy."
+            title={cairnText('map-history-screen.send-an-independent-route')}
+            body={cairnText('map-history-screen.each-selected-friend-receives-a-complete-snapshot')}
             onClose={() => !routeShareLoading && setRouteShareOpen(false)}
           />
           <ScrollView style={{ maxHeight: 280 }}>
             {routeFriends.length === 0 ? (
-              <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>No accepted friends are available.</Text>
+              <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.no-accepted-friends-are-available')}</Text>
             ) : routeFriends.map(friend => {
               const selected = routeShareRecipients.includes(friend.userId);
               return (
@@ -2129,13 +2121,13 @@ function MapHistoryObjectScreen() {
           {routeShareMessage ? <Text style={[styles.routeStateText, { color: visualTheme.foregroundSecondary }]}>{routeShareMessage}</Text> : null}
           <View style={styles.deleteModalActions}>
             <PrimaryButton
-              label={routeShareRecipients.length ? `Deliver to ${routeShareRecipients.length}` : 'Choose friends'}
+              label={routeShareRecipients.length ? cairnText('map-history-screen.deliver-to-value', { length: routeShareRecipients.length }) : cairnText('map-history-screen.choose-friends')}
               onPress={() => { void deliverRouteSnapshot(); }}
               loading={routeShareLoading}
               disabled={routeShareRecipients.length === 0}
               testID="route-share-deliver"
             />
-            <PrimaryButton label="Done" variant="secondary" onPress={() => setRouteShareOpen(false)} disabled={routeShareLoading} />
+            <PrimaryButton label={cairnText('common.done')} variant="secondary" onPress={() => setRouteShareOpen(false)} disabled={routeShareLoading} />
           </View>
         </ModalCard>
         <ModalCard
@@ -2145,19 +2137,19 @@ function MapHistoryObjectScreen() {
           testID="route-delete-confirmation"
         >
           <ModalCardHeader
-            title={targetSharedDeliveryId ? 'Remove received Route?' : 'Delete Route?'}
-            body={targetSharedDeliveryId ? 'This removes only your independent received snapshot.' : 'This removes the Route. Its source Activity, Cairns, and Memory stay unchanged.'}
+            title={targetSharedDeliveryId ? cairnText('map-history-screen.remove-received-route-3fa4170') : cairnText('map-history-screen.delete-route-7f0f252')}
+            body={targetSharedDeliveryId ? cairnText('map-history-screen.this-removes-only-your-independent-received-snapshot') : cairnText('map-history-screen.this-removes-the-route-its-source-activity')}
           />
           <View style={styles.deleteModalActions}>
             <PrimaryButton
-              label={targetSharedDeliveryId ? 'Remove Route' : 'Delete Route'}
+              label={targetSharedDeliveryId ? cairnText('map-history-screen.remove-route') : cairnText('map-history-screen.delete-route')}
               variant="destructive"
               onPress={() => { void (targetSharedDeliveryId ? removeSelectedReceivedRoute() : deleteSelectedRoute()); }}
               loading={deleteSaving}
               testID="route-delete-confirm"
             />
             <PrimaryButton
-              label="Keep Route"
+              label={cairnText('map-history-screen.keep-route')}
               variant="secondary"
               onPress={() => setRouteDeleteConfirm(false)}
               disabled={deleteSaving}
@@ -2168,18 +2160,18 @@ function MapHistoryObjectScreen() {
       ) : isRouteDetail ? (
         <View style={[styles.singleSessionPanel, { backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]} testID="route-detail-state">
           <Text style={[styles.detailTitle, { color: visualTheme.foreground }]}>
-            {routeDetailState === 'not-found' ? 'Route unavailable' : 'Loading Route'}
+            {routeDetailState === 'not-found' ? cairnText('map-history-screen.route-unavailable') : cairnText('map-history-screen.loading-route')}
           </Text>
           <Text style={[styles.routeOriginText, { color: visualTheme.foregroundSecondary, marginTop: Spacing.sm }]}>
             {routeDetailState === 'not-found'
-              ? 'This Route may have been deleted or is not available to this account.'
+              ? cairnText('map-history-screen.this-route-may-have-been-deleted-or')
               : routeDetailState === 'error'
-                ? 'The Route could not be loaded. Check your connection and try again.'
-                : 'Preparing the saved Route…'}
+                ? cairnText('map-history-screen.the-route-could-not-be-loaded-check')
+                : cairnText('map-history-screen.preparing-the-saved-route')}
           </Text>
           {routeDetailState === 'error' ? (
             <View style={{ marginTop: Spacing.lg }}>
-              <PrimaryButton label="Try Again" onPress={() => {
+              <PrimaryButton label={cairnText('map-history-screen.try-again')} onPress={() => {
                 if (targetSharedDeliveryId) void loadSharedRouteDetail(targetSharedDeliveryId).then(setSharedRouteDetailState);
                 else if (targetRouteId) void loadRouteDetail(targetRouteId);
               }} />
@@ -2211,14 +2203,14 @@ function MapHistoryObjectScreen() {
                       onSubmitEditing={() => { void commitActivityRename(); }}
                       editable={!renameSaving}
                       returnKeyType="done"
-                      placeholder={selectedSession.activityMode === 'running' ? 'Run name' : 'Hike name'}
+                      placeholder={selectedSession.activityMode === 'running' ? cairnText('map-history-screen.run-name') : cairnText('map-history-screen.hike-name')}
                       placeholderTextColor={visualTheme.muted}
                     />
                     {renameSaving ? <ActivityIndicator size="small" color={visualTheme.primary} /> : (
                       <TouchableOpacity
                         onPress={() => { void commitActivityRename(); }}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityLabel="Save new Activity name"
+                        accessibilityLabel={cairnText('map-history-screen.save-new-activity-name')}
                       >
                         <Icon name="Check" size={20} color={visualTheme.iconActive} strokeWidth={2.5} />
                       </TouchableOpacity>
@@ -2227,7 +2219,7 @@ function MapHistoryObjectScreen() {
                       onPress={() => { renameInputRef.current?.blur(); Keyboard.dismiss(); setRenameEditing(false); }}
                       disabled={renameSaving}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel="Cancel rename"
+                      accessibilityLabel={cairnText('map-history-screen.cancel-rename')}
                     >
                       <Icon name="X" size={20} color={visualTheme.iconInactive} strokeWidth={2.5} />
                     </TouchableOpacity>
@@ -2236,17 +2228,19 @@ function MapHistoryObjectScreen() {
                   <TouchableOpacity
                     disabled={isQaReviewClone || isSnapLabActivity}
                     onPress={() => {
-                      setRenameText(selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike'));
+                      setRenameText(selectedSession.name || (selectedSession.activityMode === 'running'
+                        ? cairnText('common.activity.run')
+                        : cairnText('common.activity.hike')));
                       setRenameEditing(true);
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Rename ${selectedSession.activityMode === 'running' ? 'Run' : 'Hike'} Activity`}
-                    accessibilityHint="Double tap to edit the Activity name"
+                    accessibilityLabel={cairnText('map-history-screen.rename-value-activity', { value1: selectedSession.activityMode === 'running' ? cairnText('common.activity.run') : cairnText('common.activity.hike') })}
+                    accessibilityHint={cairnText('map-history-screen.double-tap-to-edit-the-activity-name')}
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.detailTitle, { color: visualTheme.foreground }]} numberOfLines={2}>
-                        {selectedSession.name || (selectedSession.activityMode === 'running' ? 'Run' : 'Hike')}
+                        {selectedSession.name || (selectedSession.activityMode === 'running' ? cairnText('map-history-screen.run') : cairnText('map-history-screen.hike'))}
                       </Text>
                       {!isQaReviewClone && !isSnapLabActivity ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
                     </View>
@@ -2260,33 +2254,27 @@ function MapHistoryObjectScreen() {
                 ) : (
                   <HikingIcon size={14} color={visualTheme.iconInactive} />
                 )}
-                <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>
-                  {selectedSession.activityMode === 'running' ? 'Run' : 'Hike'}
-                  {'  ·  '}
-                  {formatDate(selectedSession.startedAt)}
-                  {'  ·  '}
-                  {formatProductTime(selectedSession.startedAt)}
-                </Text>
+                <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.value-value-value-value-value', { value1: selectedSession.activityMode === 'running' ? cairnText('map-history-screen.run') : cairnText('map-history-screen.hike'), value2: '  ·  ', value3: formatDate(selectedSession.startedAt), value4: '  ·  ', value5: formatProductTime(selectedSession.startedAt) })}</Text>
               </View>
 
               {isQaReviewClone ? (
                 <View style={styles.detailMetaRow} testID="qa-snap-review-clone-label">
                   <Icon name="Eye" size={13} color={visualTheme.iconActive} strokeWidth={2} />
-                  <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>QA / SNAP REVIEW CLONE · NO PRODUCT EFFECTS</Text>
+                  <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>{cairnText('map-history-screen.qa-snap-review-clone-no-product-effects')}</Text>
                 </View>
               ) : null}
 
               {isSnapLabActivity ? (
                 <View style={styles.detailMetaRow} testID="qa-snap-lab-activity-label">
                   <Icon name="Wrench" size={13} color={visualTheme.iconActive} strokeWidth={2} />
-                  <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>SNAP LAB · LOCAL QA REALM · ZERO PRODUCTION UPLOADS</Text>
+                  <Text style={[styles.detailMetaText, { color: visualTheme.primary, fontWeight: '700' }]}>{cairnText('map-history-screen.snap-lab-local-qa-realm-zero-production')}</Text>
                 </View>
               ) : null}
 
               <View style={[styles.singleSessionStats, styles.activityMetrics, { borderColor: visualTheme.borderSubtle }]}>
                 <View style={[styles.singleStat, styles.activityMetricStat]}>
                   <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>{dist.format(selectedSession.distanceM, 1)}</Text>
-                  <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{selectedMetricLabels[0]} · {dist.unit}</Text>
+                  <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.value-value-83ca8f8', { value1: selectedMetricLabels[0], unit: dist.unit })}</Text>
                 </View>
                 <View style={[styles.singleStatDivider, { backgroundColor: visualTheme.borderSubtle }]} />
                 <View style={[styles.singleStat, styles.activityMetricStat]}>
@@ -2298,11 +2286,9 @@ function MapHistoryObjectScreen() {
                   <Text style={[styles.singleStatValue, { color: visualTheme.foreground }]}>
                     {selectedSession.activityMode === 'running'
                       ? formatAverageActivityPace(selectedSession.durationS, selectedSession.distanceM, dist.imperial)
-                      : `+${dist.formatElevation(selectedSession.elevationGainM ?? 0)}${dist.elevUnit}`}
+                      : cairnText('map-history-screen.value-value', { value1: dist.formatElevation(selectedSession.elevationGainM ?? 0), elevUnit: dist.elevUnit })}
                   </Text>
-                  <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>
-                    {selectedMetricLabels[2]}{selectedSession.activityMode === 'running' ? ` · /${dist.unit}` : ''}
-                  </Text>
+                  <Text style={[styles.singleStatLabel, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.value-value-7e51f13', { value1: selectedMetricLabels[2], value2: selectedSession.activityMode === 'running' ? cairnText('map-history-screen.value-6b705d4', { unit: dist.unit }) : '' })}</Text>
                 </View>
               </View>
 
@@ -2337,7 +2323,7 @@ function MapHistoryObjectScreen() {
                         style={styles.activityStateRow}
                         onPress={() => { void import('../services/syncDaemon').then(({ drainPending }) => drainPending({ wakeReason: 'manual', force: true })); }}
                         accessibilityRole="button"
-                        accessibilityLabel="Retry Activity sync"
+                        accessibilityLabel={cairnText('map-history-screen.retry-activity-sync')}
                       >
                         {content}
                       </TouchableOpacity>
@@ -2351,7 +2337,7 @@ function MapHistoryObjectScreen() {
               {routeFlags.length > 0 ? (
                 <View style={styles.linkedCairnSection} testID="activity-linked-cairns">
                   <View style={styles.sectionHeadingRow}>
-                    <Text style={[styles.sectionHeading, { color: visualTheme.foreground }]}>Cairns from this Activity</Text>
+                    <Text style={[styles.sectionHeading, { color: visualTheme.foreground }]}>{cairnText('map-history-screen.cairns-from-this-activity')}</Text>
                     <Text style={[styles.sectionCount, { color: visualTheme.foregroundSecondary }]}>{routeFlags.length}</Text>
                   </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.linkedCairnList}>
@@ -2374,7 +2360,7 @@ function MapHistoryObjectScreen() {
                             <View style={{ flex: 1 }}>
                               <Text style={[styles.linkedCairnTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{title}</Text>
                               <Text style={[styles.linkedCairnMeta, { color: visualTheme.foregroundSecondary }]} numberOfLines={1}>
-                                {marker.syncState === 'failed' ? 'Sync needs attention' : meta.label}
+                                {marker.syncState === 'failed' ? cairnText('map-history-screen.sync-needs-attention') : meta.label}
                               </Text>
                             </View>
                             <Icon name="ChevronRight" size={15} color={visualTheme.iconInactive} strokeWidth={2} />
@@ -2389,34 +2375,34 @@ function MapHistoryObjectScreen() {
               {isQaReviewClone ? (
                 <View style={[styles.detailMetaRow, { marginTop: Spacing.sm }]}>
                   <Icon name="Lock" size={13} color={visualTheme.iconInactive} strokeWidth={2} />
-                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Read-only · rename, delete, sync, Memory and stats are disabled</Text>
+                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.read-only-rename-delete-sync-memory-and')}</Text>
                 </View>
               ) : isSnapLabActivity ? (
                 <View style={styles.activityActions}>
                   <PrimaryButton
-                    label="Save QA Route snapshot"
+                    label={cairnText('map-history-screen.save-qa-route-snapshot')}
                     onPress={saveSnapLabRouteDraft}
                     disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
                     loading={routeDraftOpening}
                     renderIcon={color => <Icon name="Route" size={IconSize.sm} color={color} strokeWidth={2} />}
                     testID="snap-lab-save-route-snapshot"
                   />
-                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Rename, delete, product sync, Personal Memory and production Routes are disabled here.</Text>
+                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.rename-delete-product-sync-personal-memory-and')}</Text>
                 </View>
               ) : (
                 <View style={styles.activityActions}>
                   <PrimaryButton
-                    label="Create Route"
+                    label={cairnText('map-history-screen.create-route')}
                     onPress={createRouteFromActivity}
                     disabled={loadedTrackPoints == null || loadedTrackPoints.length < 2}
                     loading={routeDraftOpening}
                     renderIcon={color => <Icon name="Route" size={IconSize.sm} color={color} strokeWidth={2} />}
                     testID="activity-create-route"
                   />
-                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>Creates a separate editable copy. This Activity and its Memory stay unchanged.</Text>
+                  <Text style={[styles.detailMetaText, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.creates-a-separate-editable-copy-this-activity')}</Text>
                   {debugMode ? (
                     <PrimaryButton
-                      label="Copy diagnostics"
+                      label={cairnText('map-history-screen.copy-diagnostics')}
                       variant="secondary"
                       onPress={() => { void copySelectedActivityDiagnostics(); }}
                       loading={activityDiagnosticsCopying}
@@ -2428,11 +2414,11 @@ function MapHistoryObjectScreen() {
                     style={styles.activityDeleteAction}
                     onPress={() => setDeleteConfirm(true)}
                     accessibilityRole="button"
-                    accessibilityLabel="Delete Activity"
+                    accessibilityLabel={cairnText('map-history-screen.delete-activity')}
                     testID="activity-delete-action"
                   >
                     <Icon name="Trash2" size={15} color={visualTheme.iconInactive} strokeWidth={2} />
-                    <Text style={[styles.activityDeleteText, { color: visualTheme.foregroundSecondary }]}>Delete Activity</Text>
+                    <Text style={[styles.activityDeleteText, { color: visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.delete-activity')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -2446,19 +2432,19 @@ function MapHistoryObjectScreen() {
             testID="activity-delete-confirmation"
           >
             <ModalCardHeader
-              title="Delete Activity?"
-              body="This removes the Activity record. Cairns, independent Routes, and Memory already earned stay in place."
+              title={cairnText('map-history-screen.delete-activity-069cc59')}
+              body={cairnText('map-history-screen.this-removes-the-activity-record-cairns-independent')}
             />
             <View style={styles.deleteModalActions}>
               <PrimaryButton
-                label="Delete Activity"
+                label={cairnText('map-history-screen.delete-activity')}
                 variant="destructive"
                 onPress={() => { void deleteSelectedActivity(); }}
                 loading={deleteSaving}
                 testID="activity-delete-confirm"
               />
               <PrimaryButton
-                label="Keep Activity"
+                label={cairnText('map-history-screen.keep-activity')}
                 variant="secondary"
                 onPress={() => setDeleteConfirm(false)}
                 disabled={deleteSaving}
@@ -2477,12 +2463,12 @@ function MapHistoryObjectScreen() {
           <View style={[styles.panelHandle, { backgroundColor: visualTheme.border }]} />
           <View style={styles.emptyState}>
             <Icon name="Map" size={34} color={visualTheme.iconInactive} strokeWidth={1.7} />
-            <Text style={[styles.emptyTitle, { color: visualTheme.foreground }]}>{snapLabLoading ? 'Loading QA Activity' : 'Activity unavailable'}</Text>
-            <Text style={[styles.emptySubtitle, { color: visualTheme.foregroundSecondary }]}>{snapLabLoading ? 'Restoring the isolated Snap Lab record…' : 'This Activity could not be found in local Activity history.'}</Text>
+            <Text style={[styles.emptyTitle, { color: visualTheme.foreground }]}>{snapLabLoading ? cairnText('map-history-screen.loading-qa-activity') : cairnText('map-history-screen.activity-unavailable')}</Text>
+            <Text style={[styles.emptySubtitle, { color: visualTheme.foregroundSecondary }]}>{snapLabLoading ? cairnText('map-history-screen.restoring-the-isolated-snap-lab-record') : cairnText('map-history-screen.this-activity-could-not-be-found-in')}</Text>
             <PrimaryButton
               label={activityBackContext === 'previous' && nav.canGoBack()
-                ? 'Back'
-                : 'Back to Activities'}
+                ? cairnText('navigation.back')
+                : cairnText('map-history-screen.back-to-activities')}
               variant="secondary"
               onPress={handleActivityBack}
             />
@@ -2502,18 +2488,18 @@ function MapHistoryObjectScreen() {
                 style={styles.searchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search hikes by name…"
+                placeholder={cairnText('map-history-screen.search-hikes-by-name')}
                 placeholderTextColor={Colors.textMuted}
                 autoCorrect={false}
                 autoCapitalize="none"
                 clearButtonMode="while-editing"
-                accessibilityLabel="Search hikes"
+                accessibilityLabel={cairnText('map-history-screen.search-hikes')}
               />
               {searchQuery.length > 0 && Platform.OS !== 'ios' && (
                 <TouchableOpacity
                   onPress={() => setSearchQuery('')}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Clear search"
+                  accessibilityLabel={cairnText('map-history-screen.clear-search')}
                 >
                   <Icon name="X" size={14} color={Colors.textMuted} strokeWidth={2.2} />
                 </TouchableOpacity>
@@ -2523,7 +2509,7 @@ function MapHistoryObjectScreen() {
                 onPress={() => setShowFilters(v => !v)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
-                accessibilityLabel="Show filters"
+                accessibilityLabel={cairnText('map-history-screen.show-filters')}
               >
                 <Icon
                   name="ArrowUpDown"
@@ -2537,7 +2523,7 @@ function MapHistoryObjectScreen() {
               <View style={styles.filterBar}>
                 {/* Type row */}
                 <View style={styles.filterRow}>
-                  <Text style={styles.filterLabel}>Type</Text>
+                  <Text style={styles.filterLabel}>{cairnText('map-history-screen.type')}</Text>
                   {(['all', 'hiking', 'running'] as const).map(t => (
                     <TouchableOpacity
                       key={t}
@@ -2545,14 +2531,14 @@ function MapHistoryObjectScreen() {
                       style={[styles.filterChip, typeFilter === t && styles.filterChipActive]}
                     >
                       <Text style={[styles.filterChipText, typeFilter === t && styles.filterChipTextActive]}>
-                        {t === 'all' ? 'All' : t === 'hiking' ? 'Hikes' : 'Runs'}
+                        {t === 'all' ? cairnText('map-history-screen.all') : t === 'hiking' ? cairnText('map-history-screen.hikes') : cairnText('map-history-screen.runs')}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 {/* Period row */}
                 <View style={styles.filterRow}>
-                  <Text style={styles.filterLabel}>When</Text>
+                  <Text style={styles.filterLabel}>{cairnText('map-history-screen.when')}</Text>
                   {(['all', 'week', 'month', 'year'] as const).map(p => (
                     <TouchableOpacity
                       key={p}
@@ -2560,14 +2546,14 @@ function MapHistoryObjectScreen() {
                       style={[styles.filterChip, periodFilter === p && styles.filterChipActive]}
                     >
                       <Text style={[styles.filterChipText, periodFilter === p && styles.filterChipTextActive]}>
-                        {p === 'all' ? 'All' : p === 'week' ? '7 days' : p === 'month' ? '30 days' : '1 year'}
+                        {p === 'all' ? cairnText('map-history-screen.all') : p === 'week' ? cairnText('map-history-screen.7-days') : p === 'month' ? cairnText('map-history-screen.30-days') : cairnText('map-history-screen.1-year')}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 {/* Sort row */}
                 <View style={styles.filterRow}>
-                  <Text style={styles.filterLabel}>Sort</Text>
+                  <Text style={styles.filterLabel}>{cairnText('map-history-screen.sort')}</Text>
                   {(['recent', 'oldest', 'longest'] as const).map(o => (
                     <TouchableOpacity
                       key={o}
@@ -2575,7 +2561,7 @@ function MapHistoryObjectScreen() {
                       style={[styles.filterChip, sortOrder === o && styles.filterChipActive]}
                     >
                       <Text style={[styles.filterChipText, sortOrder === o && styles.filterChipTextActive]}>
-                        {o === 'recent' ? 'Newest' : o === 'oldest' ? 'Oldest' : 'Longest'}
+                        {o === 'recent' ? cairnText('map-history-screen.newest') : o === 'oldest' ? cairnText('map-history-screen.oldest') : cairnText('map-history-screen.longest')}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -2588,7 +2574,7 @@ function MapHistoryObjectScreen() {
         {qaReviewError ? (
           <View style={styles.emptyState} testID="qa-snap-review-error">
             <Icon name="TriangleAlert" size={40} color={Colors.danger} strokeWidth={1.5} />
-            <Text style={styles.emptyTitle}>Review clone unavailable</Text>
+            <Text style={styles.emptyTitle}>{cairnText('map-history-screen.review-clone-unavailable')}</Text>
             <Text style={styles.emptySubtitle}>{qaReviewError}</Text>
           </View>
         ) : tab === 'routes' ? (
@@ -2600,15 +2586,15 @@ function MapHistoryObjectScreen() {
                       linked by a line) rendered in a muted primary tint so it
                       reads as an illustrative anchor rather than a UI control. */}
                   <Icon name="Route" size={44} color={Colors.primary + '99'} strokeWidth={1.4} />
-                  <Text style={styles.emptyTitle}>No hikes yet</Text>
-                  <Text style={styles.emptySubtitle}>Start hiking or running to see your routes here</Text>
+                  <Text style={styles.emptyTitle}>{cairnText('map-history-screen.no-hikes-yet')}</Text>
+                  <Text style={styles.emptySubtitle}>{cairnText('map-history-screen.start-hiking-or-running-to-see-your')}</Text>
                   <PressBtn
                     style={styles.emptyCta}
                     onPress={() => nav.replace('Hiking')}
                     scaleTo={0.96}
                   >
                     <Icon name="Play" size={14} color="#fff" strokeWidth={2.5} />
-                    <Text style={styles.emptyCtaText}>Start a Hike</Text>
+                    <Text style={styles.emptyCtaText}>{cairnText('map-history-screen.start-a-hike')}</Text>
                   </PressBtn>
                 </View>
               ) : (
@@ -2624,23 +2610,23 @@ function MapHistoryObjectScreen() {
                     if (hasSearch && hasFilter) {
                       return (
                         <>
-                          <Text style={styles.emptyTitle}>No matches</Text>
-                          <Text style={styles.emptySubtitle}>Try clearing the filters or search term.</Text>
+                          <Text style={styles.emptyTitle}>{cairnText('map-history-screen.no-matches')}</Text>
+                          <Text style={styles.emptySubtitle}>{cairnText('map-history-screen.try-clearing-the-filters-or-search-term')}</Text>
                         </>
                       );
                     }
                     if (hasFilter) {
                       return (
                         <>
-                          <Text style={styles.emptyTitle}>No hikes match your filters</Text>
-                          <Text style={styles.emptySubtitle}>Try All / All to see everything.</Text>
+                          <Text style={styles.emptyTitle}>{cairnText('map-history-screen.no-hikes-match-your-filters')}</Text>
+                          <Text style={styles.emptySubtitle}>{cairnText('map-history-screen.try-all-all-to-see-everything')}</Text>
                         </>
                       );
                     }
                     return (
                       <>
-                        <Text style={styles.emptyTitle}>No matches</Text>
-                        <Text style={styles.emptySubtitle}>Try a different search term.</Text>
+                        <Text style={styles.emptyTitle}>{cairnText('map-history-screen.no-matches')}</Text>
+                        <Text style={styles.emptySubtitle}>{cairnText('map-history-screen.try-a-different-search-term')}</Text>
                       </>
                     );
                   })()}
@@ -2676,7 +2662,7 @@ function MapHistoryObjectScreen() {
                   }}
                 >
                   <Icon name="Trash2" size={IconSize.sm} color={deleteConfirm ? '#fff' : Colors.danger} strokeWidth={2} />
-                  <Text style={[cardStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? 'Confirm Delete' : 'Delete Route'}</Text>
+                  <Text style={[cardStyles.deleteBtnText, deleteConfirm && { color: '#fff' }]}>{deleteConfirm ? cairnText('map-history-screen.confirm-delete') : cairnText('map-history-screen.delete-route')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -2686,8 +2672,8 @@ function MapHistoryObjectScreen() {
             {markers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Icon name="Flag" size={40} color={Colors.textMuted} strokeWidth={1.2} />
-                <Text style={styles.emptyTitle}>No cairns planted</Text>
-                <Text style={styles.emptySubtitle}>Open the map to place your first flag</Text>
+                <Text style={styles.emptyTitle}>{cairnText('map-history-screen.no-cairns-planted')}</Text>
+                <Text style={styles.emptySubtitle}>{cairnText('map-history-screen.open-the-map-to-place-your-first')}</Text>
               </View>
             ) : (
               markers.map(m => {
@@ -2701,7 +2687,7 @@ function MapHistoryObjectScreen() {
                   : null;
                 const distLabel = distM === null
                   ? null
-                  : `${dist.formatShort(distM)} away`;
+                  : cairnText('map-history-screen.value-away', { value1: dist.formatShort(distM) });
                 const subtitle = distLabel ?? (m.note ? m.note.substring(0, 40) : timeAgo);
                 return (
                   <PressRow key={m.id} onPress={() => setSelectedMarkerId(m.id)} style={{ marginBottom: 0 }}>
@@ -2760,7 +2746,7 @@ function TrailsIndexRedirect() {
   return (
     <View style={[styles.legacyRedirect, { backgroundColor: theme.background }]} testID="map-history-index-redirect">
       <ActivityIndicator color={theme.primary} />
-      <Text style={[styles.legacyRedirectText, { color: theme.textSecondary }]}>Opening Trails…</Text>
+      <Text style={[styles.legacyRedirectText, { color: theme.textSecondary }]}>{cairnText('map-history-screen.opening-trails')}</Text>
     </View>
   );
 }

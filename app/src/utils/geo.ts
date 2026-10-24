@@ -1,4 +1,5 @@
-/**
+
+import { cairnText } from '../i18n/runtime';/**
  * geo.ts — geographic utility functions.
  * Unit-agnostic internally (meters). All display formatting goes through
  * formatDistance() which respects user's preferred unit.
@@ -110,12 +111,12 @@ export function formatDate(timestamp: number): string {
   const yesterdayStart = todayStart - 86400000;
   const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
-  if (dateStart === todayStart) return 'Today';
-  if (dateStart === yesterdayStart) return 'Yesterday';
+  if (dateStart === todayStart) return cairnText('geo.today');
+  if (dateStart === yesterdayStart) return cairnText('geo.yesterday');
 
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getMonth()]} ${date.getDate()}`;
+  return cairnText('geo.value-value', { value1: months[date.getMonth()], value2: date.getDate() });
 }
 
 /**
@@ -124,12 +125,12 @@ export function formatDate(timestamp: number): string {
 export function getRelativeTime(ts: number): string {
   const diffMs = Date.now() - ts;
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 60) return diffMin <= 1 ? 'just now' : `${diffMin}m ago`;
+  if (diffMin < 60) return diffMin <= 1 ? cairnText('geo.just-now') : cairnText('geo.value-m-ago', { diffMin: diffMin });
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h ago`;
+  if (diffH < 24) return cairnText('geo.value-h-ago', { diffH: diffH });
   const diffD = Math.floor(diffH / 24);
-  if (diffD === 1) return 'yesterday';
-  return `${diffD} days ago`;
+  if (diffD === 1) return cairnText('geo.yesterday-6a8e613');
+  return cairnText('geo.value-days-ago', { diffD: diffD });
 }
 
 // ── Kalman Filter for GPS Smoothing ─────────────────────────────────────────

@@ -1,4 +1,5 @@
-/**
+
+import { cairnText } from '../../../i18n/runtime';/**
  * Marker note encoding — tiny pure module so the round-trip is
  * unit-testable without pulling RN/navigation imports into jest.
  *
@@ -39,5 +40,5 @@ export function cairnDisplayTitle(
 ): string {
   const explicit = title.trim();
   if (explicit) return title;
-  return 'A moment here';
+  return cairnText('plant.note-encoding.a-moment-here');
 }

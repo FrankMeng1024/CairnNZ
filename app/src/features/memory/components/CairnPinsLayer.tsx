@@ -48,6 +48,7 @@ import { splitTitleBody } from '../../plant/services/noteEncoding';
 import { likeMarker, reportMarker, MarkerInteractionError } from '../../../services/markerInteractionService';
 import type { Tier } from './pinTier';
 import { useNavigation } from '@react-navigation/native';
+import { cairnText } from '../../../i18n/runtime';
 
 export type { Tier };
 
@@ -212,7 +213,7 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
     const id = mark.id;
     if (likedIds.has(id)) return; // already liked in this session
     if (!lastCoordinate) {
-      Alert.alert('Finding your location', 'Finding your location — please wait a moment.', [{ text: 'OK' }]);
+      Alert.alert(cairnText('memory.cairn-pins-layer.finding-your-location'), cairnText('memory.cairn-pins-layer.finding-your-location-please-wait-a-moment'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
       return;
     }
 
@@ -227,9 +228,9 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       setLikedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       const code = err instanceof MarkerInteractionError ? err.code : 'SERVER_ERROR';
       if (code === 'TOO_FAR') {
-        Alert.alert('Too far', 'Get closer to the cairn to like it.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('memory.cairn-pins-layer.too-far'), cairnText('memory.cairn-pins-layer.get-closer-to-the-cairn-to-like'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
       } else if (code === 'RATE_LIMITED') {
-        Alert.alert('Slow down', 'Too many actions. Try again in a moment.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('memory.cairn-pins-layer.slow-down'), cairnText('memory.cairn-pins-layer.too-many-actions-try-again-in-a'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
       }
       // NONCE_INVALID + SERVER_ERROR: silent — network/server blip, don't alarm user.
     });
@@ -240,11 +241,11 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
   const handleReport = useCallback((mark: Marker) => {
     const targetId = mark.id;
     if (reportedIds.has(targetId)) {
-      Alert.alert('Already reported', 'You have already reported this cairn.', [{ text: 'OK' }]);
+      Alert.alert(cairnText('memory.cairn-pins-layer.already-reported'), cairnText('memory.cairn-pins-layer.you-have-already-reported-this-cairn'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
       return;
     }
     if (!lastCoordinate) {
-      Alert.alert('Finding your location', 'Finding your location — please wait a moment before reporting.', [{ text: 'OK' }]);
+      Alert.alert(cairnText('memory.cairn-pins-layer.finding-your-location'), cairnText('memory.cairn-pins-layer.finding-your-location-please-wait-a-moment-d6b26d0'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
       return;
     }
 
@@ -256,24 +257,24 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
       setReportedIds((prev) => new Set([...prev, targetId]));
       reportMarker(targetId, reason, lat, lng, accuracy)
         .then(() => {
-          Alert.alert('Report sent', "Thanks — we'll look into it.", [{ text: 'OK' }]);
+          Alert.alert(cairnText('memory.cairn-pins-layer.report-sent'), cairnText('memory.cairn-pins-layer.thanks-we-ll-look-into-it'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
         })
         .catch((err) => {
           setReportedIds((prev) => { const n = new Set(prev); n.delete(targetId); return n; });
           const code = err instanceof MarkerInteractionError ? err.code : 'SERVER_ERROR';
           if (code === 'TOO_FAR') {
-            Alert.alert('Too far', 'Get closer to the cairn to report it.', [{ text: 'OK' }]);
+            Alert.alert(cairnText('memory.cairn-pins-layer.too-far'), cairnText('memory.cairn-pins-layer.get-closer-to-the-cairn-to-report'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
           } else if (code === 'RATE_LIMITED') {
-            Alert.alert('Slow down', 'Too many reports. Try again later.', [{ text: 'OK' }]);
+            Alert.alert(cairnText('memory.cairn-pins-layer.slow-down'), cairnText('memory.cairn-pins-layer.too-many-reports-try-again-later'), [{ text: cairnText('memory.cairn-pins-layer.ok') }]);
           }
         });
     };
 
-    Alert.alert('Report this cairn', 'What is wrong with it?', [
-      { text: 'Spam or ad', onPress: () => sendReport('fake_ad') },
-      { text: 'Wrong info', onPress: () => sendReport('info_mismatch') },
-      { text: "Don't like it", onPress: () => sendReport('dislike') },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(cairnText('memory.cairn-pins-layer.report-this-cairn'), cairnText('memory.cairn-pins-layer.what-is-wrong-with-it'), [
+      { text: cairnText('memory.cairn-pins-layer.spam-or-ad'), onPress: () => sendReport('fake_ad') },
+      { text: cairnText('memory.cairn-pins-layer.wrong-info'), onPress: () => sendReport('info_mismatch') },
+      { text: cairnText('memory.cairn-pins-layer.don-t-like-it'), onPress: () => sendReport('dislike') },
+      { text: cairnText('common.cancel'), style: 'cancel' },
     ]);
   }, [reportedIds, lastCoordinate]);
 
@@ -311,10 +312,10 @@ export function CairnPinsLayer({ markers, centerLat, centerLng, strangerMarks }:
         const hiding = hideMark(target.marker.id);
         setSelection({ kind: 'none' });
         void hiding.catch(() => {
-          Alert.alert('Could not hide this cairn', 'Please try again.');
+          Alert.alert(cairnText('memory.cairn-pins-layer.could-not-hide-this-cairn'), cairnText('memory.cairn-pins-layer.please-try-again'));
         });
       } catch {
-        Alert.alert('Could not hide this cairn', 'Please try again.');
+        Alert.alert(cairnText('memory.cairn-pins-layer.could-not-hide-this-cairn'), cairnText('memory.cairn-pins-layer.please-try-again'));
       }
     }
   }, [deleteMarker, deleteTarget, hideMark]);

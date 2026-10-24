@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
+import { cairnText } from '../../../i18n/runtime';
 
 export interface MemoryFriendGrant {
   friend_id: string;
@@ -67,7 +68,7 @@ export const useMemorySharingStore = create<State>((set, get) => ({
         });
       } catch {
         if (requestGeneration !== sessionGeneration || get().ownerId !== normalizedOwnerId) return;
-        set({ grantsLoading: false, error: 'Connect to manage sharing.' });
+        set({ grantsLoading: false, error: cairnText('memory.use-memory-sharing-store.connect-to-manage-sharing') });
       }
     })();
     await grantsTask;
@@ -107,7 +108,7 @@ export const useMemorySharingStore = create<State>((set, get) => ({
       set({
         grants: get().grants.map(grant => grant.friend_id === friendId ? { ...grant, enabled: previousEnabled } : grant),
         grantPendingIds: get().grantPendingIds.filter(id => id !== friendId),
-        grantErrors: { ...get().grantErrors, [friendId]: 'Could not update. Your previous choice is unchanged.' },
+        grantErrors: { ...get().grantErrors, [friendId]: cairnText('memory.sharing.update-failed') },
       });
       return false;
     }

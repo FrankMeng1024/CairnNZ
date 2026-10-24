@@ -22,6 +22,7 @@ import {
   DEFAULT_ROUTE_DRAWING_REPLAY_FIXTURE,
   HUMAN_ROUTE_DRAWING_FIXTURES,
 } from '../features/routeDrawing/humanIntentFixtures';
+import { cairnText } from '../i18n/runtime';
 
 const CANVAS_WIDTH = 358;
 const CANVAS_HEIGHT = 330;
@@ -79,11 +80,11 @@ function ReplayCanvas({ replay }: { replay: RouteDrawingReplayResult }) {
         ) : null}
       </Svg>
       <View style={styles.legend}>
-        <Legend color="#7B817C" label="Original" />
-        <Legend color="#C87941" label="Finger" />
-        <Legend color="#3C79A8" label="Provider" />
-        <Legend color="#C75662" label="Before" />
-        <Legend color="#1E6B45" label="Final" />
+        <Legend color="#7B817C" label={cairnText('route-drawing-replay-screen.original')} />
+        <Legend color="#C87941" label={cairnText('route-drawing-replay-screen.finger')} />
+        <Legend color="#3C79A8" label={cairnText('route-drawing-replay-screen.provider')} />
+        <Legend color="#C75662" label={cairnText('route-drawing-replay-screen.before')} />
+        <Legend color="#1E6B45" label={cairnText('route-drawing-replay-screen.final')} />
       </View>
     </View>
   );
@@ -111,11 +112,11 @@ function CapturedEvidenceCanvas({ evidence }: { evidence: RouteOperationReplayEv
         <Polyline points={pathPoints(evidence.finalGeometry, all)} fill="none" stroke="#704B9E" strokeWidth={2} strokeDasharray="10 4" />
       </Svg>
       <View style={styles.legend}>
-        <Legend color="#7B817C" label="Pre-state" />
-        <Legend color="#C87941" label="Input" />
-        <Legend color="#3C79A8" label="Provider" />
-        <Legend color="#1E6B45" label="Selected" />
-        <Legend color="#704B9E" label="Committed" />
+        <Legend color="#7B817C" label={cairnText('route-drawing-replay-screen.pre-state')} />
+        <Legend color="#C87941" label={cairnText('route-drawing-replay-screen.input')} />
+        <Legend color="#3C79A8" label={cairnText('route-drawing-replay-screen.provider')} />
+        <Legend color="#1E6B45" label={cairnText('route-drawing-replay-screen.selected')} />
+        <Legend color="#704B9E" label={cairnText('route-drawing-replay-screen.committed')} />
       </View>
     </View>
   );
@@ -184,7 +185,7 @@ export function RouteDrawingReplayScreen() {
       <View style={[styles.screen, { backgroundColor: theme.background }]}>
         <SafeAreaView>
           <BackButton onPress={() => nav.goBack()} />
-          <Text style={[styles.unavailable, { color: theme.foreground }]}>Route replay is available only in internal Debug mode.</Text>
+          <Text style={[styles.unavailable, { color: theme.foreground }]}>{cairnText('route-drawing-replay-screen.route-replay-is-available-only-in-internal')}</Text>
         </SafeAreaView>
       </View>
     );
@@ -197,7 +198,7 @@ export function RouteDrawingReplayScreen() {
         <View style={styles.topBar}>
           <BackButton onPress={() => nav.goBack()} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: theme.foreground }]}>Route drawing replay</Text>
+            <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('route-drawing-replay-screen.route-drawing-replay')}</Text>
             <Text style={[styles.subtitle, { color: theme.foregroundSecondary }]}>{capturedEvidence?.operationId ?? replay?.fixture.id ?? capturedTrace?.sessionId}</Text>
           </View>
         </View>
@@ -221,34 +222,34 @@ export function RouteDrawingReplayScreen() {
                   key={id}
                   style={[styles.fixtureChip, { borderColor: theme.border }, selectedOperationId === id && { backgroundColor: theme.primary }]}
                   onPress={() => setOperationId(id)}
-                ><Text style={[styles.fixtureChipText, { color: selectedOperationId === id ? theme.onPrimary : theme.foreground }]}>#{index + 1} {id.includes(':point:') ? 'Point' : id.endsWith(':session') ? 'Session' : 'Draw'}</Text></TouchableOpacity>
+                ><Text style={[styles.fixtureChipText, { color: selectedOperationId === id ? theme.onPrimary : theme.foreground }]}>{cairnText('route-drawing-replay-screen.value-value', { value1: index + 1, value2: id.includes(':point:') ? cairnText('route-drawing-replay-screen.point') : id.endsWith(':session') ? cairnText('route-drawing-replay-screen.session') : cairnText('route-drawing-replay-screen.draw') })}</Text></TouchableOpacity>
               ))}
             </ScrollView>
           )}
           {replay ? <ReplayCanvas replay={replay} /> : capturedEvidence ? <CapturedEvidenceCanvas evidence={capturedEvidence} /> : null}
           <View style={[styles.summaryCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
-            <Text style={[styles.summaryTitle, { color: theme.foreground }]}>Replay result</Text>
+            <Text style={[styles.summaryTitle, { color: theme.foreground }]}>{cairnText('route-drawing-replay-screen.replay-result')}</Text>
             {replay && selected ? <>
-            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Intent: {replay.decision.intent}</Text>
-            {capturedEvidence ? <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Recorded outcome: {capturedEvidence.outcome} · {capturedEvidence.reason ?? 'no rejection reason'}</Text> : null}
-            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Selected: {replay.decision.selectionSource}</Text>
-            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>First divergence: {replay.divergenceStage ?? 'none'}</Text>
-            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Max finger deviation: {selected.maxDeviationM.toFixed(1)} m · {selected.maxDeviationPx.toFixed(1)} px</Text>
-            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Length inflation: {selected.pathLengthInflation.toFixed(2)}× · turns {selected.sharpTurns} · reversals {selected.reversals} · spikes {selected.spikes}</Text>
-            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Seams: {selected.seamEntryTurnDeg.toFixed(0)}° in · {selected.seamExitTurnDeg.toFixed(0)}° out</Text>
+            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.intent-value', { intent: replay.decision.intent })}</Text>
+            {capturedEvidence ? <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.recorded-outcome-value-value', { outcome: capturedEvidence.outcome, value2: capturedEvidence.reason ?? cairnText('route-drawing-replay-screen.no-rejection-reason') })}</Text> : null}
+            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.selected-value', { selectionSource: replay.decision.selectionSource })}</Text>
+            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.first-divergence-value', { value1: replay.divergenceStage ?? cairnText('route-drawing-replay-screen.none') })}</Text>
+            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.max-finger-deviation-value-m-value-px', { value1: selected.maxDeviationM.toFixed(1), value2: selected.maxDeviationPx.toFixed(1) })}</Text>
+            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.length-inflation-value-turns-value-reversals-value', { value1: selected.pathLengthInflation.toFixed(2), sharpTurns: selected.sharpTurns, reversals: selected.reversals, spikes: selected.spikes })}</Text>
+            <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.seams-value-in-value-out', { value1: selected.seamEntryTurnDeg.toFixed(0), value2: selected.seamExitTurnDeg.toFixed(0) })}</Text>
             {zoomComparison ? (
-              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Zoom stability: z{zoomComparison.wideZoom} / z{zoomComparison.neighborhoodZoom} · same final {zoomComparison.sameFinal ? 'yes' : 'no'} · {zoomComparison.wideMaxDeviationPx.toFixed(1)} / {zoomComparison.neighborhoodMaxDeviationPx.toFixed(1)} px</Text>
+              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.zoom-stability-z-value-z-value-same', { wideZoom: zoomComparison.wideZoom, neighborhoodZoom: zoomComparison.neighborhoodZoom, value3: zoomComparison.sameFinal ? cairnText('route-drawing-replay-screen.yes') : cairnText('route-drawing-replay-screen.no'), value4: zoomComparison.wideMaxDeviationPx.toFixed(1), value5: zoomComparison.neighborhoodMaxDeviationPx.toFixed(1) })}</Text>
             ) : null}
             </> : capturedEvidence ? <>
-              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Kind: {capturedEvidence.kind} · outcome {capturedEvidence.outcome}</Text>
-              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Recorded divergence: {capturedEvidence.divergenceStage ?? 'none'} · reason {capturedEvidence.reason ?? 'none'}</Text>
-              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>Points: pre {capturedEvidence.preStateGeometry.length} · input {capturedEvidence.inputGeometry.length} · provider {capturedEvidence.providerGeometry.length} · selected {capturedEvidence.selectedGeometry.length} · final {capturedEvidence.finalGeometry.length}</Text>
-            </> : <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>This operation has no replayable geometry.</Text>}
+              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.kind-value-outcome-value', { kind: capturedEvidence.kind, outcome: capturedEvidence.outcome })}</Text>
+              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.recorded-divergence-value-reason-value', { value1: capturedEvidence.divergenceStage ?? cairnText('route-drawing-replay-screen.none'), value2: capturedEvidence.reason ?? cairnText('route-drawing-replay-screen.none') })}</Text>
+              <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.points-pre-value-input-value-provider-value', { length: capturedEvidence.preStateGeometry.length, length2: capturedEvidence.inputGeometry.length, length3: capturedEvidence.providerGeometry.length, length4: capturedEvidence.selectedGeometry.length, length5: capturedEvidence.finalGeometry.length })}</Text>
+            </> : <Text style={[styles.summaryLine, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.this-operation-has-no-replayable-geometry')}</Text>}
           </View>
           {replay ? <View style={[styles.summaryCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
-            <Text style={[styles.summaryTitle, { color: theme.foreground }]}>Why</Text>
+            <Text style={[styles.summaryTitle, { color: theme.foreground }]}>{cairnText('route-drawing-replay-screen.why')}</Text>
             {replay.decision.reasons.map(reason => (
-              <Text key={reason} style={[styles.reason, { color: theme.foregroundSecondary }]}>• {reason}</Text>
+              <Text key={reason} style={[styles.reason, { color: theme.foregroundSecondary }]}>{cairnText('route-drawing-replay-screen.value', { reason: reason })}</Text>
             ))}
           </View> : null}
         </ScrollView>

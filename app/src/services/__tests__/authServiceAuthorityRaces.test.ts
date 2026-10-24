@@ -215,7 +215,9 @@ describe('authService account/token authority races', () => {
     transitions.finishAccountTransition(reconciled.transitionAuthority);
 
     await expect(auth.changePassword('new', 'newer', 'owner-a')).resolves.toMatchObject({
-      error: 'wrong_current_password',
+      // UI copy is owned by the catalog; raw backend/provider wording is not
+      // a stable behavioural contract and must not leak into normal UI.
+      error: 'Password could not be updated.',
     });
     expect(passwordCalls).toBe(2);
   });

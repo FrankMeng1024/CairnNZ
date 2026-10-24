@@ -58,6 +58,7 @@ import {
 } from '../services/authSessionInstallation';
 import { OTP_LENGTH, applyOtpCellInput, normalizeOtpInput } from '../utils/authOtp';
 import { PASSWORD_RULES, passwordPolicyError, passwordRuleState } from '../utils/passwordPolicy';
+import { cairnText, formatCairnDate } from '../i18n/runtime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -516,7 +517,7 @@ function DobInputs({ value, onChange, onError, error }: {
             setY(clean);
             commit(clean, m, d);
           }}
-          placeholder="YYYY"
+          placeholder={cairnText('auth-screen.yyyy')}
           placeholderTextColor={Colors.textMuted}
           keyboardType="number-pad"
           maxLength={4}
@@ -533,7 +534,7 @@ function DobInputs({ value, onChange, onError, error }: {
             setM(clean);
             commit(y, clean, d);
           }}
-          placeholder="MM"
+          placeholder={cairnText('auth-screen.mm')}
           placeholderTextColor={Colors.textMuted}
           keyboardType="number-pad"
           maxLength={2}
@@ -550,7 +551,7 @@ function DobInputs({ value, onChange, onError, error }: {
             setD(clean);
             commit(y, m, clean);
           }}
-          placeholder="DD"
+          placeholder={cairnText('auth-screen.dd')}
           placeholderTextColor={Colors.textMuted}
           keyboardType="number-pad"
           maxLength={2}
@@ -890,9 +891,9 @@ export function AuthScreen() {
     // to accept id_token via loginWithGoogle whenever the client can
     // produce one.
     Alert.alert(
-      'Google Sign In',
-      'Google Sign In needs a build configured with your Google OAuth client. Use email sign-in in the meantime.',
-      [{ text: 'OK' }],
+      cairnText('auth-screen.google-sign-in'),
+      cairnText('auth-screen.google-sign-in-needs-a-build-configured'),
+      [{ text: cairnText('auth-screen.ok') }],
     );
     return { type: 'dismiss' as const };
   };
@@ -1061,14 +1062,14 @@ export function AuthScreen() {
   };
 
   const validateEmail = (val: string) => {
-    if (!val.trim()) return 'Email is required';
+    if (!val.trim()) return cairnText('auth-screen.email-is-required');
     // O17: validate email format on both login and register (was register-only).
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'Please enter a valid email';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return cairnText('auth-screen.please-enter-a-valid-email');
     return '';
   };
 
   const validatePassword = (val: string) => {
-    if (!val) return 'Password is required';
+    if (!val) return cairnText('auth-screen.password-is-required');
     if (view === 'register') {
       // R21 (2026-08-17 user "注册时候的密码没满足要求也通过了"): concept
       // 1.3 shows 3 rules (8 chars / uppercase / number) as a green
@@ -1085,22 +1086,22 @@ export function AuthScreen() {
   // so users can type the format directly. A future picker widget can drop
   // in without changing this contract.
   const validateDob = (val: string) => {
-    if (!val || !val.trim()) return 'Date of birth is required';
+    if (!val || !val.trim()) return cairnText('auth-screen.date-of-birth-is-required');
     const m = val.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return 'Use YYYY-MM-DD (e.g. 1998-06-15)';
+    if (!m) return cairnText('auth-screen.use-yyyy-mm-dd-e-g-1998');
     const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
     const dt = new Date(Date.UTC(y, mo - 1, d));
     if (
       dt.getUTCFullYear() !== y ||
       dt.getUTCMonth() !== mo - 1 ||
       dt.getUTCDate() !== d
-    ) return 'Not a real date';
+    ) return cairnText('auth-screen.not-a-real-date');
     const now = new Date();
     let age = now.getUTCFullYear() - y;
     const nm = now.getUTCMonth() - (mo - 1);
     if (nm < 0 || (nm === 0 && now.getUTCDate() < d)) age -= 1;
-    if (age < 13) return 'Cairn is for people 13 and up';
-    if (age > 120) return 'Please enter a valid date';
+    if (age < 13) return cairnText('auth-screen.cairn-is-for-people-13-and-up');
+    if (age > 120) return cairnText('auth-screen.please-enter-a-valid-date');
     return '';
   };
 
@@ -1113,16 +1114,16 @@ export function AuthScreen() {
     submitAttempted.current = true;  // STORY-00133: enable blur validation after first submit
     let valid = true;
 
-    if (isRegister && !name.trim()) { setNameError('Name is required'); valid = false; }
+    if (isRegister && !name.trim()) { setNameError(cairnText('auth-screen.name-is-required')); valid = false; }
     const eErr = validateEmail(email); if (eErr) { setEmailError(eErr); valid = false; }
     const pErr = validatePassword(password); if (pErr) { setPasswordError(pErr); valid = false; }
-    if (isRegister && password !== confirm) { setConfirmError('Passwords do not match'); valid = false; }
+    if (isRegister && password !== confirm) { setConfirmError(cairnText('auth-screen.passwords-do-not-match')); valid = false; }
     // O18 AUTH-06: DOB required at register only (login doesn't need it).
     if (isRegister) {
       const dErr = validateDob(dob);
       if (dErr) { setDobError(dErr); valid = false; } else { setDobError(''); }
     }
-    if (isRegister && !privacyChecked) { setPrivacyError('Please agree to continue'); valid = false; }
+    if (isRegister && !privacyChecked) { setPrivacyError(cairnText('auth-screen.please-agree-to-continue')); valid = false; }
     if (!valid) return;
     if (authActionFlight.current) return;
     authActionFlight.current = true;
@@ -1137,10 +1138,10 @@ export function AuthScreen() {
       if (result.error) {
         if (!authMounted.current) return;
         // 409 = email already registered — guide user to sign in instead
-        if (result.error.includes('already exists') || result.error.includes('already registered')) {
-          setApiError('An account with this email already exists. Please sign in instead, or use "Continue with Google" if you signed up with Google.');
-        } else if (!isRegister && /incorrect email or password|invalid credentials/i.test(result.error)) {
-          setApiError('The email or password doesn’t match. Try again, reset your password, or create an account.');
+        if (result.errorCode === 'EMAIL_ALREADY_REGISTERED') {
+          setApiError(cairnText('auth-screen.an-account-with-this-email-already-exists'));
+        } else if (!isRegister && result.errorCode === 'INVALID_CREDENTIALS') {
+          setApiError(cairnText('auth-screen.the-email-or-password-doesn-t-match'));
         } else {
           setApiError(result.error);
         }
@@ -1199,7 +1200,7 @@ export function AuthScreen() {
       const installed = await installAuthenticatedResult(result);
       if (!authMounted.current) return;
       if (!installed) {
-        setApiError('This sign-in was superseded before Cairn could install the account. Please sign in again.');
+        setApiError(cairnText('auth-screen.this-sign-in-was-superseded-before-cairn'));
         return;
       }
       try {
@@ -1247,16 +1248,16 @@ export function AuthScreen() {
         msg.includes('ECONNREFUSED') ||
         msg.includes('ENOTFOUND')
       ) {
-        setApiError('Cannot reach the server. Check your internet connection and try again.');
+        setApiError(cairnText('auth-screen.cannot-reach-the-server-check-your-internet'));
         // Concept 3.4 Network Error: swap the whole screen to the
         // dedicated no-connection view instead of a small inline error.
         // Remember where we were so Try Again can bring the user back.
         setPreviousView(view);
         setView('network_error');
       } else if (msg) {
-        setApiError(msg);
+        setApiError(cairnText('auth-screen.please-try-again'));
       } else {
-        setApiError('We couldn\'t reach Cairn. Check your connection and try again.');
+        setApiError(cairnText('auth-screen.we-couldn-t-reach-cairn-check-your'));
       }
     } finally {
       authActionFlight.current = false;
@@ -1287,7 +1288,7 @@ export function AuthScreen() {
     resetErrors();
     if (Platform.OS !== 'ios') {
       crashLogger.breadcrumb(`apple:platform_skip os=${Platform.OS}`);
-      Alert.alert('Apple Sign In', 'Apple Sign In is available on iOS only. Please use email or Google on this device.', [{ text: 'OK' }]);
+      Alert.alert(cairnText('auth-screen.apple-sign-in'), cairnText('auth-screen.apple-sign-in-is-available-on-ios'), [{ text: cairnText('auth-screen.ok') }]);
       authActionFlight.current = false;
       return;
     }
@@ -1303,7 +1304,7 @@ export function AuthScreen() {
       if (!authMounted.current) return;
       crashLogger.breadcrumb(`apple:isAvailable_result=${available}`);
       if (!available) {
-        Alert.alert('Apple Sign In', 'Apple Sign In is not available on this device (older iOS or unsupported region).', [{ text: 'OK' }]);
+        Alert.alert(cairnText('auth-screen.apple-sign-in'), cairnText('auth-screen.apple-sign-in-is-not-available-on'), [{ text: cairnText('auth-screen.ok') }]);
         return;
       }
       // Sprint 6 review C7 fix: generate a random nonce, SHA-256 it, and
@@ -1332,7 +1333,7 @@ export function AuthScreen() {
       const idToken = credential.identityToken;
       if (!idToken) {
         crashLogger.breadcrumb('apple:no_id_token');
-        Alert.alert('Apple Sign In failed', 'No identity token returned. Please try again.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('auth-screen.apple-sign-in-failed'), cairnText('auth-screen.no-identity-token-returned-please-try-again'), [{ text: cairnText('auth-screen.ok') }]);
         return;
       }
       // Apple only sends `fullName` on the very first authorize. Persist
@@ -1358,7 +1359,7 @@ export function AuthScreen() {
       crashLogger.breadcrumb(`apple:loginWithApple_result has_err=${!!result.error} has_user=${!!result.user} hint=${result.hint || 'none'}`);
       if (result.error) {
         if (!authMounted.current) return;
-        Alert.alert('Apple Sign In failed', result.error, [{ text: 'OK' }]);
+        Alert.alert(cairnText('auth-screen.apple-sign-in-failed'), result.error, [{ text: cairnText('auth-screen.ok') }]);
         return;
       }
       if (result.transitionAuthority) activeAuthTransition.current = result.transitionAuthority;
@@ -1376,7 +1377,7 @@ export function AuthScreen() {
       const installed = await installAuthenticatedResult(result);
       if (!authMounted.current) return;
       if (!installed) {
-        Alert.alert('Apple Sign In failed', 'The account changed before sign-in could finish. Please try again.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('auth-screen.apple-sign-in-failed'), cairnText('auth-screen.the-account-changed-before-sign-in-could'), [{ text: cairnText('auth-screen.ok') }]);
         return;
       }
       crashLogger.breadcrumb('apple:complete');
@@ -1388,7 +1389,7 @@ export function AuthScreen() {
       const msg = String(err?.message || '').slice(0, 80);
       crashLogger.breadcrumb(`apple:catch code=${code} msg=${msg}`);
       if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') return;
-      Alert.alert('Apple Sign In failed', err?.message || 'Please try again.', [{ text: 'OK' }]);
+      Alert.alert(cairnText('auth-screen.apple-sign-in-failed'), cairnText('auth-screen.please-try-again'), [{ text: cairnText('auth-screen.ok') }]);
     } finally {
       authActionFlight.current = false;
       if (authMounted.current) setAppleLoading(false);
@@ -1453,7 +1454,7 @@ export function AuthScreen() {
     // 立即触发 verify 时 verifyCode_ 可能还是上一次的值. 优先使用 codeOverride.
     const raw = codeOverride ?? verifyCode_;
     const trimmed = raw.replace(/\s/g, '');
-    if (trimmed.length !== 6) { setVerifyError('Please enter the 6-digit code.'); return; }
+    if (trimmed.length !== 6) { setVerifyError(cairnText('auth-screen.please-enter-the-6-digit-code')); return; }
     if (authActionFlight.current) return;
     authActionFlight.current = true;
     setVerifyLoading(true);
@@ -1472,7 +1473,7 @@ export function AuthScreen() {
       const installed = await installAuthenticatedResult(result);
       if (!authMounted.current) return;
       if (!installed) {
-        setVerifyError('The account changed before verification could finish. Please sign in.');
+        setVerifyError(cairnText('auth-screen.the-account-changed-before-verification-could-finish'));
         return;
       }
       // RootNavigator reacts to the single installed auth state. Do not also
@@ -1563,16 +1564,16 @@ export function AuthScreen() {
               <Animated.Text style={[styles.appName, {
                 opacity: wordmarkOpacity,
                 transform: [{ translateY: wordmarkTranslate }],
-              }]}>CairnNZ</Animated.Text>
+              }]}>{cairnText('auth-screen.cairnnz')}</Animated.Text>
               <View style={styles.taglineWrap}>
                 <Animated.Text style={[styles.tagline, {
                   opacity: tagline1Opacity,
                   transform: [{ translateY: tagline1Translate }],
-                }]}>Leave your mark,</Animated.Text>
+                }]}>{cairnText('auth-screen.leave-your-mark')}</Animated.Text>
                 <Animated.Text style={[styles.tagline, {
                   opacity: tagline2Opacity,
                   transform: [{ translateY: tagline2Translate }],
-                }]}>find your path.</Animated.Text>
+                }]}>{cairnText('auth-screen.find-your-path')}</Animated.Text>
               </View>
             </View>
 
@@ -1597,7 +1598,7 @@ export function AuthScreen() {
                   {authEntryLoading
                     ? <ActivityIndicator size="small" color="#fff" />
                     : <Icon name="Mail" size={IconSize.sm} color="#fff" strokeWidth={2} />}
-                  <Text style={styles.landingEmailBtnText}>{authEntryLoading ? 'Opening sign in…' : 'Continue with Email'}</Text>
+                  <Text style={styles.landingEmailBtnText}>{authEntryLoading ? cairnText('auth-screen.opening-sign-in') : cairnText('auth-screen.continue-with-email')}</Text>
                 </View>
               </PressBtn>
 
@@ -1617,7 +1618,7 @@ export function AuthScreen() {
                     ? <ActivityIndicator size="small" color={Colors.primary} />
                     : <GoogleGIcon />}
                   <Text style={styles.landingGoogleBtnText}>
-                    {googleLoading ? 'Connecting…' : 'Continue with Google'}
+                    {googleLoading ? cairnText('auth-screen.connecting') : cairnText('auth-screen.continue-with-google')}
                   </Text>
                 </View>
               </PressBtn>
@@ -1636,7 +1637,7 @@ export function AuthScreen() {
                     ? <ActivityIndicator size="small" color={Colors.textPrimary} />
                     : <AppleIcon size={18} color="#000" />}
                   <Text style={styles.landingAppleBtnText}>
-                    {appleLoading ? 'Connecting…' : 'Continue with Apple'}
+                    {appleLoading ? cairnText('auth-screen.connecting') : cairnText('auth-screen.continue-with-apple')}
                   </Text>
                 </View>
               </PressBtn>
@@ -1665,13 +1666,9 @@ export function AuthScreen() {
 
             <View style={formStyles.titleRow}>
               <CairnLogo size={28} />
-              <Text style={formStyles.title}>Check your email</Text>
+              <Text style={formStyles.title}>{cairnText('auth-screen.check-your-email')}</Text>
             </View>
-            <Text style={formStyles.sub}>
-              {'We sent a 6-digit code to '}
-              <Text style={{ fontWeight: '600', color: Colors.textPrimary }}>{verifyEmail}</Text>
-              {'. Enter it below to verify your account.'}
-            </Text>
+            <Text style={formStyles.sub}>{cairnText('auth-screen.value-value-value', { value1: cairnText('auth-screen.we-sent-a-6-digit-code-to'), verifyEmail: verifyEmail, value3: cairnText('auth-screen.enter-it-below-to-verify-your-account') })}</Text>
 
             {!!verifyError && (
               <View style={formStyles.apiBanner}>
@@ -1680,7 +1677,7 @@ export function AuthScreen() {
               </View>
             )}
 
-            <Text style={formStyles.label}>Verification Code</Text>
+            <Text style={formStyles.label}>{cairnText('auth-screen.verification-code')}</Text>
             {/* R114/O22 Bug D (2026-08-10): 6 独立格子 OTP + 输完自动 verify.
                 去掉 Verify Email button — 用户输完 6 位就直接判断, 不需要
                 多一步点击. 每个格子输入后自动 focus 下一格; 删除时自动
@@ -1695,18 +1692,18 @@ export function AuthScreen() {
             {verifyLoading && (
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.md, gap: 8 }}>
                 <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={{ fontSize: FontSize.small, color: Colors.textSecondary }}>Verifying…</Text>
+                <Text style={{ fontSize: FontSize.small, color: Colors.textSecondary }}>{cairnText('auth-screen.verifying')}</Text>
               </View>
             )}
 
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.md, alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: FontSize.small, color: Colors.textSecondary }}>Didn't receive it?</Text>
+              <Text style={{ fontSize: FontSize.small, color: Colors.textSecondary }}>{cairnText('auth-screen.didn-t-receive-it')}</Text>
               <TouchableOpacity onPress={handleResend} disabled={resendCooldown > 0} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
                 <Text style={[
                   { fontSize: FontSize.small, fontWeight: '600' },
                   resendCooldown > 0 ? { color: Colors.textSecondary } : { color: Colors.primary },
                 ]}>
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+                  {resendCooldown > 0 ? cairnText('auth-screen.resend-in-value-s', { resendCooldown: resendCooldown }) : cairnText('auth-screen.resend-code')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1722,8 +1719,8 @@ export function AuthScreen() {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top', 'bottom']}>
         <Icon name="CircleCheck" size={56} color={Colors.primary} strokeWidth={1.5} />
-        <Text style={[styles.appName, { marginTop: 16, marginBottom: 8 }]}>Welcome, {welcomeName}!</Text>
-        <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary }]}>Welcome to Cairn. Ready for your first hike?</Text>
+        <Text style={[styles.appName, { marginTop: 16, marginBottom: 8 }]}>{cairnText('auth-screen.welcome-value', { welcomeName: welcomeName })}</Text>
+        <Text style={[styles.tagline, { textAlign: 'center', color: Colors.textSecondary }]}>{cairnText('auth-screen.welcome-to-cairn-ready-for-your-first')}</Text>
       </SafeAreaView>
     );
   }
@@ -1787,18 +1784,14 @@ export function AuthScreen() {
               fontSize: 24, fontWeight: '700', color: '#1C1C1C',
               textAlign: 'center', marginTop: 32, letterSpacing: -0.3,
             }}
-          >
-            You're all set!
-          </Text>
+          >{cairnText('auth-screen.you-re-all-set')}</Text>
           {/* Subtitle — 15pt grey ~#8A8F95. R22 iter-2: marginTop 6 → 8. */}
           <Text
             style={{
               fontSize: 15, color: '#8A8F95',
               textAlign: 'center', marginTop: 8, letterSpacing: 0.1,
             }}
-          >
-            Welcome to your world.
-          </Text>
+          >{cairnText('auth-screen.welcome-to-your-world')}</Text>
         </SafeAreaView>
       </View>
     );
@@ -1821,17 +1814,13 @@ export function AuthScreen() {
             fontSize: 24, fontWeight: '700', color: '#1C1C1C',
             textAlign: 'center', marginTop: Spacing.lg, marginBottom: Spacing.sm,
           }}
-        >
-          No connection
-        </Text>
+        >{cairnText('auth-screen.no-connection')}</Text>
         <Text
           style={{
             fontSize: 16, color: '#8A8F95',
             textAlign: 'center', marginBottom: Spacing.xxl,
           }}
-        >
-          Please check your network and try again.
-        </Text>
+        >{cairnText('auth-screen.please-check-your-network-and-try-again')}</Text>
         <TouchableOpacity
           testID="btn-network-retry"
           style={[styles.primaryBtn, { alignSelf: 'stretch', backgroundColor: '#3E5F3A' }]}
@@ -1843,7 +1832,7 @@ export function AuthScreen() {
             setView(previousView || 'splash');
           }}
         >
-          <Text style={styles.primaryBtnText}>Try Again</Text>
+          <Text style={styles.primaryBtnText}>{cairnText('auth-screen.try-again')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -1885,26 +1874,20 @@ export function AuthScreen() {
 
             {/* Title — concept 22pt bold, dark near-black #1C1C1C.
                 Concept scan y=132/904 (14.6% viewport top) → 136pt on 932pt. */}
-            <Text style={{ fontSize: 22, fontWeight: '700', color: '#1C1C1C', marginTop: Spacing.xl, letterSpacing: -0.2 }}>
-              Enter the 6-digit code
-            </Text>
+            <Text style={{ fontSize: 22, fontWeight: '700', color: '#1C1C1C', marginTop: Spacing.xl, letterSpacing: -0.2 }}>{cairnText('auth-screen.enter-the-6-digit-code')}</Text>
             {/* Subtitle: line 1 grey, line 2 email semibold dark, tight leading.
                 R22 iter-1: split to 2 rows per concept.
                 R22 iter-2: email line bumped to 15pt semibold, matches concept
                 where "name@example.com" reads visibly larger than the grey line above. */}
-            <Text style={{ fontSize: 14, color: '#8A8F95', marginTop: 10 }}>
-              We've sent a code to
-            </Text>
+            <Text style={{ fontSize: 14, color: '#8A8F95', marginTop: 10 }}>{cairnText('auth-screen.we-ve-sent-a-code-to')}</Text>
             <Text style={{ fontSize: 15, fontWeight: '600', color: '#1C1C1C', marginTop: 2, marginBottom: 8 }}>
-              {verifyEmail || 'name@example.com'}
+              {verifyEmail || cairnText('auth-screen.name-example-com')}
             </Text>
             {/* R21 (2026-08-17 user "加一句提示 如果找不到应该去垃圾邮件里找"):
                 Gmail/Outlook sometimes route Cairn's verification email to
                 Spam or Promotions. Tell the user upfront so they don't
                 stall waiting for a mail that's already there. */}
-            <Text style={{ fontSize: 13, color: '#8A8F95', marginBottom: 32, fontStyle: 'italic' }}>
-              Can't find it? Check your spam or promotions folder.
-            </Text>
+            <Text style={{ fontSize: 13, color: '#8A8F95', marginBottom: 32, fontStyle: 'italic' }}>{cairnText('auth-screen.can-t-find-it-check-your-spam')}</Text>
 
             {!!verifyError && (
               <View style={formStyles.apiBanner}>
@@ -1924,7 +1907,7 @@ export function AuthScreen() {
             {verifyLoading && (
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.md, gap: 8 }}>
                 <ActivityIndicator size="small" color="#3E5F3A" />
-                <Text style={{ fontSize: 13, color: '#8A8F95' }}>Verifying…</Text>
+                <Text style={{ fontSize: 13, color: '#8A8F95' }}>{cairnText('auth-screen.verifying')}</Text>
               </View>
             )}
 
@@ -1935,11 +1918,11 @@ export function AuthScreen() {
             <View style={{ marginTop: 28, alignItems: 'center' }}>
               {resendCooldown > 0 ? (
                 <Text style={{ fontSize: 14, color: '#8A8F95' }}>
-                  {`Resend code in ${mm}:${ss}`}
+                  {cairnText('auth-screen.resend-code-in-value-value', { mm: mm, ss: ss })}
                 </Text>
               ) : (
                 <TouchableOpacity onPress={handleResend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Resend code</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>{cairnText('auth-screen.resend-code')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1966,12 +1949,8 @@ export function AuthScreen() {
       >
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={formStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', marginTop: Spacing.xl }}>
-              Tell us about yourself
-            </Text>
-            <Text style={{ fontSize: 15, color: '#8A8F95', marginTop: Spacing.sm, marginBottom: Spacing.xl }}>
-              This helps personalize your experience.
-            </Text>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', marginTop: Spacing.xl }}>{cairnText('auth-screen.tell-us-about-yourself')}</Text>
+            <Text style={{ fontSize: 15, color: '#8A8F95', marginTop: Spacing.sm, marginBottom: Spacing.xl }}>{cairnText('auth-screen.this-helps-personalize-your-experience')}</Text>
 
             {!!profileError && (
               <View style={formStyles.apiBanner}>
@@ -1980,15 +1959,15 @@ export function AuthScreen() {
               </View>
             )}
 
-            <Text style={formStyles.label}>Display name</Text>
+            <Text style={formStyles.label}>{cairnText('auth-screen.display-name')}</Text>
             <FieldInput
               icon="User"
-              placeholder="Your name"
+              placeholder={cairnText('auth-screen.your-name')}
               value={profileName}
               onChangeText={(v) => { setProfileName(v); if (profileError) setProfileError(''); }}
             />
 
-            <Text style={[formStyles.label, { marginTop: Spacing.lg }]}>Date of birth</Text>
+            <Text style={[formStyles.label, { marginTop: Spacing.lg }]}>{cairnText('auth-screen.date-of-birth')}</Text>
             <DobInputs
               value={profileDob}
               onChange={(v) => { setProfileDob(v); if (profileError) setProfileError(''); }}
@@ -2000,14 +1979,14 @@ export function AuthScreen() {
               testID="btn-complete-profile-continue"
               style={[styles.primaryBtn, { backgroundColor: '#3E5F3A', marginTop: Spacing.xxl }]}
               onPress={() => {
-                if (!profileName.trim()) { setProfileError('Please enter your name'); return; }
+                if (!profileName.trim()) { setProfileError(cairnText('auth-screen.please-enter-your-name')); return; }
                 const dErr = validateDob(profileDob);
                 if (dErr) { setProfileError(dErr); return; }
                 setProfileError('');
                 setView('success');
               }}
             >
-              <Text style={styles.primaryBtnText}>Continue</Text>
+              <Text style={styles.primaryBtnText}>{cairnText('common.continue')}</Text>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -2033,12 +2012,8 @@ export function AuthScreen() {
               fontSize: 12, fontWeight: '700', color: '#FFFFFF',
               letterSpacing: 2, marginBottom: 4, opacity: 0.9,
             }}
-          >
-            YOUR WORLD
-          </Text>
-          <Text style={{ fontSize: 15, color: '#FFFFFF', marginBottom: Spacing.md, opacity: 0.9 }}>
-            You&apos;ve explored
-          </Text>
+          >{cairnText('auth-screen.your-world')}</Text>
+          <Text style={{ fontSize: 15, color: '#FFFFFF', marginBottom: Spacing.md, opacity: 0.9 }}>{cairnText('auth-screen.you-ve-explored')}</Text>
           <Text
             style={{
               fontSize: 48, fontWeight: '800', color: '#FFFFFF',
@@ -2046,12 +2021,8 @@ export function AuthScreen() {
               textShadowOffset: { width: 0, height: 2 },
               textShadowRadius: 6,
             }}
-          >
-            12.6 km²
-          </Text>
-          <Text style={{ fontSize: 16, color: '#FFFFFF', marginTop: 4, opacity: 0.9 }}>
-            New Zealand
-          </Text>
+          >{cairnText('auth-screen.12-6-km')}</Text>
+          <Text style={{ fontSize: 16, color: '#FFFFFF', marginTop: 4, opacity: 0.9 }}>{cairnText('auth-screen.new-zealand')}</Text>
         </SafeAreaView>
       </View>
     );
@@ -2079,9 +2050,7 @@ export function AuthScreen() {
               textShadowOffset: { width: 0, height: 1 },
               textShadowRadius: 4,
             }}
-          >
-            Restoring your journey
-          </Text>
+          >{cairnText('auth-screen.restoring-your-journey')}</Text>
         </SafeAreaView>
       </View>
     );
@@ -2105,18 +2074,14 @@ export function AuthScreen() {
         >
           <Icon name="Lock" size={48} color="#3E5F3A" strokeWidth={1.8} />
         </View>
-        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>
-          Session expired
-        </Text>
-        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.xxl }}>
-          Please sign in again.
-        </Text>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>{cairnText('auth-screen.session-expired')}</Text>
+        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.xxl }}>{cairnText('auth-screen.please-sign-in-again')}</Text>
         <TouchableOpacity
           testID="btn-session-expired-signin"
           style={[styles.primaryBtn, { alignSelf: 'stretch', backgroundColor: '#3E5F3A' }]}
           onPress={() => setView('login')}
         >
-          <Text style={styles.primaryBtnText}>Sign In</Text>
+          <Text style={styles.primaryBtnText}>{cairnText('auth-screen.sign-in')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -2145,20 +2110,15 @@ export function AuthScreen() {
         >
           <Icon name="Send" size={44} color="#FFFFFF" strokeWidth={2} />
         </View>
-        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>
-          Check your email
-        </Text>
-        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.lg }}>
-          {"We've sent a 6-digit code to "}
-          <Text style={{ fontWeight: '600', color: '#1C1C1C' }}>{shownEmail}</Text>
-        </Text>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>{cairnText('auth-screen.check-your-email')}</Text>
+        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.lg }}>{cairnText('auth-screen.value-value', { value1: cairnText('auth-screen.we-ve-sent-a-6-digit-code'), shownEmail: shownEmail })}</Text>
         {resendCooldown > 0 ? (
           <Text style={{ fontSize: 14, color: '#8A8F95', marginBottom: Spacing.xxl }}>
-            {`Resend code in ${mm}:${ss}`}
+            {cairnText('auth-screen.resend-code-in-value-value', { mm: mm, ss: ss })}
           </Text>
         ) : (
           <TouchableOpacity onPress={handleResend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginBottom: Spacing.xxl }}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Resend code</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>{cairnText('auth-screen.resend-code')}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -2166,7 +2126,7 @@ export function AuthScreen() {
           onPress={() => setView('login')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Back to Sign In</Text>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>{cairnText('auth-screen.back-to-sign-in')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -2193,19 +2153,15 @@ export function AuthScreen() {
         >
           <Icon name="X" size={48} color="#FFFFFF" strokeWidth={2.5} />
         </View>
-        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>
-          Invalid code
-        </Text>
-        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.lg }}>
-          Please check the code and try again.
-        </Text>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: Spacing.sm }}>{cairnText('auth-screen.invalid-code')}</Text>
+        <Text style={{ fontSize: 16, color: '#8A8F95', textAlign: 'center', marginBottom: Spacing.lg }}>{cairnText('auth-screen.please-check-the-code-and-try-again')}</Text>
         {resendCooldown > 0 ? (
           <Text style={{ fontSize: 14, color: '#8A8F95', marginBottom: Spacing.xxl }}>
-            {`Resend code in ${mm}:${ss}`}
+            {cairnText('auth-screen.resend-code-in-value-value', { mm: mm, ss: ss })}
           </Text>
         ) : (
           <TouchableOpacity onPress={handleResend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginBottom: Spacing.xxl }}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Resend code</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>{cairnText('auth-screen.resend-code')}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -2213,7 +2169,7 @@ export function AuthScreen() {
           onPress={() => setView('login')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>Back to Sign In</Text>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#3E5F3A' }}>{cairnText('auth-screen.back-to-sign-in')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -2238,8 +2194,8 @@ export function AuthScreen() {
           const now = new Date();
           const sameDay = d.toDateString() === now.toDateString();
           return sameDay
-            ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+            ? formatCairnDate(d, { hour: '2-digit', minute: '2-digit' })
+            : formatCairnDate(d, { dateStyle: 'medium', timeStyle: 'short' });
         })()
       : '';
     return (
@@ -2263,16 +2219,14 @@ export function AuthScreen() {
           }}>
             <Icon name="TriangleAlert" size={40} color={Colors.warning} strokeWidth={1.6} />
           </View>
-          <Text style={[styles.appName, { marginBottom: Spacing.xs, textAlign: 'center' }]}>Restore your account?</Text>
+          <Text style={[styles.appName, { marginBottom: Spacing.xs, textAlign: 'center' }]}>{cairnText('auth-screen.restore-your-account')}</Text>
           <Text style={{
             fontSize: FontSize.body,
             textAlign: 'center',
             color: Colors.textSecondary,
             lineHeight: 22,
             marginBottom: Spacing.lg,
-          }}>
-            You scheduled this account for deletion. It will be permanently deleted on <Text style={{ fontWeight: '700', color: Colors.textPrimary }}>{deadlineStr}</Text>. Restore to keep your hikes and marks.
-          </Text>
+          }}>{cairnText('auth-screen.you-scheduled-this-account-for-deletion-it', { deadlineStr: deadlineStr })}</Text>
           <TouchableOpacity
             testID="btn-restore-account"
             style={[styles.primaryBtn, { width: '100%', marginTop: Spacing.xs }]}
@@ -2296,8 +2250,8 @@ export function AuthScreen() {
                   // system locale default. If session missing, guide user
                   // back to sign-in rather than leaving them stuck in the modal.
                   if (r.hint === 'session_missing') {
-                    Alert.alert('Session ended', r.error, [
-                      { text: 'Sign in', onPress: () => setView('login') },
+                    Alert.alert(cairnText('auth-screen.session-ended'), r.error, [
+                      { text: cairnText('auth-screen.sign-in-97508f2'), onPress: () => setView('login') },
                     ]);
                   } else if (r.hint === 'account_gone') {
                     // AUTH-3 4:59-race fix (4-eyes review #2): row was
@@ -2305,15 +2259,15 @@ export function AuthScreen() {
                     // is now unrecoverable — route user back to sign-in
                     // with a fresh form so they don't loop on a Restore
                     // button for an account that no longer exists.
-                    Alert.alert('Account permanently deleted', r.error, [
-                      { text: 'Sign in', onPress: () => handleViewChange('login') },
+                    Alert.alert(cairnText('auth-screen.account-permanently-deleted'), r.error, [
+                      { text: cairnText('auth-screen.sign-in-97508f2'), onPress: () => handleViewChange('login') },
                     ]);
                   } else if (r.hint === 'commit_unknown' || r.hint === 'save_token_failed') {
-                    Alert.alert('Restore result', r.error, [
-                      { text: 'Sign in', onPress: () => handleViewChange('login') },
+                    Alert.alert(cairnText('auth-screen.restore-result'), r.error, [
+                      { text: cairnText('auth-screen.sign-in-97508f2'), onPress: () => handleViewChange('login') },
                     ]);
                   } else {
-                    Alert.alert('Restore failed', r.error, [{ text: 'OK' }]);
+                    Alert.alert(cairnText('auth-screen.restore-failed'), r.error, [{ text: cairnText('auth-screen.ok') }]);
                   }
                   return;
                 }
@@ -2323,7 +2277,7 @@ export function AuthScreen() {
                 const installed = await installAuthenticatedResult(r);
                 if (!authMounted.current) return;
                 if (!installed) {
-                  Alert.alert('Restore failed', 'The account changed before restore could finish. Please sign in again.', [{ text: 'OK' }]);
+                  Alert.alert(cairnText('auth-screen.restore-failed'), cairnText('auth-screen.the-account-changed-before-restore-could-finish'), [{ text: cairnText('auth-screen.ok') }]);
                 }
               } finally {
                 restoreChoiceFlight.current = false;
@@ -2332,7 +2286,7 @@ export function AuthScreen() {
             }}>
             {restoreLoading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.primaryBtnText}>Restore account</Text>}
+              : <Text style={styles.primaryBtnText}>{cairnText('auth-screen.restore-account')}</Text>}
           </TouchableOpacity>
           <TouchableOpacity
             testID="btn-cancel-restore"
@@ -2368,7 +2322,7 @@ export function AuthScreen() {
               // re-triggered the same restore modal loop).
               handleViewChange('login');
             }}>
-            <Text style={{ color: Colors.textMuted, fontSize: FontSize.caption }}>Not now</Text>
+            <Text style={{ color: Colors.textMuted, fontSize: FontSize.caption }}>{cairnText('auth-screen.not-now')}</Text>
           </TouchableOpacity>
         </GlassPanel>
       </SafeAreaView>
@@ -2397,16 +2351,12 @@ export function AuthScreen() {
           <BackButton variant="inline" onPress={() => handleViewChange('login')} />
         </View>
         <View style={{ marginTop: 40 }}>
-          <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>
-            Reset password
-          </Text>
-          <Text style={{ fontSize: 14, color: '#8A8F95', fontWeight: '400', marginTop: 6, marginBottom: 32 }}>
-            Enter your account email. We'll send a 6-digit code.
-          </Text>
-          <Text style={formStyles.label}>Email</Text>
+          <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>{cairnText('auth-screen.reset-password')}</Text>
+          <Text style={{ fontSize: 14, color: '#8A8F95', fontWeight: '400', marginTop: 6, marginBottom: 32 }}>{cairnText('auth-screen.enter-your-account-email-we-ll-send')}</Text>
+          <Text style={formStyles.label}>{cairnText('auth-screen.email')}</Text>
           <FieldInput
             icon="Mail"
-            placeholder="your@email.com"
+            placeholder={cairnText('auth-screen.your-email-com')}
             value={forgotEmail}
             onChangeText={(v) => { setForgotEmail(v); if (forgotError) setForgotError(''); }}
             keyboardType="email-address"
@@ -2441,7 +2391,7 @@ export function AuthScreen() {
                   // Show explicit rate-limit message + start countdown so
                   // the button reads "Resend in Xs" until unlocked.
                   const secs = r.retryAfterSeconds || 900;
-                  setForgotError(`Too many requests. Please wait ${Math.ceil(secs / 60)} min.`);
+                  setForgotError(cairnText('auth-screen.too-many-requests-please-wait-value-min', { value1: Math.ceil(secs / 60) }));
                   startResendCooldown(secs);
                   return;
                 }
@@ -2462,7 +2412,7 @@ export function AuthScreen() {
             {forgotLoading
               ? <ActivityIndicator color="#fff" />
               : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 }}>
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Send code'}
+                  {resendCooldown > 0 ? cairnText('auth-screen.resend-in-value-s', { resendCooldown: resendCooldown }) : cairnText('auth-screen.send-code')}
                 </Text>
             }
           </PressBtn>
@@ -2484,17 +2434,11 @@ export function AuthScreen() {
           <BackButton variant="inline" onPress={() => handleViewChange('forgot_request')} />
         </View>
         <View style={{ marginTop: 40 }}>
-          <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>
-            Enter code
-          </Text>
-          <Text style={{ fontSize: 14, color: '#8A8F95', fontWeight: '400', marginTop: 6, marginBottom: 8 }}>
-            Check {forgotEmail}. Enter the 6-digit code and choose a new password.
-          </Text>
+          <Text style={{ fontSize: 26, fontWeight: '700', color: '#21362C', letterSpacing: -0.3 }}>{cairnText('auth-screen.enter-code')}</Text>
+          <Text style={{ fontSize: 14, color: '#8A8F95', fontWeight: '400', marginTop: 6, marginBottom: 8 }}>{cairnText('auth-screen.check-value-enter-the-6-digit-code', { forgotEmail: forgotEmail })}</Text>
           {/* R21 (2026-08-17): spam hint for reset flow too. */}
-          <Text style={{ fontSize: 13, color: '#8A8F95', fontStyle: 'italic', marginBottom: 24 }}>
-            Can't find it? Check your spam or promotions folder.
-          </Text>
-          <Text style={formStyles.label}>Verification code</Text>
+          <Text style={{ fontSize: 13, color: '#8A8F95', fontStyle: 'italic', marginBottom: 24 }}>{cairnText('auth-screen.can-t-find-it-check-your-spam')}</Text>
+          <Text style={formStyles.label}>{cairnText('auth-screen.verification-code-2ae1b35')}</Text>
           {/* R21 (2026-08-17 user "reset password 6 位和注册的不一样, 参照注册,
               复制也能自动粘贴 但不 auto-submit, 错了停留显示错误"): use the
               same OtpInput 6-box component as register verify (auto-paste
@@ -2509,12 +2453,12 @@ export function AuthScreen() {
             autoSubmit={false}
             autoFocus
           />
-          <Text style={[formStyles.label, { marginTop: 20 }]}>New password</Text>
+          <Text style={[formStyles.label, { marginTop: 20 }]}>{cairnText('auth-screen.new-password')}</Text>
           <PasswordField
             variant="auth"
             value={forgotNewPassword}
             onChangeText={(v) => { setForgotNewPassword(v); if (forgotError) setForgotError(''); }}
-            placeholder="Create a new password"
+            placeholder={cairnText('auth-screen.create-a-new-password')}
             isNew
           />
           <View style={{ marginTop: 12, gap: 6 }} testID="reset-password-rules">
@@ -2544,7 +2488,7 @@ export function AuthScreen() {
             disabled={forgotLoading || forgotResultUnknown}
             onPress={async () => {
               if (authActionFlight.current) return;
-              if (forgotCode.length !== 6) { setForgotError('Enter the 6-digit code'); return; }
+              if (forgotCode.length !== 6) { setForgotError(cairnText('auth-screen.enter-the-6-digit-code')); return; }
               const policyError = passwordPolicyError(forgotNewPassword);
               if (policyError) { setForgotError(policyError); return; }
               authActionFlight.current = true;
@@ -2567,7 +2511,7 @@ export function AuthScreen() {
                 const installed = await installAuthenticatedResult(r);
                 if (!authMounted.current) return;
                 if (!installed) {
-                  setForgotError('The account changed before reset sign-in could finish. Sign in with the new password.');
+                  setForgotError(cairnText('auth-screen.the-account-changed-before-reset-sign-in'));
                 }
               } finally {
                 authActionFlight.current = false;
@@ -2576,7 +2520,7 @@ export function AuthScreen() {
             }}
             scale={0.98}
           >
-            {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 }}>Reset password & sign in</Text>}
+            {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 }}>{cairnText('auth-screen.reset-password-sign-in')}</Text>}
           </PressBtn>
         </View>
           </ScrollView>
@@ -2621,9 +2565,7 @@ export function AuthScreen() {
                   fontSize: 26, fontWeight: '700', color: '#21362C',
                   letterSpacing: -0.3, marginTop: Spacing.md, marginBottom: Spacing.lg,
                 }}
-              >
-                Create your account
-              </Text>
+              >{cairnText('auth-screen.create-your-account')}</Text>
               {/* R21 (2026-08-17 user "Let's get started. 去掉"): Register
                   subtitle removed. Title alone is enough — subtitle only
                   ate vertical space that we want for the form fields. */}
@@ -2635,17 +2577,13 @@ export function AuthScreen() {
                   fontSize: 26, fontWeight: '700', color: '#21362C',
                   letterSpacing: -0.3, marginTop: Spacing.md,
                 }}
-              >
-                Welcome back
-              </Text>
+              >{cairnText('auth-screen.welcome-back')}</Text>
               <Text
                 style={{
                   fontSize: 14, color: '#8A8F95',
                   marginTop: 6, marginBottom: Spacing.xl,
                 }}
-              >
-                Glad to see you again.
-              </Text>
+              >{cairnText('auth-screen.glad-to-see-you-again')}</Text>
             </>
           )}
           {/*
@@ -2671,10 +2609,10 @@ export function AuthScreen() {
           {/* Name field — register only */}
           {isRegister && (
             <>
-              <Text style={formStyles.label}>Name</Text>
+              <Text style={formStyles.label}>{cairnText('auth-screen.name')}</Text>
               <FieldInput
                 icon="User"
-                placeholder="How friends will see you"
+                placeholder={cairnText('auth-screen.how-friends-will-see-you')}
                 value={name}
                 onChangeText={(v) => { setName(v); if (nameError) setNameError(''); }}
                 error={nameError}
@@ -2683,10 +2621,10 @@ export function AuthScreen() {
             </>
           )}
 
-          <Text style={formStyles.label}>Email</Text>
+          <Text style={formStyles.label}>{cairnText('auth-screen.email')}</Text>
           <FieldInput
             icon="Mail"
-            placeholder="your@email.com"
+            placeholder={cairnText('auth-screen.your-email-com')}
             value={email}
             onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(''); }}
             error={emailError}
@@ -2701,7 +2639,7 @@ export function AuthScreen() {
             autoComplete={isRegister ? 'off' : 'email'}
           />
 
-          <Text style={formStyles.label}>Password</Text>
+          <Text style={formStyles.label}>{cairnText('auth-screen.password')}</Text>
           <PasswordField
             variant="auth"
             value={password}
@@ -2766,21 +2704,21 @@ export function AuthScreen() {
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={{ color: Colors.primary, fontSize: FontSize.caption, fontWeight: '600' }}>Forgot password?</Text>
+                <Text style={{ color: Colors.primary, fontSize: FontSize.caption, fontWeight: '600' }}>{cairnText('auth-screen.forgot-password')}</Text>
               </TouchableOpacity>
             </View>
           )}
 
           {isRegister && (
             <>
-              <Text style={formStyles.label}>Confirm Password</Text>
+              <Text style={formStyles.label}>{cairnText('auth-screen.confirm-password')}</Text>
               <PasswordField
                 variant="auth"
                 value={confirm}
                 onChangeText={(v) => { setConfirm(v); if (confirmError) setConfirmError(''); }}
-                placeholder="Re-enter password"
+                placeholder={cairnText('auth-screen.re-enter-password')}
                 error={confirmError}
-                onBlur={() => { if (confirm && confirm !== password) setConfirmError('Passwords do not match'); }}
+                onBlur={() => { if (confirm && confirm !== password) setConfirmError(cairnText('auth-screen.passwords-do-not-match')); }}
                 isNew
               />
               {/* R114/O22 (2026-08-08) Bug 2 fix: DateTimePicker native
@@ -2793,7 +2731,7 @@ export function AuthScreen() {
                   over OTA, no native module needed. Validation builds
                   the YYYY-MM-DD string in `dob` state so backend contract
                   is unchanged. */}
-              <Text style={formStyles.label}>Date of birth</Text>
+              <Text style={formStyles.label}>{cairnText('auth-screen.date-of-birth')}</Text>
               <DobInputs
                 value={dob}
                 onChange={(v) => { setDob(v); if (dobError) setDobError(''); }}
@@ -2801,7 +2739,7 @@ export function AuthScreen() {
                 error={dobError}
               />
               {dobError ? <Text style={formStyles.errorText}>{dobError}</Text> : (
-                <Text style={formStyles.hintText}>You must be 13+ to use Cairn.</Text>
+                <Text style={formStyles.hintText}>{cairnText('auth-screen.you-must-be-13-to-use-cairn')}</Text>
               )}
             </>
           )}
@@ -2817,15 +2755,7 @@ export function AuthScreen() {
                 >
                   {privacyChecked && <Icon name="Check" size={14} color="#fff" strokeWidth={3} />}
                 </TouchableOpacity>
-                <Text style={formStyles.privacyText}>
-                  {'I have read and agree to the '}
-                  <Text
-                    style={formStyles.privacyLink}
-                    onPress={() => setPrivacyExpanded(!privacyExpanded)}
-                  >
-                    Privacy Policy
-                  </Text>
-                </Text>
+                <Text style={formStyles.privacyText}>{cairnText('auth-screen.value-value-be40e45', { value1: cairnText('auth-screen.i-have-read-and-agree-to-the'), value2: cairnText('auth-screen.privacy-policy') })}</Text>
               </View>
               {!!privacyError && <Text style={formStyles.fieldError}>{privacyError}</Text>}
 
@@ -2838,9 +2768,9 @@ export function AuthScreen() {
               >
                 <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bg }} edges={['top', 'bottom']}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.textPrimary }}>Privacy Policy</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.textPrimary }}>{cairnText('auth-screen.privacy-policy')}</Text>
                     <TouchableOpacity onPress={() => setPrivacyExpanded(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                      <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>Done</Text>
+                      <Text style={{ fontSize: 16, color: Colors.primary, fontWeight: '600' }}>{cairnText('common.done')}</Text>
                     </TouchableOpacity>
                   </View>
                   <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
@@ -2879,7 +2809,7 @@ export function AuthScreen() {
                 ? <ActivityIndicator size="small" color="#fff" />
                 : null
               }
-              <Text style={styles.primaryBtnText}>{isRegister ? 'Continue' : 'Sign In'}</Text>
+              <Text style={styles.primaryBtnText}>{isRegister ? cairnText('common.continue') : cairnText('auth-screen.sign-in')}</Text>
             </View>
           </PressBtn>
 
@@ -2891,14 +2821,14 @@ export function AuthScreen() {
               {!isRegister && (
               <View style={formStyles.divider}>
                 <View style={formStyles.divLine} />
-                <Text style={formStyles.divText}>or continue with</Text>
+                <Text style={formStyles.divText}>{cairnText('auth-screen.or-continue-with')}</Text>
                 <View style={formStyles.divLine} />
               </View>
               )}
               {isRegister && (
               <View style={formStyles.divider}>
                 <View style={formStyles.divLine} />
-                <Text style={formStyles.divText}>or sign up with</Text>
+                <Text style={formStyles.divText}>{cairnText('auth-screen.or-sign-up-with')}</Text>
                 <View style={formStyles.divLine} />
               </View>
               )}
@@ -2916,7 +2846,7 @@ export function AuthScreen() {
                     ? <ActivityIndicator size="small" color={Colors.textPrimary} />
                     : <AppleIcon size={18} color="#000" />}
                   <View>
-                    <Text style={formStyles.appleBtnText}>{appleLoading ? 'Connecting…' : 'Continue with Apple'}</Text>
+                    <Text style={formStyles.appleBtnText}>{appleLoading ? cairnText('auth-screen.connecting') : cairnText('auth-screen.continue-with-apple')}</Text>
                   </View>
                 </View>
               </PressBtn>
@@ -2929,7 +2859,7 @@ export function AuthScreen() {
                     ? <ActivityIndicator size="small" color={Colors.primary} />
                     : <GoogleGIcon size={18} />
                   }
-                  <Text style={formStyles.googleBtnText}>{googleLoading ? 'Connecting…' : 'Continue with Google'}</Text>
+                  <Text style={formStyles.googleBtnText}>{googleLoading ? cairnText('auth-screen.connecting') : cairnText('auth-screen.continue-with-google')}</Text>
                 </View>
               </PressBtn>
             </>
@@ -2939,7 +2869,7 @@ export function AuthScreen() {
               green underlined, taps to switch view. */}
           {isRegister && (
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.xxl, gap: 4 }}>
-              <Text style={{ fontSize: 13, color: '#8A8F95' }}>Already have an account?</Text>
+              <Text style={{ fontSize: 13, color: '#8A8F95' }}>{cairnText('auth-screen.already-have-an-account')}</Text>
               <TouchableOpacity
                 onPress={() => handleViewChange('login')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -2949,9 +2879,7 @@ export function AuthScreen() {
                     fontSize: 13, color: '#21362C', fontWeight: '600',
                     textDecorationLine: 'underline',
                   }}
-                >
-                  Sign in
-                </Text>
+                >{cairnText('auth-screen.sign-in-97508f2')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -2961,7 +2889,7 @@ export function AuthScreen() {
               Mirror of the Register footer, but the CTA opens 'register'. */}
           {!isRegister && (
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: Spacing.xxl, gap: 4 }}>
-              <Text style={{ fontSize: 13, color: '#8A8F95' }}>New here?</Text>
+              <Text style={{ fontSize: 13, color: '#8A8F95' }}>{cairnText('auth-screen.new-here')}</Text>
               <TouchableOpacity
                 onPress={() => handleViewChange('register')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -2971,9 +2899,7 @@ export function AuthScreen() {
                     fontSize: 13, color: '#21362C', fontWeight: '600',
                     textDecorationLine: 'underline',
                   }}
-                >
-                  Create account
-                </Text>
+                >{cairnText('auth-screen.create-account')}</Text>
               </TouchableOpacity>
             </View>
           )}

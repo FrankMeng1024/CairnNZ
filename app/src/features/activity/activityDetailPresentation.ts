@@ -1,6 +1,7 @@
 import type { Marker } from '../../store/useMarkerStore';
 import type { TrackingSession } from '../../store/useSessionStore';
 import type { ActivityRouteState } from './activityRouteState';
+import { cairnText } from '../../i18n/runtime';
 
 export type ActivityDetailNoticeKind = 'local' | 'sync' | 'gap' | 'route-review' | 'route-refinement';
 
@@ -73,82 +74,82 @@ export function activityDetailNotices(state: ActivityRouteState): ActivityDetail
   if (state.localReadiness === 'loading') {
     notices.push({
       kind: 'local',
-      title: 'Loading saved route',
-      detail: 'Your Activity summary is available while its route opens.',
+      title: cairnText('activity.activity-detail-presentation.loading-saved-route'),
+      detail: cairnText('activity.activity-detail-presentation.your-activity-summary-is-available-while-its'),
     });
   } else if (state.localReadiness === 'unavailable') {
     notices.push({
       kind: 'local',
-      title: 'Route unavailable',
-      detail: 'The Activity is saved, but this device does not have enough route geometry to display it.',
+      title: cairnText('activity.activity-detail-presentation.route-unavailable'),
+      detail: cairnText('activity.activity-detail-presentation.the-activity-is-saved-but-this-device'),
     });
   }
 
   if (state.serverSync === 'pending') {
     notices.push({
       kind: 'sync',
-      title: 'Waiting to sync',
-      detail: 'Saved on this iPhone. You can keep using this Activity offline.',
+      title: cairnText('activity.activity-detail-presentation.waiting-to-sync'),
+      detail: cairnText('activity.activity-detail-presentation.saved-on-this-iphone-you-can-keep'),
     });
   } else if (state.serverSync === 'syncing') {
     notices.push({
       kind: 'sync',
-      title: 'Syncing Activity',
-      detail: 'The local Activity remains available while Cairn sends it.',
+      title: cairnText('activity.activity-detail-presentation.syncing-activity'),
+      detail: cairnText('activity.activity-detail-presentation.the-local-activity-remains-available-while-cairn'),
     });
   } else if (state.serverSync === 'retryable_error') {
     notices.push({
       kind: 'sync',
-      title: 'Retry sync',
-      detail: 'The Activity is safe on this iPhone, but server sync needs another try.',
+      title: cairnText('activity.activity-detail-presentation.retry-sync'),
+      detail: cairnText('activity.activity-detail-presentation.the-activity-is-safe-on-this-iphone'),
       action: 'retry-sync',
     });
   } else if (state.serverSync === 'auth_required') {
     notices.push({
       kind: 'sync',
-      title: 'Sign in to sync',
-      detail: 'The Activity is safe on this device. Sign in again, then retry sync.',
+      title: cairnText('activity.activity-detail-presentation.sign-in-to-sync'),
+      detail: cairnText('activity.activity-detail-presentation.the-activity-is-safe-on-this-device'),
       action: 'retry-sync',
     });
   } else if (state.serverSync === 'action_required') {
     notices.push({
       kind: 'sync',
-      title: 'Activity saved · sync needs review',
-      detail: 'Cairn kept the complete local Activity and stopped automatic retries after the server rejected its data.',
+      title: cairnText('activity.activity-detail-presentation.activity-saved-sync-needs-review'),
+      detail: cairnText('activity.activity-detail-presentation.cairn-kept-the-complete-local-activity-and'),
     });
   } else if (state.serverSync === 'dependency') {
     notices.push({
       kind: 'sync',
-      title: 'Activity saved · another Activity is unresolved',
-      detail: 'Resolve the other unfinished Activity before retrying this upload. Neither record was merged or removed.',
+      title: cairnText('activity.activity-detail-presentation.activity-saved-another-activity-is-unresolved'),
+      detail: cairnText('activity.activity-detail-presentation.resolve-the-other-unfinished-activity-before-retrying'),
     });
   }
 
   if (state.localReadiness === 'ready' && state.roadRefinementPending) {
     notices.push({
       kind: 'route-refinement',
-      title: 'Route ready',
-      detail: 'Road refinement will continue when online.',
+      title: cairnText('activity.activity-detail-presentation.route-ready'),
+      detail: cairnText('activity.activity-detail-presentation.road-refinement-will-continue-when-online'),
     });
   } else if (state.localReadiness === 'ready' && state.finalEnhancement === 'enhanced') {
     notices.push({
       kind: 'route-refinement',
-      title: 'Route refined',
-      detail: 'Cairn selected the improved route for this Activity.',
+      title: cairnText('activity.activity-detail-presentation.route-refined'),
+      detail: cairnText('activity.activity-detail-presentation.cairn-selected-the-improved-route-for-this'),
     });
   }
 
   if (state.localReadiness === 'ready' && state.routeReadiness === 'missing_section') {
     notices.push({
       kind: 'gap',
-      title: 'Missing section',
-      detail: 'The Activity keeps this gap disconnected. A new Route can use one recorded section or an explicit reconnect.',
+      title: cairnText('activity.activity-detail-presentation.missing-section'),
+      detail: cairnText('activity.activity-detail-presentation.the-activity-keeps-this-gap-disconnected-a'),
     });
   } else if (state.localReadiness === 'ready' && state.routeReadiness === 'needs_review') {
     notices.push({
       kind: 'route-review',
-      title: 'Route needs review',
-      detail: 'The recorded path is usable, but some sections have limited map or trail evidence.',
+      title: cairnText('activity.activity-detail-presentation.route-needs-review'),
+      detail: cairnText('activity.activity-detail-presentation.the-recorded-path-is-usable-but-some'),
     });
   }
 

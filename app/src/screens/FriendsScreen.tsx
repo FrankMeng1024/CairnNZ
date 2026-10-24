@@ -44,6 +44,7 @@ import { ModalCard, ModalCardHeader } from '../components/ModalCard';
 import { Colors, FontSize, IconSize, Radius, Shadow, Spacing } from '../components/tokens';
 import { deriveFriendsRequestContentState } from '../utils/friendsRequestState';
 import { useMemorySharingStore } from '../features/memory/store/useMemorySharingStore';
+import { cairnText } from '../i18n/runtime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ProfileFriend = {
@@ -163,17 +164,15 @@ function FriendRow({
         <View style={{ flex: 1 }}>
           <View style={s.friendNameRow}>
             <Text style={[s.cardName, s.friendNameText, { color: theme.foreground }]} numberOfLines={1}>{name}</Text>
-            {isNew ? <Text style={[s.newBadge, { color: theme.onPrimary, backgroundColor: theme.primary }]}>New</Text> : null}
+            {isNew ? <Text style={[s.newBadge, { color: theme.onPrimary, backgroundColor: theme.primary }]}>{cairnText('friends-screen.new')}</Text> : null}
           </View>
           <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{email}</Text>
           <Text
             style={[s.sharingStatus, { color: sharingState === 'shared' ? theme.primary : theme.foregroundSecondary }]}
             numberOfLines={1}
-          >
-            My Memory: {sharingState === 'shared' ? 'Shared'
-              : sharingState === 'not-shared' ? 'Not shared'
-                : sharingState === 'checking' ? 'Checking…' : 'Unavailable'}
-          </Text>
+          >{cairnText('friends-screen.my-memory-value', { value1: sharingState === 'shared' ? cairnText('friends-screen.shared')
+              : sharingState === 'not-shared' ? cairnText('friends-screen.not-shared')
+                : sharingState === 'checking' ? cairnText('friends-screen.checking') : cairnText('friends-screen.unavailable') })}</Text>
         </View>
         <Icon name="ChevronRight" size={IconSize.sm} color={theme.iconInactive} strokeWidth={1.8} />
       </ContentSurface>
@@ -200,7 +199,7 @@ function IncomingRow({
         <View style={s.requestIdentityCopy}>
           <Text style={[s.cardName, { color: theme.foreground }]}>{fromName}</Text>
           <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]}>{fromEmail}</Text>
-          {requesterShares ? <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Will share their Memory</Text> : null}
+          {requesterShares ? <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.will-share-their-memory')}</Text> : null}
         </View>
         <View style={s.actionRow}>
           <TouchableOpacity
@@ -208,7 +207,7 @@ function IncomingRow({
             onPress={onReject}
             disabled={busy}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
-            accessibilityLabel="Decline friend request"
+            accessibilityLabel={cairnText('friends-screen.decline-friend-request')}
           >
             <Icon name="X" size={DS.ic_sm} color={theme.icon} strokeWidth={2} />
           </TouchableOpacity>
@@ -217,7 +216,7 @@ function IncomingRow({
             onPress={() => onAccept(shareMemory)}
             disabled={busy}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
-            accessibilityLabel="Accept friend request"
+            accessibilityLabel={cairnText('friends-screen.accept-friend-request')}
           >
             {busy ? <ActivityIndicator size="small" color={theme.iconActive} /> : <Icon name="Check" size={DS.ic_sm} color={theme.iconActive} strokeWidth={2} />}
           </TouchableOpacity>
@@ -225,15 +224,15 @@ function IncomingRow({
       </View>
       <View style={[s.requestConsentRow, { borderTopColor: theme.borderSubtle }]}>
         <View style={{ flex: 1, paddingRight: 12 }}>
-          <Text style={[s.cardName, { color: theme.foreground }]}>Share my Memory after accepting</Text>
-          <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Full accepted history, delayed at least 30 min; no route line or timestamps. Familiar places may still be inferred.</Text>
+          <Text style={[s.cardName, { color: theme.foreground }]}>{cairnText('friends-screen.share-my-memory-after-accepting')}</Text>
+          <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.full-accepted-history-delayed-at-least-30')}</Text>
         </View>
         <Switch
           value={shareMemory}
           disabled={busy}
           onValueChange={setShareMemory}
           trackColor={{ false: theme.borderStrong, true: theme.primary }}
-          accessibilityLabel={`Share my Memory with ${fromName} after accepting`}
+          accessibilityLabel={cairnText('friends-screen.share-my-memory-with-value-after-accepting', { fromName: fromName })}
         />
       </View>
     </ContentSurface>
@@ -262,7 +261,7 @@ function SentRow({
         <Text style={[s.cardName, { color: theme.foreground }]} numberOfLines={1}>{toName}</Text>
         <Text style={[s.cardMeta, { color: theme.foregroundSecondary }]} numberOfLines={1}>{toEmail}</Text>
         <Text style={[s.declinedStatus, { color: status === 'declined' ? theme.destructive : theme.foregroundSecondary }]}>
-          {status === 'declined' ? 'Declined' : 'Pending'}
+          {status === 'declined' ? cairnText('friends-screen.declined') : cairnText('friends-screen.pending')}
         </Text>
         {error ? <Text style={[s.outboundError, { color: theme.destructive }]}>{error}</Text> : null}
       </View>
@@ -271,14 +270,14 @@ function SentRow({
         onPress={onCancel}
         disabled={busy}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        accessibilityLabel={status === 'declined' ? 'Dismiss declined request' : 'Cancel outbound request'}
+        accessibilityLabel={status === 'declined' ? cairnText('friends-screen.dismiss-declined-request') : cairnText('friends-screen.cancel-outbound-request')}
         testID={`btn-cancel-outbound-${id}`}
       >
         {busy
           ? <ActivityIndicator size="small" color={theme.primary} />
           : status === 'declined'
           ? <Icon name="X" size={DS.ic_sm} color={theme.icon} strokeWidth={2} />
-          : <Text style={[s.sentCancelText, { color: theme.foregroundSecondary }]}>Cancel request</Text>}
+          : <Text style={[s.sentCancelText, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.cancel-request')}</Text>}
       </TouchableOpacity>
     </ContentSurface>
   );
@@ -363,18 +362,18 @@ function AddFriendPage({
   const submit = async () => {
     if (state === 'loading') return;
     const trimmed = email.trim();
-    if (!isValidEmail(trimmed)) { setErr('Enter a valid email address.'); return; }
+    if (!isValidEmail(trimmed)) { setErr(cairnText('friends-screen.enter-a-valid-email-address')); return; }
     const normalized = trimmed.toLowerCase();
     if (existingFriendEmails.some(value => value.trim().toLowerCase() === normalized)) {
-      setErr('Already friends.');
+      setErr(cairnText('friends-screen.already-friends'));
       return;
     }
     if (outgoingPendingEmails.some(value => value.trim().toLowerCase() === normalized)) {
-      setErr('Request already pending.');
+      setErr(cairnText('friends-screen.request-already-pending'));
       return;
     }
     if (incomingPendingEmails.some(value => value.trim().toLowerCase() === normalized)) {
-      setErr('They already sent you a request. Open Requests to respond.');
+      setErr(cairnText('friends-screen.they-already-sent-you-a-request-open'));
       return;
     }
     setErr('');
@@ -384,16 +383,15 @@ function AddFriendPage({
       onRequestSent(r.request);
       close();
     } else {
-      const raw = (r.error || '').toLowerCase();
       let msg: string;
-      if (raw.includes('not found') || raw.includes('no user') || raw.includes('does not exist')) {
-        msg = 'No CairnNZ account uses that email yet.';
-      } else if (raw.includes('already') && (raw.includes('friend') || raw.includes('request'))) {
-        msg = 'You already sent a request or are friends with this person.';
-      } else if (raw.includes('yourself') || raw.includes('self')) {
-        msg = 'You can’t send a request to your own account.';
+      if (r.errorCode === 'USER_NOT_FOUND') {
+        msg = cairnText('friends.request.account-not-found');
+      } else if (r.errorCode === 'ALREADY_FRIENDS' || r.errorCode === 'REQUEST_ALREADY_PENDING') {
+        msg = cairnText('friends.request.already-connected-or-pending');
+      } else if (r.errorCode === 'SELF_REQUEST') {
+        msg = cairnText('friends.request.self');
       } else {
-        msg = r.error || "Couldn't send. Check your connection and try again.";
+        msg = r.error || cairnText('friends.request.failed');
       }
       setErr(msg);
       setState('idle');
@@ -424,7 +422,7 @@ function AddFriendPage({
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
           onPress={handleBackdropPress}
-          accessibilityLabel="Dismiss keyboard or close add friend sheet"
+          accessibilityLabel={cairnText('friends-screen.dismiss-keyboard-or-close-add-friend-sheet')}
         />
       </Animated.View>
 
@@ -497,15 +495,13 @@ function AddFriendPage({
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             >
-              <Text style={[s.f6Title, { color: theme.foreground }]}>Add friend</Text>
-              <Text style={[s.f6Body, { color: theme.foregroundSecondary }]}>
-                Enter their email address to{`\n`}send a friend request.
-              </Text>
+              <Text style={[s.f6Title, { color: theme.foreground }]}>{cairnText('friends-screen.add-friend')}</Text>
+              <Text style={[s.f6Body, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.enter-their-email-address-to-value-send', { value1: `\n` })}</Text>
 
               <TextField
-                    label="Email address"
+                    label={cairnText('friends-screen.email-address')}
                     error={err}
-                    placeholder="name@email.com"
+                    placeholder={cairnText('friends-screen.name-email-com')}
                     value={email}
                     onChangeText={(text) => { setEmail(text); if (err) setErr(''); }}
                     keyboardType="email-address"
@@ -521,19 +517,19 @@ function AddFriendPage({
               />
               <View style={[s.addFriendConsent, { borderColor: theme.borderSubtle, backgroundColor: theme.surfaceElevated }]}>
                 <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={[s.cardName, { color: theme.foreground }]}>Share my Memory if accepted</Text>
-                  <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Full accepted Memory history, delayed at least 30 min. Familiar places may still be inferred; precise routes and times stay hidden.</Text>
+                  <Text style={[s.cardName, { color: theme.foreground }]}>{cairnText('friends-screen.share-my-memory-if-accepted')}</Text>
+                  <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.full-accepted-memory-history-delayed-at-least')}</Text>
                 </View>
                 <Switch
                   value={shareMemory}
                   disabled={state === 'loading'}
                   onValueChange={setShareMemory}
                   trackColor={{ false: theme.borderStrong, true: theme.primary }}
-                  accessibilityLabel="Share my Memory after this friend request is accepted"
+                  accessibilityLabel={cairnText('friends-screen.share-my-memory-after-this-friend-request')}
                 />
               </View>
               <PrimaryButton
-                    label="Send request"
+                    label={cairnText('friends-screen.send-request')}
                     onPress={submit}
                     disabled={!email.trim()}
                     loading={state === 'loading'}
@@ -556,7 +552,7 @@ function AddFriendPage({
         <DismissButton
           style={s.f6Close}
           onPress={close}
-          label="Close add friend"
+          label={cairnText('friends-screen.close-add-friend')}
           contained
           testID="add-friend-close"
         />
@@ -571,10 +567,10 @@ function AddFriendPage({
 function BottomNav({ active, onNavigate }: { active: 'trails' | 'friends' | 'memory' | 'settings'; onNavigate: (dest: string) => void }) {
   const theme = useVisualTheme();
   const items = [
-    { key: 'trails' as const, route: 'Routes', label: 'Trails', icon: 'Route' as IconName },
-    { key: 'friends' as const, route: 'Friends', label: 'Friends', icon: 'Users' as IconName },
-    { key: 'memory' as const, route: 'Memory', label: 'Memory', icon: 'Layers' as IconName },
-    { key: 'settings' as const, route: 'Settings', label: 'Settings', icon: 'Cog' as IconName },
+    { key: 'trails' as const, route: 'Routes', label: cairnText('friends-screen.trails'), icon: 'Route' as IconName },
+    { key: 'friends' as const, route: 'Friends', label: cairnText('friends-screen.friends'), icon: 'Users' as IconName },
+    { key: 'memory' as const, route: 'Memory', label: cairnText('friends-screen.memory'), icon: 'Layers' as IconName },
+    { key: 'settings' as const, route: 'Settings', label: cairnText('friends-screen.settings'), icon: 'Cog' as IconName },
   ];
   return (
     <View style={[s.bottomNav, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -691,7 +687,7 @@ export function FriendsScreen() {
       await Promise.all([loadFriendsFromBackend(), loadRequests(), viewerId ? loadMemorySharing(viewerId) : Promise.resolve()]);
       void loadCircleMarkers();
     } else if (!result.superseded) {
-      setRequestsError(result.error || 'Could not accept request.');
+      setRequestsError(result.error || cairnText('friends-screen.could-not-accept-request'));
     }
   };
 
@@ -700,7 +696,7 @@ export function FriendsScreen() {
     const result = await rejectFriendRequestAPI(String(id));
     setBusyId(null);
     if (result.success) await loadRequests();
-    else if (!result.superseded) setRequestsError(result.error || 'Could not decline request.');
+    else if (!result.superseded) setRequestsError(result.error || cairnText('friends-screen.could-not-decline-request'));
   };
 
   const dismissDeclinedOutbound = async (req: OutboundRequest) => {
@@ -711,7 +707,7 @@ export function FriendsScreen() {
     if (result.superseded) return;
     setOutboundBusyId(null);
     if (!result.success) {
-      setOutboundErrors(errors => ({ ...errors, [req.id]: result.error || 'Couldn’t dismiss. Try again.' }));
+      setOutboundErrors(errors => ({ ...errors, [req.id]: result.error || cairnText('use-friend-store.could-not-update-this-request') }));
       return;
     }
     setOutbound((prev) => prev.filter((item) => item.id !== req.id));
@@ -733,7 +729,7 @@ export function FriendsScreen() {
     const result = await cancelOutboundRequest(cancelRequestTarget.id);
     setCancelRequestBusy(false);
     if (!result.success) {
-      if (!result.superseded) setCancelRequestError(result.error || 'Could not update this request. Try again.');
+      if (!result.superseded) setCancelRequestError(result.error || cairnText('friends-screen.could-not-update-this-request-try-again'));
       return;
     }
     setOutbound((prev) => prev.filter((r) => r.id !== cancelRequestTarget.id));
@@ -784,11 +780,11 @@ export function FriendsScreen() {
     setRemoveBusy(false);
     if (result.serverCommitted) {
       setRemoveServerCommitted(true);
-      setRemoveError(result.error || 'Unfriend completed, but local cleanup could not be confirmed.');
+      setRemoveError(result.error || cairnText('friends-screen.unfriend-completed-but-local-cleanup-could-not'));
       return;
     }
     if (!result.success) {
-      setRemoveError(result.error || 'Could not remove friend. Try again.');
+      setRemoveError(result.error || cairnText('friends-screen.could-not-remove-friend-try-again'));
       return;
     }
     setProfileFriend(null);
@@ -814,7 +810,7 @@ export function FriendsScreen() {
           <BackButton variant="inline" onPress={() => nav.goBack()} />
         </View>
         <View style={s.titleBlock}>
-          <Text style={[s.hTitle, { color: headerColor }]}>Friends</Text>
+          <Text style={[s.hTitle, { color: headerColor }]}>{cairnText('friends-screen.friends')}</Text>
         </View>
         <View style={s.headerBack} accessible={false} />
       </View>
@@ -823,7 +819,7 @@ export function FriendsScreen() {
       <SegmentedControl
         value={tab}
         onChange={(value) => setTab(value as 'friends' | 'pending')}
-        segments={[{ key: 'friends', label: 'Friends' }, { key: 'pending', label: 'Requests' }]}
+        segments={[{ key: 'friends', label: cairnText('friends-screen.friends') }, { key: 'pending', label: cairnText('friends-screen.requests') }]}
         containerStyle={s.tabsRow}
         testID="friends-tabs"
       />
@@ -839,7 +835,7 @@ export function FriendsScreen() {
         {initialLoading && !hasFriends && !hasIncoming && !hasOutbound && (
           <StateSurface
             variant="loading"
-            title="Loading friends…"
+            title={cairnText('friends-screen.loading-friends')}
             material="embedded"
             alignment="center"
             style={s.loadingBlock}
@@ -853,14 +849,14 @@ export function FriendsScreen() {
               <CairnIcon name="friends" size={IconSize.lg} color={theme.iconActive} accent={theme.accent} active />
             </View>
             <View style={s.emptyTextGroup}>
-              <Text style={[s.emptyTitle, { color: theme.foreground }]}>No friends yet</Text>
-              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>Add someone by email to connect on CairnNZ.</Text>
+              <Text style={[s.emptyTitle, { color: theme.foreground }]}>{cairnText('friends-screen.no-friends-yet')}</Text>
+              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.add-someone-by-email-to-connect-on')}</Text>
             </View>
           </View>
         )}
         {tab === 'friends' && hasFriends && (
           <>
-            <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>{friends.length} {friends.length === 1 ? 'friend' : 'friends'}</Text>
+            <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.value-value', { length: friends.length, value2: friends.length === 1 ? cairnText('friends-screen.friend') : cairnText('friends-screen.friends-882d7e5') })}</Text>
             {friends.map((f) => (
               <FriendRow
                 key={f.id}
@@ -887,8 +883,8 @@ export function FriendsScreen() {
               <Icon name="Mail" size={DS.ic_lg} color={theme.iconActive} strokeWidth={1.8} />
             </View>
             <View style={s.emptyTextGroup}>
-              <Text style={[s.emptyTitle, { color: theme.foreground }]}>No friend requests</Text>
-              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>Received and sent requests will appear here.</Text>
+              <Text style={[s.emptyTitle, { color: theme.foreground }]}>{cairnText('friends-screen.no-friend-requests')}</Text>
+              <Text style={[s.emptyBody, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.received-and-sent-requests-will-appear-here')}</Text>
             </View>
           </View>
         )}
@@ -896,7 +892,7 @@ export function FriendsScreen() {
           <>
             {showReceived && (
               <>
-                <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>Received · {visibleIncoming.length}</Text>
+                <Text style={[s.sectionTitle, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.received-value', { length: visibleIncoming.length })}</Text>
                 {visibleIncoming.map((r) => (
                   <IncomingRow
                     key={r.id}
@@ -913,7 +909,7 @@ export function FriendsScreen() {
             )}
             {showSent && (
               <>
-                <Text style={[s.sectionTitle, { marginTop: 20, color: theme.foregroundSecondary }]}>Sent · {visibleOutbound.length}</Text>
+                <Text style={[s.sectionTitle, { marginTop: 20, color: theme.foregroundSecondary }]}>{cairnText('friends-screen.sent-value', { length: visibleOutbound.length })}</Text>
                 {visibleOutbound.map((r) => (
                   <SentRow
                     key={r.id}
@@ -932,7 +928,7 @@ export function FriendsScreen() {
         )}
         {tab === 'pending' && requestsError ? (
           <TouchableOpacity style={s.requestError} onPress={() => { void loadRequests(); }} testID="friends-requests-error">
-            <Text style={[s.consentMeta, { color: theme.destructive }]}>{requestsError} Tap to retry.</Text>
+            <Text style={[s.consentMeta, { color: theme.destructive }]}>{cairnText('friends-screen.value-tap-to-retry', { requestsError: requestsError })}</Text>
           </TouchableOpacity>
         ) : null}
       </ScrollView>
@@ -940,7 +936,7 @@ export function FriendsScreen() {
       {/* One stable primary action position across list, empty and loading states. */}
       {!initialLoading && !showAdd && (
         <PrimaryButton
-          label="Add friend"
+          label={cairnText('friends-screen.add-friend')}
           onPress={() => setShowAdd(true)}
           variant="primary"
           renderIcon={(color) => <Icon name="Plus" size={DS.ic_sm} color={color} strokeWidth={2} />}
@@ -977,14 +973,14 @@ export function FriendsScreen() {
               </View>
               <DismissButton
                 onPress={closeProfile}
-                label="Close profile"
+                label={cairnText('friends-screen.close-profile')}
                 testID="friend-profile-close"
               />
             </View>
             <View style={[s.profileSharingRow, { borderColor: theme.borderSubtle, backgroundColor: theme.surfaceElevated }]}>
               <View style={{ flex: 1, paddingRight: Spacing.md }}>
-                <Text style={[s.cardName, { color: theme.foreground }]}>Share my Memory</Text>
-                <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>Full accepted history, delayed at least 30 min.</Text>
+                <Text style={[s.cardName, { color: theme.foreground }]}>{cairnText('friends-screen.share-my-memory')}</Text>
+                <Text style={[s.consentMeta, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.full-accepted-history-delayed-at-least-30-8095920')}</Text>
                 {profileFriend && grantErrors[profileFriend.id] ? (
                   <Text style={[s.consentMeta, { color: theme.destructive }]}>{grantErrors[profileFriend.id]}</Text>
                 ) : null}
@@ -993,7 +989,7 @@ export function FriendsScreen() {
                 <ActivityIndicator size="small" color={theme.primary} />
               ) : sharingLoadError ? (
                 <TouchableOpacity onPress={() => { if (viewerId) void loadMemorySharing(viewerId); }} accessibilityRole="button">
-                  <Text style={[s.consentMeta, { color: theme.primary }]}>Unavailable · Retry</Text>
+                  <Text style={[s.consentMeta, { color: theme.primary }]}>{cairnText('friends-screen.unavailable-retry')}</Text>
                 </TouchableOpacity>
               ) : (
                 <Switch
@@ -1001,7 +997,7 @@ export function FriendsScreen() {
                   disabled={grantPendingIds.includes(profileFriend.id)}
                   onValueChange={(enabled) => { void setMemoryGrant(profileFriend.id, enabled); }}
                   trackColor={{ false: theme.borderStrong, true: theme.primary }}
-                  accessibilityLabel={`Share my Memory with ${profileFriend.name}`}
+                  accessibilityLabel={cairnText('friends-screen.share-my-memory-with-value', { name: profileFriend.name })}
                   testID="friend-profile-memory-toggle"
                 />
               )}
@@ -1009,12 +1005,10 @@ export function FriendsScreen() {
             <View style={s.profileRemoveShell} testID="friend-profile-remove-region">
               {removeConfirming ? (
                 <View style={s.removeConfirmation} testID="friend-profile-remove-confirmation">
-                  <Text style={[s.removeWarning, { color: theme.foregroundSecondary }]}>
-                    You’ll lose access to routes, cairns, and explored areas shared by this friend. Your own exploration won’t be affected.
-                  </Text>
+                  <Text style={[s.removeWarning, { color: theme.foregroundSecondary }]}>{cairnText('friends-screen.you-ll-lose-access-to-routes-cairns')}</Text>
                   {removeError ? <Text style={[s.removeError, { color: theme.destructive }]}>{removeError}</Text> : null}
                   <PrimaryButton
-                    label="Remove friend"
+                    label={cairnText('friends-screen.remove-friend')}
                     variant="destructive"
                     onPress={confirmRemoveFriend}
                     loading={removeBusy}
@@ -1025,7 +1019,7 @@ export function FriendsScreen() {
                 </View>
               ) : (
                 <PrimaryButton
-                  label="Remove friend"
+                  label={cairnText('friends-screen.remove-friend')}
                   variant="secondary"
                   onPress={() => setRemoveConfirming(true)}
                   style={s.profileRemoveAction}
@@ -1044,13 +1038,13 @@ export function FriendsScreen() {
           testID="cancel-request-modal"
         >
           <ModalCardHeader
-            title={`Cancel request to ${cancelRequestTarget.toName}?`}
-            body="They won’t receive this friend request."
+            title={cairnText('friends-screen.cancel-request-to-value', { toName: cancelRequestTarget.toName })}
+            body={cairnText('friends-screen.they-won-t-receive-this-friend-request')}
             onClose={() => setCancelRequestTarget(null)}
           />
           {cancelRequestError ? <Text style={[s.dialogError, { color: theme.destructive }]}>{cancelRequestError}</Text> : null}
           <View style={s.dialogActions}>
-            <PrimaryButton label="Cancel request" variant="destructive" onPress={confirmCancelOutbound} loading={cancelRequestBusy} style={s.dialogAction} testID="cancel-request-confirm" />
+            <PrimaryButton label={cairnText('friends-screen.cancel-request')} variant="destructive" onPress={confirmCancelOutbound} loading={cancelRequestBusy} style={s.dialogAction} testID="cancel-request-confirm" />
           </View>
         </ModalCard>
       )}

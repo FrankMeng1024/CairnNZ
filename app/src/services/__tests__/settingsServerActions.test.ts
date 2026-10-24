@@ -87,7 +87,8 @@ describe('truthful Settings server actions', () => {
 
   test.each([
     [true, 200, {}, 'Feedback could not be delivered.'],
-    [false, 503, { error: 'Not accepted.' }, 'Not accepted.'],
+    // A backend body is diagnostic input, not app-owned display copy.
+    [false, 503, { error: 'Not accepted.' }, 'Feedback could not be delivered.'],
   ])('feedback does not turn HTTP response into false success', async (ok, status, body, error) => {
     global.fetch = jest.fn(async () => response(ok as boolean, status as number, body)) as unknown as typeof fetch;
     await expect(submitFeedback({

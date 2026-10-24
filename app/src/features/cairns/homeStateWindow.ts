@@ -1,4 +1,5 @@
-export type HomeStateWindow = 'save-recovery' | 'active-or-recoverable' | 'discovery' | 'recent' | 'memory' | 'first-use';
+
+import { cairnText } from '../../i18n/runtime';export type HomeStateWindow = 'save-recovery' | 'active-or-recoverable' | 'discovery' | 'recent' | 'memory' | 'first-use';
 
 export function hasPersonalMemoryEvidence(input: {
   memoryPointCount: number;
@@ -20,13 +21,13 @@ export function buildDiscoveryHomeCopy(group: {
 }, relativeTime: string): { title: string; meta: string; details: string[] } {
   const title = group.cairnCount === 1
     ? (group.eventCount > 0 && group.updatedEventCount === group.eventCount
-      ? 'A Cairn story was updated'
-      : 'A Cairn is now in Memory')
-    : `${group.cairnCount} Cairns are now in Memory`;
+      ? cairnText('cairns.home-state-window.a-cairn-story-was-updated')
+      : cairnText('cairns.home-state-window.a-cairn-is-now-in-memory'))
+    : cairnText('cairns.home-state-window.value-cairns-are-now-in-memory', { cairnCount: group.cairnCount });
   return {
     title,
-    meta: `Saved in Memory · ${relativeTime}`,
-    details: ['Saved in Memory', relativeTime],
+    meta: cairnText('cairns.home-state-window.saved-in-memory-value', { relativeTime: relativeTime }),
+    details: [cairnText('memory.saved-in-memory'), relativeTime],
   };
 }
 

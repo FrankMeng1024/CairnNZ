@@ -97,16 +97,20 @@ describe('Activity Simulator integration and safety contracts', () => {
 
   test('dual-mode source boundary preserves Clean Path and gives Raw GPS production continuity', () => {
     const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     const provider = read('src/features/activitySimulator/activityLocationProvider.ts');
     const tracking = read('src/store/useTrackingStore.ts');
     const map = read('src/screens/HikingMap.tsx');
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
-    expect(panel).toContain('SIM MODE');
-    expect(panel).toContain('Clean Path');
-    expect(panel).toContain('Raw GPS');
-    expect(panel).toContain('Product');
-    expect(panel).toContain('Diagnostic');
+    // REVISE_WITH_REASON: source integration is keyed; exact QA copy belongs
+    // only to the annotated catalog.
+    for (const key of ['sim-mode', 'clean-path', 'raw-gps', 'product', 'diagnostic']) {
+      expect(panel).toContain(`cairnText('activity-simulator.activity-simulator-panel.${key}')`);
+    }
+    for (const value of ['SIM MODE', 'Clean Path', 'Raw GPS', 'Product', 'Diagnostic']) {
+      expect(catalog).toContain(`'en-NZ': '${value}'`);
+    }
     expect(provider).toContain('simulatorObservationMode: sample.observationMode');
     expect(tracking).toContain("owned.simulatorObservationMode === 'raw-gps'");
     expect(tracking).toContain('!isSimulatorSample || isRawGpsSimulatorSample');
@@ -217,6 +221,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     const engine = read('src/features/activitySimulator/activitySimulatorEngine.ts');
     const tracking = read('src/store/useTrackingStore.ts');
     const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(time).toContain('SIMULATOR_MAX_VIRTUAL_ACTIVITY_MS');
     expect(time).toContain('SIMULATOR_FUTURE_SAFETY_MARGIN_MS');
     expect(engine).toContain('elapsedVirtualMs');
@@ -226,8 +231,12 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(tracking).toContain('simulatorActivityStartTimestamp(');
     expect(tracking).toContain('const endedAt = activityTimestampForSource(');
     expect(panel).toContain('([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map');
-    expect(panel).toContain('Replay time acceleration');
-    expect(panel).toContain('physical movement speed stays unchanged');
+    // REVISE_WITH_REASON: preserve the QA semantics via key wiring plus the
+    // single en-NZ catalog authority.
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.replay-time-acceleration')");
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.speeds-up-qa-time-physical-movement-speed')");
+    expect(catalog).toContain("'en-NZ': 'Replay time acceleration'");
+    expect(catalog).toContain("'en-NZ': 'Speeds up QA time; physical movement speed stays unchanged.'");
   });
 
   test('recovery fences and live freshness use the provider timeline without changing Real GPS', () => {
@@ -253,11 +262,16 @@ describe('Activity Simulator integration and safety contracts', () => {
   test('Auto Move follows a bounded walking geometry and straight-line mode is explicit Advanced QA', () => {
     const route = read('src/features/activitySimulator/simulatorWalkingRoute.ts');
     const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(route).toContain('/directions/v5/mapbox/walking/');
     expect(route).toContain('MAX_SIMULATOR_AUTOPILOT_POINTS');
     expect(panel).toContain("'simulator_walking_route_ready'");
-    expect(panel).toContain('无法获取步行路径，请使用摇杆');
-    expect(panel).toContain('label="直线移动"');
+    // REVISE_WITH_REASON: QA copy now resolves from the en-NZ catalog; the
+    // routing/fallback behavior remains guarded by its stable callsites.
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-280e57b')");
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-74e46ec')");
+    expect(catalog).toContain("'en-NZ': 'Could not get a walking route. Use the joystick.'");
+    expect(catalog).toContain("'en-NZ': 'Move in a straight line'");
   });
 
   test('map configuration fails safe on missing OTA token and restores outdoor information density', () => {
@@ -494,11 +508,15 @@ describe('Activity Simulator integration and safety contracts', () => {
     const store = read('src/features/activitySimulator/useActivitySimulatorStore.ts');
     const provider = read('src/features/activitySimulator/activityLocationProvider.ts');
     const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(store).toContain('startConfigured: false');
     expect(store).toContain('startConfigured: true');
     expect(provider).toContain('&& state.startConfigured');
     expect(panel).toContain('activity-simulator-start-here');
-    expect(panel).toContain('模拟起点');
+    // REVISE_WITH_REASON: start setup is identified by its stable key and the
+    // catalog carries the New Zealand English display text.
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-22f985c')");
+    expect(catalog).toContain("'en-NZ': 'Simulated start'");
   });
 
   test('both fresh Activity screens reset stale Simulator setup through the durable unfinished-Activity guard', () => {
@@ -554,6 +572,7 @@ describe('Activity Simulator integration and safety contracts', () => {
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
     const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     expect(mapState).toContain('args.acceptedPosition');
     expect(mapState).toContain("args.providerSource === 'simulator'");
     expect(mapState).toContain("args.trackingStatus !== 'idle'");
@@ -565,14 +584,19 @@ describe('Activity Simulator integration and safety contracts', () => {
     expect(run).toContain("status === 'idle' || simulatorPickerMode !== null");
     expect(panel).toContain('actions.setPickerMode(\'reacquire\')');
     expect(panel).toContain('actions.setPickerMode(\'destination\')');
-    expect(panel).toContain('模拟起点');
-    expect(panel).toContain('从这里开始');
-    expect(panel).toContain('自动前往');
+    // REVISE_WITH_REASON: keep the setup controls source-wired to catalog
+    // keys while exact English remains in one editable file.
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-22f985c')");
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-565528f')");
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-f79e562')");
     expect(panel).toContain('activity-simulator-speed-controls');
-    expect(panel).toContain('Replay time acceleration');
-    expect(panel).toContain('地形');
-    expect(panel).toContain('GPS 状态');
-    expect(panel).toContain('设置虚拟位置');
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.replay-time-acceleration')");
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-d73c7a0')");
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.gps')");
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.copy-3b720a3')");
+    for (const value of ['Start here', 'Go automatically', 'Terrain', 'GPS status', 'Set virtual location']) {
+      expect(catalog).toContain(`'en-NZ': '${value}'`);
+    }
     expect(panel).toContain("'simulator_manual_virtual_position_set'");
   });
 
@@ -608,11 +632,18 @@ describe('Activity Simulator integration and safety contracts', () => {
 
   test('runtime exposes fast replay and truthful Simulator GPS states without changing real GPS health', () => {
     const panel = read('src/features/activitySimulator/ActivitySimulatorPanel.tsx');
+    const catalog = read('src/i18n/cairnText.ts');
     const hike = read('src/screens/HikingScreen.tsx');
     const run = read('src/screens/RunningScreen.tsx');
     expect(panel).toContain('([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[])');
-    expect(panel).toContain("SIM · {observationMode === 'raw-gps' ? 'RAW GPS' : 'CLEAN'} · {timeScale}×");
-    expect(panel).toContain("normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住'");
+    // REVISE_WITH_REASON: dynamic Simulator state remains domain data; its
+    // visible labels are stable catalog keys rather than translated state.
+    expect(panel).toContain("cairnText('activity-simulator.activity-simulator-panel.sim-value-value'");
+    for (const key of ['copy-d3a1b54', 'copy-1561f19', 'copy-25af371', 'copy-44ecf11']) {
+      expect(panel).toContain(`cairnText('activity-simulator.activity-simulator-panel.${key}')`);
+    }
+    expect(catalog).toContain("'en-NZ': 'SIM · {value1} · {timeScale}×'");
+    for (const value of ['Good', 'Poor', 'Lost', 'Frozen']) expect(catalog).toContain(`'en-NZ': '${value}'`);
     expect(hike).toContain("locationProviderSource === 'simulator'");
     expect(hike).toContain("simulatorSignal === 'poor' ? 'warning'");
     expect(run).toContain("simulatorSignal === 'lost' ? 'danger'");

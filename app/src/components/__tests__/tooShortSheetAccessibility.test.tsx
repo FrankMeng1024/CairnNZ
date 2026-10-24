@@ -36,9 +36,9 @@ function accessibilityContract(source: string): boolean {
   const primary = openingTagForStyle(source, 'styles.btnPrimary');
   const secondary = openingTagForStyle(source, 'styles.btnSecondary');
   return (primary.match(/accessibilityRole="button"/g) ?? []).length === 1
-    && (primary.match(/accessibilityLabel="Got it — keep going"/g) ?? []).length === 1
+    && (primary.match(/accessibilityLabel=\{cairnText\('too-short-sheet\.got-it-keep-going'\)\}/g) ?? []).length === 1
     && (secondary.match(/accessibilityRole="button"/g) ?? []).length === 1
-    && (secondary.match(/accessibilityLabel=\{`End \$\{label\.toLowerCase\(\)\} anyway`\}/g) ?? []).length === 1;
+    && (secondary.match(/accessibilityLabel=\{cairnText\('too-short-sheet\.end-value-anyway', \{ value1: label\.toLowerCase\(\) \}\)\}/g) ?? []).length === 1;
 }
 
 describe('TooShortSheet accessibility contract', () => {
@@ -113,15 +113,18 @@ describe('TooShortSheet accessibility contract', () => {
 
   it('rejects removal or duplication of either action semantic', () => {
     const source = fs.readFileSync(sheetPath, 'utf8');
+    // REVISE_WITH_REASON: accessibility names are catalog-backed. Mutate the
+    // stable key-bearing attributes while preserving the duplicate/removal
+    // negative contract.
     const mutations = [
       mutateOpeningTag(source, 'styles.btnPrimary', tag => tag.replace('          accessibilityRole="button"\n', '')),
-      mutateOpeningTag(source, 'styles.btnPrimary', tag => tag.replace('          accessibilityLabel="Got it — keep going"\n', '')),
+      mutateOpeningTag(source, 'styles.btnPrimary', tag => tag.replace("          accessibilityLabel={cairnText('too-short-sheet.got-it-keep-going')}\n", '')),
       mutateOpeningTag(source, 'styles.btnSecondary', tag => tag.replace('          accessibilityRole="button"\n', '')),
-      mutateOpeningTag(source, 'styles.btnSecondary', tag => tag.replace('          accessibilityLabel={`End ${label.toLowerCase()} anyway`}\n', '')),
+      mutateOpeningTag(source, 'styles.btnSecondary', tag => tag.replace("          accessibilityLabel={cairnText('too-short-sheet.end-value-anyway', { value1: label.toLowerCase() })}\n", '')),
       mutateOpeningTag(source, 'styles.btnPrimary', tag => tag.replace('          accessibilityRole="button"\n',
         '          accessibilityRole="button"\n          accessibilityRole="button"\n')),
-      mutateOpeningTag(source, 'styles.btnSecondary', tag => tag.replace('          accessibilityLabel={`End ${label.toLowerCase()} anyway`}\n',
-        '          accessibilityLabel={`End ${label.toLowerCase()} anyway`}\n          accessibilityLabel={`End ${label.toLowerCase()} anyway`}\n')),
+      mutateOpeningTag(source, 'styles.btnSecondary', tag => tag.replace("          accessibilityLabel={cairnText('too-short-sheet.end-value-anyway', { value1: label.toLowerCase() })}\n",
+        "          accessibilityLabel={cairnText('too-short-sheet.end-value-anyway', { value1: label.toLowerCase() })}\n          accessibilityLabel={cairnText('too-short-sheet.end-value-anyway', { value1: label.toLowerCase() })}\n")),
     ];
 
     expect(accessibilityContract(source)).toBe(true);

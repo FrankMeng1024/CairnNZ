@@ -13,8 +13,9 @@ describe('Trails personal journey library screen contracts', () => {
 
   test('normal Trails has exactly Activities and Routes as first-class families', () => {
     const tabs = trails.slice(trails.indexOf('const TABS'), trails.indexOf('function LibraryIntro'));
-    expect(tabs).toContain("{ key: 'activities', label: 'Activities' }");
-    expect(tabs).toContain("{ key: 'routes', label: 'Routes' }");
+    // REVISE_WITH_REASON: UI copy now belongs to the catalog; retain the product-structure assertion.
+    expect(tabs).toContain("{ key: 'activities', get label() { return cairnText('routes-screen.activities'); } }");
+    expect(tabs).toContain("{ key: 'routes', get label() { return cairnText('routes-screen.routes'); } }");
     expect(tabs).not.toMatch(/Friends|Cairns|Flags|Mine/);
     expect(navigation).toContain("Routes: { initialTab?: 'routes' | 'activities' }");
   });
@@ -56,7 +57,8 @@ describe('Trails personal journey library screen contracts', () => {
   });
 
   test('Route loading failure keeps local Routes meaningful instead of claiming true empty', () => {
-    expect(trails).toContain('Routes on this device are still available.');
+    // REVISE_WITH_REASON: assert the stable message identity, not mutable en-NZ wording.
+    expect(trails).toContain("cairnText('routes-screen.couldn-t-check-the-server-routes-on')");
     expect(trails).toContain('routesLoadError');
     expect(trails).toContain('trails-routes-unavailable');
     expect(routeStore).toContain('routesLoading: true');
@@ -66,9 +68,9 @@ describe('Trails personal journey library screen contracts', () => {
     expect(detail).toContain('route-use-action');
     expect(detail).toContain("nav.navigate(mode === 'running' ? 'Running' : 'Hiking', { routeId: ready.id })");
     expect(detail).not.toContain('title="Use this Route"');
-    expect(detail.indexOf('route-use-action')).toBeLessThan(detail.indexOf('accessibilityLabel="Edit route"'));
-    expect(read('src/screens/HikingScreen.tsx')).toContain('This Route is shown on the map for reference.');
-    expect(read('src/screens/RunningScreen.tsx')).toContain('This Route is shown on the map for reference.');
+    expect(detail.indexOf('route-use-action')).toBeLessThan(detail.indexOf("accessibilityLabel={cairnText('map-history-screen.edit-route')}") );
+    expect(read('src/screens/HikingScreen.tsx')).toContain("cairnText('hiking-screen.this-route-is-shown-on-the-map')");
+    expect(read('src/screens/RunningScreen.tsx')).toContain("cairnText('running-screen.this-route-is-shown-on-the-map')");
     expect(read('src/screens/HikingMap.tsx')).toContain('id="planned-route-line"');
   });
 
@@ -82,7 +84,7 @@ describe('Trails personal journey library screen contracts', () => {
     expect(detail).toContain("creationSource: 'activity'");
     expect(detail).toContain('fromSessionId: selectedSession.id');
     expect(detail).toContain('creationSessionId: createRouteCreationSessionId()');
-    expect(detail).toContain('This Activity and its Memory stay unchanged.');
+    expect(detail).toContain("cairnText('map-history-screen.creates-a-separate-editable-copy-this-activity')");
     expect(detail).not.toContain('Save as Route');
     expect(editor).toContain('createImportedOrderedDraft');
     expect(editor).toContain("nav.replace('MapHistory', { routeId: savedId })");
@@ -90,7 +92,7 @@ describe('Trails personal journey library screen contracts', () => {
 
   test('Routes use one All/Mine/Received collection and a distinct inline Create action', () => {
     expect(trails).toContain("useState<'all' | 'mine' | 'received'>('all')");
-    expect(trails).toContain("{ key: 'received', label: 'Received' }");
+    expect(trails).toContain("{ key: 'received', label: cairnText('routes-screen.received') }");
     expect(trails).toContain('testID="route-ownership-filter"');
     expect(trails).toContain('style={[styles.inlineCreateButton');
     expect(trails).not.toContain('My Routes');
@@ -105,7 +107,7 @@ describe('Trails personal journey library screen contracts', () => {
     );
     expect(deletion).toContain('tombstoneActivity');
     expect(deletion).not.toMatch(/useMarkerStore|deleteMarker|useRouteStore|deleteRoute|useMemoryStore|resetMemory/);
-    expect(detail).toContain('Cairns, independent Routes, and Memory already earned stay in place.');
+    expect(detail).toContain("cairnText('map-history-screen.this-removes-the-activity-record-cairns-independent')");
   });
 
   test('parameterless legacy MapHistory redirects to the one Trails library', () => {

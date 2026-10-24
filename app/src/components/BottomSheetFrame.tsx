@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontSize, RadiusRole, Shadow, Spacing } from './tokens';
 import { DismissButton } from './DismissButton';
 import { useVisualTheme } from '../hooks/useVisualTheme';
+import { cairnText } from '../i18n/runtime';
 
 interface Props {
   visible: boolean;
@@ -66,7 +67,7 @@ export function BottomSheetFrame({
           onPress={dismissible ? onDismiss : undefined}
           accessible={dismissible}
           accessibilityRole={dismissible ? 'button' : undefined}
-          accessibilityLabel={dismissible ? 'Dismiss sheet' : undefined}
+          accessibilityLabel={dismissible ? cairnText('bottom-sheet-frame.dismiss-sheet') : undefined}
         />
         <View
           testID={testID}
@@ -111,7 +112,7 @@ export function BottomSheetHeader({ title, subtitle, onClose, trailing, testID }
       </View>
       {trailing}
       {onClose ? (
-        <DismissButton onPress={onClose} label="Close sheet" style={styles.close} />
+        <DismissButton onPress={onClose} label={cairnText('bottom-sheet-frame.close-sheet')} style={styles.close} />
       ) : null}
     </View>
   );

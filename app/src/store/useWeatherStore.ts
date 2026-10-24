@@ -15,6 +15,7 @@ import { create } from 'zustand';
 import { storage } from './storage';
 import type { ScenicTimeOfDay } from '../utils/scenicTime';
 import type { HikingIconCandidate, RunningIconCandidate } from '../components/home/HomeActionCandidateIcon';
+import { cairnText } from '../i18n/runtime';
 
 // WMO Weather Interpretation Codes → simplified condition bucket
 // https://open-meteo.com/en/docs#weathervariables
@@ -46,12 +47,12 @@ export function computeIsDaytime(): boolean {
 // alpine tourist hub, Christchurch covers plains, Dunedin covers south
 // coast.
 export const NZ_TEST_CITIES = [
-  { label: 'Auckland',      lat: -36.8485, lon: 174.7633 },
-  { label: 'Wellington',    lat: -41.2866, lon: 174.7756 },
-  { label: 'Christchurch',  lat: -43.5321, lon: 172.6362 },
-  { label: 'Queenstown',    lat: -45.0312, lon: 168.6626 },
-  { label: 'Wanaka',        lat: -44.7000, lon: 169.1500 },
-  { label: 'Milford Sound', lat: -44.6717, lon: 167.9256 },
+  { get label() { return cairnText('use-weather-store.auckland'); },      lat: -36.8485, lon: 174.7633 },
+  { get label() { return cairnText('use-weather-store.wellington'); },    lat: -41.2866, lon: 174.7756 },
+  { get label() { return cairnText('use-weather-store.christchurch'); },  lat: -43.5321, lon: 172.6362 },
+  { get label() { return cairnText('use-weather-store.queenstown'); },    lat: -45.0312, lon: 168.6626 },
+  { get label() { return cairnText('use-weather-store.wanaka'); },        lat: -44.7000, lon: 169.1500 },
+  { get label() { return cairnText('use-weather-store.milford-sound'); }, lat: -44.6717, lon: 167.9256 },
 ] as const;
 
 export type NZCity = typeof NZ_TEST_CITIES[number]['label'];

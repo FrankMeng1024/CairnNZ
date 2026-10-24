@@ -9,6 +9,7 @@
  */
 import { Alert, Platform } from 'react-native';
 import { crashLogger } from './crashLogger';
+import { cairnText } from '../i18n/runtime';
 
 const DEDUPE_KEY = 'cairn_lpm_warned_ts';
 const DEDUPE_WINDOW_MS = 24 * 60 * 60_000;
@@ -35,9 +36,9 @@ export async function checkAndWarnLowPowerMode(): Promise<void> {
     await AsyncStorage.setItem(DEDUPE_KEY, String(now));
     crashLogger.breadcrumb('lpm:warning_shown');
     Alert.alert(
-      'Low Power Mode is on',
-      'iOS may limit background GPS while Low Power Mode is on. For best tracking, consider turning it off or keeping Cairn in the foreground.',
-      [{ text: 'OK' }]
+      cairnText('low-power-mode-warn.low-power-mode-is-on'),
+      cairnText('low-power-mode-warn.ios-may-limit-background-gps-while-low'),
+      [{ text: cairnText('low-power-mode-warn.ok') }]
     );
   } catch {
     // expo-battery may not be available (web, old build) — silent.

@@ -42,6 +42,7 @@ import {
   updateSnapLabRunContext,
   type SnapLabTransportMode,
 } from './snapLabActivityStore';
+import { cairnText } from '../../i18n/runtime';
 
 const JOYSTICK_SIZE = SIMULATOR_JOYSTICK_SIZE;
 const JOYSTICK_KNOB = 44;
@@ -255,7 +256,7 @@ export function ActivitySimulatorPanel() {
       startConfigured,
     }, { coordinateSource: 'simulator' });
     if (status !== 'idle') {
-      actions.setLastFailure('Manual Start here is available only before Activity Start.');
+      actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.manual-start-here-is-available-only-before'));
       appendSimulatorLog('SIM_INPUT', 'manual_start_location_rejected', {
         rejectionReason: `tracking-status-${status}`,
       }, { coordinateSource: 'none' });
@@ -277,7 +278,7 @@ export function ActivitySimulatorPanel() {
       mapLoadState: mapDiagnostics.loadState,
     }, { coordinateSource: 'none' });
     if (status !== 'idle') {
-      actions.setLastFailure('Set from map center is available only before Activity Start.');
+      actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.set-from-map-center-is-available-only'));
       appendSimulatorLog('SIM_INPUT', 'use_map_center_rejected', {
         rejectionReason: `tracking-status-${status}`,
       }, { coordinateSource: 'none' });
@@ -285,7 +286,7 @@ export function ActivitySimulatorPanel() {
     }
     const center = await getSimulatorMapCenter();
     if (!center) {
-      actions.setLastFailure('Map center is not available yet.');
+      actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.map-center-is-not-available-yet'));
       appendSimulatorLog('SIM_INPUT', 'use_map_center_rejected', {
         rejectionReason: 'map-center-ref-unavailable',
         mapMounted: mapDiagnostics.mounted,
@@ -307,7 +308,7 @@ export function ActivitySimulatorPanel() {
   const confirmVirtualOrigin = async () => {
     const center = await readPickerCenter();
     if (!center) {
-      actions.setLastFailure('地图中心尚未可用');
+      actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.copy-69fed44'));
       appendSimulatorLog('SIM_INPUT', 'virtual_origin_selection_rejected', {
         rejectionReason: 'map-center-ref-unavailable',
       }, { coordinateSource: 'none' });
@@ -324,7 +325,7 @@ export function ActivitySimulatorPanel() {
   const confirmRuntimePicker = async () => {
     const center = await readPickerCenter();
     if (!center) {
-      actions.setLastFailure('地图中心尚未可用');
+      actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.copy-69fed44'));
       return;
     }
     if (pickerMode === 'reacquire') {
@@ -355,7 +356,7 @@ export function ActivitySimulatorPanel() {
         isOnline: networkState === 'online',
       });
       if (!result.ok) {
-        actions.setLastFailure('无法获取步行路径，请使用摇杆');
+        actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.copy-280e57b'));
         appendSimulatorLog('SIM_INPUT', 'simulator_walking_route_failed', {
           reason: result.reason,
         }, { coordinateSource: 'none' });
@@ -386,7 +387,7 @@ export function ActivitySimulatorPanel() {
     ) {
       const restored = await useTrackingStore.getState().reacquireSimulatorAt(current, next);
       if (!restored) {
-        actions.setLastFailure('无法恢复模拟 GPS，请保持当前状态后重试');
+        actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.gps-d387f2f'));
         return;
       }
     } else {
@@ -404,8 +405,10 @@ export function ActivitySimulatorPanel() {
   const rollback = async (distanceM: number) => {
     const result = await useTrackingStore.getState().rollbackSimulatorTail(distanceM);
     actions.setLastFailure(result.ok
-      ? `已回退 ${result.actualDistanceM.toFixed(1)}m（${result.removedPointCount} 点）`
-      : `无法回退：${result.reason ?? '路线不足'}`);
+      ? cairnText('activity-simulator.activity-simulator-panel.value-m-value', { value1: result.actualDistanceM.toFixed(1), removedPointCount: result.removedPointCount })
+      : cairnText('activity-simulator.activity-simulator-panel.value', {
+        value1: result.reason ?? cairnText('diagnostics.route.not-enough-evidence'),
+      }));
   };
 
   const useSelectedAsStart = () => {
@@ -415,8 +418,8 @@ export function ActivitySimulatorPanel() {
     }, { coordinateSource: 'none' });
     if (!mapSelection || status !== 'idle') {
       actions.setLastFailure(!mapSelection
-        ? 'Long-press the map to select a Simulator start first.'
-        : 'Start here is available only before Activity Start.');
+        ? cairnText('activity-simulator.activity-simulator-panel.long-press-the-map-to-select-a')
+        : cairnText('activity-simulator.activity-simulator-panel.start-here-is-available-only-before-activity'));
       appendSimulatorLog('SIM_INPUT', 'map_selection_start_here_rejected', {
         rejectionReason: !mapSelection ? 'no-map-selection' : `tracking-status-${status}`,
       }, { coordinateSource: 'none' });
@@ -547,8 +550,8 @@ export function ActivitySimulatorPanel() {
   const selectSnapLabTransport = (mode: SnapLabTransportMode) => {
     if (mode !== 'offline' && !snapLabTransportConfigured()) {
       Alert.alert(
-        'Replay transport not loaded',
-        'Load an exact-identity deterministic or captured cassette through the Snap Lab batch launcher first. CairnNZ will not fall through to the network.',
+        cairnText('activity-simulator.activity-simulator-panel.replay-transport-not-loaded'),
+        cairnText('activity-simulator.activity-simulator-panel.load-an-exact-identity-deterministic-or-captured'),
       );
       return;
     }
@@ -565,7 +568,7 @@ export function ActivitySimulatorPanel() {
   const forceInterruption = async () => {
     const store = useTrackingStore.getState() as any;
     if (store.status !== 'tracking' || typeof store.simulateRecordingInterruption !== 'function') {
-      actions.setLastFailure('Start or resume an Activity before simulating interruption.');
+      actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.start-or-resume-an-activity-before-simulating'));
       return;
     }
     await store.simulateRecordingInterruption();
@@ -579,12 +582,12 @@ export function ActivitySimulatorPanel() {
       const Clipboard = await import('expo-clipboard');
       await Clipboard.setStringAsync(text || 'No Simulator log events recorded.');
       actions.setLastFailure(null);
-      Alert.alert('Simulator diagnostics copied', `${text.split('\n').filter(Boolean).length} JSONL events copied to the clipboard.`);
+      Alert.alert(cairnText('activity-simulator.activity-simulator-panel.simulator-diagnostics-copied'), cairnText('activity-simulator.activity-simulator-panel.value-jsonl-events-copied-to-the-clipboard', { length: text.split('\n').filter(Boolean).length }));
       appendSimulatorLog('SIM_INPUT', 'diagnostics_copy_completed', {
         eventCount: text.split('\n').filter(Boolean).length,
       }, { coordinateSource: 'none' });
     } catch (error) {
-      actions.setLastFailure(`Diagnostics export failed: ${String(error).slice(0, 100)}`);
+      actions.setLastFailure(cairnText('activity-simulator.activity-simulator-panel.diagnostics-export-failed-value', { value1: String(error).slice(0, 100) }));
       appendSimulatorLog('ERROR', 'diagnostics_copy_failed', {
         error: String(error).slice(0, 120),
       }, { coordinateSource: 'none' });
@@ -601,13 +604,13 @@ export function ActivitySimulatorPanel() {
     <View
       testID="activity-simulator-joystick"
       style={[styles.joystickDock, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
-      accessibilityLabel="Simulator movement joystick"
+      accessibilityLabel={cairnText('activity-simulator.activity-simulator-panel.simulator-movement-joystick')}
     >
-      <Text style={[styles.joystickLabel, { color: theme.foregroundSecondary }]}>移动</Text>
+      <Text style={[styles.joystickLabel, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.copy')}</Text>
       <View style={styles.joystick} pointerEvents="box-only" {...panResponder.panHandlers}>
         <View style={styles.deadZone} />
         <Animated.View style={[styles.knob, { transform: [{ translateX: stickX }, { translateY: stickY }] }]} />
-        <Text style={styles.northLabel}>N</Text>
+        <Text style={styles.northLabel}>{cairnText('activity-simulator.activity-simulator-panel.n')}</Text>
       </View>
     </View>
   ) : null;
@@ -617,16 +620,16 @@ export function ActivitySimulatorPanel() {
   if (status === 'idle') {
     return <View style={styles.overlayHost} pointerEvents="box-none" testID="activity-simulator-overlay-host">
       <View style={[styles.preStartCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
-        <Text style={[styles.title, { color: theme.foreground }]}>模拟起点</Text>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>SIM MODE</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-22f985c')}</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.sim-mode')}</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-mode-controls">
-          <TinyButton label="Clean Path" active={observationMode === 'clean-path'} onPress={() => setObservationMode('clean-path')} />
-          <TinyButton label="Raw GPS" active={observationMode === 'raw-gps'} onPress={() => setObservationMode('raw-gps')} />
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.clean-path')} active={observationMode === 'clean-path'} onPress={() => setObservationMode('clean-path')} />
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.raw-gps')} active={observationMode === 'raw-gps'} onPress={() => setObservationMode('raw-gps')} />
         </View>
-        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? `Realistic GPS · seed ${deterministicSeed}` : 'Exact deterministic position'}</Text>
-        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>移动地图，让中心标记对准任意位置</Text>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? cairnText('activity-simulator.activity-simulator-panel.realistic-gps-seed-value', { deterministicSeed: deterministicSeed }) : cairnText('activity-simulator.activity-simulator-panel.exact-deterministic-position')}</Text>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-f0af48d')}</Text>
         <Text style={[styles.selectionText, { color: theme.foreground }]}>
-          {pickerCoordinate ? pickerCoordinate.lat.toFixed(6) + ', ' + pickerCoordinate.lng.toFixed(6) : '地图中心'}
+          {pickerCoordinate ? pickerCoordinate.lat.toFixed(6) + ', ' + pickerCoordinate.lng.toFixed(6) : cairnText('activity-simulator.activity-simulator-panel.copy-0676e83')}
         </Text>
         {lastFailure ? <Text style={styles.failureText}>{lastFailure}</Text> : null}
         <TouchableOpacity
@@ -634,34 +637,34 @@ export function ActivitySimulatorPanel() {
           style={styles.primaryButton}
           onPress={() => { void confirmVirtualOrigin(); }}
           accessibilityRole="button"
-          accessibilityLabel="从这里开始"
+          accessibilityLabel={cairnText('activity-simulator.activity-simulator-panel.copy-565528f')}
         >
-          <Text style={styles.primaryButtonText}>从这里开始</Text>
+          <Text style={styles.primaryButtonText}>{cairnText('activity-simulator.activity-simulator-panel.copy-565528f')}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowAdvanced(value => !value)} style={styles.advancedLink}>
-          <Text style={[styles.collapseText, { color: theme.foregroundSecondary }]}>更多</Text>
+          <Text style={[styles.collapseText, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-595c91f')}</Text>
         </TouchableOpacity>
         {showAdvanced ? <>
-          <Text style={[styles.sectionTitle, { color: theme.foreground }]}>SNAP LAB RUN</Text>
+          <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.snap-lab-run')}</Text>
           <View style={styles.inputActionRow}>
-            <TextInput value={snapLabCaseDraft} onChangeText={setSnapLabCaseDraft} style={styles.input} placeholder="Case ID" autoCapitalize="none" />
-            <TextInput value={snapLabProfileDraft} onChangeText={setSnapLabProfileDraft} style={styles.input} placeholder="Profile" autoCapitalize="none" />
-            <TinyButton label="Apply" onPress={applySnapLabIdentity} />
+            <TextInput value={snapLabCaseDraft} onChangeText={setSnapLabCaseDraft} style={styles.input} placeholder={cairnText('activity-simulator.activity-simulator-panel.case-id')} autoCapitalize="none" />
+            <TextInput value={snapLabProfileDraft} onChangeText={setSnapLabProfileDraft} style={styles.input} placeholder={cairnText('activity-simulator.activity-simulator-panel.profile')} autoCapitalize="none" />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.apply')} onPress={applySnapLabIdentity} />
           </View>
           <View style={styles.buttonRowWrap} testID="snap-lab-network-controls">
-            <TinyButton label="Offline" active={snapLabTransportMode === 'offline'} onPress={() => selectSnapLabTransport('offline')} />
-            <TinyButton label="Deterministic" active={snapLabTransportMode === 'deterministic'} onPress={() => selectSnapLabTransport('deterministic')} />
-            <TinyButton label="Captured" active={snapLabTransportMode === 'captured'} onPress={() => selectSnapLabTransport('captured')} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.offline')} active={snapLabTransportMode === 'offline'} onPress={() => selectSnapLabTransport('offline')} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.deterministic')} active={snapLabTransportMode === 'deterministic'} onPress={() => selectSnapLabTransport('deterministic')} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.captured')} active={snapLabTransportMode === 'captured'} onPress={() => selectSnapLabTransport('captured')} />
           </View>
-          <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Network replay is isolated and exact-identity only; no live fallback.</Text>
+          <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.network-replay-is-isolated-and-exact-identity')}</Text>
           <View style={styles.inputActionRow}>
-            <TextInput value={seedDraft} onChangeText={setSeedDraft} style={styles.smallInput} keyboardType="number-pad" placeholder="Seed" />
-            <TinyButton label="Set seed" onPress={setSeed} />
+            <TextInput value={seedDraft} onChangeText={setSeedDraft} style={styles.smallInput} keyboardType="number-pad" placeholder={cairnText('activity-simulator.activity-simulator-panel.seed')} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.set-seed')} onPress={setSeed} />
           </View>
           <View style={styles.inputActionRow}>
-            <TextInput value={latDraft} onChangeText={setLatDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder="纬度" />
-            <TextInput value={lngDraft} onChangeText={setLngDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder="经度" />
-            <TinyButton label="使用坐标" onPress={applyManualStart} />
+            <TextInput value={latDraft} onChangeText={setLatDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder={cairnText('activity-simulator.activity-simulator-panel.copy-ea0ebba')} />
+            <TextInput value={lngDraft} onChangeText={setLngDraft} style={styles.input} keyboardType="numbers-and-punctuation" placeholder={cairnText('activity-simulator.activity-simulator-panel.copy-8a22e1c')} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-ac5f2f5')} onPress={applyManualStart} />
           </View>
         </> : null}
       </View>
@@ -671,14 +674,14 @@ export function ActivitySimulatorPanel() {
   if (pickerMode) {
     return <View style={styles.overlayHost} pointerEvents="box-none" testID="activity-simulator-overlay-host">
       <View style={[styles.preStartCard, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
-        <Text style={[styles.title, { color: theme.foreground }]}>{pickerMode === 'reacquire' ? '重新定位' : '选择目的地'}</Text>
-        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>移动地图到目标位置</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{pickerMode === 'reacquire' ? cairnText('activity-simulator.activity-simulator-panel.copy-3cef39f') : cairnText('activity-simulator.activity-simulator-panel.copy-28ee554')}</Text>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-08c6c56')}</Text>
         <Text style={[styles.selectionText, { color: theme.foreground }]}>
-          {mapSelection ? mapSelection.lat.toFixed(6) + ', ' + mapSelection.lng.toFixed(6) : '地图中心'}
+          {mapSelection ? mapSelection.lat.toFixed(6) + ', ' + mapSelection.lng.toFixed(6) : cairnText('activity-simulator.activity-simulator-panel.copy-0676e83')}
         </Text>
         <View style={styles.buttonRow}>
-          <TinyButton label={pickerMode === 'reacquire' ? '从这里继续' : '自动前往'} onPress={() => { void confirmRuntimePicker(); }} />
-          <TinyButton label="取消" onPress={() => { straightLinePickerRef.current = false; actions.setPickerMode(null); }} />
+          <TinyButton label={pickerMode === 'reacquire' ? cairnText('activity-simulator.activity-simulator-panel.copy-c912333') : cairnText('activity-simulator.activity-simulator-panel.copy-f79e562')} onPress={() => { void confirmRuntimePicker(); }} />
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-d658553')} onPress={() => { straightLinePickerRef.current = false; actions.setPickerMode(null); }} />
         </View>
       </View>
     </View>;
@@ -692,106 +695,104 @@ export function ActivitySimulatorPanel() {
         activeOpacity={0.84}
         onPress={() => actions.setExpanded(true)}
         accessibilityRole="button"
-        accessibilityLabel={`打开模拟行走，${observationMode === 'raw-gps' ? 'Raw GPS' : 'Clean Path'}，当前 ${timeScale} 倍，GPS ${signal}`}
+        accessibilityLabel={cairnText('activity-simulator.activity-simulator-panel.value-value-gps-value', { value1: observationMode === 'raw-gps' ? cairnText('activity-simulator.activity-simulator-panel.raw-gps') : cairnText('activity-simulator.activity-simulator-panel.clean-path'), timeScale: timeScale, signal: signal })}
       >
-        <Text style={[styles.collapsedTitle, { color: theme.foreground }]}>SIM · {observationMode === 'raw-gps' ? 'RAW GPS' : 'CLEAN'} · {timeScale}×</Text>
+        <Text style={[styles.collapsedTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.sim-value-value', { value1: observationMode === 'raw-gps' ? cairnText('activity-simulator.activity-simulator-panel.raw-gps-08f4b01') : cairnText('activity-simulator.activity-simulator-panel.clean'), timeScale: timeScale })}</Text>
       </TouchableOpacity>
       {status === 'tracking' ? joystick : null}
     </View>;
   }
 
-  const speedLabels: Record<string, string> = { slow: '慢走', walk: '徒步', brisk: '快走', run: '跑步', custom: '自定义' };
-  const gpsLabels: Record<SimulatorSignal, string> = { normal: '正常', poor: '较差', lost: '丢失', frozen: '卡住' };
-  const terrainLabels: Record<string, string> = { flat: '平地', climb: '上坡', descend: '下坡' };
+  const speedLabels: Record<string, string> = { slow: cairnText('activity-simulator.activity-simulator-panel.copy-bdf6942'), walk: cairnText('activity-simulator.activity-simulator-panel.copy-2e6924d'), brisk: cairnText('activity-simulator.activity-simulator-panel.copy-5e40543'), run: cairnText('activity-simulator.activity-simulator-panel.copy-d6a8ba7'), custom: cairnText('activity-simulator.activity-simulator-panel.copy-09e5d3d') };
+  const gpsLabels: Record<SimulatorSignal, string> = { normal: cairnText('activity-simulator.activity-simulator-panel.copy-d3a1b54'), poor: cairnText('activity-simulator.activity-simulator-panel.copy-1561f19'), lost: cairnText('activity-simulator.activity-simulator-panel.copy-25af371'), frozen: cairnText('activity-simulator.activity-simulator-panel.copy-44ecf11') };
+  const terrainLabels: Record<string, string> = { flat: cairnText('activity-simulator.activity-simulator-panel.copy-572bfd8'), climb: cairnText('activity-simulator.activity-simulator-panel.copy-1d0a2ba'), descend: cairnText('activity-simulator.activity-simulator-panel.copy-4dd1ef6') };
 
   return <View style={styles.overlayHost} pointerEvents="box-none" testID="activity-simulator-overlay-host">
     <View style={[styles.expanded, styles.expandedRuntime, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]} testID="activity-simulator-expanded">
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.title, { color: theme.foreground }]}>Simulator walk</Text>
-          <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? 'RAW GPS · REALISTIC' : 'CLEAN PATH'} · {speedKmh.toFixed(1)} km/h · {timeScale}× · seed {deterministicSeed}</Text>
+          <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.simulator-walk')}</Text>
+          <Text style={[styles.meta, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.value-value-km-h-value-seed-value', { value1: observationMode === 'raw-gps' ? cairnText('activity-simulator.activity-simulator-panel.raw-gps-realistic') : cairnText('activity-simulator.activity-simulator-panel.clean-path-242e2d9'), value2: speedKmh.toFixed(1), timeScale: timeScale, deterministicSeed: deterministicSeed })}</Text>
         </View>
         <TouchableOpacity onPress={() => actions.setExpanded(false)} style={styles.collapseButton}>
-          <Text style={[styles.collapseText, { color: theme.foreground }]}>收起</Text>
+          <Text style={[styles.collapseText, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-ab75eaa')}</Text>
         </TouchableOpacity>
       </View>
       <ScrollView testID="activity-simulator-settings-scroll" style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" nestedScrollEnabled>
         {lastFailure ? <View style={styles.failureBanner}><Text style={styles.failureText}>{lastFailure}</Text></View> : null}
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>SIM MODE</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.sim-mode')}</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-mode-controls">
-          <TinyButton label="Clean Path" active={observationMode === 'clean-path'} disabled onPress={() => setObservationMode('clean-path')} />
-          <TinyButton label="Raw GPS" active={observationMode === 'raw-gps'} disabled onPress={() => setObservationMode('raw-gps')} />
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.clean-path')} active={observationMode === 'clean-path'} disabled onPress={() => setObservationMode('clean-path')} />
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.raw-gps')} active={observationMode === 'raw-gps'} disabled onPress={() => setObservationMode('raw-gps')} />
         </View>
-        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? 'Joystick and Auto Move are ground truth; correlated GPS observations enter Activity.' : 'Intended position enters Activity exactly and remains deterministic.'}</Text>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>VIEW</Text>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{observationMode === 'raw-gps' ? cairnText('activity-simulator.activity-simulator-panel.joystick-and-auto-move-are-ground-truth') : cairnText('activity-simulator.activity-simulator-panel.intended-position-enters-activity-exactly-and-remains')}</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.view')}</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-view-controls">
-          <TinyButton label="Product" active={!diagnosticsVisible} onPress={() => actions.setDiagnosticsVisible(false)} />
-          <TinyButton label="Diagnostic" active={diagnosticsVisible} onPress={() => actions.setDiagnosticsVisible(true)} />
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.product')} active={!diagnosticsVisible} onPress={() => actions.setDiagnosticsVisible(false)} />
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.diagnostic')} active={diagnosticsVisible} onPress={() => actions.setDiagnosticsVisible(true)} />
         </View>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Movement speed · {speedKmh.toFixed(1)} km/h</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.movement-speed-value-km-h', { value1: speedKmh.toFixed(1) })}</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-speed-controls">
           {(['slow', 'walk', 'brisk', 'run', 'custom'] as SimulatorSpeedPreset[]).map(preset => <TinyButton key={preset} label={speedLabels[preset]} active={speedPreset === preset || (preset === 'walk' && speedPreset === 'hike')} onPress={() => setSpeed(preset)} />)}
         </View>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Replay time acceleration</Text>
-        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Speeds up QA time; physical movement speed stays unchanged.</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.replay-time-acceleration')}</Text>
+        <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.speeds-up-qa-time-physical-movement-speed')}</Text>
         <View style={styles.buttonRowWrap} testID="activity-simulator-time-scale-controls">
           {([1, 2, 5, 10, 30, 60, 120] as SimulatorTimeScale[]).map(scale => <TinyButton key={scale} label={String(scale) + '×'} active={timeScale === scale} disabled={observationMode === 'raw-gps' && scale > 10} onPress={() => setTimeScale(scale)} />)}
         </View>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>GPS 状态</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.gps')}</Text>
         <View style={styles.buttonRowWrap}>
           {(['normal', 'poor', 'lost', 'frozen'] as SimulatorSignal[]).map(item => <TinyButton key={item} label={gpsLabels[item]} active={signal === item} danger={item === 'lost' && signal === item} onPress={() => { void setGpsState(item); }} />)}
         </View>
-        {signal === 'lost' ? <TinyButton label="重新定位" onPress={() => { actions.setMapSelection(null); actions.setPickerMode('reacquire'); }} /> : null}
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>地形</Text>
+        {signal === 'lost' ? <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-3cef39f')} onPress={() => { actions.setMapSelection(null); actions.setPickerMode('reacquire'); }} /> : null}
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-d73c7a0')}</Text>
         <View style={styles.buttonRowWrap}>
           {(['flat', 'climb', 'descend'] as SimulatorAltitudeMode[]).map(mode => <TinyButton key={mode} label={terrainLabels[mode]} active={altitudeMode === mode} onPress={() => setAltitudeModel(mode)} />)}
         </View>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>自动移动</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-a9d1d2f')}</Text>
         <View style={styles.buttonRowWrap}>
-          <TinyButton label="自动前往" onPress={() => { straightLinePickerRef.current = false; actions.setMapSelection(null); actions.setPickerMode('destination'); }} />
-          {autopilotActive ? <TinyButton label="停止" danger onPress={() => actions.stopAutopilot()} /> : null}
+          <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-f79e562')} onPress={() => { straightLinePickerRef.current = false; actions.setMapSelection(null); actions.setPickerMode('destination'); }} />
+          {autopilotActive ? <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-6b79818')} danger onPress={() => actions.stopAutopilot()} /> : null}
         </View>
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>路线纠正</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-32fa2ab')}</Text>
         <View style={styles.buttonRowWrap}>
           {[10, 25, 50, 100].map(metres => <TinyButton key={metres} label={'回退 ' + metres + 'm'} onPress={() => { void rollback(metres); }} />)}
         </View>
         <TouchableOpacity onPress={() => setShowAdvanced(value => !value)} style={styles.advancedLink}>
-          <Text style={[styles.collapseText, { color: theme.foregroundSecondary }]}>更多</Text>
+          <Text style={[styles.collapseText, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.copy-595c91f')}</Text>
         </TouchableOpacity>
         {showAdvanced ? <>
-          <Text style={[styles.diagnostic, { color: theme.foregroundSecondary }]}>Ground truth {current.lat.toFixed(6)}, {current.lng.toFixed(6)}</Text>
+          <Text style={[styles.diagnostic, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.ground-truth-value-value', { value1: current.lat.toFixed(6), value2: current.lng.toFixed(6) })}</Text>
           <View style={styles.inputActionRow}>
-            <TextInput value={seedDraft} onChangeText={setSeedDraft} style={styles.smallInput} keyboardType="number-pad" placeholder="Seed" />
-            <TinyButton label="Set seed" disabled onPress={setSeed} />
+            <TextInput value={seedDraft} onChangeText={setSeedDraft} style={styles.smallInput} keyboardType="number-pad" placeholder={cairnText('activity-simulator.activity-simulator-panel.seed')} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.set-seed')} disabled onPress={setSeed} />
           </View>
           <View style={styles.inputActionRow}>
-            <TextInput value={latDraft} onChangeText={setLatDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" placeholder="纬度" />
-            <TextInput value={lngDraft} onChangeText={setLngDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" placeholder="经度" />
-            <TinyButton label="设置虚拟位置" onPress={setManualVirtualPosition} />
+            <TextInput value={latDraft} onChangeText={setLatDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" placeholder={cairnText('activity-simulator.activity-simulator-panel.copy-ea0ebba')} />
+            <TextInput value={lngDraft} onChangeText={setLngDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" placeholder={cairnText('activity-simulator.activity-simulator-panel.copy-8a22e1c')} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-3b720a3')} onPress={setManualVirtualPosition} />
           </View>
           <View style={styles.inputActionRow}>
             <TextInput value={speedDraft} onChangeText={setSpeedDraft} style={styles.smallInput} keyboardType="decimal-pad" />
-            <TinyButton label="自定义 km/h" onPress={setCustomSpeed} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.km-h')} onPress={setCustomSpeed} />
           </View>
           {observationMode === 'clean-path' ? <View style={styles.inputActionRow}>
             <TextInput value={accuracyDraft} onChangeText={setAccuracyDraft} style={styles.smallInput} keyboardType="decimal-pad" />
-            <TinyButton label="精度 ±m" onPress={setCustomAccuracy} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.m')} onPress={setCustomAccuracy} />
             <TextInput value={verticalDraft} onChangeText={setVerticalDraft} style={styles.smallInput} keyboardType="numbers-and-punctuation" />
-            <TinyButton label="高度 m/h" onPress={setCustomVerticalRate} />
-          </View> : <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>Realistic GPS derives hAcc from correlated error. Use GPS Poor for bounded degradation.</Text>}
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.m-h')} onPress={setCustomVerticalRate} />
+          </View> : <Text style={[styles.hint, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.realistic-gps-derives-hacc-from-correlated-error')}</Text>}
           <View style={styles.buttonRowWrap}>
-            <TinyButton label="直线移动" onPress={() => {
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-74e46ec')} onPress={() => {
               straightLinePickerRef.current = true;
               actions.setMapSelection(null);
               actions.setPickerMode('destination');
             }} />
           </View>
-          <Text testID="activity-simulator-native-diagnostics" style={[styles.diagnostic, { color: theme.foregroundSecondary }]}>
-            QA {qaSessionId ?? '…'} · {observationMode.toUpperCase()} · seed {deterministicSeed}{'\n'}map {mapDiagnostics.mountId ?? '—'} · style {mapDiagnostics.styleLoaded ? 'YES' : 'NO'} · ready {mapDiagnostics.mapReady ? 'YES' : 'NO'}{'\n'}provider {locationProviderSource.toUpperCase()} · owner {ownerGeneration?.slice(-8) ?? '—'} · seg {currentSegmentId?.slice(-8) ?? '—'}{'\n'}truth {lastGeneratedSample?.groundTruthLat != null && lastGeneratedSample?.groundTruthLng != null ? `${lastGeneratedSample.groundTruthLat.toFixed(6)},${lastGeneratedSample.groundTruthLng.toFixed(6)}` : '—'}{'\n'}raw #{lastGeneratedSample?.sequence ?? 0} {lastGeneratedSample ? `${lastGeneratedSample.lat.toFixed(6)},${lastGeneratedSample.lng.toFixed(6)}` : '—'} · hAcc {lastGeneratedSample?.accuracyM?.toFixed(1) ?? '—'}{'\n'}accepted #{lastAcceptedSample?.sequence ?? 0} {lastAcceptedSample?.lat != null && lastAcceptedSample?.lng != null ? `${lastAcceptedSample.lat.toFixed(6)},${lastAcceptedSample.lng.toFixed(6)}` : '—'} · rejected {lastRejectionReason ?? '—'}{'\n'}committed {committedPointCount} {committedPosition ? `${committedPosition.lat.toFixed(6)},${committedPosition.lng.toFixed(6)}` : '—'} · sync {String(latestSyncState).toUpperCase()} · network {networkState.toUpperCase()}
-          </Text>
+          <Text testID="activity-simulator-native-diagnostics" style={[styles.diagnostic, { color: theme.foregroundSecondary }]}>{cairnText('activity-simulator.activity-simulator-panel.qa-value-value-seed-value-value-map', { value1: qaSessionId ?? '…', value2: observationMode.toUpperCase(), deterministicSeed: deterministicSeed, value4: '\n', value5: mapDiagnostics.mountId ?? '—', value6: mapDiagnostics.styleLoaded ? cairnText('activity-simulator.activity-simulator-panel.yes') : cairnText('activity-simulator.activity-simulator-panel.no'), value7: mapDiagnostics.mapReady ? cairnText('activity-simulator.activity-simulator-panel.yes') : cairnText('activity-simulator.activity-simulator-panel.no'), value8: '\n', value9: locationProviderSource.toUpperCase(), value10: ownerGeneration?.slice(-8) ?? '—', value11: currentSegmentId?.slice(-8) ?? '—', value12: '\n', value13: lastGeneratedSample?.groundTruthLat != null && lastGeneratedSample?.groundTruthLng != null ? cairnText('activity-simulator.activity-simulator-panel.value-value', { value1: lastGeneratedSample.groundTruthLat.toFixed(6), value2: lastGeneratedSample.groundTruthLng.toFixed(6) }) : '—', value14: '\n', value15: lastGeneratedSample?.sequence ?? 0, value16: lastGeneratedSample ? cairnText('activity-simulator.activity-simulator-panel.value-value', { value1: lastGeneratedSample.lat.toFixed(6), value2: lastGeneratedSample.lng.toFixed(6) }) : '—', value17: lastGeneratedSample?.accuracyM?.toFixed(1) ?? '—', value18: '\n', value19: lastAcceptedSample?.sequence ?? 0, value20: lastAcceptedSample?.lat != null && lastAcceptedSample?.lng != null ? cairnText('activity-simulator.activity-simulator-panel.value-value', { value1: lastAcceptedSample.lat.toFixed(6), value2: lastAcceptedSample.lng.toFixed(6) }) : '—', value21: lastRejectionReason ?? '—', value22: '\n', committedPointCount: committedPointCount, value24: committedPosition ? cairnText('activity-simulator.activity-simulator-panel.value-value', { value1: committedPosition.lat.toFixed(6), value2: committedPosition.lng.toFixed(6) }) : '—', value25: String(latestSyncState).toUpperCase(), value26: networkState.toUpperCase() })}</Text>
           <View style={styles.buttonRowWrap}>
-            <TinyButton label="Copy JSONL" onPress={() => { void copyDiagnostics(); }} />
-            <TinyButton label="强制中断" danger disabled={status !== 'tracking'} onPress={() => { void forceInterruption(); }} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-jsonl')} onPress={() => { void copyDiagnostics(); }} />
+            <TinyButton label={cairnText('activity-simulator.activity-simulator-panel.copy-f14a25c')} danger disabled={status !== 'tracking'} onPress={() => { void forceInterruption(); }} />
           </View>
         </> : null}
       </ScrollView>

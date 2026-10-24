@@ -24,6 +24,7 @@ import {
 } from '../activity/activityStageLedger';
 import type { SnapLabCassetteEntry, SnapLabTransportReceipt } from './snapLabTransport';
 import type { ActivityDiagnosticReplayExport } from '../activity/activityDiagnosticReplay';
+import { cairnText } from '../../i18n/runtime';
 
 export type SnapLabTransportMode = 'offline' | 'deterministic' | 'captured' | 'live';
 export type SnapLabEvidenceLabel =

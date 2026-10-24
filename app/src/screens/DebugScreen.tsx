@@ -49,6 +49,7 @@ import {
   setRouteDrawingDiagnosticsEnabled,
   type RouteDrawingTrace,
 } from '../features/routeDrawing/routeDrawingTrace';
+import { cairnText, formatCairnDate, formatCairnNumber } from '../i18n/runtime';
 
 export function DebugScreen() {
   const nav = useNavigation();
@@ -111,12 +112,12 @@ export function DebugScreen() {
   const exportLatestRouteDrawing = useCallback(async () => {
     const latest = listRouteDrawingTraces(ownerUserId)[0];
     if (!latest) {
-      Alert.alert('No Route drawing trace', 'Arm capture, reproduce one drawing operation, then return here.');
+      Alert.alert(cairnText('debug-screen.no-route-drawing-trace'), cairnText('debug-screen.arm-capture-reproduce-one-drawing-operation-then'));
       return;
     }
     const body = exportRouteDrawingTrace(latest.sessionId, ownerUserId);
     if (!body || !FileSystem.documentDirectory) {
-      Alert.alert('Export unavailable', 'The local trace file could not be created on this device.');
+      Alert.alert(cairnText('debug-screen.export-unavailable'), cairnText('debug-screen.the-local-trace-file-could-not-be'));
       return;
     }
     setBusyId(`route:${latest.sessionId}`);
@@ -127,15 +128,15 @@ export function DebugScreen() {
       const path = `${dir}${latest.sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
       await FileSystem.writeAsStringAsync(path, body, { encoding: FileSystem.EncodingType.UTF8 });
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert('Trace saved locally', path);
+        Alert.alert(cairnText('debug-screen.trace-saved-locally'), path);
         return;
       }
       await Sharing.shareAsync(path, {
         mimeType: 'application/json',
-        dialogTitle: `Cairn Route drawing trace ${latest.sessionId}`,
+        dialogTitle: cairnText('debug-screen.cairn-route-drawing-trace-value', { sessionId: latest.sessionId }),
       });
     } catch (error) {
-      Alert.alert('Export failed', String(error));
+      Alert.alert(cairnText('debug-screen.export-failed'), String(error));
     } finally {
       setBusyId(null);
       void refresh();
@@ -163,9 +164,9 @@ export function DebugScreen() {
     const r = await telemetryUploader.upload(s.session_id);
     setBusyId(null);
     Alert.alert(
-      r.ok ? 'Uploaded ✓' : 'Upload failed',
-      r.ok ? `Sent ${r.bytes} bytes.` : (r.error || 'Unknown error'),
-      [{ text: 'OK' }],
+      r.ok ? cairnText('debug-screen.uploaded') : cairnText('debug-screen.upload-failed'),
+      r.ok ? cairnText('debug-screen.sent-value-bytes', { bytes: r.bytes }) : (r.error || cairnText('debug-screen.unknown-error')),
+      [{ text: cairnText('debug-screen.ok') }],
     );
     refresh();
   }
@@ -179,20 +180,20 @@ export function DebugScreen() {
       }
       const path = await debugLogger.getSessionFilePath(s.session_id);
       if (!path) {
-        Alert.alert('Export failed', 'Session file not found.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('debug-screen.export-failed'), cairnText('debug-screen.session-file-not-found'), [{ text: cairnText('debug-screen.ok') }]);
         return;
       }
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
-        Alert.alert('Sharing unavailable', 'This platform does not support sharing.', [{ text: 'OK' }]);
+        Alert.alert(cairnText('debug-screen.sharing-unavailable'), cairnText('debug-screen.this-platform-does-not-support-sharing'), [{ text: cairnText('debug-screen.ok') }]);
         return;
       }
       await Sharing.shareAsync(path, {
         mimeType: 'application/x-ndjson',
-        dialogTitle: `Cairn session ${s.session_id}`,
+        dialogTitle: cairnText('debug-screen.cairn-session-value', { session_id: s.session_id }),
       });
     } catch (err) {
-      Alert.alert('Export failed', String(err), [{ text: 'OK' }]);
+      Alert.alert(cairnText('debug-screen.export-failed'), String(err), [{ text: cairnText('debug-screen.ok') }]);
     } finally {
       setBusyId(null);
     }
@@ -237,11 +238,11 @@ export function DebugScreen() {
       await clearSnapLabRealmForOwner(ownerUserId);
       setClearSnapLabOpen(false);
       await refresh();
-      Alert.alert('Snap Lab cleared', 'All isolated Activities, WAL evidence, diagnostics and QA Memory for this owner were verified removed.');
+      Alert.alert(cairnText('debug-screen.snap-lab-cleared'), cairnText('debug-screen.all-isolated-activities-wal-evidence-diagnostics-and'));
     } catch (error) {
       Alert.alert(
-        'Snap Lab not fully cleared',
-        `CairnNZ could not verify complete removal. No success was claimed. ${String(error).slice(0, 140)}`,
+        cairnText('debug-screen.snap-lab-not-fully-cleared'),
+        cairnText('debug-screen.cairnnz-could-not-verify-complete-removal-no', { value1: String(error).slice(0, 140) }),
       );
     } finally {
       setDestructiveBusy(false);
@@ -254,9 +255,9 @@ export function DebugScreen() {
     setLoading(false);
     const okCount = results.filter((r) => r.ok).length;
     Alert.alert(
-      'Upload finished',
-      `${okCount} / ${results.length} sessions uploaded successfully.`,
-      [{ text: 'OK' }],
+      cairnText('debug-screen.upload-finished'),
+      cairnText('debug-screen.value-value-sessions-uploaded-successfully', { okCount: okCount, length: results.length }),
+      [{ text: cairnText('debug-screen.ok') }],
     );
     refresh();
   }
@@ -269,7 +270,7 @@ export function DebugScreen() {
         <SafeAreaView style={{ flex: 1 }}>
           <View style={styles.topBar}>
             <BackButton onPress={() => nav.goBack()} />
-            <Text style={styles.title}>Debug unavailable</Text>
+            <Text style={styles.title}>{cairnText('debug-screen.debug-unavailable')}</Text>
           </View>
         </SafeAreaView>
       </View>
@@ -281,46 +282,34 @@ export function DebugScreen() {
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.topBar}>
           <BackButton onPress={() => nav.goBack()} />
-          <Text style={styles.title}>Debug</Text>
+          <Text style={styles.title}>{cairnText('debug-screen.debug')}</Text>
         </View>
 
         <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
           {/* Status */}
           <View style={styles.section}>
-            <Text style={styles.sectionHeader}>STATUS</Text>
+            <Text style={styles.sectionHeader}>{cairnText('debug-screen.status')}</Text>
             <View style={styles.statusBox}>
-              <Row label="Enable QA tools">
+              <Row label={cairnText('debug-screen.enable-qa-tools')}>
                 <Switch
                   testID="debug-mode-toggle"
                   value={debugMode}
                   onValueChange={(value) => updateSetting('debugMode', value)}
                 />
               </Row>
-              <Text style={styles.statusLine}>
-                Debug mode: {debugMode ? 'ON' : 'OFF'}
-              </Text>
-              <Text style={styles.statusLine}>
-                Stored sessions: {sessions.length}
-              </Text>
-              <Text style={styles.statusLine}>
-                Total events: {stats.totalEvents.toLocaleString()}
-              </Text>
-              <Text style={styles.statusLine}>
-                Storage used: {(stats.totalSize / 1024).toFixed(1)} KB
-              </Text>
-              <Text style={styles.statusLine}>
-                Buffer (in-memory, current session): {bufferSize}
-              </Text>
-              <Text style={styles.statusLine}>
-                Dropped events (overflow): {debugLogger.getDroppedEventsCount()}
-              </Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.debug-mode-value', { value1: debugMode ? cairnText('debug-screen.on') : cairnText('debug-screen.off') })}</Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.stored-sessions-value', { length: sessions.length })}</Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.total-events-value', { value1: formatCairnNumber(stats.totalEvents) })}</Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.storage-used-value-kb', { value1: (stats.totalSize / 1024).toFixed(1) })}</Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.buffer-in-memory-current-session-value', { bufferSize: bufferSize })}</Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.dropped-events-overflow-value', { value1: debugLogger.getDroppedEventsCount() })}</Text>
             </View>
             </View>
 
             {activitySimulatorBuildCapable ? (
               <View style={styles.section} testID="activity-simulator-owner">
-                <Text style={styles.sectionHeader}>ACTIVITY SIMULATOR</Text>
-                <Row label="Activity Simulator">
+                <Text style={styles.sectionHeader}>{cairnText('debug-screen.activity-simulator')}</Text>
+                <Row label={cairnText('debug-screen.activity-simulator-755948c')}>
                   <Switch
                     testID="activity-simulator-toggle"
                     value={activitySimulatorEnabled}
@@ -330,17 +319,17 @@ export function DebugScreen() {
                 </Row>
                 <Text style={styles.fieldHint}>
                   {!debugMode
-                    ? 'Enable QA tools first.'
+                    ? cairnText('debug-screen.enable-qa-tools-first')
                     : simulatorContinuity.locked
                       ? simulatorContinuity.reason
-                      : 'Uses the explicit Clean Path or Raw GPS test source in Hike and Run.'}
+                      : cairnText('debug-screen.uses-the-explicit-clean-path-or-raw')}
                 </Text>
               </View>
             ) : null}
 
           <View style={styles.section} testID="route-drawing-diagnostics">
-            <Text style={styles.sectionHeader}>ROUTE DRAWING REPLAY</Text>
-            <Row label="Arm next local trace">
+            <Text style={styles.sectionHeader}>{cairnText('debug-screen.route-drawing-replay')}</Text>
+            <Row label={cairnText('debug-screen.arm-next-local-trace')}>
               <Switch
                 testID="route-drawing-trace-toggle"
                 value={routeDrawingArmed}
@@ -349,25 +338,23 @@ export function DebugScreen() {
               />
             </Row>
             <View style={styles.statusBox}>
-              <Text style={styles.statusLine}>Local traces: {routeDrawingTraces.length} / 8</Text>
-              <Text style={styles.fieldHint}>
-                Precise finger and Route geometry stays in a bounded local buffer. Cairn never uploads it automatically. Export is always manual.
-              </Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.local-traces-value-8', { length: routeDrawingTraces.length })}</Text>
+              <Text style={styles.fieldHint}>{cairnText('debug-screen.precise-finger-and-route-geometry-stays-in')}</Text>
               <View style={styles.actionRow}>
                 <ActionPill
-                  label="Replay latest"
+                  label={cairnText('debug-screen.replay-latest')}
                   onPress={() => {
                     const latest = listRouteDrawingTraces(ownerUserId)[0];
                     (nav as any).navigate('RouteDrawingReplay', latest ? { sessionId: latest.sessionId } : { fixtureId: 'flattenV' });
                   }}
                 />
                 <ActionPill
-                  label="Export latest"
+                  label={cairnText('debug-screen.export-latest')}
                   onPress={() => { void exportLatestRouteDrawing(); }}
                   busy={busyId?.startsWith('route:')}
                 />
                 <ActionPill
-                  label="Clear local"
+                  label={cairnText('debug-screen.clear-local')}
                   danger
                   onPress={() => {
                     clearRouteDrawingTraces();
@@ -382,15 +369,13 @@ export function DebugScreen() {
 
           {activitySimulatorBuildCapable ? (
             <View style={styles.section} testID="snap-lab-shelf">
-              <Text style={styles.sectionHeader}>QA → ACTIVITY REPLAY LAB</Text>
+              <Text style={styles.sectionHeader}>{cairnText('debug-screen.qa-activity-replay-lab')}</Text>
               <View style={styles.statusBox}>
-                <Text style={styles.statusLine}>Snap Lab records: {snapLabActivities.length}</Text>
-                <Text style={styles.fieldHint}>
-                  Raw GPS → qualification → canonical → isolated WAL → Live → Finish → selected Final → persisted QA Detail. Records and QA Route snapshots stay local and never enter product sync or Personal Memory.
-                </Text>
+                <Text style={styles.statusLine}>{cairnText('debug-screen.snap-lab-records-value', { length: snapLabActivities.length })}</Text>
+                <Text style={styles.fieldHint}>{cairnText('debug-screen.raw-gps-qualification-canonical-isolated-wal-live')}</Text>
                 <View style={styles.actionRow}>
-                  <ActionPill label="Record Hike" onPress={() => openSnapLabRecorder('Hiking')} />
-                  <ActionPill label="Record Run" onPress={() => openSnapLabRecorder('Running')} />
+                  <ActionPill label={cairnText('debug-screen.record-hike')} onPress={() => openSnapLabRecorder('Hiking')} />
+                  <ActionPill label={cairnText('debug-screen.record-run')} onPress={() => openSnapLabRecorder('Running')} />
                 </View>
                 {snapLabActivities.map(activity => (
                   <TouchableOpacity
@@ -401,9 +386,7 @@ export function DebugScreen() {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={styles.sessionTitle}>{activity.session.name}</Text>
-                      <Text style={styles.sessionMeta}>
-                        {activity.context.caseId} · {activity.context.profileId} · {activity.selectedSource} · {activity.selectedFinal.length} points
-                      </Text>
+                      <Text style={styles.sessionMeta}>{cairnText('debug-screen.value-value-value-value-points', { caseId: activity.context.caseId, profileId: activity.context.profileId, selectedSource: activity.selectedSource, length: activity.selectedFinal.length })}</Text>
                       <Text style={styles.sessionId}>{activity.activityId}</Text>
                     </View>
                     <Icon name="ChevronRight" size={16} color={Colors.textMuted} />
@@ -415,7 +398,7 @@ export function DebugScreen() {
                     testID="clear-snap-lab-records"
                     onPress={() => setClearSnapLabOpen(true)}
                   >
-                    <Text style={styles.clearAllText}>Clear Snap Lab records</Text>
+                    <Text style={styles.clearAllText}>{cairnText('debug-screen.clear-snap-lab-records')}</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -423,46 +406,44 @@ export function DebugScreen() {
           ) : null}
 
           {activitySimulatorBuildCapable ? <View style={styles.section} testID="qa-snap-review">
-            <Text style={styles.sectionHeader}>QA SNAP REVIEW</Text>
+            <Text style={styles.sectionHeader}>{cairnText('debug-screen.qa-snap-review')}</Text>
             <View style={styles.statusBox}>
-              <Text style={styles.statusLine}>almost done clone v1</Text>
-              <Text style={styles.fieldHint}>
-                Review-only Activity Detail. It reads the immutable pending evidence and never enters Activity, Memory, sync, stats, gameplay, or social stores.
-              </Text>
+              <Text style={styles.statusLine}>{cairnText('debug-screen.almost-done-clone-v1')}</Text>
+              <Text style={styles.fieldHint}>{cairnText('debug-screen.review-only-activity-detail-it-reads-the')}</Text>
               <TouchableOpacity
                 style={styles.actionBtn}
                 testID="open-almost-done-clone-v1"
                 onPress={() => (nav as any).navigate('MapHistory', { qaReviewClone: ALMOST_DONE_CLONE_V1_ROUTE })}
               >
                 <Icon name="Route" size={16} color={Colors.primary} strokeWidth={2} />
-                <Text style={styles.actionBtnText}>Open review clone</Text>
+                <Text style={styles.actionBtnText}>{cairnText('debug-screen.open-review-clone')}</Text>
               </TouchableOpacity>
             </View>
           </View> : null}
 
           {/* Telemetry */}
           <View style={styles.section}>
-            <Text style={styles.sectionHeader}>TELEMETRY UPLOAD</Text>
-            <Row label="Auto-upload sessions">
+            <Text style={styles.sectionHeader}>{cairnText('debug-screen.telemetry-upload')}</Text>
+            <Row label={cairnText('debug-screen.auto-upload-sessions')}>
               <Switch
                 value={telemetryUploadEnabled}
                 onValueChange={(v) => updateSetting('telemetryUploadEnabled', v)}
               />
             </Row>
-            <Row label="WiFi-only">
+            <Row label={cairnText('debug-screen.wifi-only')}>
               <Switch
                 value={telemetryWifiOnly}
                 onValueChange={(v) => updateSetting('telemetryWifiOnly', v)}
               />
             </Row>
-            <Row label="Show annotation FAB">
+            <Row label={cairnText('debug-screen.show-annotation-fab')}>
               <Switch
                 value={debugAnnotationFabVisible}
                 onValueChange={(v) => updateSetting('debugAnnotationFabVisible', v)}
               />
             </Row>
 
-            <Text style={styles.fieldLabel}>Backend URL</Text>
+            <Text style={styles.fieldLabel}>{cairnText('debug-screen.backend-url')}</Text>
             <TextInput
               style={styles.input}
               value={telemetryBackendUrl}
@@ -471,27 +452,23 @@ export function DebugScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <Text style={styles.fieldHint}>
-              Leave blank to use the app&apos;s default backend.
-            </Text>
+            <Text style={styles.fieldHint}>{cairnText('debug-screen.leave-blank-to-use-the-app-s')}</Text>
 
             <TouchableOpacity style={styles.actionBtn} onPress={handleRetryAll}>
               <Icon name="ArrowUp" size={16} color={Colors.primary} />
-              <Text style={styles.actionBtnText}>Retry all pending uploads</Text>
+              <Text style={styles.actionBtnText}>{cairnText('debug-screen.retry-all-pending-uploads')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Session list */}
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeader}>SESSIONS ({sessions.length})</Text>
+              <Text style={styles.sectionHeader}>{cairnText('debug-screen.sessions-value', { length: sessions.length })}</Text>
               {loading && <ActivityIndicator size="small" color={Colors.textMuted} />}
             </View>
 
             {sessions.length === 0 && !loading && (
-              <Text style={styles.empty}>
-                No sessions yet. Start tracking with debug mode on.
-              </Text>
+              <Text style={styles.empty}>{cairnText('debug-screen.no-sessions-yet-start-tracking-with-debug')}</Text>
             )}
 
             {sessions.map((s) => (
@@ -499,23 +476,16 @@ export function DebugScreen() {
                 <View style={styles.sessionRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.sessionTitle}>
-                      {new Date(s.started_at).toLocaleString()}
+                      {formatCairnDate(new Date(s.started_at), { dateStyle: 'medium', timeStyle: 'short' })}
                     </Text>
-                    <Text style={styles.sessionMeta}>
-                      {s.activity_mode ?? 'session'} ·{' '}
-                      {s.ended_at ? formatDuration(s.ended_at - s.started_at) : 'active'} ·{' '}
-                      {(s.events_count ?? 0).toLocaleString()} events ·{' '}
-                      {((s.raw_size_bytes ?? 0) / 1024).toFixed(1)} KB
-                    </Text>
+                    <Text style={styles.sessionMeta}>{cairnText('debug-screen.value-value-value-value-value-events-value', { value1: s.activity_mode ?? cairnText('debug-screen.session'), value2: ' ', value3: s.ended_at ? formatDuration(s.ended_at - s.started_at) : cairnText('debug-screen.active'), value4: ' ', value5: formatCairnNumber(s.events_count ?? 0), value6: ' ', value7: formatCairnNumber((s.raw_size_bytes ?? 0) / 1024, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) })}</Text>
                     <Text style={styles.sessionId}>{s.session_id}</Text>
                   </View>
                   <View style={styles.uploadBadge}>
                     {s.uploaded ? (
-                      <Text style={styles.uploadedText}>✓ Uploaded</Text>
+                      <Text style={styles.uploadedText}>{cairnText('debug-screen.uploaded-753101a')}</Text>
                     ) : (
-                      <Text style={styles.notUploadedText}>
-                        Pending {s.upload_attempts > 0 ? `(${s.upload_attempts})` : ''}
-                      </Text>
+                      <Text style={styles.notUploadedText}>{cairnText('debug-screen.pending-value', { value1: s.upload_attempts > 0 ? cairnText('debug-screen.value', { upload_attempts: s.upload_attempts }) : '' })}</Text>
                     )}
                   </View>
                 </View>
@@ -526,17 +496,17 @@ export function DebugScreen() {
 
                 <View style={styles.actionRow}>
                   <ActionPill
-                    label={s.uploaded ? 'Re-upload' : 'Upload now'}
+                    label={s.uploaded ? cairnText('debug-screen.re-upload') : cairnText('debug-screen.upload-now')}
                     onPress={() => handleUpload(s)}
                     busy={busyId === s.session_id}
                   />
                   <ActionPill
-                    label="Export"
+                    label={cairnText('debug-screen.export')}
                     onPress={() => handleExport(s)}
                     busy={busyId === s.session_id}
                   />
                   <ActionPill
-                    label="Delete"
+                    label={cairnText('debug-screen.delete')}
                     onPress={() => handleDelete(s)}
                     danger
                   />
@@ -546,7 +516,7 @@ export function DebugScreen() {
 
             {sessions.length > 0 && (
               <TouchableOpacity style={styles.clearAllBtn} onPress={handleClearAll}>
-                <Text style={styles.clearAllText}>Clear all sessions</Text>
+                <Text style={styles.clearAllText}>{cairnText('debug-screen.clear-all-sessions')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -558,12 +528,12 @@ export function DebugScreen() {
           testID="snap-lab-clear-confirmation"
         >
           <ModalCardHeader
-            title="Clear Snap Lab records?"
-            body="This deletes only this owner's saved QA Activities, QA Routes, isolated QA journal, stage ledger, and test Memory. Product Activities and Personal Memory are not changed."
+            title={cairnText('debug-screen.clear-snap-lab-records-17f19c0')}
+            body={cairnText('debug-screen.this-deletes-only-this-owner-s-saved')}
           />
           <View style={styles.modalActions}>
-            <PrimaryButton label="Clear QA records" variant="destructive" loading={destructiveBusy} onPress={() => { void confirmClearSnapLab(); }} />
-            <PrimaryButton label="Keep records" variant="secondary" disabled={destructiveBusy} onPress={() => setClearSnapLabOpen(false)} />
+            <PrimaryButton label={cairnText('debug-screen.clear-qa-records')} variant="destructive" loading={destructiveBusy} onPress={() => { void confirmClearSnapLab(); }} />
+            <PrimaryButton label={cairnText('debug-screen.keep-records')} variant="secondary" disabled={destructiveBusy} onPress={() => setClearSnapLabOpen(false)} />
           </View>
         </ModalCard>
         <ModalCard
@@ -573,14 +543,14 @@ export function DebugScreen() {
           testID="debug-delete-session-confirmation"
         >
           <ModalCardHeader
-            title="Delete debug session?"
+            title={cairnText('debug-screen.delete-debug-session')}
             body={deleteTarget
-              ? `Session ${deleteTarget.session_id} contains ${deleteTarget.events_count} events. This cannot be undone.`
+              ? cairnText('debug-screen.session-value-contains-value-events-this-cannot', { session_id: deleteTarget.session_id, events_count: deleteTarget.events_count })
               : undefined}
           />
           <View style={styles.modalActions}>
-            <PrimaryButton label="Delete session" variant="destructive" loading={destructiveBusy} onPress={() => { void confirmDelete(); }} />
-            <PrimaryButton label="Keep session" variant="secondary" disabled={destructiveBusy} onPress={() => setDeleteTarget(null)} />
+            <PrimaryButton label={cairnText('debug-screen.delete-session')} variant="destructive" loading={destructiveBusy} onPress={() => { void confirmDelete(); }} />
+            <PrimaryButton label={cairnText('debug-screen.keep-session')} variant="secondary" disabled={destructiveBusy} onPress={() => setDeleteTarget(null)} />
           </View>
         </ModalCard>
         <ModalCard
@@ -590,12 +560,12 @@ export function DebugScreen() {
           testID="debug-clear-sessions-confirmation"
         >
           <ModalCardHeader
-            title="Clear debug sessions?"
-            body="This deletes all stored debug logs. The current active session, if any, is kept."
+            title={cairnText('debug-screen.clear-debug-sessions')}
+            body={cairnText('debug-screen.this-deletes-all-stored-debug-logs-the')}
           />
           <View style={styles.modalActions}>
-            <PrimaryButton label="Clear sessions" variant="destructive" loading={destructiveBusy} onPress={() => { void confirmClearAll(); }} />
-            <PrimaryButton label="Keep sessions" variant="secondary" disabled={destructiveBusy} onPress={() => setClearAllOpen(false)} />
+            <PrimaryButton label={cairnText('debug-screen.clear-sessions')} variant="destructive" loading={destructiveBusy} onPress={() => { void confirmClearAll(); }} />
+            <PrimaryButton label={cairnText('debug-screen.keep-sessions')} variant="secondary" disabled={destructiveBusy} onPress={() => setClearAllOpen(false)} />
           </View>
         </ModalCard>
       </SafeAreaView>

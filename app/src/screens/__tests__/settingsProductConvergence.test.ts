@@ -10,8 +10,9 @@ describe('Settings product and correctness convergence', () => {
   test('root is the accepted four-group product surface', () => {
     const root = settings.slice(settings.indexOf('const renderRoot'), settings.indexOf('const renderAccount'));
     expect(root.match(/<SectionTitle[^>]*>[^<]+<\/SectionTitle>/g)).toHaveLength(4);
-    for (const title of ['Account', 'Preferences', 'Privacy & Data', 'Help & About']) {
-      expect(root).toContain(`>${title}</SectionTitle>`);
+    // REVISE_WITH_REASON: section identity is stable-keyed and locale-live.
+    for (const key of ['account', 'preferences', 'privacy-data', 'help-about']) {
+      expect(root).toContain(`{cairnText('settings-screen.${key}')}</SectionTitle>`);
     }
     for (const removed of ['Weather', "What's New", 'Safety report', 'Date format', 'Map layer', 'Exploration stats']) {
       expect(root).not.toContain(removed);
@@ -21,20 +22,22 @@ describe('Settings product and correctness convergence', () => {
   test('account actions are provider-aware and destructive behavior is secondary', () => {
     const account = settings.slice(settings.indexOf('const renderAccount'), settings.indexOf('const renderExportState'));
     expect(account).toContain('user?.hasPassword === true');
-    expect(account).toContain('Password managed by your provider');
-    expect(account).toContain('Account email · not currently changeable in the app');
-    expect(account).toContain('Seven days to restore, then permanent deletion');
+    expect(account).toContain("cairnText('settings-screen.password-managed-by-your-provider')");
+    expect(account).toContain("cairnText('settings-screen.account-email-not-currently-changeable-in-the')");
+    expect(account).toContain("cairnText('settings-screen.seven-days-to-restore-then-permanent-deletion')");
     const root = settings.slice(settings.indexOf('const renderRoot'), settings.indexOf('const renderAccount'));
     expect(root).not.toContain('Delete account');
   });
 
   test('local preferences remain immediate and truthfully scoped', () => {
-    expect(settings).toContain("{ key: 'metric', label: 'Metric' }");
-    expect(settings).toContain("{ key: 'imperial', label: 'Imperial' }");
-    for (const appearance of ['Auto', 'Day', 'Sunset', 'Night']) expect(settings).toContain(`label: '${appearance}'`);
-    expect(settings).toContain('Updates Memory during ordinary walks, including normal lock and background use');
-    expect(settings).toContain('Updates while Cairn is open on this installed build');
-    expect(settings).toContain('On in Cairn · unavailable until foreground location is allowed in iOS');
+    expect(settings).toContain("{ key: 'metric', get label() { return cairnText('settings-screen.metric'); } }");
+    expect(settings).toContain("{ key: 'imperial', get label() { return cairnText('settings-screen.imperial'); } }");
+    for (const appearance of ['auto', 'day', 'sunset', 'night']) {
+      expect(settings).toContain(`cairnText('settings-screen.${appearance}')`);
+    }
+    expect(settings).toContain("cairnText('settings-screen.eligible-walks-update-memory-and-scan-for')");
+    expect(settings).toContain("cairnText('settings-screen.eligible-walks-update-memory-and-scan-for-a12baa6')");
+    expect(settings).toContain("cairnText('settings-screen.on-in-cairn-waiting-for-foreground-location')");
     expect(settings).toContain("updateSetting('hapticFeedback'");
   });
 
@@ -46,20 +49,20 @@ describe('Settings product and correctness convergence', () => {
     expect(settings).toContain('generation !== feedbackGeneration.current');
     expect(settings).toContain('if (exportFlight.current) return');
     expect(settings).toContain('if (!ownerId || currentOwnerId() !== ownerId || deleteFlight.current) return');
-    expect(settings).toContain('Delivered to Cairn');
-    expect(settings).toContain('Retry delivery');
+    expect(settings).toContain("cairnText('settings-screen.delivered-to-cairn')");
+    expect(settings).toContain("cairnText('settings-screen.retry-delivery')");
     expect(settings).toContain("latestExport.status === 'queued' || latestExport.status === 'building'");
-    expect(settings).toContain('Ready to download');
-    expect(settings).toContain('The export could not be prepared');
+    expect(settings).toContain("cairnText('settings-screen.ready-to-download')");
+    expect(settings).toContain("cairnText('settings-screen.the-export-could-not-be-prepared-your')");
     expect(settings).toContain("result.localCleanup !== 'complete' && result.durableCleanupScheduled === false");
-    expect(settings).toContain('Do not sign another account into this installation; reinstall Cairn first.');
+    expect(settings).toContain("cairnText('settings-screen.cairn-could-not-confirm-that-all-account')");
   });
 
   test('normal Settings owns no Debug or emergency product entry', () => {
     expect(settings).not.toContain('Open Debug');
     expect(settings).not.toContain('developer unlock');
     expect(settings).not.toContain('Safety report');
-    expect(settings).toContain('Feedback is not an emergency or monitored safety service.');
+    expect(settings).toContain("cairnText('settings-screen.feedback-is-not-an-emergency-or-monitored')");
   });
 
   test('Settings reuses Cairn visual authority for all scenic appearances', () => {
@@ -133,7 +136,9 @@ describe('Settings product and correctness convergence', () => {
     const uploader = read('src/services/telemetryUploader.ts');
     expect(routeEditor).not.toContain('debugLogger.setEnabled(true)');
     expect(routeEditor).not.toContain('debugLogger.setEnabled');
-    expect(uploader.match(/Internal QA upload is not authorized/g)).toHaveLength(2);
+    // REVISE_WITH_REASON: authorization policy remains duplicated at the two
+    // guarded upload paths; only the visible wording moved to the catalog.
+    expect(uploader.match(/cairnText\('telemetry-uploader\.internal-qa-upload-is-not-authorized'\)/g)).toHaveLength(2);
     expect(uploader).toContain('settings.debugMode');
     expect(uploader).toContain('activitySimulatorBuildCapable');
   });

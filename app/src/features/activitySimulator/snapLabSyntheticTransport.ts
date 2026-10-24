@@ -4,6 +4,7 @@ import {
   type SnapLabCassetteEntry,
   type SnapLabTransportReceipt,
 } from './snapLabTransport';
+import { cairnText } from '../../i18n/runtime';
 
 export interface SnapLabSyntheticMapPath {
   id: string;
@@ -231,7 +232,7 @@ function matchingBody(options: SnapLabSyntheticTransportOptions, url: URL): unkn
       };
     });
   }
-  if (matchings.length === 0) return { code: 'NoMatch', message: 'No segment matched the deterministic available map.', tracepoints };
+  if (matchings.length === 0) return { code: 'NoMatch', message: cairnText('activity-simulator.snap-lab-synthetic-transport.no-segment-matched-the-deterministic-available-map'), tracepoints };
   return { code: 'Ok', tracepoints, matchings };
 }
 
@@ -317,7 +318,7 @@ export function createSnapLabSyntheticGraphTransport(options: SnapLabSyntheticTr
     };
     if (method !== 'GET') {
       complete(405, 'METHOD_NOT_ALLOWED');
-      return jsonResponse(405, { message: 'Method not allowed' });
+      return jsonResponse(405, { message: cairnText('activity-simulator.snap-lab-synthetic-transport.method-not-allowed') });
     }
     if (options.failureMode === 'timeout') {
       complete(null, 'TIMEOUT');

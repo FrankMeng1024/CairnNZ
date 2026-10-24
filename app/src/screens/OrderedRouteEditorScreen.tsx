@@ -115,6 +115,7 @@ import {
   routeEditorLeaveDecision,
   type RouteEditorLeaveDecision,
 } from '../features/route/routeEditorSaveCoordinator';
+import { cairnText } from '../i18n/runtime';
 
 let MapView: any = null;
 let Camera: any = null;
@@ -191,32 +192,32 @@ function createRouteGrowthFrameHistory(): RouteGrowthFrameHistory {
 
 function providerReason(reason: RouteProviderReason, providerCode?: string): string {
   if (reason === 'provider-unavailable') {
-    if (providerCode === 'NO_TOKEN') return 'Walking routing is not configured. Your Route is unchanged.';
-    if (providerCode === 'UNAUTHORIZED') return 'Walking routing authorization failed. Your Route is unchanged.';
-    if (providerCode === 'RATE_LIMIT') return 'Walking routing is busy. Try another Point in a moment.';
-    if (providerCode === 'NETWORK') return 'Walking routing needs a connection. Your Route is unchanged.';
+    if (providerCode === 'NO_TOKEN') return cairnText('ordered-route-editor-screen.walking-routing-is-not-configured-your-route');
+    if (providerCode === 'UNAUTHORIZED') return cairnText('ordered-route-editor-screen.walking-routing-authorization-failed-your-route-is');
+    if (providerCode === 'RATE_LIMIT') return cairnText('ordered-route-editor-screen.walking-routing-is-busy-try-another-point');
+    if (providerCode === 'NETWORK') return cairnText('ordered-route-editor-screen.walking-routing-needs-a-connection-your-route');
   }
   switch (reason) {
-    case 'no-route': return 'No walkable map segment near this Point or Route end. Move the Point, or Draw this section.';
-    case 'no-match': return 'No mapped path fits this drawing. Redraw with clearer attachments.';
-    case 'split-match': return 'No mapped path fits this drawing. Your Route is unchanged.';
-    case 'endpoint-shift': return 'The mapped result moved an endpoint. Review it before applying.';
-    case 'shape-deviation': return 'The mapped result may shortcut the path you drew. Review it first.';
-    case 'chunk-seam': return 'No mapped path fits this drawing. Your Route is unchanged.';
-    case 'provider-unavailable': return 'Routing is unavailable. Your Route and selection are unchanged.';
-    default: return 'This edit could not be used. Your Route is unchanged.';
+    case 'no-route': return cairnText('ordered-route-editor-screen.no-walkable-map-segment-near-this-point');
+    case 'no-match': return cairnText('ordered-route-editor-screen.no-mapped-path-fits-this-drawing-redraw');
+    case 'split-match': return cairnText('ordered-route-editor-screen.no-mapped-path-fits-this-drawing-your');
+    case 'endpoint-shift': return cairnText('ordered-route-editor-screen.the-mapped-result-moved-an-endpoint-review');
+    case 'shape-deviation': return cairnText('ordered-route-editor-screen.the-mapped-result-may-shortcut-the-path');
+    case 'chunk-seam': return cairnText('ordered-route-editor-screen.no-mapped-path-fits-this-drawing-your');
+    case 'provider-unavailable': return cairnText('ordered-route-editor-screen.routing-is-unavailable-your-route-and-selection');
+    default: return cairnText('ordered-route-editor-screen.this-edit-could-not-be-used-your');
   }
 }
 
 function editFailure(code: string): string {
   switch (code) {
-    case 'ZERO_LENGTH': return 'Move farther before confirming this edit.';
-    case 'DISCONNECTED': return 'Start at a Route end, or reconnect your stroke to the Route.';
-    case 'AMBIGUOUS_INTERVAL': return 'Redraw from clearer positions so Cairn can preserve the right path.';
-    case 'DESTRUCTIVE_ACTIVITY_REPLACEMENT': return 'That edit would remove the recorded Activity. Use Point or Draw from the Route end instead.';
-    case 'STALE_TRANSACTION': return 'This Route changed. The unfinished stroke was cancelled without changing your Route.';
-    case 'INVALID_COORDINATE': return 'The map could not read that position. Your Route is unchanged.';
-    default: return 'Your Route is unchanged. Try again while connected.';
+    case 'ZERO_LENGTH': return cairnText('ordered-route-editor-screen.move-farther-before-confirming-this-edit');
+    case 'DISCONNECTED': return cairnText('ordered-route-editor-screen.start-at-a-route-end-or-reconnect');
+    case 'AMBIGUOUS_INTERVAL': return cairnText('ordered-route-editor-screen.redraw-from-clearer-positions-so-cairn-can-1f82cdd');
+    case 'DESTRUCTIVE_ACTIVITY_REPLACEMENT': return cairnText('ordered-route-editor-screen.that-edit-would-remove-the-recorded-activity');
+    case 'STALE_TRANSACTION': return cairnText('ordered-route-editor-screen.this-route-changed-the-unfinished-stroke-was');
+    case 'INVALID_COORDINATE': return cairnText('ordered-route-editor-screen.the-map-could-not-read-that-position');
+    default: return cairnText('ordered-route-editor-screen.your-route-is-unchanged-try-again-while');
   }
 }
 
@@ -978,7 +979,7 @@ export function OrderedRouteEditorScreen() {
           ownerId,
           segments,
         });
-        initialName = `${session.name || (session.activityMode === 'running' ? 'Run' : 'Hike')} Route`;
+        initialName = cairnText('ordered-route-editor-screen.value-route', { value1: session.name || (session.activityMode === 'running' ? cairnText('common.activity.run') : cairnText('common.activity.hike')) });
         initializationProvenanceRef.current = 'immutable-activity-template';
       } else if (sharedDeliveryId) {
         let shared = useRouteStore.getState().sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
@@ -1000,7 +1001,7 @@ export function OrderedRouteEditorScreen() {
               points: shared.points,
               origin: creationSource === 'shared-copy' ? 'received-copy' : 'plan',
             });
-        initialName = creationSource === 'shared-copy' ? `${shared.name} copy` : shared.name;
+        initialName = creationSource === 'shared-copy' ? cairnText('ordered-route-editor-screen.value-copy', { name: shared.name }) : shared.name;
         initializationProvenanceRef.current = creationSource === 'shared-copy' ? 'received-route-copy' : 'received-route-view';
       } else {
         draft = createEmptyOrderedDraft({ draftId: `plan:${uuidv4()}`, ownerId });
@@ -1260,7 +1261,7 @@ export function OrderedRouteEditorScreen() {
         if (permissionState.status !== 'granted') {
           if (!cancelled) {
             setInitialLocation({ status: 'unavailable' });
-            setError('Location is unavailable. Browse the map to start planning.');
+            setError(cairnText('ordered-route-editor-screen.location-is-unavailable-browse-the-map-to'));
           }
           return;
         }
@@ -1277,7 +1278,7 @@ export function OrderedRouteEditorScreen() {
       } catch {
         if (!cancelled && !userMovedCameraRef.current) {
           setInitialLocation({ status: 'unavailable' });
-          setError('Current location is unavailable. Browse the map instead.');
+          setError(cairnText('ordered-route-editor-screen.current-location-is-unavailable-browse-the-map'));
         }
       }
     })();
@@ -1287,7 +1288,7 @@ export function OrderedRouteEditorScreen() {
   const showRouteOverview = useCallback(() => {
     finishRouteAnimation('camera-action');
     const points = historyRef.current?.present.parts.flatMap(part => part.points) ?? [];
-    if (points.length < 2) { setError('Add a path before showing its overview.'); return; }
+    if (points.length < 2) { setError(cairnText('ordered-route-editor-screen.add-a-path-before-showing-its-overview')); return; }
     const ne: [number, number] = [Math.max(...points.map(point => point.lng)), Math.max(...points.map(point => point.lat))];
     const sw: [number, number] = [Math.min(...points.map(point => point.lng)), Math.min(...points.map(point => point.lat))];
     cameraRef.current?.fitBounds?.(ne, sw, [insets.top + 110, 88, bottomClearance + 30, 36], reduceMotion ? 0 : 420);
@@ -1298,7 +1299,7 @@ export function OrderedRouteEditorScreen() {
       const permissionState = await Location.getForegroundPermissionsAsync();
       setLocationPermissionGranted(permissionState.status === 'granted');
       if (permissionState.status !== 'granted') {
-        setError('Location permission is needed to center the planning map. You can still browse another city.');
+        setError(cairnText('ordered-route-editor-screen.location-permission-is-needed-to-center-the'));
         return;
       }
       const fix = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60_000, requiredAccuracy: 500 })
@@ -1309,7 +1310,7 @@ export function OrderedRouteEditorScreen() {
       moveCamera(point, 14);
       setError(null);
     } catch {
-      setError('Current location is unavailable. Browse the map instead.');
+      setError(cairnText('ordered-route-editor-screen.current-location-is-unavailable-browse-the-map'));
     }
   }, [moveCamera]);
 
@@ -1319,9 +1320,9 @@ export function OrderedRouteEditorScreen() {
   ): boolean => {
     const completionMessage = parts.some(part => part.resolution === 'draw-manual')
       ? parts.some(part => part.resolution === 'draw-matched')
-        ? 'Part of your drawing was kept. Undo if needed.'
-        : 'Drawing kept. Undo if needed.'
-      : 'Line added. Move the map, or tap Draw to continue.';
+        ? cairnText('ordered-route-editor-screen.part-of-your-drawing-was-kept-undo')
+        : cairnText('ordered-route-editor-screen.drawing-kept-undo-if-needed')
+      : cairnText('ordered-route-editor-screen.line-added-move-the-map-or-tap');
     const current = historyRef.current;
     if (!current) {
       setMode('Browse');
@@ -1329,12 +1330,12 @@ export function OrderedRouteEditorScreen() {
     }
     if (intent.kind === 'replace' || intent.kind === 'replace-across-gap') {
       if (intent.options.length > 1) {
-        setError('Redraw from clearer positions so Cairn can preserve the right path.');
+        setError(cairnText('ordered-route-editor-screen.redraw-from-clearer-positions-so-cairn-can'));
         setMode('Browse');
         return false;
       }
       const option = intent.options[0];
-      if (!option) { setError('Redraw from clearer positions. Your Route is unchanged.'); setMode('Browse'); return false; }
+      if (!option) { setError(cairnText('ordered-route-editor-screen.redraw-from-clearer-positions-your-route-is')); setMode('Browse'); return false; }
       const operation = intent.kind === 'replace-across-gap'
         ? { kind: 'replace-across-gap' as const, option, gapId: intent.gapId }
         : { kind: 'replace' as const, option };
@@ -1351,7 +1352,7 @@ export function OrderedRouteEditorScreen() {
       return false;
     }
     if (intent.kind === 'pending-bridge' || intent.kind === 'pending-replace') {
-      setError('Redraw with both ends clearly attached. Your Route is unchanged.');
+      setError(cairnText('ordered-route-editor-screen.redraw-with-both-ends-clearly-attached-your'));
       setMode('Browse');
       return false;
     }
@@ -1424,7 +1425,7 @@ export function OrderedRouteEditorScreen() {
         finalMode: modeRef.current,
         busyReleased: false,
       }, 'state');
-      setError('Finish or cancel the current Route edit first.');
+      setError(cairnText('ordered-route-editor-screen.finish-or-cancel-the-current-route-edit'));
       return;
     }
     const transactionPoints = raw;
@@ -1471,8 +1472,8 @@ export function OrderedRouteEditorScreen() {
         unchangedFinalGeometry: orderedDraftPoints(current.present),
       }, 'attachment');
       setError(intent.kind === 'pending-replace' && intent.ambiguity === 'overlap'
-        ? 'That section is ambiguous. Redraw from clearer points; your Route is unchanged.'
-        : 'Draw with both ends clearly attached. Your Route is unchanged.');
+        ? cairnText('ordered-route-editor-screen.that-section-is-ambiguous-redraw-from-clearer')
+        : cairnText('ordered-route-editor-screen.draw-with-both-ends-clearly-attached-your'));
       setMode('DrawArmed');
       recordRouteDrawingTrace('route_operation_terminal', {
         strokeId,
@@ -1586,7 +1587,7 @@ export function OrderedRouteEditorScreen() {
           stack: cause instanceof Error ? cause.stack ?? null : null,
           durationMs: Date.now() - providerStartedAtMs,
         }, 'state');
-        setError('That drawing could not be applied. Your Route is unchanged.');
+        setError(cairnText('ordered-route-editor-screen.that-drawing-could-not-be-applied-your'));
         setMode('Browse');
         recordRouteDrawingTrace('route_operation_terminal', {
           strokeId,
@@ -1685,7 +1686,7 @@ export function OrderedRouteEditorScreen() {
       return false;
     }
     if (current.present.revision !== baseRevision) {
-      setError('This Route changed while the edit was being reviewed. The older result was not applied.');
+      setError(cairnText('ordered-route-editor-screen.this-route-changed-while-the-edit-was'));
       setPendingPointTarget(null);
       setMode('PointTargeting');
       return false;
@@ -1840,8 +1841,8 @@ export function OrderedRouteEditorScreen() {
         if (!selection.accepted) {
           setPendingPointTarget(null);
           setError(selection.reason === 'provider-absurd-detour'
-            ? 'Long detour. Move the Point or Draw this connection.'
-            : 'No nearby path found. Move the Point or draw this section.');
+            ? cairnText('ordered-route-editor-screen.long-detour-move-the-point-or-draw')
+            : cairnText('ordered-route-editor-screen.no-nearby-path-found-move-the-point'));
           setMode('PointTargeting');
           recordRouteDrawingTrace('route_operation_terminal', {
             strokeId: operationId,
@@ -1894,7 +1895,7 @@ export function OrderedRouteEditorScreen() {
           stack: cause instanceof Error ? cause.stack ?? null : null,
           durationMs: Date.now() - providerStartedAtMs,
         }, 'state');
-        setError('Routing is unavailable. Move the map and add another Point.');
+        setError(cairnText('ordered-route-editor-screen.routing-is-unavailable-move-the-map-and'));
         setMode('PointTargeting');
         recordRouteDrawingTrace('route_operation_terminal', {
           strokeId: operationId,
@@ -2013,10 +2014,10 @@ export function OrderedRouteEditorScreen() {
   const saveRoute = useCallback(async () => {
     const current = historyRef.current;
     if (!current || readOnlyShared) return;
-    if (providerBusy || providerTransactionRef.current) { setError('Wait for the current Route edit before saving.'); return; }
+    if (providerBusy || providerTransactionRef.current) { setError(cairnText('ordered-route-editor-screen.wait-for-the-current-route-edit-before')); return; }
     const title = name.trim();
-    if (!title) { setError('Name this Route before saving.'); return; }
-    if (current.present.parts.length === 0) { setError('Add a path before saving this Route.'); return; }
+    if (!title) { setError(cairnText('ordered-route-editor-screen.name-this-route-before-saving')); return; }
+    if (current.present.parts.length === 0) { setError(cairnText('ordered-route-editor-screen.add-a-path-before-saving-this-route')); return; }
     const objectKey = `${ownerId}:${routeId ?? current.present.draftId}`;
     const saveToken = saveCoordinatorRef.current.begin(objectKey);
     if (!saveToken) return;
@@ -2084,8 +2085,8 @@ export function OrderedRouteEditorScreen() {
         outcomeUnknown: Boolean(cause?.outcomeUnknown),
       }, 'persistence');
       setError(cause?.outcomeUnknown
-        ? 'The save outcome is not confirmed. Stay on this screen and retry Save.'
-        : 'This Route could not be saved. Stay on this screen and retry Save.');
+        ? cairnText('ordered-route-editor-screen.the-save-outcome-is-not-confirmed-stay')
+        : cairnText('ordered-route-editor-screen.this-route-could-not-be-saved-stay'));
     } finally {
       saveCoordinatorRef.current.finish(saveToken);
       setSaving(false);
@@ -2096,7 +2097,7 @@ export function OrderedRouteEditorScreen() {
   const useSharedRoute = useCallback((mode: 'hiking' | 'running') => {
     const shared = sharedRoutes.find(item => item.sharedDeliveryId === sharedDeliveryId);
     if (!shared || !orderedDraftCanUseOrShare(historyRef.current?.present ?? createEmptyOrderedDraft({ draftId: 'invalid', ownerId }))) {
-      setError('Repair every unknown gap before using this Route.');
+      setError(cairnText('ordered-route-editor-screen.repair-every-unknown-gap-before-using-this'));
       return;
     }
     captureActivityRouteReference(shared.id);
@@ -2107,15 +2108,15 @@ export function OrderedRouteEditorScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: theme.background }]}>
         <ActivityIndicator color={theme.primary} />
-        <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Preparing Route…</Text>
+        <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>{cairnText('ordered-route-editor-screen.preparing-route')}</Text>
         {error ? <Text style={[styles.errorText, { color: theme.destructive }]}>{error}</Text> : null}
       </View>
     );
   }
 
   const pointActionLabel = draft.parts.length === 0 && !draft.startPoint
-    ? 'Set start'
-    : 'Add point';
+    ? cairnText('ordered-route-editor-screen.set-start')
+    : cairnText('ordered-route-editor-screen.add-point');
   const trimPreviewResult = (() => {
     if (!trimOpen || draft.parts.length === 0) return null;
     const start = orderedPositionAtDistanceFraction(draft, trimStart);
@@ -2169,11 +2170,11 @@ export function OrderedRouteEditorScreen() {
     ));
     return [{
       type: 'Feature' as const,
-      properties: { role: same ? 'Start / End' : 'Start', turnback: isTurnback(start) },
+      properties: { role: same ? cairnText('route.map.start-end') : cairnText('route.map.start'), turnback: isTurnback(start) },
       geometry: { type: 'Point' as const, coordinates: [start.lng, start.lat] },
     }, ...(end && !same ? [{
       type: 'Feature' as const,
-      properties: { role: 'End', turnback: isTurnback(end) },
+      properties: { role: cairnText('route.map.end'), turnback: isTurnback(end) },
       geometry: { type: 'Point' as const, coordinates: [end.lng, end.lat] },
     }] : [])];
   })();
@@ -2207,21 +2208,21 @@ export function OrderedRouteEditorScreen() {
           accessibilityRole="button"
           accessibilityState={{ disabled: trimStart <= 0.001 && trimEnd >= 0.999 }}
           testID="route-trim-apply"
-        ><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Apply</Text></TouchableOpacity>
+        ><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{cairnText('ordered-route-editor-screen.apply')}</Text></TouchableOpacity>
     </View>
   ) : mode === 'MatchPending' || providerBusy ? (
     <View style={[styles.contextContent, styles.contextProgress]} testID="route-provider-progress">
-      <View style={styles.busyRow}><ActivityIndicator size="small" color={contextInk} /><Text style={[styles.contextText, { color: contextInk }]}>Finding a path…</Text></View>
+      <View style={styles.busyRow}><ActivityIndicator size="small" color={contextInk} /><Text style={[styles.contextText, { color: contextInk }]}>{cairnText('ordered-route-editor-screen.finding-a-path')}</Text></View>
     </View>
   ) : tool === 'point' ? (
     <View style={styles.pointInlineRow} testID="route-point-context">
-      <Text style={[styles.contextText, { color: error ? theme.destructive : contextInk }]} numberOfLines={2}>{error ?? 'Move map to choose.'}</Text>
+      <Text style={[styles.contextText, { color: error ? theme.destructive : contextInk }]} numberOfLines={2}>{error ?? cairnText('ordered-route-editor-screen.move-map-to-choose')}</Text>
       <TouchableOpacity style={[styles.compactPrimaryAction, { backgroundColor: theme.primaryAction }]} hitSlop={COMPACT_ACTION_HIT_SLOP} onPress={confirmPointTarget} disabled={providerBusy} accessibilityRole="button" accessibilityLabel={pointActionLabel} testID="route-point-confirm"><Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{pointActionLabel}</Text></TouchableOpacity>
     </View>
   ) : error ? (
     <TouchableOpacity style={styles.contextContent} onPress={() => setError(null)} accessibilityRole="button" testID="route-context-message"><Text style={[styles.contextText, { color: contextInk }]}>{error}</Text></TouchableOpacity>
   ) : tool === 'draw' ? (
-    <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: contextInk }]}>{draft.gaps.length > 0 ? 'Draw across the dotted gap to join your route.' : 'Draw to reshape your route.'}</Text></View>
+    <View style={styles.contextContent} testID="route-draw-instruction"><Text style={[styles.contextText, { color: contextInk }]}>{draft.gaps.length > 0 ? cairnText('ordered-route-editor-screen.draw-across-the-dotted-gap-to-join') : cairnText('ordered-route-editor-screen.draw-to-reshape-your-route')}</Text></View>
   ) : briefStatus ? (
     <View style={styles.contextContent} testID="route-brief-status"><Text style={[styles.contextText, { color: contextInk }]}>{briefStatus}</Text></View>
   ) : null;
@@ -2230,7 +2231,7 @@ export function OrderedRouteEditorScreen() {
     <View style={[styles.screen, { backgroundColor: theme.background }]} testID="ordered-route-editor">
       {!MapView ? (
         <View style={[StyleSheet.absoluteFill, styles.centered, { backgroundColor: theme.background }]}>
-          <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Map unavailable</Text>
+          <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>{cairnText('ordered-route-editor-screen.map-unavailable')}</Text>
         </View>
       ) : showPlannerMap ? (
         <MapView
@@ -2544,8 +2545,8 @@ export function OrderedRouteEditorScreen() {
       {MapView && !showPlannerMap ? (
         <View style={[StyleSheet.absoluteFill, styles.centered, { backgroundColor: theme.background }]} testID="route-initial-location-state">
           <ActivityIndicator color={theme.primary} />
-          <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Finding your current location…</Text>
-          <Text style={[styles.initialLocationHint, { color: theme.muted }]}>Your map will open as soon as location is ready.</Text>
+          <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>{cairnText('ordered-route-editor-screen.finding-your-current-location')}</Text>
+          <Text style={[styles.initialLocationHint, { color: theme.muted }]}>{cairnText('ordered-route-editor-screen.your-map-will-open-as-soon-as')}</Text>
         </View>
       ) : null}
 
@@ -2561,20 +2562,20 @@ export function OrderedRouteEditorScreen() {
           {showRouteFogPending ? <ActivityIndicator size="small" color={theme.primary} /> : null}
           <Text style={[styles.routeSceneStatusText, { color: theme.foreground }]} numberOfLines={2}>
             {showRouteFogPending
-              ? 'Updating exploration…'
+              ? cairnText('ordered-route-editor-screen.updating-exploration')
               : routeFriendAuthorizationLost
-                ? 'Friend exploration is no longer authorized. Mine remains visible.'
-                : 'Shared exploration could not refresh. Mine remains visible.'}
+                ? cairnText('ordered-route-editor-screen.friend-exploration-is-no-longer-authorized-mine')
+                : cairnText('ordered-route-editor-screen.shared-exploration-could-not-refresh-mine-remains')}
           </Text>
           {!showRouteFogPending && routeFriendProjectionFailure ? (
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Retry shared exploration"
+              accessibilityLabel={cairnText('ordered-route-editor-screen.retry-shared-exploration')}
               onPress={retryRouteScene}
               style={[styles.routeSceneRetry, { borderColor: theme.borderStrong }]}
               testID="route-scene-retry"
             >
-              <Text style={[styles.routeSceneRetryText, { color: theme.primary }]}>Retry</Text>
+              <Text style={[styles.routeSceneRetryText, { color: theme.primary }]}>{cairnText('common.retry')}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -2585,14 +2586,14 @@ export function OrderedRouteEditorScreen() {
           style={[styles.mapToolButton, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={() => { void showCurrentLocation(); }}
           accessibilityRole="button"
-          accessibilityLabel="Center map on current location"
+          accessibilityLabel={cairnText('ordered-route-editor-screen.center-map-on-current-location')}
           testID="route-current-location"
         ><Icon name="Target" size={19} color={theme.iconActive} /></TouchableOpacity>
         <TouchableOpacity
           style={[styles.mapToolButton, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
           onPress={showRouteOverview}
           accessibilityRole="button"
-          accessibilityLabel="Show Route overview"
+          accessibilityLabel={cairnText('ordered-route-editor-screen.show-route-overview')}
           testID="route-overview"
         ><Icon name="Route" size={19} color={theme.iconActive} /></TouchableOpacity>
         {!readOnlyShared ? (
@@ -2606,7 +2607,7 @@ export function OrderedRouteEditorScreen() {
               void loadMemorySubscriptions();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Exploration layers"
+            accessibilityLabel={cairnText('ordered-route-editor-screen.exploration-layers')}
             accessibilityState={{ selected: moreOpen, expanded: moreOpen }}
             testID="route-more"
           ><Icon name="Layers" size={19} color={moreOpen ? theme.primary : theme.iconActive} /></TouchableOpacity>
@@ -2615,41 +2616,41 @@ export function OrderedRouteEditorScreen() {
 
       {moreOpen && !readOnlyShared ? (
         <View style={[styles.morePopover, { top: insets.top + (compactViewport ? 72 : 128), backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]} testID="route-more-menu">
-          <Text style={[styles.popoverTitle, { color: theme.foreground }]}>Map & Route</Text>
-          <Text style={[styles.popoverLabel, { color: theme.foregroundSecondary }]}>Exploration Fog</Text>
+          <Text style={[styles.popoverTitle, { color: theme.foreground }]}>{cairnText('ordered-route-editor-screen.map-route')}</Text>
+          <Text style={[styles.popoverLabel, { color: theme.foregroundSecondary }]}>{cairnText('ordered-route-editor-screen.exploration-fog')}</Text>
           <View style={styles.popoverRow}>
             <TouchableOpacity
               style={[styles.popoverChoice, { borderColor: planningMemoryScope === 'self' ? theme.primary : theme.borderSubtle, backgroundColor: planningMemoryScope === 'self' ? theme.controlSelected : theme.surface }]}
               onPress={() => setPlanningMemoryScope('self')}
               accessibilityRole="radio"
               accessibilityState={{ selected: planningMemoryScope === 'self' }}
-            ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine</Text></TouchableOpacity>
+            ><Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>{cairnText('ordered-route-editor-screen.mine')}</Text></TouchableOpacity>
             <TouchableOpacity
               style={[styles.popoverChoice, { borderColor: planningMemoryScope === 'combined' ? theme.primary : theme.borderSubtle, backgroundColor: planningMemoryScope === 'combined' ? theme.controlSelected : theme.surface }, memorySubscriptions.length === 0 && styles.disabled]}
               disabled={memorySubscriptions.length === 0}
               onPress={() => setPlanningMemoryScope('combined')}
               accessibilityRole="radio"
-              accessibilityLabel="Mine and Friends exploration"
+              accessibilityLabel={cairnText('ordered-route-editor-screen.mine-and-friends-exploration')}
               accessibilityState={{
                 selected: planningMemoryScope === 'combined',
                 disabled: memorySubscriptions.length === 0,
               }}
             >
-              <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Mine &amp; Friends</Text>
+              <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>{cairnText('ordered-route-editor-screen.mine-friends')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[styles.friendPickerAction, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }]}
             onPress={() => setRouteFriendPickerOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Choose Friends contributors, ${memorySubscriptions.length} selected`}
+            accessibilityLabel={cairnText('ordered-route-editor-screen.choose-friends-contributors-value-selected', { length: memorySubscriptions.length })}
             testID="route-friend-picker-open"
           >
-            <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>Friends</Text>
-            <Text style={[styles.friendPickerCount, { color: theme.primary }]}>{memorySubscriptions.length} selected</Text>
+            <Text style={[styles.popoverChoiceText, { color: theme.foreground }]}>{cairnText('ordered-route-editor-screen.friends')}</Text>
+            <Text style={[styles.friendPickerCount, { color: theme.primary }]}>{cairnText('ordered-route-editor-screen.value-selected', { length: memorySubscriptions.length })}</Text>
           </TouchableOpacity>
           {memorySubscriptions.length === 0 ? (
-            <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>No shared Friend Fog is available. Mine stays visible.</Text>
+            <Text style={[styles.popoverHint, { color: theme.foregroundSecondary }]}>{cairnText('ordered-route-editor-screen.no-shared-friend-fog-is-available-mine')}</Text>
           ) : null}
         </View>
       ) : null}
@@ -2659,7 +2660,7 @@ export function OrderedRouteEditorScreen() {
         { paddingTop: insets.top + Spacing.lg, paddingBottom: Spacing.xs },
       ]} pointerEvents="box-none" testID="route-editor-header">
         <BackButton variant="inline" onPress={() => nav.goBack()} />
-        <Text testID="route-editor-title" pointerEvents="none" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? 'Shared Route' : routeId ? 'Edit Route' : 'Create Route'}</Text>
+        <Text testID="route-editor-title" pointerEvents="none" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? cairnText('ordered-route-editor-screen.shared-route') : routeId ? cairnText('ordered-route-editor-screen.edit-route') : cairnText('ordered-route-editor-screen.create-route')}</Text>
         <View style={styles.topUtilityPlaceholder} />
       </View>
 
@@ -2709,8 +2710,8 @@ export function OrderedRouteEditorScreen() {
           }, 'state');
           setMode('Browse');
           setError(reason === 'gesture-interrupted'
-            ? 'Stroke cancelled. Move the map, then tap Draw to try again.'
-            : 'The map could not read that stroke. Your Route is unchanged.');
+            ? cairnText('ordered-route-editor-screen.stroke-cancelled-move-the-map-then-tap')
+            : cairnText('ordered-route-editor-screen.the-map-could-not-read-that-stroke'));
         }}
         bottomInset={bottomClearance}
         strokeColor={theme.primary}
@@ -2727,15 +2728,15 @@ export function OrderedRouteEditorScreen() {
               {error ? <Text style={[styles.helper, { color: theme.destructive }]}>{error}</Text> : null}
               <View style={[styles.summary, compactViewport && styles.summaryCompact, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
                 <Text style={[styles.nameReadOnly, { color: theme.foreground }]}>{name}</Text>
-                <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>Independent snapshot · {dist.format(orderedDraftDistanceM(draft), 1)} {dist.unit}</Text>
+                <Text style={[styles.helper, { color: theme.foregroundSecondary }]}>{cairnText('ordered-route-editor-screen.independent-snapshot-value-value', { value1: dist.format(orderedDraftDistanceM(draft), 1), unit: dist.unit })}</Text>
               </View>
               <View style={styles.row}>
-                <PrimaryButton label="Use for Hike" onPress={() => useSharedRoute('hiking')} style={styles.flexButton} disabled={!orderedDraftCanUseOrShare(draft)} />
-                <PrimaryButton label="Use for Run" variant="secondary" onPress={() => useSharedRoute('running')} style={styles.flexButton} disabled={!orderedDraftCanUseOrShare(draft)} />
+                <PrimaryButton label={cairnText('ordered-route-editor-screen.use-for-hike')} onPress={() => useSharedRoute('hiking')} style={styles.flexButton} disabled={!orderedDraftCanUseOrShare(draft)} />
+                <PrimaryButton label={cairnText('ordered-route-editor-screen.use-for-run')} variant="secondary" onPress={() => useSharedRoute('running')} style={styles.flexButton} disabled={!orderedDraftCanUseOrShare(draft)} />
               </View>
               <View style={styles.row}>
-                <PrimaryButton label="Edit a copy" variant="secondary" onPress={() => nav.replace('RouteEditor', { sharedDeliveryId, creationSource: 'shared-copy' })} style={styles.flexButton} />
-                <PrimaryButton label="Remove" variant="destructive" onPress={() => { void removeSharedRoute(sharedDeliveryId!).then(() => nav.goBack()); }} style={styles.flexButton} />
+                <PrimaryButton label={cairnText('ordered-route-editor-screen.edit-a-copy')} variant="secondary" onPress={() => nav.replace('RouteEditor', { sharedDeliveryId, creationSource: 'shared-copy' })} style={styles.flexButton} />
+                <PrimaryButton label={cairnText('ordered-route-editor-screen.remove')} variant="destructive" onPress={() => { void removeSharedRoute(sharedDeliveryId!).then(() => nav.goBack()); }} style={styles.flexButton} />
               </View>
             </>
           ) : (
@@ -2747,20 +2748,20 @@ export function OrderedRouteEditorScreen() {
               ) : null}
               <View style={styles.toolRow}>
                 <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'draw' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'draw' ? theme.controlSelected : theme.surface }]} onPress={() => selectEditorTool(tool === 'draw' ? 'browse' : 'draw')} accessibilityRole="button" accessibilityState={{ selected: tool === 'draw' }} testID="route-tool-draw">
-                  <Icon name="Pencil" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Draw</Text>
+                  <Icon name="Pencil" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>{cairnText('ordered-route-editor-screen.draw')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.toolButton, { borderColor: tool === 'point' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'point' ? theme.controlSelected : theme.surface }]} onPress={() => selectEditorTool(tool === 'point' ? 'browse' : 'point')} accessibilityRole="button" accessibilityState={{ selected: tool === 'point' }} testID="route-tool-point">
-                  <Icon name="MapPin" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Point</Text>
+                  <Icon name="MapPin" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>{cairnText('ordered-route-editor-screen.point')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity disabled={draft.parts.length === 0} style={[styles.toolButton, { borderColor: tool === 'trim' ? theme.primary : theme.borderSubtle, backgroundColor: tool === 'trim' ? theme.controlSelected : theme.surface }, draft.parts.length === 0 && styles.disabled]} onPress={() => selectEditorTool(tool === 'trim' ? 'browse' : 'trim')} accessibilityRole="button" accessibilityState={{ selected: tool === 'trim', disabled: draft.parts.length === 0 }} testID="route-tool-trim">
-                  <Icon name="Move" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>Trim</Text>
+                  <Icon name="Move" size={20} color={theme.iconActive} /><Text style={[styles.toolLabel, { color: theme.foreground }]}>{cairnText('ordered-route-editor-screen.trim')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.undoButton, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }, (!history || (history.past.length === 0 && !trimOpen) || hasUncommittedRouteEdit) && styles.disabled]}
                   onPress={handleUndo}
                   disabled={!history || (history.past.length === 0 && !trimOpen) || hasUncommittedRouteEdit}
                   accessibilityRole="button"
-                  accessibilityLabel="Undo last Route edit"
+                  accessibilityLabel={cairnText('ordered-route-editor-screen.undo-last-route-edit')}
                   accessibilityState={{ disabled: !history || (history.past.length === 0 && !trimOpen) || hasUncommittedRouteEdit }}
                   testID="route-undo"
                 >
@@ -2772,10 +2773,10 @@ export function OrderedRouteEditorScreen() {
                   <TextInput
                     value={name}
                     onChangeText={setName}
-                    placeholder="Route name"
+                    placeholder={cairnText('ordered-route-editor-screen.route-name')}
                     placeholderTextColor={theme.muted}
                     style={[styles.nameInput, compactViewport && styles.nameInputCompact, { color: theme.foreground }]}
-                    accessibilityLabel="Route name"
+                    accessibilityLabel={cairnText('ordered-route-editor-screen.route-name')}
                   />
                   <View pointerEvents="none" style={styles.nameEditAffordance}><Icon name="Edit3" size={15} color={theme.iconActive} strokeWidth={2} /></View>
                 </View>
@@ -2784,7 +2785,7 @@ export function OrderedRouteEditorScreen() {
                   onPress={() => { void saveRoute(); }}
                   disabled={saving || draft.parts.length === 0 || !name.trim() || hasUncommittedRouteEdit}
                   testID="ordered-route-save"
-                >{saving ? <ActivityIndicator size="small" color={theme.onPrimary} /> : <Icon name="Check" size={16} color={theme.onPrimary} />}<Text style={[styles.compactActionText, { color: theme.onPrimary }]}>Save</Text></TouchableOpacity>
+                >{saving ? <ActivityIndicator size="small" color={theme.onPrimary} /> : <Icon name="Check" size={16} color={theme.onPrimary} />}<Text style={[styles.compactActionText, { color: theme.onPrimary }]}>{cairnText('common.save')}</Text></TouchableOpacity>
               </View>
             </>
           )}
@@ -2798,16 +2799,16 @@ export function OrderedRouteEditorScreen() {
         testID="route-editor-leave-confirm"
       >
         <ModalCardHeader
-          title={pendingLeave?.decision === 'confirm-saving' ? 'Leave while saving?' : 'Discard Route changes?'}
+          title={pendingLeave?.decision === 'confirm-saving' ? cairnText('ordered-route-editor-screen.leave-while-saving') : cairnText('ordered-route-editor-screen.discard-route-changes')}
           body={pendingLeave?.decision === 'confirm-saving'
-            ? 'The save may still finish, but this screen will not move you after you leave.'
-            : 'Your unsaved Route changes will be discarded.'}
+            ? cairnText('ordered-route-editor-screen.the-save-may-still-finish-but-this')
+            : cairnText('ordered-route-editor-screen.your-unsaved-route-changes-will-be-discarded')}
           onClose={() => setPendingLeave(null)}
         />
         <View style={styles.confirmBody}>
-          <PrimaryButton label="Keep editing" variant="secondary" onPress={() => setPendingLeave(null)} />
+          <PrimaryButton label={cairnText('ordered-route-editor-screen.keep-editing')} variant="secondary" onPress={() => setPendingLeave(null)} />
           <PrimaryButton
-            label={pendingLeave?.decision === 'confirm-saving' ? 'Leave' : 'Discard changes'}
+            label={pendingLeave?.decision === 'confirm-saving' ? cairnText('ordered-route-editor-screen.leave') : cairnText('ordered-route-editor-screen.discard-changes')}
             variant="destructive"
             onPress={() => {
               if (!pendingLeave) return;

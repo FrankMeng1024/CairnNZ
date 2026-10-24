@@ -15,6 +15,7 @@
  */
 import { AppState } from 'react-native';
 import { crashLogger } from './crashLogger';
+import { cairnText } from '../i18n/runtime';
 
 export const AUTO_PAUSE = {
   IDLE_SPEED_THRESHOLD_MS: 0.5,     // m/s — below this = "not moving"
@@ -88,8 +89,8 @@ async function sendPromptNotification(): Promise<void> {
     const N = await import('expo-notifications');
     await N.scheduleNotificationAsync({
       content: {
-        title: 'Cairn',
-        body: 'You still on the trail? Tap to continue or end your hike.',
+        title: cairnText('auto-pause-monitor.cairn'),
+        body: cairnText('auto-pause-monitor.you-still-on-the-trail-tap-to'),
       },
       trigger: null,
     });

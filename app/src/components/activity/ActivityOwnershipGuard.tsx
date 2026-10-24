@@ -4,6 +4,7 @@ import type { ActivityMode } from '../../store/useSessionStore';
 import { useVisualTheme } from '../../hooks/useVisualTheme';
 import { Icon } from '../Icon';
 import { FontSize, RadiusRole, Spacing } from '../tokens';
+import { cairnText } from '../../i18n/runtime';
 
 export function ActivityOwnershipGuard({
   ownerMode,
@@ -15,7 +16,7 @@ export function ActivityOwnershipGuard({
   onHome: () => void;
 }) {
   const theme = useVisualTheme();
-  const ownerLabel = ownerMode === 'running' ? 'run' : 'hike';
+  const ownerLabel = ownerMode === 'running' ? cairnText('activity.activity-ownership-guard.run') : cairnText('activity.activity-ownership-guard.hike');
 
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: theme.background }]} testID="activity-ownership-guard">
@@ -23,16 +24,16 @@ export function ActivityOwnershipGuard({
         <View style={[styles.iconWell, { backgroundColor: theme.surface }]}>
           <Icon name={ownerMode === 'running' ? 'Footprints' : 'Mountain'} size={28} color={theme.primary} strokeWidth={1.8} />
         </View>
-        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>ACTIVITY IN PROGRESS</Text>
-        <Text style={[styles.title, { color: theme.textPrimary }]}>Your {ownerLabel} is still recording</Text>
-        <Text style={[styles.body, { color: theme.textSecondary }]}>Cairn keeps one recording owner at a time so its route, timer and Cairns cannot be mistaken for another Activity.</Text>
+        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>{cairnText('activity.activity-ownership-guard.activity-in-progress')}</Text>
+        <Text style={[styles.title, { color: theme.textPrimary }]}>{cairnText('activity.activity-ownership-guard.your-value-is-still-recording', { ownerLabel: ownerLabel })}</Text>
+        <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('activity.activity-ownership-guard.cairn-keeps-one-recording-owner-at-a')}</Text>
         <TouchableOpacity
           accessibilityRole="button"
           testID="activity-return-to-owner"
           style={[styles.primary, { backgroundColor: theme.primary }]}
           onPress={onReturnToActivity}
         >
-          <Text style={styles.primaryText}>Return to {ownerLabel}</Text>
+          <Text style={styles.primaryText}>{cairnText('activity.activity-ownership-guard.return-to-value', { ownerLabel: ownerLabel })}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           accessibilityRole="button"
@@ -40,7 +41,7 @@ export function ActivityOwnershipGuard({
           style={[styles.secondary, { borderColor: theme.border }]}
           onPress={onHome}
         >
-          <Text style={[styles.secondaryText, { color: theme.textPrimary }]}>Back to Home</Text>
+          <Text style={[styles.secondaryText, { color: theme.textPrimary }]}>{cairnText('activity.activity-ownership-guard.back-to-home')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

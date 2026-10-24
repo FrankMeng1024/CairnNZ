@@ -12,6 +12,7 @@ import {
 import { useVisualTheme } from '../hooks/useVisualTheme';
 import { Icon } from './Icon';
 import { Colors, FontSize, IconSize, RadiusRole, Spacing } from './tokens';
+import { cairnText } from '../i18n/runtime';
 
 export interface PasswordFieldProps extends Omit<TextInputProps, 'secureTextEntry' | 'style'> {
   value: string;
@@ -150,7 +151,7 @@ export function PasswordField({
               inputRef.current?.focus();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Clear password"
+            accessibilityLabel={cairnText('password-field.clear-password')}
             hitSlop={{ top: 8, bottom: 8, left: 0, right: 4 }}
           >
             <Icon name="X" size={IconSize.sm} color={Colors.textMuted} strokeWidth={2} />
@@ -161,7 +162,7 @@ export function PasswordField({
           style={styles.iconButton}
           onPress={restoreSelectionAfterVisibilityChange}
           accessibilityRole="button"
-          accessibilityLabel={visible ? 'Hide password' : 'Show password'}
+          accessibilityLabel={visible ? cairnText('password-field.hide-password') : cairnText('password-field.show-password')}
           accessibilityState={{ disabled: inactive }}
           disabled={inactive}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Radius, Shadow, Spacing } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { CairnStoneMark } from './CairnPaper';
+import { cairnText } from '../../../i18n/runtime';
 
 export function CairnNotificationRetryBanner({
   busy,
@@ -32,8 +33,8 @@ export function CairnNotificationRetryBanner({
     >
       <CairnStoneMark size={30} tone="neutral" />
       <View style={styles.copy}>
-        <Text style={[styles.title, { color: theme.foreground }]}>Couldn’t open this encounter</Text>
-        <Text style={[styles.detail, { color: theme.foregroundSecondary }]}>It is still safely in Memory. Try again when you’re ready.</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{cairnText('cairns.cairn-notification-retry-banner.couldn-t-open-this-encounter')}</Text>
+        <Text style={[styles.detail, { color: theme.foregroundSecondary }]}>{cairnText('cairns.cairn-notification-retry-banner.it-is-still-safely-in-memory-try')}</Text>
         <View style={styles.actions}>
           <TouchableOpacity
             accessibilityRole="button"
@@ -42,10 +43,10 @@ export function CairnNotificationRetryBanner({
             onPress={onRetry}
             style={[styles.retry, { backgroundColor: theme.primary }]}
           >
-            {busy ? <ActivityIndicator size="small" color={theme.onPrimary} /> : <Text style={[styles.retryText, { color: theme.onPrimary }]}>Try again</Text>}
+            {busy ? <ActivityIndicator size="small" color={theme.onPrimary} /> : <Text style={[styles.retryText, { color: theme.onPrimary }]}>{cairnText('cairns.cairn-notification-retry-banner.try-again')}</Text>}
           </TouchableOpacity>
           <TouchableOpacity accessibilityRole="button" onPress={onLater} style={styles.later}>
-            <Text style={[styles.laterText, { color: theme.foregroundSecondary }]}>Later</Text>
+            <Text style={[styles.laterText, { color: theme.foregroundSecondary }]}>{cairnText('cairns.cairn-notification-retry-banner.later')}</Text>
           </TouchableOpacity>
         </View>
       </View>

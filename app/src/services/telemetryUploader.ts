@@ -24,6 +24,7 @@ import type { SessionMetadata, DeviceInfo } from '../types/debugLog';
 import { getToken } from './tokenStore';
 import { sanitizeTelemetryJsonlForUpload } from './telemetryPrivacy';
 import { activitySimulatorBuildCapable } from '../features/activitySimulator/capability';
+import { cairnText } from '../i18n/runtime';
 
 export type UploadResult =
   | { ok: true; sessionId: string; bytes: number }
@@ -90,32 +91,32 @@ class TelemetryUploader {
    */
   async upload(sessionId: string): Promise<UploadResult> {
     if (this.uploadInProgress.has(sessionId)) {
-      return { ok: false, sessionId, error: 'Upload already in progress', retryable: false };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.upload-already-in-progress'), retryable: false };
     }
 
     const settings = useSettingsStore.getState();
     const qaAuthorized = settings.debugMode
       && (activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__));
     if (!qaAuthorized) {
-      return { ok: false, sessionId, error: 'Internal QA upload is not authorized', retryable: false };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.internal-qa-upload-is-not-authorized'), retryable: false };
     }
     if (!settings.telemetryUploadEnabled) {
-      return { ok: false, sessionId, error: 'Upload disabled in settings', retryable: false };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.upload-disabled-in-settings'), retryable: false };
     }
 
     const backendUrl = this.getBackendUrl();
     if (!backendUrl) {
-      return { ok: false, sessionId, error: 'No backend URL configured', retryable: true };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.no-backend-url-configured'), retryable: true };
     }
 
     // WiFi gate
     if (settings.telemetryWifiOnly && !networkMonitor.isWifi()) {
-      return { ok: false, sessionId, error: 'WiFi-only mode: waiting for WiFi', retryable: true };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.wifi-only-mode-waiting-for-wifi'), retryable: true };
     }
 
     // Online gate
     if (!networkMonitor.isOnline()) {
-      return { ok: false, sessionId, error: 'Offline', retryable: true };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.offline'), retryable: true };
     }
 
     this.uploadInProgress.add(sessionId);
@@ -128,10 +129,10 @@ class TelemetryUploader {
 
       const localJsonl = await debugLogger.readSessionContent(sessionId);
       if (!localJsonl) {
-        return { ok: false, sessionId, error: 'Session file not found', retryable: false };
+        return { ok: false, sessionId, error: cairnText('telemetry-uploader.session-file-not-found'), retryable: false };
       }
       const jsonl = sanitizeTelemetryJsonlForUpload(localJsonl);
-      if (!jsonl) return { ok: false, sessionId, error: 'No safe events to upload', retryable: false };
+      if (!jsonl) return { ok: false, sessionId, error: cairnText('telemetry-uploader.no-safe-events-to-upload'), retryable: false };
 
       // Read metadata to enrich payload
       const metas = await debugLogger.listSessions();
@@ -181,7 +182,7 @@ class TelemetryUploader {
         return {
           ok: false,
           sessionId,
-          error: `HTTP ${resp.status}: ${errText}`,
+          error: cairnText('telemetry-uploader.http-value-value', { status: resp.status, errText: errText }),
           retryable,
         };
       }
@@ -227,27 +228,27 @@ class TelemetryUploader {
   }): Promise<UploadResult> {
     const { sessionId } = input;
     if (this.uploadInProgress.has(sessionId)) {
-      return { ok: false, sessionId, error: 'Upload already in progress', retryable: false };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.upload-already-in-progress'), retryable: false };
     }
     const settings = useSettingsStore.getState();
     const qaAuthorized = settings.debugMode
       && (activitySimulatorBuildCapable || (typeof __DEV__ !== 'undefined' && __DEV__));
     if (!qaAuthorized) {
-      return { ok: false, sessionId, error: 'Internal QA upload is not authorized', retryable: false };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.internal-qa-upload-is-not-authorized'), retryable: false };
     }
     if (!settings.telemetryUploadEnabled) {
-      return { ok: false, sessionId, error: 'Internal QA upload is disabled', retryable: false };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.internal-qa-upload-is-disabled'), retryable: false };
     }
     const backendUrl = this.getBackendUrl();
-    if (!backendUrl) return { ok: false, sessionId, error: 'No backend URL configured', retryable: true };
+    if (!backendUrl) return { ok: false, sessionId, error: cairnText('telemetry-uploader.no-backend-url-configured'), retryable: true };
     if (settings.telemetryWifiOnly && !networkMonitor.isWifi()) {
-      return { ok: false, sessionId, error: 'WiFi-only mode: waiting for WiFi', retryable: true };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.wifi-only-mode-waiting-for-wifi'), retryable: true };
     }
-    if (!networkMonitor.isOnline()) return { ok: false, sessionId, error: 'Offline', retryable: true };
+    if (!networkMonitor.isOnline()) return { ok: false, sessionId, error: cairnText('telemetry-uploader.offline'), retryable: true };
     const jsonl = sanitizeTelemetryJsonlForUpload(input.jsonl);
-    if (!jsonl) return { ok: false, sessionId, error: 'No safe events to upload', retryable: false };
+    if (!jsonl) return { ok: false, sessionId, error: cairnText('telemetry-uploader.no-safe-events-to-upload'), retryable: false };
     if (jsonl.length > 512 * 1024) {
-      return { ok: false, sessionId, error: 'QA payload exceeds 512 KiB', retryable: false };
+      return { ok: false, sessionId, error: cairnText('telemetry-uploader.qa-payload-exceeds-512-kib'), retryable: false };
     }
     this.uploadInProgress.add(sessionId);
     try {
@@ -278,7 +279,7 @@ class TelemetryUploader {
         return {
           ok: false,
           sessionId,
-          error: `HTTP ${response.status}: ${message}`,
+          error: cairnText('telemetry-uploader.http-value-value-48a93a8', { status: response.status, message: message }),
           retryable: response.status >= 500 || response.status === 0 || response.status === 408 || response.status === 429,
         };
       }

@@ -21,6 +21,7 @@
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 import type { TurnDirection } from './RouteFollower';
+import { cairnText } from '../../i18n/runtime';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -96,12 +97,12 @@ function fmtDistance(m: number, imperial: boolean): string {
 
 function turnWord(dir: TurnDirection): string {
   switch (dir) {
-    case 'left': return 'turn left';
-    case 'right': return 'turn right';
-    case 'sharp-left': return 'sharp left';
-    case 'sharp-right': return 'sharp right';
-    case 'u-turn': return 'make a u-turn';
-    case 'straight': return 'continue straight';
+    case 'left': return cairnText('route-following.voice-guidance.turn-left');
+    case 'right': return cairnText('route-following.voice-guidance.turn-right');
+    case 'sharp-left': return cairnText('route-following.voice-guidance.sharp-left');
+    case 'sharp-right': return cairnText('route-following.voice-guidance.sharp-right');
+    case 'u-turn': return cairnText('route-following.voice-guidance.make-a-u-turn');
+    case 'straight': return cairnText('route-following.voice-guidance.continue-straight');
   }
 }
 

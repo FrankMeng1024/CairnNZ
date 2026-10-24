@@ -94,6 +94,7 @@ import { resolveActivityScreenOwnership } from '../features/activity/activityScr
 import { CairnDeleteDialog } from '../features/cairns/CairnDeleteDialog';
 import { PublicWalkingDiscoveryCard } from '../features/public/components/PublicWalkingDiscoveryCard';
 import { markersForVisibleWorkspace } from '../features/cairns/cairnWorkspace';
+import { cairnText } from '../i18n/runtime';
 
 
 // ── Main HikingScreen ──────────────────────────────────────────────────────
@@ -452,11 +453,11 @@ export function HikingScreen() {
     if (saf01AlertShownRef.current) return;
     saf01AlertShownRef.current = true;
     Alert.alert(
-      "We couldn't save this activity",
-      "Your device may be low on storage. Your Activity is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
+      cairnText('hiking-screen.we-couldn-t-save-this-activity'),
+      cairnText('hiking-screen.your-device-may-be-low-on-storage'),
       [
         {
-          text: 'Discard',
+          text: cairnText('hiking-screen.discard'),
           style: 'destructive',
           onPress: () => {
             saf01AlertShownRef.current = false;
@@ -467,7 +468,7 @@ export function HikingScreen() {
           },
         },
         {
-          text: 'Retry',
+          text: cairnText('common.retry'),
           onPress: async () => {
             // Sprint 6 round-5 review R5B2 fix: Retry re-attempts
             // savePending with the captured payload FIRST, then drains.
@@ -564,11 +565,11 @@ export function HikingScreen() {
       if (saf01AlertShownRef.current) return;
       saf01AlertShownRef.current = true;
       Alert.alert(
-        "We couldn't save this activity",
-        "Your device may be low on storage. Your Activity is still recorded in the app. Tap Retry to try saving again, or Discard to remove it.",
+        cairnText('hiking-screen.we-couldn-t-save-this-activity'),
+        cairnText('hiking-screen.your-device-may-be-low-on-storage'),
         [
           {
-            text: 'Discard',
+            text: cairnText('hiking-screen.discard'),
             style: 'destructive',
             onPress: () => {
               saf01AlertShownRef.current = false;
@@ -577,7 +578,7 @@ export function HikingScreen() {
             },
           },
           {
-            text: 'Retry',
+            text: cairnText('common.retry'),
             onPress: async () => {
               const payload = useTrackingStore.getState().saveLostPayload;
               try {
@@ -702,10 +703,10 @@ export function HikingScreen() {
         borrowedUse = (await authorizeBorrowedRouteStart(sharedRouteLease, requestedActivityId)).identity;
       } catch (error: any) {
         Alert.alert(
-          'Shared Route unavailable',
+          cairnText('hiking-screen.shared-route-unavailable'),
           error?.code === 'expired'
-            ? 'The offline use authorization has expired. Connect and reopen this Route from your friend.'
-            : 'Connect and reopen this Route from your friend before starting.',
+            ? cairnText('hiking-screen.the-offline-use-authorization-has-expired-connect')
+            : cairnText('hiking-screen.connect-and-reopen-this-route-from-your'),
         );
         return;
       }
@@ -719,7 +720,7 @@ export function HikingScreen() {
         borrowedUse,
       });
     } else if (selectedRoute && !captureActivityRouteReference(selectedRoute)) {
-      Alert.alert('Route unavailable', 'This Route is not ready on this device yet.');
+      Alert.alert(cairnText('hiking-screen.route-unavailable'), cairnText('hiking-screen.this-route-is-not-ready-on-this'));
       return;
     }
     if (!selectedRoute) clearActivityRouteReference();
@@ -848,7 +849,7 @@ export function HikingScreen() {
       const prev = lastLapCountRef.current;
       lastLapCountRef.current = currentLap;
       haptic.impact('light');
-      const unit = dist.imperial ? 'mi' : 'km';
+      const unit = dist.imperial ? cairnText('hiking-screen.mi') : cairnText('hiking-screen.km');
       const msg = currentLap - prev > 1
         ? `${prev + 1}–${currentLap} ${unit}`
         : `${currentLap} ${unit}`;
@@ -897,20 +898,25 @@ export function HikingScreen() {
     && !signalLost && !canonicalDegraded;
   const simulatorGpsActive = isTracking && locationProviderSource === 'simulator';
   const gpsStatusLabel = simulatorGpsActive
-    ? `SIM · ${{ normal: 'Good', poor: 'Poor', lost: 'Lost', frozen: 'Frozen' }[simulatorSignal]}`
+    ? cairnText('hiking-screen.sim-value', { value1: {
+      normal: cairnText('common.status.good'),
+      poor: cairnText('common.status.poor'),
+      lost: cairnText('common.status.lost'),
+      frozen: cairnText('common.status.frozen'),
+    }[simulatorSignal] })
     : transitionState === 'resuming' || realLocationHealth.foregroundRecoveryActive
-      ? 'Restoring GPS'
+      ? cairnText('hiking-screen.restoring-gps')
     : status === 'paused'
-      ? 'GPS held'
+      ? cairnText('hiking-screen.gps-held')
       : signalLost
-        ? 'Signal lost'
+        ? cairnText('hiking-screen.signal-lost')
         : canonicalDegraded
-          ? 'Location issue'
+          ? cairnText('hiking-screen.location-issue')
         : gpsFixHealthy
-          ? 'GPS good'
+          ? cairnText('hiking-screen.gps-good')
           : hasLocationPermission === false
-            ? 'Location off'
-            : 'Finding GPS';
+            ? cairnText('hiking-screen.location-off')
+            : cairnText('hiking-screen.finding-gps');
   const gpsStatusTone: ActivityStatusTone = simulatorGpsActive
     ? simulatorSignal === 'normal' ? 'healthy'
       : simulatorSignal === 'poor' ? 'warning'
@@ -925,30 +931,30 @@ export function HikingScreen() {
             : 'warning';
   const backgroundTrackingWarning = locationProviderSource === 'real'
     && backgroundLocationPermission === 'foreground-only'
-    ? 'Background location is off — keep CairnNZ open'
+    ? cairnText('hiking-screen.background-location-is-off-keep-cairnnz-open')
     : null;
   const hikeNotices: ActivityNoticePresentation[] = [];
   if (signalLost) {
     hikeNotices.push({
-      label: signalLostMin >= 1 ? `No location update for ${signalLostMin} min` : 'GPS signal lost',
+      label: signalLostMin >= 1 ? cairnText('hiking-screen.no-location-update-for-value-min', { signalLostMin: signalLostMin }) : cairnText('hiking-screen.gps-signal-lost'),
       tone: 'danger',
       icon: 'CloudOff',
     });
   } else if (canonicalDegraded) {
     hikeNotices.push({
-      label: 'Location signal is too weak to map reliably',
+      label: cairnText('hiking-screen.location-signal-is-too-weak-to-map'),
       tone: 'warning',
       icon: 'Navigation',
     });
   }
   if (isTracking && overSpeedActive) {
     hikeNotices.push({
-      label: 'Moving quickly for a hike — your path may be less precise',
+      label: cairnText('hiking-screen.moving-quickly-for-a-hike-your-path'),
       tone: 'warning',
       icon: 'TriangleAlert',
     });
   } else if (isTracking && lapToast) {
-    hikeNotices.push({ label: `${lapToast} explored`, tone: 'healthy', icon: 'Milestone' });
+    hikeNotices.push({ label: cairnText('hiking-screen.value-explored', { lapToast: lapToast }), tone: 'healthy', icon: 'Milestone' });
   }
 
   const [showRoutePicker, setShowRoutePicker] = useState(false);
@@ -975,7 +981,7 @@ export function HikingScreen() {
 
   const selectedRouteName = sharedRouteLease && selectedRoute === sharedRouteKey
     ? sharedRouteLease.name
-    : [...routes, ...sharedRoutes].find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? 'Free Hike';
+    : [...routes, ...sharedRoutes].find(item => selectedRoute && routeMatchesIdentity(item, selectedRoute))?.name ?? cairnText('hiking-screen.free-hike-57dd0c6');
 
   // v412: 两个 return 分支 (phase='select' early return + Phase 2 主 return) 都需要挂
   // UnfinishedRecoveryModal, 抽成一个 node 避免复制粘贴导致 onContinue/onDiscard 逻辑分叉。
@@ -1159,12 +1165,12 @@ export function HikingScreen() {
           phase={operationalState === 'starting' ? 'starting' : 'ready'}
           safeTop={insets.top}
           gpsLabel={simulatorLocationAuthoritative
-            ? 'SIM ready'
+            ? cairnText('hiking-screen.sim-ready')
             : hasLocationPermission === false
-              ? 'Location off'
+              ? cairnText('hiking-screen.location-off-6a38601')
               : hasLocationPermission === true
-                ? 'GPS ready'
-                : 'Checking GPS'}
+                ? cairnText('hiking-screen.gps-ready')
+                : cairnText('hiking-screen.checking-gps')}
           gpsTone={simulatorLocationAuthoritative || hasLocationPermission === true
             ? 'healthy'
             : hasLocationPermission === false ? 'danger' : 'warning'}
@@ -1175,14 +1181,14 @@ export function HikingScreen() {
           mode="hike"
           safeBottom={insets.bottom}
           routeName={selectedRouteName}
-          routeDescription={selectedRoute ? 'This Route is shown on the map for reference.' : 'Explore freely without a planned route'}
+          routeDescription={selectedRoute ? cairnText('hiking-screen.this-route-is-shown-on-the-map') : cairnText('hiking-screen.explore-freely-without-a-planned-route')}
           readinessLabel={simulatorLocationAuthoritative
-            ? 'Simulator origin ready'
+            ? cairnText('hiking-screen.simulator-origin-ready')
             : hasLocationPermission === false
-              ? 'Location permission is needed before recording'
+              ? cairnText('hiking-screen.location-permission-is-needed-before-recording')
               : hasLocationPermission === true
-                ? 'Location ready · your path will be saved as you move'
-                : 'Checking location readiness'}
+                ? cairnText('hiking-screen.location-ready-your-path-will-be-saved')
+                : cairnText('hiking-screen.checking-location-readiness')}
           readinessTone={simulatorLocationAuthoritative || hasLocationPermission === true
             ? 'healthy'
             : hasLocationPermission === false ? 'danger' : 'warning'}
@@ -1200,7 +1206,7 @@ export function HikingScreen() {
             <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRoutePicker} activeOpacity={1} />
             <Animated.View style={[styles.routePickerSheet, { backgroundColor: hikeTheme.sheetSurface, borderTopColor: hikeTheme.border, transform: [{ translateY: routePickerSlide }] }]}>
               <View style={[styles.routePickerHandle, { backgroundColor: hikeTheme.borderStrong }]} />
-              <Text style={[styles.routePickerTitle, { color: hikeTheme.foreground }]}>Choose a route</Text>
+              <Text style={[styles.routePickerTitle, { color: hikeTheme.foreground }]}>{cairnText('hiking-screen.choose-a-route')}</Text>
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }} contentContainerStyle={{ gap: Spacing.sm }}>
                 {/* Free Hiking */}
                 <TouchableOpacity
@@ -1216,8 +1222,8 @@ export function HikingScreen() {
                     <Icon name="Target" size={16} color={hikeTheme.iconActive} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.routePickerName, { color: hikeTheme.foreground }]}>Free Hike</Text>
-                    <Text style={[styles.routePickerMeta, { color: hikeTheme.foregroundSecondary }]}>No route · explore freely</Text>
+                    <Text style={[styles.routePickerName, { color: hikeTheme.foreground }]}>{cairnText('hiking-screen.free-hike')}</Text>
+                    <Text style={[styles.routePickerMeta, { color: hikeTheme.foregroundSecondary }]}>{cairnText('hiking-screen.no-route-explore-freely')}</Text>
                   </View>
                   {selectedRoute === null && <Icon name="Check" size={16} color={hikeTheme.iconActive} strokeWidth={2.5} />}
                 </TouchableOpacity>
@@ -1237,8 +1243,8 @@ export function HikingScreen() {
                   const distLabel = distFromUser === null
                     ? null
                     : distFromUser < 100
-                      ? '· at start'
-                      : `· ${dist.formatShort(distFromUser)} away`;
+                      ? cairnText('hiking-screen.at-start')
+                      : cairnText('hiking-screen.value-away', { value1: dist.formatShort(distFromUser) });
                   return (
                     <TouchableOpacity
                       key={r.id}
@@ -1257,13 +1263,7 @@ export function HikingScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.routePickerName, { color: hikeTheme.foreground }]}>{r.name}</Text>
-                        <Text style={[styles.routePickerMeta, { color: hikeTheme.foregroundSecondary }]}>
-                          {dist.format(r.distanceM, 1)} {dist.unit}
-                          {r.elevationGainM > 0 ? ` · ↑${dist.formatElevation(r.elevationGainM)}${dist.elevUnit}` : ''}
-                          {r.runCount > 0 ? ` · ${r.runCount}× done` : ''}
-                          {distLabel ? ` ${distLabel}` : ''}
-                          {tooFar ? ' · too far' : ''}
-                        </Text>
+                        <Text style={[styles.routePickerMeta, { color: hikeTheme.foregroundSecondary }]}>{cairnText('hiking-screen.value-value-value-value-value-value', { value1: dist.format(r.distanceM, 1), unit: dist.unit, value3: r.elevationGainM > 0 ? cairnText('hiking-screen.value-value', { value1: dist.formatElevation(r.elevationGainM), elevUnit: dist.elevUnit }) : '', value4: r.runCount > 0 ? cairnText('hiking-screen.value-done', { runCount: r.runCount }) : '', value5: distLabel ? cairnText('hiking-screen.value', { distLabel: distLabel }) : '', value6: tooFar ? cairnText('hiking-screen.too-far') : '' })}</Text>
                       </View>
                       {selectedRoute === r.id && <Icon name="Check" size={16} color={hikeTheme.iconActive} strokeWidth={2.5} />}
                     </TouchableOpacity>
@@ -1299,10 +1299,10 @@ export function HikingScreen() {
         gpsLabel={gpsStatusLabel}
         gpsTone={gpsStatusTone}
         onBack={() => nav.goBack()}
-        primaryMetric={{ label: 'DISTANCE', value: distDisplay, unit: dist.unit }}
+        primaryMetric={{ label: cairnText('hiking-screen.distance'), value: distDisplay, unit: dist.unit }}
         secondaryMetrics={[
-          { label: 'ACTIVE TIME', value: durationDisplay },
-          { label: 'ELEVATION', value: `↑${dist.formatElevation(elevationGainM)}`, unit: dist.elevUnit },
+          { label: cairnText('hiking-screen.active-time'), value: durationDisplay },
+          { label: cairnText('hiking-screen.elevation'), value: `↑${dist.formatElevation(elevationGainM)}`, unit: dist.elevUnit },
         ]}
         notices={hikeNotices}
       />
@@ -1333,7 +1333,7 @@ export function HikingScreen() {
           safeBottom={insets.bottom}
           backgroundWarning={backgroundTrackingWarning}
           syncWarning={remoteStartConflict
-            ? 'Saved locally · another unfinished Activity must be resolved before sync'
+            ? cairnText('hiking-screen.saved-locally-another-unfinished-activity-must-be')
             : null}
           onPauseResume={handlePauseResumeHike}
           onCairn={() => {
