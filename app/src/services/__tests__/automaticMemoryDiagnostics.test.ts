@@ -48,4 +48,35 @@ describe('existing appLog durable Memory/Fog routing', () => {
       stream: { sourceType: 'app' },
     });
   });
+
+  test('routes complete-dataset page and terminal evidence through the same owner policy', () => {
+    log('o92.memory.snapshot_page', {
+      request_id: 'mine-snapshot-8',
+      snapshot_revision: 'revision-abc',
+      expected_pages_n: 3,
+      received_pages_n: 2,
+      latitude: -41.2,
+    });
+    log('o86.memory.friend_coverage_failed', {
+      request_id: 'friend-snapshot-9',
+      operation_stage: 'completeness',
+      failure_kind: 'payload',
+      owner_id: 'must-not-survive',
+    });
+
+    expect(mockCapture).toHaveBeenCalledTimes(2);
+    expect(mockCapture.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        eventCode: 'O92_MEMORY_SNAPSHOT_PAGE',
+        details: expect.objectContaining({ expected_pages_n: 3, received_pages_n: 2 }),
+      }),
+      expect.objectContaining({
+        eventCode: 'O86_MEMORY_FRIEND_COVERAGE_FAILED',
+        details: expect.objectContaining({ operation_stage: 'completeness', failure_kind: 'payload' }),
+      }),
+    ]));
+    const serialized = JSON.stringify(mockCapture.mock.calls);
+    expect(serialized).not.toContain('-41.2');
+    expect(serialized).not.toContain('must-not-survive');
+  });
 });

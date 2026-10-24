@@ -16,6 +16,103 @@ function projection(friendId = '11', authorizedAt = 1_000_000) {
   };
 }
 
+function snapshotResponse(
+  friendId = 11,
+  authorizationVersion = 4,
+  snapshotId = `snapshot-${friendId}`,
+) {
+  const now = Date.now();
+  const ring = projection(String(friendId)).cells[0].polygon;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      revoked_friend_ids: [],
+      projections: [{
+        source_friend_id: friendId,
+        authorization_version: authorizationVersion,
+        server_authorized_at: new Date(now - 100).toISOString(),
+        authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+        manifest: {
+          snapshot_id: snapshotId,
+          dataset_revision: snapshotId,
+          coverage_rule_version: 4,
+          as_of: new Date(now).toISOString(),
+          expected_pages: 1,
+          expected_tiles: 1,
+          expected_evidence_count: 1,
+          regions: [],
+          complete: false,
+        },
+        page: {
+          snapshot_id: snapshotId,
+          page_index: 0,
+          tiles: [{
+            id: `tile-${friendId}`,
+            bbox: [174.6, -41.4, 174.9, -41.1],
+            evidence_count: 1,
+            geometry_sha256: `sha-${snapshotId}`,
+            geometry: { type: 'MultiPolygon', coordinates: [[ring]] },
+          }],
+          next_cursor: null,
+          complete: true,
+        },
+      }],
+    }),
+  };
+}
+
+function pagedSnapshotResponse(input: {
+  friendId?: number;
+  authorizationVersion?: number;
+  pageIndex: number;
+  tile: { id: string; bbox: [number, number, number, number]; ring: number[][] };
+  nextCursor: string | null;
+  expectedPages?: number;
+  expectedTiles?: number;
+}) {
+  const now = Date.now();
+  const friendId = input.friendId ?? 11;
+  const snapshotId = `snapshot-${friendId}-two-regions`;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      revoked_friend_ids: [],
+      projections: [{
+        source_friend_id: friendId,
+        authorization_version: input.authorizationVersion ?? 4,
+        server_authorized_at: new Date(now - 100).toISOString(),
+        authorization_expires_at: new Date(now + 5 * 60 * 1000).toISOString(),
+        manifest: {
+          snapshot_id: snapshotId,
+          dataset_revision: 'dataset-two-regions',
+          coverage_rule_version: 4,
+          as_of: new Date(now).toISOString(),
+          expected_pages: input.expectedPages ?? 2,
+          expected_tiles: input.expectedTiles ?? 2,
+          expected_evidence_count: input.expectedTiles ?? 2,
+          regions: [],
+          complete: false,
+        },
+        page: {
+          snapshot_id: snapshotId,
+          page_index: input.pageIndex,
+          tiles: [{
+            id: input.tile.id,
+            bbox: input.tile.bbox,
+            evidence_count: 1,
+            geometry_sha256: `sha-${input.tile.id}`,
+            geometry: { type: 'MultiPolygon', coordinates: [[input.tile.ring]] },
+          }],
+          next_cursor: input.nextCursor,
+          complete: input.nextCursor === null,
+        },
+      }],
+    }),
+  };
+}
+
 function persisted(userId: string, value: ReturnType<typeof projection>, savedAtMs = 1_000_000) {
   return JSON.stringify({
     v: 1,
@@ -78,22 +175,7 @@ describe('friend Memory authorization cache ordering', () => {
     let releaseSubscriptions!: (value: any) => void;
     let releaseSources!: (value: any) => void;
     const authenticatedFetch = jest.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          revoked_friend_ids: [],
-          projections: [{
-            source_friend_id: 11,
-            authorization_version: 4,
-            projection_version: 'fresh-4',
-            cell_size_m: 200,
-            server_authorized_at: new Date(1_000_000).toISOString(),
-            authorization_expires_at: new Date(1_000_000 + 86_400_000).toISOString(),
-            cells: projection().cells,
-            regions: [],
-          }],
-        }),
-      })
+      .mockResolvedValueOnce(snapshotResponse(11, 4, 'fresh-4'))
       .mockImplementationOnce(() => new Promise(resolve => { releaseSubscriptions = resolve; }))
       .mockImplementationOnce(() => new Promise(resolve => { releaseSources = resolve; }));
     jest.doMock('../../../store/storage', () => ({
@@ -113,38 +195,23 @@ describe('friend Memory authorization cache ordering', () => {
       }],
     });
     await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, TEST_VIEWPORT)).toHaveLength(1);
 
     const refresh = useMemorySubscriptionsStore.getState().load();
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, TEST_VIEWPORT)).toHaveLength(1);
     releaseSubscriptions({ ok: false, status: 503 });
     releaseSources({ ok: false, status: 503, json: async () => ({}) });
     await refresh;
 
     expect(useMemorySubscriptionsStore.getState().error).toContain('HTTP 503');
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, TEST_VIEWPORT)).toHaveLength(1);
   });
 
   test('a successful sources authority revokes geometry even if the subscriptions read fails', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
     const appState = { user: { id: 'viewer-a' } };
     const authenticatedFetch = jest.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          revoked_friend_ids: [],
-          projections: [{
-            source_friend_id: 11,
-            authorization_version: 4,
-            projection_version: 'fresh-4',
-            cell_size_m: 200,
-            server_authorized_at: new Date(1_000_000).toISOString(),
-            authorization_expires_at: new Date(1_000_000 + 86_400_000).toISOString(),
-            cells: projection().cells,
-            regions: [],
-          }],
-        }),
-      })
+      .mockResolvedValueOnce(snapshotResponse(11, 4, 'fresh-4'))
       .mockResolvedValueOnce({ ok: false, status: 503 })
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ sources: [] }) });
     jest.doMock('../../../store/storage', () => ({
@@ -164,7 +231,7 @@ describe('friend Memory authorization cache ordering', () => {
       }],
     });
     await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, TEST_VIEWPORT)).toHaveLength(1);
 
     await useMemorySubscriptionsStore.getState().load();
     expect(useFriendMemoryStore.getState().getVisibleCells()).toEqual([]);
@@ -221,7 +288,7 @@ describe('friend Memory authorization cache ordering', () => {
       label: 'schema-invalid JSON',
       json: async () => ({ projections: 'not-an-array' }),
       stage: 'validate',
-      causeCode: 'INVALID_SCHEMA',
+      causeCode: 'INVALID_SNAPSHOT_SCHEMA',
     },
   ])('HTTP 200 $label is a terminal payload failure, never offline', async ({ json, stage, causeCode }) => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
@@ -283,26 +350,7 @@ describe('friend Memory authorization cache ordering', () => {
     let now = 1_000_100;
     jest.spyOn(Date, 'now').mockImplementation(() => now);
     const appState = { user: { id: 'viewer-a' } };
-    const authenticatedFetch = jest.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        revoked_friend_ids: [],
-        projections: [{
-          source_friend_id: 11,
-          authorization_version: 4,
-          projection_version: 'geometry-4',
-          cell_size_m: 200,
-          server_authorized_at: new Date(1_000_000).toISOString(),
-          authorization_expires_at: new Date(1_000_000 + 86_400_000).toISOString(),
-          cells: [],
-          geometry: {
-            type: 'MultiPolygon',
-            coordinates: [[[[174.7, -41.3], [174.8, -41.3], [174.8, -41.2], [174.7, -41.2], [174.7, -41.3]]]],
-          },
-          regions: [],
-        }],
-      }),
-    }));
+    const authenticatedFetch = jest.fn(async () => snapshotResponse(11, 4, 'geometry-4'));
     jest.doMock('../../../store/storage', () => ({
       storage: { removeItem: jest.fn(async () => undefined) },
     }));
@@ -349,7 +397,24 @@ describe('friend Memory authorization cache ordering', () => {
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
-    const retained = { ...projection(), viewportKey: TEST_VIEWPORT.key, regions: [] };
+    const retainedBase = projection();
+    const retained = {
+      ...retainedBase,
+      viewportKey: 'all-authorized',
+      projectionVersion: 'retained-snapshot',
+      snapshotId: 'retained-snapshot',
+      datasetRevision: '4',
+      complete: true,
+      expectedPages: 1,
+      expectedTiles: 1,
+      geometry: { type: 'MultiPolygon' as const, coordinates: [[retainedBase.cells[0].polygon]] },
+      tiles: [{
+        id: 'retained-tile', bbox: TEST_VIEWPORT.bbox, evidenceCount: 1,
+        geometrySha256: 'retained-sha',
+        geometry: { type: 'MultiPolygon' as const, coordinates: [[retainedBase.cells[0].polygon]] },
+      }],
+      regions: [],
+    };
     useFriendMemoryStore.setState({
       userId: 'viewer-a',
       projections: { '11': retained },
@@ -368,7 +433,7 @@ describe('friend Memory authorization cache ordering', () => {
       status: 'loaded', cellCount: 1,
     });
     expect(useFriendMemoryStore.getState().error).toBeNull();
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, TEST_VIEWPORT)).toHaveLength(1);
   });
 
   test('an account switch never restores either account durable Friend geometry', async () => {
@@ -423,21 +488,7 @@ describe('friend Memory authorization cache ordering', () => {
     await Promise.resolve();
     appState.user = { id: 'viewer-b' };
     await useFriendMemoryStore.getState().hydrate('viewer-b');
-    releaseResponse({
-      ok: true,
-      json: async () => ({
-        revoked_friend_ids: [],
-        projections: [{
-          source_friend_id: 11,
-          authorization_version: 4,
-          projection_version: 'stale-a',
-          cell_size_m: 200,
-          server_authorized_at: new Date(1_000_000).toISOString(),
-          authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
-          cells: projection().cells,
-        }],
-      }),
-    });
+    releaseResponse(snapshotResponse(11, 4, 'stale-a'));
     await oldLoad;
 
     expect(useFriendMemoryStore.getState().userId).toBe('viewer-b');
@@ -482,21 +533,7 @@ describe('friend Memory authorization cache ordering', () => {
     await fetchStarted;
     subscriptionState.subscriptions = [];
     await useFriendMemoryStore.getState().purgeFriend('11');
-    releaseResponse({
-      ok: true,
-      json: async () => ({
-        revoked_friend_ids: [],
-        projections: [{
-          source_friend_id: 11,
-          authorization_version: 4,
-          projection_version: 'late-projection',
-          cell_size_m: 200,
-          server_authorized_at: new Date(1_000_000).toISOString(),
-          authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
-          cells: projection().cells,
-        }],
-      }),
-    });
+    releaseResponse(snapshotResponse(11, 4, 'late-projection'));
     await pending;
 
     expect(useFriendMemoryStore.getState().projections).toEqual({});
@@ -504,7 +541,7 @@ describe('friend Memory authorization cache ordering', () => {
     expect(setItem).not.toHaveBeenCalled();
   });
 
-  test('two same-source reads resolving out of order retain only the later request', async () => {
+  test('two retained map screens coalesce one same-source complete-dataset request', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
     const appState = { user: { id: 'viewer-a' } };
     const subscriptions = [{ friend_id: 11 }];
@@ -520,33 +557,85 @@ describe('friend Memory authorization cache ordering', () => {
         getState: () => ({ subscriptions, availableSources: [{ friend_id: '11', authorization_version: 4 }] }),
       },
     }));
-    const body = (version: string) => ({
-      ok: true,
-      json: async () => ({
-        revoked_friend_ids: [],
-        projections: [{
-          source_friend_id: 11,
-          authorization_version: 4,
-          projection_version: version,
-          cell_size_m: 200,
-          server_authorized_at: new Date(1_000_000).toISOString(),
-          authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
-          cells: projection().cells,
-        }],
-      }),
-    });
-
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
     const first = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     while (deferred.length < 1) await Promise.resolve();
-    const second = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
-    while (deferred.length < 2) await Promise.resolve();
-    deferred[1].resolve(body('newer-request'));
+    const second = useFriendMemoryStore.getState().loadSelectedProjections(undefined, {
+      key: 'distant-second-map', bbox: [168.5, -46, 168.8, -45.7],
+    });
     await second;
-    deferred[0].resolve(body('older-request'));
+    expect(deferred).toHaveLength(1);
+    deferred[0].resolve(snapshotResponse(11, 4, 'one-complete-dataset'));
     await first;
 
-    expect(useFriendMemoryStore.getState().projections['11'].projectionVersion).toBe('newer-request');
+    expect(authenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(useFriendMemoryStore.getState().projections['11'].projectionVersion).toBe('one-complete-dataset');
+  });
+
+  test('one complete multi-page dataset serves distant cameras without refetching', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    const subscriptionState = {
+      subscriptions: [{ friend_id: 11 }],
+      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+    };
+    const wellingtonBbox: [number, number, number, number] = [174.6, -41.4, 174.9, -41.1];
+    const fiordlandBbox: [number, number, number, number] = [166.8, -46.2, 167.1, -45.9];
+    const ringFor = (bbox: [number, number, number, number]) => [
+      [bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[2], bbox[3]], [bbox[0], bbox[3]], [bbox[0], bbox[1]],
+    ];
+    const authenticatedFetch = jest.fn(async (_path: string, init: { body: string }) => {
+      const body = JSON.parse(init.body);
+      return body.cursor
+        ? pagedSnapshotResponse({ pageIndex: 1, tile: { id: 'fiordland', bbox: fiordlandBbox, ring: ringFor(fiordlandBbox) }, nextCursor: null })
+        : pagedSnapshotResponse({ pageIndex: 0, tile: { id: 'wellington', bbox: wellingtonBbox, ring: ringFor(wellingtonBbox) }, nextCursor: 'page-2' });
+    });
+    jest.doMock('../../../store/storage', () => ({ storage: { getItem: jest.fn(async () => null), removeItem: jest.fn(async () => undefined) } }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+    jest.doMock('../store/useMemorySubscriptionsStore', () => ({
+      useMemorySubscriptionsStore: { getState: () => subscriptionState },
+    }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+    const distantViewport = { key: 'fiordland', bbox: fiordlandBbox };
+    expect(useFriendMemoryStore.getState().projections['11']).toMatchObject({
+      complete: true, expectedPages: 2, expectedTiles: 2,
+    });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, TEST_VIEWPORT)[0].geometry.coordinates).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, distantViewport)[0].geometry.coordinates).toHaveLength(1);
+
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, distantViewport);
+    expect(authenticatedFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('a terminal page that omits an expected page cannot become complete', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    const subscriptionState = {
+      subscriptions: [{ friend_id: 11 }],
+      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+    };
+    const bbox: [number, number, number, number] = TEST_VIEWPORT.bbox;
+    const ring = [[bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[2], bbox[3]], [bbox[0], bbox[3]], [bbox[0], bbox[1]]];
+    jest.doMock('../../../store/storage', () => ({ storage: { getItem: jest.fn(async () => null), removeItem: jest.fn(async () => undefined) } }));
+    jest.doMock('../../../services/apiService', () => ({
+      authenticatedFetch: jest.fn(async () => pagedSnapshotResponse({
+        pageIndex: 0, tile: { id: 'only-page', bbox, ring }, nextCursor: null,
+      })),
+    }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+    jest.doMock('../store/useMemorySubscriptionsStore', () => ({
+      useMemorySubscriptionsStore: { getState: () => subscriptionState },
+    }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+    expect(useFriendMemoryStore.getState().projections).toEqual({});
+    expect(useFriendMemoryStore.getState().lastFailure).toMatchObject({
+      kind: 'payload', stage: 'completeness', causeCode: 'INCOMPLETE_SNAPSHOT',
+    });
   });
 
   test('loads and purges remain session-only and relaunch cannot restore borrowed geometry', async () => {
@@ -567,21 +656,7 @@ describe('friend Memory authorization cache ordering', () => {
       },
     }));
     jest.doMock('../../../services/apiService', () => ({
-      authenticatedFetch: jest.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          revoked_friend_ids: [],
-          projections: [{
-            source_friend_id: 11,
-            authorization_version: 4,
-            projection_version: 'about-to-be-purged',
-            cell_size_m: 200,
-            server_authorized_at: new Date(1_000_000).toISOString(),
-            authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
-            cells: projection().cells,
-          }],
-        }),
-      })),
+      authenticatedFetch: jest.fn(async () => snapshotResponse(11, 4, 'about-to-be-purged')),
     }));
     jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
     jest.doMock('../store/useMemorySubscriptionsStore', () => ({
@@ -613,25 +688,9 @@ describe('friend Memory authorization cache ordering', () => {
       ],
     };
     const authenticatedFetch = jest.fn(async (_path: string, init: { body: string }) => {
-      const friendId = JSON.parse(init.body).friend_ids[0];
+      const friendId = JSON.parse(init.body).friend_id;
       if (friendId === 11) return { ok: false, status: 503, json: async () => ({}) };
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          revoked_friend_ids: [],
-          projections: [{
-            source_friend_id: 22,
-            authorization_version: 7,
-            projection_version: 'friend-22-ok',
-            cell_size_m: 200,
-            server_authorized_at: new Date(1_000_000).toISOString(),
-            authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
-            cells: projection('22').cells,
-            regions: [],
-          }],
-        }),
-      };
+      return snapshotResponse(22, 7, 'friend-22-ok');
     });
     jest.doMock('../../../store/storage', () => ({
       storage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined) },
@@ -650,7 +709,7 @@ describe('friend Memory authorization cache ordering', () => {
       '22': { status: 'loaded', cellCount: 1 },
     });
     expect(Object.keys(useFriendMemoryStore.getState().projections)).toEqual(['22']);
-    expect(useFriendMemoryStore.getState().getVisibleCells()).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries(null, TEST_VIEWPORT)).toHaveLength(1);
   });
 
   test('a valid deliberate reselection starts a fresh source generation without harming other sources', async () => {
@@ -665,21 +724,10 @@ describe('friend Memory authorization cache ordering', () => {
     };
     const responses: any[] = [];
     const authenticatedFetch = jest.fn(async () => responses.shift());
-    const makeResponse = (items: Array<{ id: number; auth: number; version: string }>) => ({
-      ok: true,
-      json: async () => ({
-        revoked_friend_ids: [],
-        projections: items.map(item => ({
-          source_friend_id: item.id,
-          authorization_version: item.auth,
-          projection_version: item.version,
-          cell_size_m: 200,
-          server_authorized_at: new Date(1_000_000).toISOString(),
-          authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
-          cells: projection(String(item.id)).cells,
-        })),
-      }),
-    });
+    const makeResponse = (items: Array<{ id: number; auth: number; version: string }>) => {
+      const item = items[0];
+      return snapshotResponse(item.id, item.auth, item.version);
+    };
     // Projection loads are intentionally isolated per contributor so one
     // failed friend cannot suppress another. Supply one response per source.
     responses.push(makeResponse([{ id: 11, auth: 4, version: 'a-1' }]));
@@ -725,21 +773,7 @@ describe('friend Memory authorization cache ordering', () => {
     jest.doMock('../store/useMemorySubscriptionsStore', () => ({
       useMemorySubscriptionsStore: { getState: () => subscriptionState },
     }));
-    const response = (auth: number, version: string) => ({
-      ok: true,
-      json: async () => ({
-        revoked_friend_ids: [],
-        projections: [{
-          source_friend_id: 11,
-          authorization_version: auth,
-          projection_version: version,
-          cell_size_m: 200,
-          server_authorized_at: new Date(1_000_000).toISOString(),
-          authorization_expires_at: new Date(1_000_000 + 24 * 60 * 60 * 1000).toISOString(),
-          cells: projection().cells,
-        }],
-      }),
-    });
+    const response = (auth: number, version: string) => snapshotResponse(11, auth, version);
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
     const stale = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);

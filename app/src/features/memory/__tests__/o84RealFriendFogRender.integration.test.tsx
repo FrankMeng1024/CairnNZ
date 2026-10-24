@@ -168,21 +168,27 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
       error: null,
     });
     mockAuthenticatedFetch.mockImplementation(async (url: string, options: any) => {
-      if (url.startsWith('/api/memory/coverage?bbox=')) {
+      if (url.startsWith('/api/memory/coverage-snapshot?')) {
         return {
           ok: true,
           status: 200,
           json: async () => ({
-            coverage_rule_version: 4,
-            coverage_version: 'mine-exact-v1',
-            evidence_count: 8,
-            tile_count: 1,
-            rebuilt_tile_count: 0,
-            geometry: mineGeometry,
+            manifest: {
+              snapshot_id: 'mine-exact-v1', dataset_revision: '1', coverage_rule_version: 4,
+              as_of: new Date(now).toISOString(), expected_pages: 1, expected_tiles: 1,
+              expected_evidence_count: 8, regions: [], complete: false,
+            },
+            page: {
+              snapshot_id: 'mine-exact-v1', page_index: 0, next_cursor: null, complete: true,
+              tiles: [{
+                id: 'mine-tile', bbox: [174.7, -36.9, 174.9, -36.7], evidence_count: 8,
+                geometry_sha256: 'mine-sha', geometry: mineGeometry,
+              }],
+            },
           }),
         };
       }
-      const requestedId = String(JSON.parse(options.body).friend_ids[0]);
+      const requestedId = String(JSON.parse(options.body).friend_id);
       return {
         ok: true,
         status: 200,
@@ -190,14 +196,22 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
           projections: [{
             source_friend_id: requestedId,
             authorization_version: 4,
-            projection_version: `friend-${requestedId}-exact-v1`,
-            coverage_rule_version: 4,
-            evidence_count: 4,
-            cells: [],
-            regions: [],
-            geometry: friendGeometries[requestedId],
             server_authorized_at: new Date(now - 60_000).toISOString(),
             authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+            manifest: {
+              snapshot_id: `friend-${requestedId}-exact-v1`, dataset_revision: '1', coverage_rule_version: 4,
+              as_of: new Date(now).toISOString(), expected_pages: 1, expected_tiles: 1,
+              expected_evidence_count: 4, regions: [], complete: false,
+            },
+            page: {
+              snapshot_id: `friend-${requestedId}-exact-v1`, page_index: 0,
+              next_cursor: null, complete: true,
+              tiles: [{
+                id: `friend-tile-${requestedId}`, bbox: [174.7, -36.9, 174.9, -36.7],
+                evidence_count: 4, geometry_sha256: `friend-sha-${requestedId}`,
+                geometry: friendGeometries[requestedId],
+              }],
+            },
           }],
           revoked_friend_ids: [],
         }),
@@ -343,6 +357,8 @@ describe('O86 prepared viewport render lifecycle', () => {
       coverage: {
         viewportKey: viewport.key, coverageVersion: 'cold-error-mine-v1', coverageRuleVersion: 4,
         geometry: { type: 'MultiPolygon', coordinates: [] }, evidenceCount: 0, loadedAtMs: Date.now(),
+        datasetRevision: 'cold-error-mine-v1', snapshotId: 'cold-error-mine-v1', complete: true,
+        tiles: [], regions: [], expectedPages: 0, expectedTiles: 0,
       },
       status: 'ready', error: null, version: 1, viewport,
       loadViewport: jest.fn(async () => undefined),
@@ -401,6 +417,8 @@ describe('O86 prepared viewport render lifecycle', () => {
         geometry: { type: 'MultiPolygon', coordinates: [] },
         evidenceCount: 0,
         loadedAtMs: Date.now(),
+        datasetRevision: 'same-key-v1', snapshotId: 'same-key-v1', complete: true,
+        tiles: [], regions: [], expectedPages: 0, expectedTiles: 0,
       },
       status: 'ready', error: null, version: 1, viewport, loadViewport,
     });
@@ -436,6 +454,8 @@ describe('O86 prepared viewport render lifecycle', () => {
       coverage: {
         viewportKey: viewport.key, coverageVersion: 'late-subscriptions-v1', coverageRuleVersion: 4,
         geometry: { type: 'MultiPolygon', coordinates: [] }, evidenceCount: 0, loadedAtMs: Date.now(),
+        datasetRevision: 'late-subscriptions-v1', snapshotId: 'late-subscriptions-v1', complete: true,
+        tiles: [], regions: [], expectedPages: 0, expectedTiles: 0,
       },
       status: 'ready', error: null, version: 1, viewport,
     });

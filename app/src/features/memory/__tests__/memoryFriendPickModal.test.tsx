@@ -41,15 +41,34 @@ function projection(friendId: number) {
   return {
     source_friend_id: friendId,
     authorization_version: 1,
-    projection_version: `projection-${friendId}`,
-    coverage_rule_version: 4,
     server_authorized_at: new Date(now - 60_000).toISOString(),
     authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
-    regions: [],
-    cells: [],
-    geometry: {
-      type: 'MultiPolygon',
-      coordinates: [[[[start, -41], [start + 0.001, -41], [start + 0.001, -41.001], [start, -41.001], [start, -41]]]],
+    manifest: {
+      snapshot_id: `projection-${friendId}`,
+      dataset_revision: '1',
+      coverage_rule_version: 4,
+      as_of: new Date(now).toISOString(),
+      expected_pages: 1,
+      expected_tiles: 1,
+      expected_evidence_count: 1,
+      regions: [],
+      complete: false,
+    },
+    page: {
+      snapshot_id: `projection-${friendId}`,
+      page_index: 0,
+      tiles: [{
+        id: `tile-${friendId}`,
+        bbox: [start - 0.01, -41.01, start + 0.01, -40.99],
+        evidence_count: 1,
+        geometry_sha256: `sha-${friendId}`,
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: [[[[start, -41], [start + 0.001, -41], [start + 0.001, -41.001], [start, -41.001], [start, -41]]]],
+        },
+      }],
+      next_cursor: null,
+      complete: true,
     },
   };
 }
@@ -81,8 +100,8 @@ describe('Memory friend picker interaction owner', () => {
       if (path === '/api/friend-sharing/sources') return ok({ sources });
       if (path === '/api/memory-subscriptions' && init.method === 'POST') return ok({}, 201);
       if (path.startsWith('/api/memory-subscriptions/') && init.method === 'DELETE') return ok({});
-      if (path === '/api/friend-sharing/coverage') {
-        const friendId = JSON.parse(init.body).friend_ids[0];
+      if (path === '/api/friend-sharing/coverage-snapshot') {
+        const friendId = JSON.parse(init.body).friend_id;
         if (friendId === 11) await firstGate;
         return ok({ revoked_friend_ids: [], projections: [projection(friendId)] });
       }

@@ -44,12 +44,13 @@ test('region navigation uses the latest accepted coverage witness as its anchor'
 
 test('shared region anchors remain behind the existing delayed-visibility fence', async () => {
   const db = regionDb(row, (sql) => {
-    assert.match(sql, /mapped\.share_ready_at<=UTC_TIMESTAMP\(3\)/);
+    assert.match(sql, /mapped\.share_ready_at\s*<=\s*UTC_TIMESTAMP\(3\)/);
     assert.match(sql, /evidence\.owner_id=mapped\.owner_id/);
     assert.match(sql, /evidence\.coverage_rule_version=mapped\.coverage_rule_version/);
     assert.match(sql, /WHERE ranked\.recency_rank=1/);
   });
 
   const regions = await loadCoverageRegions(db, 42, 'shared');
-  assert.deepEqual(regions[0].anchor, [121.60231, 31.20451]);
+  assert.deepEqual(regions[0].anchor, [121.6, 31.25]);
+  assert.notDeepEqual(regions[0].anchor, [121.60231, 31.20451], 'must not expose a foreign witness coordinate');
 });

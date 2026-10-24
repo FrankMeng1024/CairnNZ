@@ -472,7 +472,7 @@ export function MemoryScreen() {
     setFogScenePending(true);
     void (async () => {
       await retrySelectionIntents();
-      await loadSubs();
+      await loadSubs(true);
       const viewport = mapRef.current?.getCoverageViewport();
       const selectionStillPending = Object.keys(
         useMemorySubscriptionsStore.getState().selectionPending,
@@ -629,13 +629,10 @@ export function MemoryScreen() {
       manualBrowseThisMountRef.current = false;
       currentCityAppliedRef.current = null;
       const now = Date.now();
-      // Fence the prior focus synchronously. Waiting for the subscriptions
-      // request would leave a small revoke window where the old verified
-      // projection could be made visible from another map control.
-      useFriendMemoryStore.getState().suspendVisibility();
-      // Re-authorize social layers on every return to Memory. Cached Fog may
-      // accelerate a successful refresh, but it is deliberately invisible
-      // until the current session has revalidated sources and projections.
+      // Focus is a presentation transition, not an authorization mutation.
+      // Keep an unexpired server-issued projection visible while the bounded
+      // sources lease refreshes; projection expiry/revoke/logout still fences
+      // borrowed geometry synchronously in the store.
       void (async () => {
         const ownerId = String(useAppStore.getState().user?.id ?? '');
         if (!ownerId) return;
@@ -651,11 +648,8 @@ export function MemoryScreen() {
         const selectionStillPending = Object.keys(
           useMemorySubscriptionsStore.getState().selectionPending,
         ).length > 0;
-        // MemoryMap stays mounted between tabs. Reclaim its exact viewport
-        // after fresh authorization: Route can legitimately have replaced the
-        // singleton prepared/Friends viewport while Memory was blurred, and
-        // unchanged camera/selection keys would otherwise never retrigger the
-        // FogLayer effects after suspendVisibility().
+        // Camera is only a local render hint. Complete Mine/Friends snapshots
+        // are reusable across screens and must not be invalidated on focus.
         const memoryViewport = mapRef.current?.getCoverageViewport();
         if (memoryViewport) {
           await Promise.all([

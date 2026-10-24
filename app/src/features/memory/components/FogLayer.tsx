@@ -14,7 +14,10 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
-import { usePreparedMemoryCoverageStore } from '../store/usePreparedMemoryCoverageStore';
+import {
+  selectPreparedCoverageViewport,
+  usePreparedMemoryCoverageStore,
+} from '../store/usePreparedMemoryCoverageStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeStore';
 import { getMapbox } from '../services/mapboxAdapter';
@@ -194,8 +197,6 @@ export function memoryFogCombinedPreparationSettled(input: {
   subscriptionsLoading: boolean;
   selectedFriendIds: string[];
   friendLoading: boolean;
-  activeViewportKey?: string;
-  requiredViewportKey?: string;
   sourceStates: Record<string, { status?: string }>;
 }): boolean {
   if (input.scope !== 'combined') return true;
@@ -204,9 +205,7 @@ export function memoryFogCombinedPreparationSettled(input: {
   // visible content transition.
   if (input.selectedFriendIds.length === 0) return true;
   if (input.subscriptionsLoading) return false;
-  if (!input.requiredViewportKey
-    || input.activeViewportKey !== input.requiredViewportKey
-    || input.friendLoading) return false;
+  if (input.friendLoading) return false;
   return input.selectedFriendIds.every(friendId => {
     const status = input.sourceStates[friendId]?.status;
     return status === 'loaded'
@@ -1478,7 +1477,6 @@ export function FogLayer({
   const friendMemoryError = useFriendMemoryStore((s) => s.error);
   const friendSourceStates = useFriendMemoryStore((s) => s.sourceStates);
   const authorizedSourceVersions = useFriendMemoryStore((s) => s.authorizedSourceVersions);
-  const friendActiveViewportKey = useFriendMemoryStore((s) => s.activeViewport?.key);
   const preparedMemoryVersion = usePreparedMemoryCoverageStore((s) => s.version);
   const preparedMemoryStatus = usePreparedMemoryCoverageStore((s) => s.status);
   const preparedMemoryCoverage = usePreparedMemoryCoverageStore((s) => s.coverage);
@@ -1501,13 +1499,16 @@ export function FogLayer({
   }, [friendMemoryRef, loadPreparedViewport, scope, selectedFriendIdsKey, selectionPendingKey, syntheticQaAuthority, viewportKey]);
 
   const preparedSelfReady = !syntheticQaAuthority
-    && preparedMemoryStatus === 'ready'
-    && preparedMemoryCoverage?.viewportKey === viewport?.key;
+    && (preparedMemoryStatus === 'ready' || preparedMemoryStatus === 'refreshing')
+    && preparedMemoryCoverage?.complete === true;
   const preparedSelfEvidence = useMemo(
     () => preparedSelfReady && preparedMemoryCoverage
-      ? multiPolygon(preparedMemoryCoverage.geometry.coordinates)
+      ? (() => {
+          const selected = selectPreparedCoverageViewport(preparedMemoryCoverage, viewport);
+          return selected ? multiPolygon(selected.coordinates) : null;
+        })()
       : null,
-    [preparedMemoryCoverage, preparedSelfReady],
+    [preparedMemoryCoverage, preparedSelfReady, viewport],
   );
 
   // v413: union self ∪ enabled friend points. 每次 self 或 friend 变化都重算.
@@ -1532,9 +1533,9 @@ export function FogLayer({
   const friendGeometries = useMemo(
     () => syntheticQaAuthority || scope === 'self'
       ? []
-      : friendMemoryRef().getVisibleGeometries(null),
+      : friendMemoryRef().getVisibleGeometries(null, viewport),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [friendMemoryVersion, scope, syntheticQaAuthority, viewport?.key],
+    [friendMemoryVersion, scope, syntheticQaAuthority, viewport],
   );
   const selectedFriendIds = useMemo(
     () => selectedFriendIdsKey ? selectedFriendIdsKey.split(',') : [],
@@ -1552,8 +1553,6 @@ export function FogLayer({
     subscriptionsLoading,
     selectedFriendIds,
     friendLoading: friendMemoryLoading,
-    activeViewportKey: friendActiveViewportKey,
-    requiredViewportKey: viewport?.key,
     sourceStates: friendSourceStates,
   });
   const combinedPreparationFailed = memoryFogCombinedPreparationFailed({

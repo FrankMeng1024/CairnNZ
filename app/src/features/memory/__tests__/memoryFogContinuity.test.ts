@@ -34,8 +34,6 @@ describe('Memory evidence rendering continuity', () => {
       subscriptionsLoading: false,
       selectedFriendIds: ['31', '32'],
       friendLoading: false,
-      activeViewportKey: 'auckland',
-      requiredViewportKey: 'auckland',
       sourceStates: {
         '31': { status: 'loaded' },
         '32': { status: 'loading' },
@@ -51,12 +49,11 @@ describe('Memory evidence rendering continuity', () => {
     })).toBe(true);
     expect(memoryFogCombinedPreparationSettled({
       ...base,
-      activeViewportKey: 'wellington',
       sourceStates: {
         '31': { status: 'loaded' },
         '32': { status: 'loaded' },
       },
-    })).toBe(false);
+    })).toBe(true);
     expect(memoryFogCombinedPreparationSettled({
       ...base,
       sourceStates: {
@@ -78,8 +75,6 @@ describe('Memory evidence rendering continuity', () => {
       subscriptionsLoading: true,
       selectedFriendIds: [],
       friendLoading: true,
-      activeViewportKey: 'old-friend-viewport',
-      requiredViewportKey: 'current-mine-viewport',
       sourceStates: { '31': { status: 'loading' } },
     })).toBe(true);
   });

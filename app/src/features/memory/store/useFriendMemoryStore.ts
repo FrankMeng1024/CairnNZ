@@ -19,6 +19,14 @@ export interface FriendProjectionCell {
   projectionVersion?: string;
 }
 
+export interface FriendProjectionTile {
+  id: string;
+  bbox: [number, number, number, number];
+  evidenceCount: number;
+  geometrySha256: string;
+  geometry: MultiPolygon;
+}
+
 export interface FriendProjection {
   friendId: string;
   authorizationVersion: number;
@@ -27,6 +35,12 @@ export interface FriendProjection {
   cells: FriendProjectionCell[];
   geometry?: MultiPolygon;
   viewportKey?: string;
+  snapshotId?: string;
+  datasetRevision?: string;
+  complete?: boolean;
+  expectedPages?: number;
+  expectedTiles?: number;
+  tiles?: FriendProjectionTile[];
   regions: Array<{
     id: string;
     parentId: string | null;
@@ -70,7 +84,7 @@ interface FriendMemoryState {
   /** Hide every cached source after an authorization refresh failure. */
   suspendVisibility: () => void;
   getVisibleCells: (friendId?: string | null) => FriendProjectionCell[];
-  getVisibleGeometries: (friendId?: string | null) => Array<{
+  getVisibleGeometries: (friendId?: string | null, viewport?: MemoryCoverageViewport | null) => Array<{
     sourceFriendId: string;
     authorizationVersion: number;
     authorizationExpiresAtMs: number;
@@ -99,7 +113,7 @@ const latestSourceRequests = new Map<string, number>();
 const verifiedSourceVersions = new Map<string, number>();
 const activeSourceControllers = new Map<string, AbortController>();
 const sourceExpiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
-export const FRIEND_MEMORY_PROJECTION_TIMEOUT_MS = 5_000;
+export const FRIEND_MEMORY_PROJECTION_TIMEOUT_MS = 30_000;
 
 function legacyCacheKey(userId: string) {
   return `${LEGACY_CACHE_PREFIX}${userId}`;
@@ -123,6 +137,16 @@ function validProjection(value: any, now: number): value is FriendProjection {
         && Number.isFinite(coordinate[1])))
     && (value.geometry === undefined
       || (value.geometry?.type === 'MultiPolygon' && Array.isArray(value.geometry.coordinates)))
+    && (value.complete !== true || (
+      typeof value.snapshotId === 'string'
+      && Array.isArray(value.tiles)
+      && value.tiles.every((tile: any) => typeof tile?.id === 'string'
+        && Array.isArray(tile?.bbox)
+        && tile.bbox.length === 4
+        && tile.bbox.every(Number.isFinite)
+        && tile?.geometry?.type === 'MultiPolygon'
+        && Array.isArray(tile.geometry.coordinates))
+    ))
     && Array.isArray(value.regions ?? [])
     && (value.regions ?? []).every((region: any) => typeof region?.id === 'string'
       && (region.level === 2 || region.level === 3)
@@ -133,6 +157,21 @@ function validProjection(value: any, now: number): value is FriendProjection {
       && Array.isArray(region.anchor)
       && region.anchor.length === 2
       && region.anchor.every(Number.isFinite));
+}
+
+function validBbox(value: any): value is [number, number, number, number] {
+  return Array.isArray(value) && value.length === 4 && value.every(Number.isFinite)
+    && value[0] < value[2] && value[1] < value[3];
+}
+
+function viewportIntersectsTile(
+  viewport: MemoryCoverageViewport,
+  bbox: [number, number, number, number],
+): boolean {
+  const pad = 0.001;
+  const [west, south, east, north] = viewport.bbox;
+  return bbox[2] >= west - pad && bbox[0] <= east + pad
+    && bbox[3] >= south - pad && bbox[1] <= north + pad;
 }
 
 function parseProjection(incoming: any, viewportKey?: string): FriendProjection {
@@ -158,6 +197,200 @@ function parseProjection(incoming: any, viewportKey?: string): FriendProjection 
     })),
     serverAuthorizedAtMs,
     authorizationExpiresAtMs: Math.min(parsedExpiry, serverAuthorizedAtMs + MAX_CACHE_AGE_MS),
+  };
+}
+
+function parseSnapshotRegions(value: any): FriendProjection['regions'] | null {
+  if (!Array.isArray(value)) return null;
+  const regions = value.map((region: any) => ({
+    id: String(region?.id ?? ''),
+    parentId: region?.parent_id == null ? null : String(region.parent_id),
+    level: Number(region?.level) as 2 | 3,
+    name: String(region?.name_en ?? ''),
+    bbox: region?.bbox,
+    anchor: region?.anchor,
+  }));
+  return regions.every(region => region.id
+    && (region.level === 2 || region.level === 3)
+    && validBbox(region.bbox)
+    && Array.isArray(region.anchor)
+    && region.anchor.length === 2
+    && region.anchor.every(Number.isFinite)) ? regions : null;
+}
+
+async function loadCompleteFriendProjection(input: {
+  friendId: number;
+  userId: string;
+  controller: AbortController;
+  expectedAuthorizationVersion?: number;
+  requestId: string;
+}): Promise<{ projection?: FriendProjection; revoked: boolean; decodedBytes: number }> {
+  let cursor: string | null | undefined;
+  let snapshotId: string | undefined;
+  let asOf: string | undefined;
+  let manifest: any = null;
+  let authorizationVersion: number | undefined;
+  let serverAuthorizedAtMs = 0;
+  let authorizationExpiresAtMs = Number.POSITIVE_INFINITY;
+  const pageIndexes = new Set<number>();
+  const tileIds = new Set<string>();
+  const tiles: FriendProjectionTile[] = [];
+  let receivedEvidenceCount = 0;
+  let decodedBytes = 0;
+  do {
+    const response = await authenticatedFetch('/api/friend-sharing/coverage-snapshot', {
+      method: 'POST',
+      body: JSON.stringify({
+        friend_id: input.friendId,
+        page_size: 24,
+        ...(snapshotId ? { snapshot_id: snapshotId } : {}),
+        ...(asOf ? { as_of: asOf } : {}),
+        ...(cursor ? { cursor } : {}),
+      }),
+      expectedUserId: input.userId,
+      signal: input.controller.signal,
+    });
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}`) as Error & {
+        httpStatus?: number;
+        operationStage?: string;
+        code?: string;
+      };
+      error.httpStatus = response.status;
+      error.operationStage = response.status === 409 ? 'snapshot-consistency' : 'http';
+      error.code = response.status === 409 ? 'SNAPSHOT_CHANGED' : `HTTP_${response.status}`;
+      throw error;
+    }
+    let body: any;
+    try {
+      body = await response.json();
+    } catch (error) {
+      Object.assign(error as object, { invalidPayload: true, operationStage: 'decode', httpStatus: response.status });
+      throw error;
+    }
+    decodedBytes += JSON.stringify(body).length;
+    if (!body || typeof body !== 'object' || !Array.isArray(body.projections)
+      || !Array.isArray(body.revoked_friend_ids)) {
+      const error = new Error('Invalid Friend Memory snapshot schema');
+      Object.assign(error, { invalidPayload: true, operationStage: 'validate', httpStatus: response.status, code: 'INVALID_SNAPSHOT_SCHEMA' });
+      throw error;
+    }
+    if (body.revoked_friend_ids.some((id: unknown) => String(id) === String(input.friendId))) {
+      return { revoked: true, decodedBytes };
+    }
+    const incoming = body.projections.find((value: any) => String(value?.source_friend_id) === String(input.friendId));
+    manifest = incoming?.manifest;
+    const page = incoming?.page;
+    snapshotId = String(manifest?.snapshot_id ?? '');
+    asOf = String(manifest?.as_of ?? '');
+    const nextAuthorizationVersion = Number(incoming?.authorization_version);
+    const nextAuthorizedAt = Date.parse(incoming?.server_authorized_at);
+    const nextExpiresAt = Date.parse(incoming?.authorization_expires_at);
+    if (!incoming || !snapshotId || !asOf || Number(manifest?.coverage_rule_version) !== 4
+      || !Number.isInteger(Number(manifest?.expected_pages))
+      || !Number.isInteger(Number(manifest?.expected_tiles))
+      || !Number.isFinite(Number(manifest?.expected_evidence_count))
+      || !Number.isInteger(nextAuthorizationVersion)
+      || !Number.isFinite(nextAuthorizedAt) || !Number.isFinite(nextExpiresAt)
+      || !page || page.snapshot_id !== snapshotId
+      || typeof page.complete !== 'boolean' || !Array.isArray(page.tiles)) {
+      const error = new Error('Invalid Friend Memory snapshot response');
+      Object.assign(error, { invalidPayload: true, operationStage: 'validate', httpStatus: response.status, code: 'INVALID_SNAPSHOT_SCHEMA' });
+      throw error;
+    }
+    if (authorizationVersion !== undefined && authorizationVersion !== nextAuthorizationVersion) {
+      const error = new Error('Friend Memory authorization changed during acquisition');
+      Object.assign(error, { invalidPayload: true, operationStage: 'authorization', code: 'AUTHORIZATION_CHANGED' });
+      throw error;
+    }
+    authorizationVersion = nextAuthorizationVersion;
+    serverAuthorizedAtMs = Math.max(serverAuthorizedAtMs, nextAuthorizedAt);
+    authorizationExpiresAtMs = Math.min(authorizationExpiresAtMs, nextExpiresAt);
+    if (page.tiles.length > 0) {
+      const pageIndex = Number(page.page_index);
+      if (!Number.isInteger(pageIndex) || pageIndexes.has(pageIndex)) {
+        const error = new Error('Duplicate Friend Memory snapshot page');
+        Object.assign(error, { invalidPayload: true, operationStage: 'validate', code: 'DUPLICATE_PAGE' });
+        throw error;
+      }
+      pageIndexes.add(pageIndex);
+    }
+    for (const tile of page.tiles) {
+      const id = String(tile?.id ?? '');
+      if (!id || tileIds.has(id) || !validBbox(tile?.bbox)
+        || tile?.geometry?.type !== 'MultiPolygon' || !Array.isArray(tile.geometry.coordinates)) {
+        const error = new Error('Invalid or duplicate Friend Memory tile');
+        Object.assign(error, { invalidPayload: true, operationStage: 'validate', code: 'INVALID_TILE' });
+        throw error;
+      }
+      tileIds.add(id);
+      const evidenceCount = Number(tile.evidence_count) || 0;
+      receivedEvidenceCount += evidenceCount;
+      tiles.push({
+        id,
+        bbox: tile.bbox,
+        evidenceCount,
+        geometrySha256: String(tile.geometry_sha256 ?? ''),
+        geometry: tile.geometry,
+      });
+    }
+    log('o86.memory.friend_coverage_page', {
+      request_id: input.requestId,
+      snapshot_revision: snapshotId,
+      page_index: Number(page.page_index) || 0,
+      page_tiles_n: page.tiles.length,
+      expected_pages_n: Number(manifest.expected_pages),
+      received_pages_n: pageIndexes.size,
+      complete: page.complete,
+    });
+    cursor = page.next_cursor == null ? null : String(page.next_cursor);
+    if (page.complete !== (cursor === null)) {
+      const error = new Error('Inconsistent Friend Memory terminal state');
+      Object.assign(error, { invalidPayload: true, operationStage: 'validate', code: 'INVALID_TERMINAL' });
+      throw error;
+    }
+  } while (cursor);
+
+  const regions = parseSnapshotRegions(manifest?.regions);
+  const expectedPages = Number(manifest?.expected_pages);
+  const expectedTiles = Number(manifest?.expected_tiles);
+  const expectedEvidenceCount = Number(manifest?.expected_evidence_count);
+  if (!regions
+    || pageIndexes.size !== expectedPages
+    || tiles.length !== expectedTiles
+    || receivedEvidenceCount !== expectedEvidenceCount
+    || manifest?.complete !== (expectedTiles === 0)
+    || (Number.isFinite(input.expectedAuthorizationVersion)
+      && authorizationVersion !== input.expectedAuthorizationVersion)) {
+    const error = new Error('Incomplete Friend Memory snapshot');
+    Object.assign(error, { invalidPayload: true, operationStage: 'completeness', code: 'INCOMPLETE_SNAPSHOT' });
+    throw error;
+  }
+  const geometry: MultiPolygon = {
+    type: 'MultiPolygon',
+    coordinates: tiles.flatMap(tile => tile.geometry.coordinates),
+  };
+  return {
+    revoked: false,
+    decodedBytes,
+    projection: {
+      friendId: String(input.friendId),
+      authorizationVersion: authorizationVersion!,
+      projectionVersion: snapshotId!,
+      snapshotId,
+      datasetRevision: String(manifest.dataset_revision ?? ''),
+      complete: true,
+      expectedPages,
+      expectedTiles,
+      tiles,
+      cellSizeM: 0,
+      cells: [],
+      geometry,
+      viewportKey: 'all-authorized',
+      regions,
+      serverAuthorizedAtMs,
+      authorizationExpiresAtMs: Math.min(authorizationExpiresAtMs, serverAuthorizedAtMs + MAX_CACHE_AGE_MS),
+    },
   };
 }
 
@@ -240,8 +473,8 @@ function scheduleSourceExpiry(projection: FriendProjection): void {
       const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
       const stillSelected = useMemorySubscriptionsStore.getState().subscriptions
         .some((source: { friend_id: string | number }) => String(source.friend_id) === friendId);
-      if (stillSelected && state.activeViewport) {
-        void useFriendMemoryStore.getState().loadSelectedProjections([friendId], state.activeViewport);
+      if (stillSelected) {
+        void useFriendMemoryStore.getState().loadSelectedProjections([friendId], state.activeViewport ?? undefined);
       }
     } catch { /* a later selection/viewport event can refresh the projection */ }
   };
@@ -307,8 +540,9 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     if (get().userId !== userId) await get().hydrate(userId);
     if (get().userId !== userId) return;
     const requestedViewport = viewport ?? get().activeViewport;
-    if (!requestedViewport) return;
-    if (!get().activeViewport || get().activeViewport?.key !== requestedViewport.key) {
+    if (requestedViewport && get().activeViewport?.key !== requestedViewport.key) {
+      // Compatibility/diagnostic hint only. Dataset acquisition and visibility
+      // are keyed by account, grant and snapshot revision, never by camera.
       set({ activeViewport: requestedViewport });
     }
     const subscriptionState = useMemorySubscriptionsStore.getState();
@@ -343,14 +577,16 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         (item: { friend_id: string | number }) => String(item.friend_id) === id,
       );
       const requiredAuthorizationVersion = Number(source?.authorization_version);
-      return existing?.viewportKey === requestedViewport.key
+      return existing?.complete === true
         && validProjection(existing, now)
         && verifiedSourceVersions.get(id) === existing.authorizationVersion
         && (!Number.isFinite(requiredAuthorizationVersion)
           || existing.authorizationVersion === requiredAuthorizationVersion);
     }));
-    const idsToLoad = selectedIds.filter(friendId => !reusableIds.has(friendId));
+    const idsToLoad = selectedIds.filter(friendId => !reusableIds.has(friendId)
+      && !activeSourceControllers.has(String(friendId)));
     if (idsToLoad.length === 0) {
+      if (selectedIds.some(friendId => activeSourceControllers.has(String(friendId)))) return;
       const nextStates = { ...get().sourceStates };
       for (const friendId of reusableIds) {
         const id = String(friendId);
@@ -376,15 +612,12 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     );
     const requests = idsToLoad.map(friendId => {
       const id = String(friendId);
-      // A normal viewport refresh does not invalidate a still-current source
-      // grant. Keeping authorization proof distinct from viewport geometry is
-      // what lets the renderer retain its last coherent scene while adjacent
-      // coverage is prepared. Focus/reconnect explicitly calls
-      // suspendVisibility() first and therefore remains fail-closed.
+      // Camera/focus changes do not invalidate a still-current source grant.
+      // Expiry, definitive rejection, revoke and logout own the privacy fence.
       const sequence = ++requestSequence;
       const generation = sourceGeneration(id);
       latestSourceRequests.set(id, sequence);
-      return { friendId, id, sequence, generation };
+      return { friendId, id, sequence, generation, requestId: `friend-snapshot-${sequence}` };
     });
     set({
       loading: true,
@@ -419,49 +652,18 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         controller.abort();
       }, FRIEND_MEMORY_PROJECTION_TIMEOUT_MS);
       try {
-        const response = await authenticatedFetch('/api/friend-sharing/coverage', {
-          method: 'POST',
-          body: JSON.stringify({ friend_ids: [request.friendId], viewport_bbox: requestedViewport.bbox }),
-          expectedUserId: userId,
-          signal: controller.signal,
+        const source = (useMemorySubscriptionsStore.getState().availableSources ?? []).find(
+          (item: { friend_id: string }) => String(item.friend_id) === request.id,
+        );
+        const snapshot = await loadCompleteFriendProjection({
+          friendId: request.friendId,
+          userId,
+          controller,
+          expectedAuthorizationVersion: Number.isFinite(Number(source?.authorization_version))
+            ? Number(source.authorization_version)
+            : undefined,
+          requestId: request.requestId,
         });
-        if (!response.ok) {
-          const httpError = new Error(`HTTP ${response.status}`) as Error & {
-            httpStatus?: number;
-            operationStage?: string;
-          };
-          httpError.httpStatus = response.status;
-          httpError.operationStage = 'http';
-          throw httpError;
-        }
-        let body: any;
-        try {
-          body = await response.json();
-        } catch (error) {
-          const payloadError = error as Error & {
-            httpStatus?: number;
-            operationStage?: string;
-            invalidPayload?: boolean;
-          };
-          payloadError.httpStatus = response.status;
-          payloadError.operationStage = 'decode';
-          payloadError.invalidPayload = true;
-          throw payloadError;
-        }
-        if (!body || typeof body !== 'object' || !Array.isArray(body.projections)
-          || !Array.isArray(body.revoked_friend_ids)) {
-          const payloadError = new Error('Invalid Friend Memory response schema') as Error & {
-            httpStatus?: number;
-            operationStage?: string;
-            invalidPayload?: boolean;
-            code?: string;
-          };
-          payloadError.httpStatus = response.status;
-          payloadError.operationStage = 'validate';
-          payloadError.invalidPayload = true;
-          payloadError.code = 'INVALID_SCHEMA';
-          throw payloadError;
-        }
         if (String(useAppStore.getState().user?.id ?? '') !== userId
           || get().userId !== userId
           || requestAccountGeneration !== accountGeneration
@@ -471,18 +673,15 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         if (!currentSubscriptions.subscriptions.some((subscription: { friend_id: number }) => Number(subscription.friend_id) === request.friendId)) return;
         const next = { ...get().projections };
         const nextStates = { ...get().sourceStates };
-          if ((Array.isArray(body?.revoked_friend_ids) ? body.revoked_friend_ids : []).some((id: unknown) => String(id) === request.id)) {
+          if (snapshot.revoked) {
             invalidateSource(request.id);
             verifiedSourceVersions.delete(request.id);
           delete next[request.id];
           nextStates[request.id] = { status: 'unauthorized', cellCount: 0 };
         } else {
-          const incoming = (Array.isArray(body?.projections) ? body.projections : [])
-            .find((projection: any) => String(projection?.source_friend_id) === request.id);
-          const candidate = parseProjection(incoming, requestedViewport.key);
+          const candidate = snapshot.projection!;
           const receivedAt = Date.now();
-          const source = currentSubscriptions.availableSources.find((item: { friend_id: string }) => String(item.friend_id) === request.id);
-          if (!incoming || !validProjection(candidate, receivedAt)
+          if (!validProjection(candidate, receivedAt)
             || (Number.isFinite(Number(source?.authorization_version))
               && candidate.authorizationVersion < Number(source?.authorization_version))) {
             const projectionError = new Error('Invalid projection response') as Error & {
@@ -491,7 +690,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
               invalidPayload?: boolean;
               code?: string;
             };
-            projectionError.httpStatus = response.status;
+            projectionError.httpStatus = 200;
             projectionError.operationStage = 'validate';
             projectionError.invalidPayload = true;
             projectionError.code = 'INVALID_PROJECTION';
@@ -513,14 +712,16 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           verifiedSourceVersions.set(request.id, accepted.authorizationVersion);
           scheduleSourceExpiry(accepted);
           log('o86.memory.friend_coverage_ready', {
+            request_id: request.requestId,
             selected_source_index: requestIndex,
             request_ms: Date.now() - requestStartedAtMs,
-            total_ms: Number(body?.total_ms) || 0,
-            evidence_n: Number(incoming?.evidence_count) || 0,
-            tile_n: Number(incoming?.tile_count) || 0,
-            rebuilt_tile_n: Number(incoming?.rebuilt_tile_count) || 0,
+            snapshot_revision: candidate.snapshotId,
+            dataset_revision: candidate.datasetRevision,
+            pages_n: candidate.expectedPages ?? 0,
+            evidence_n: candidate.tiles?.reduce((sum, tile) => sum + tile.evidenceCount, 0) ?? 0,
+            tile_n: candidate.expectedTiles ?? 0,
+            decoded_bytes: snapshot.decodedBytes,
             geometry_components_n: candidate.geometry?.coordinates.length ?? 0,
-            stage_ms: incoming?.stage_ms ?? {},
           });
         }
         set({
@@ -542,7 +743,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           httpStatus,
           operation: 'friend-coverage',
           stage: error?.operationStage ?? 'transport',
-          targetRevision: `${request.id}:${requestedViewport.key}:${request.sequence}`,
+          targetRevision: `friend-source-${requestIndex}:all-authorized:${request.sequence}`,
           timedOut,
           cancelled: error?.name === 'AbortError' && !timedOut,
           invalidPayload: Boolean(error?.invalidPayload),
@@ -557,6 +758,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           || (errorCategory === 'unavailable' && aggregateError !== 'unauthorized')
           || aggregateError == null) aggregateError = errorCategory;
         log('o86.memory.friend_coverage_failed', {
+          request_id: request.requestId,
           selected_source_index: requestIndex,
           request_ms: Date.now() - requestStartedAtMs,
           failure_kind: failure.kind,
@@ -734,7 +936,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     return [...cells.values()];
   },
 
-  getVisibleGeometries: (friendId) => {
+  getVisibleGeometries: (friendId, viewport) => {
     const now = Date.now();
     if (now < get().lastObservedWallClockMs) {
       fenceAllProjectionAuthority();
@@ -744,21 +946,27 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       });
       return [];
     }
-    const currentViewportKey = get().activeViewport?.key;
     const selected = friendId
       ? [get().projections[friendId]].filter(Boolean)
       : Object.values(get().projections);
     return selected.flatMap(projection => {
-      if (!projection.geometry
-        || projection.viewportKey !== currentViewportKey
-        || !validProjection(projection, now)
+      if (!validProjection(projection, now)
         || verifiedSourceVersions.get(projection.friendId) !== projection.authorizationVersion) return [];
+      const geometry = projection.complete && Array.isArray(projection.tiles)
+        ? {
+            type: 'MultiPolygon' as const,
+            coordinates: projection.tiles
+              .filter(tile => !viewport || viewportIntersectsTile(viewport, tile.bbox))
+              .flatMap(tile => tile.geometry.coordinates),
+          }
+        : projection.geometry;
+      if (!geometry) return [];
       return [{
         sourceFriendId: projection.friendId,
         authorizationVersion: projection.authorizationVersion,
         authorizationExpiresAtMs: projection.authorizationExpiresAtMs,
         projectionVersion: projection.projectionVersion,
-        geometry: projection.geometry,
+        geometry,
       }];
     });
   },

@@ -29,12 +29,13 @@ describe('shared Memory authority initialization', () => {
     expect(manager).not.toContain('detachMemorySync');
   });
 
-  test('returning focus explicitly reacquires Memory viewport coverage after authorization', () => {
+  test('returning focus reuses complete coverage without fencing valid authorization', () => {
     const screen = read('src/features/memory/screens/MemoryScreen.tsx');
     expect(screen).toContain('let focusActive = true;');
     expect(screen).toContain('const memoryViewport = mapRef.current?.getCoverageViewport();');
     expect(screen).toContain('usePreparedMemoryCoverageStore.getState().loadViewport(memoryViewport)');
     expect(screen).toContain('useFriendMemoryStore.getState().loadSelectedProjections(undefined, memoryViewport)');
+    expect(screen).not.toContain('useFriendMemoryStore.getState().suspendVisibility()');
     expect(screen).toContain('focusActive = false;');
     expect(screen).toContain("if (!focusActive || authorityLoaded === false\n          || String(useAppStore.getState().user?.id ?? '') !== ownerId) return;");
     expect(screen.indexOf('focusActive = false;')).toBeGreaterThan(screen.indexOf('loadSelectedProjections(undefined, memoryViewport)'));

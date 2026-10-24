@@ -47,10 +47,11 @@ interface State {
   selectionPending: Record<string, 'select' | 'deselect'>;
   selectionError: FriendMemoryFailure | null;
   selectionLastFailure: MemoryOperationFailure | null;
+  authorityValidatedAtMs: number;
   /** Last raw HTTP status from a mutation, for UI to map 409 → paywall trigger. */
   // O1 batch 37: lastMutationStatus removed — 0 external readers; callers use the return value directly.
 
-  load: () => Promise<boolean>;
+  load: (force?: boolean) => Promise<boolean>;
   /** Returns server status code so caller can branch on 201/403/409. */
   subscribe: (friendId: number) => Promise<number>;
   unsubscribe: (friendId: number) => Promise<number>;
@@ -71,6 +72,7 @@ const selectionMutationGenerations = new Map<string, number>();
 const selectionMutationTails = new Map<string, Promise<void>>();
 const selectionIntentPersistenceTails = new Map<string, Promise<void>>();
 const SELECTION_INTENT_PREFIX = 'cairn:memory-selection-intent:v1:';
+const AUTHORITY_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
 function selectionIntentKey(userId: string): string {
   return `${SELECTION_INTENT_PREFIX}${userId}`;
@@ -198,9 +200,10 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   selectionPending: {},
   selectionError: null,
   selectionLastFailure: null,
+  authorityValidatedAtMs: 0,
   // O1 batch 37: lastMutationStatus removed
 
-  load: async () => {
+  load: async (force = false) => {
     // BUG-007 fix: single-flight guard. Multiple consumers (MapScreen +
     // MemoryFriendPickModal + FlagsTab Friends sub-tab) can fire load()
     // concurrently — without this guard 3 parallel HTTP requests race
@@ -213,7 +216,20 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     // login), drop the response — without this, user A's in-flight
     // load() resolving after user B's hydrate() would overwrite B's
     // empty subs slice with A's data, leaking cross-session.
-    if (get().loading) return false;
+    if (get().loading) {
+      // Join the existing authority read. Treating "already loading" as a
+      // failed authorization made a returning screen abandon otherwise valid
+      // work and surface a misleading Friends connection state.
+      return new Promise<boolean>(resolve => {
+        const unsubscribe = useMemorySubscriptionsStore.subscribe(state => {
+          if (state.loading) return;
+          unsubscribe();
+          resolve(state.authorityValidatedAtMs > 0 && state.error == null);
+        });
+      });
+    }
+    if (!force && get().authorityValidatedAtMs > 0
+      && Date.now() - get().authorityValidatedAtMs < AUTHORITY_REFRESH_INTERVAL_MS) return true;
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { useAppStore } = require('../../../store/useAppStore');
     const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
@@ -289,6 +305,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         } : {}),
         loading: false,
         error: sourcesBody ? null : `Could not refresh available friends (HTTP ${sourcesResponse.status}).`,
+        ...(nextSources ? { authorityValidatedAtMs: Date.now() } : {}),
       });
       // A durable Fog cache is never self-authorizing. A fresh sources read
       // purges revoked/version-stale rows and restores proof only for an
@@ -331,6 +348,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       selectionPending: { ...state.selectionPending, [String(friendId)]: 'select' },
       selectionError: null,
       selectionLastFailure: null,
+      authorityValidatedAtMs: 0,
     }));
     persistSelectionIntents(viewerAtStart, get().selectionPending);
     return enqueueSelectionMutation(friendId, async () => {
@@ -423,6 +441,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       selectionPending: { ...state.selectionPending, [String(friendId)]: 'deselect' },
       selectionError: null,
       selectionLastFailure: null,
+      authorityValidatedAtMs: 0,
     }));
     persistSelectionIntents(viewerAtStart, get().selectionPending);
     useFriendMemoryStore.getState().invalidateFriend(friendId);
@@ -512,6 +531,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         .filter(([id]) => Number(id) !== numericId)),
       selectionError: null,
       selectionLastFailure: null,
+      authorityValidatedAtMs: 0,
     });
   },
 
@@ -528,6 +548,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       selectionPending: {},
       selectionError: null,
       selectionLastFailure: null,
+      authorityValidatedAtMs: 0,
       // O1 batch 37: lastMutationStatus removed
     });
   },

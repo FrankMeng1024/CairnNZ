@@ -26,6 +26,7 @@ const { scheduleMemoryAttribution, scheduleMemoryProjectionReset } = require('..
 const { reconcilePublicSubmissionsForActivity } = require('../services/publicPublication');
 const {
   loadPreparedCoverage,
+  loadCoverageSnapshotPage,
   parseViewport,
   synchronizeCoverageEvidenceForClientIds,
   synchronizeCoverageEvidenceForSegments,
@@ -474,6 +475,34 @@ router.delete('/points', authenticate, wipeLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   } finally {
     conn.release();
+  }
+});
+
+// Additive all-regions contract. Existing /coverage remains unchanged for O92
+// and older installed clients; snapshot pages are complete only after the
+// terminal page and all manifest counts have been verified by the caller.
+router.get('/coverage-snapshot', authenticate, async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    const result = await loadCoverageSnapshotPage(pool, req.user.userId, 'mine', {
+      snapshotId: typeof req.query.snapshot_id === 'string' ? req.query.snapshot_id : undefined,
+      visibleAt: typeof req.query.as_of === 'string' ? req.query.as_of : undefined,
+      cursor: typeof req.query.cursor === 'string' ? req.query.cursor : undefined,
+      pageSize: req.query.page_size,
+      snapshotAuthority: `mine:${req.user.userId}`,
+    });
+    return res.json({
+      ...result,
+      source_owner_id: String(req.user.userId),
+      total_ms: Date.now() - startedAt,
+    });
+  } catch (error) {
+    const status = Number(error?.httpStatus) || 500;
+    if (status >= 500) console.error('[memory/coverage-snapshot]', error.message);
+    return res.status(status).json({
+      error: status >= 500 ? 'Server error' : error.message,
+      code: error?.code ?? 'COVERAGE_SNAPSHOT_FAILED',
+    });
   }
 });
 

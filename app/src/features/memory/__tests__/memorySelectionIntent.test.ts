@@ -145,4 +145,46 @@ describe('Memory friend selection intent', () => {
     expect(useMemorySubscriptionsStore.getState().availableSources[0].selected).toBe(false);
     expect(useMemorySubscriptionsStore.getState().selectionPending).toEqual({ '31': 'deselect' });
   });
+
+  test('ordinary focus reuses a fresh authority read while explicit Retry forces revalidation', async () => {
+    const subscriptionResponse = () => ({
+      ok: true, status: 200,
+      json: async () => ({ limit: null, subscriptions: [] }),
+    });
+    const sourceResponse = () => ({
+      ok: true, status: 200,
+      json: async () => ({ sources: [source] }),
+    });
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce(subscriptionResponse())
+      .mockResolvedValueOnce(sourceResponse());
+
+    await expect(useMemorySubscriptionsStore.getState().load()).resolves.toBe(true);
+    await expect(useMemorySubscriptionsStore.getState().load()).resolves.toBe(true);
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce(subscriptionResponse())
+      .mockResolvedValueOnce(sourceResponse());
+    await expect(useMemorySubscriptionsStore.getState().load(true)).resolves.toBe(true);
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(4);
+  });
+
+  test('two screen consumers join one authority request instead of classifying loading as failure', async () => {
+    let releaseSubscriptions!: (value: any) => void;
+    let releaseSources!: (value: any) => void;
+    mockAuthenticatedFetch
+      .mockImplementationOnce(() => new Promise(resolve => { releaseSubscriptions = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { releaseSources = resolve; }));
+
+    const first = useMemorySubscriptionsStore.getState().load();
+    while (mockAuthenticatedFetch.mock.calls.length < 2) await Promise.resolve();
+    const second = useMemorySubscriptionsStore.getState().load();
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+    releaseSubscriptions({ ok: true, status: 200, json: async () => ({ limit: null, subscriptions: [] }) });
+    releaseSources({ ok: true, status: 200, json: async () => ({ sources: [source] }) });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(useMemorySubscriptionsStore.getState().loading).toBe(false);
+  });
 });

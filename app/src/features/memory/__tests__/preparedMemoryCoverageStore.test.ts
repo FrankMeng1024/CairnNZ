@@ -22,11 +22,32 @@ const viewport = { key: 'viewport-a', bbox: [174.77, -41.29, 174.79, -41.28] as 
 function response(version: string) {
   return {
     ok: true,
+    status: 200,
     json: async () => ({
-      coverage_rule_version: 4,
-      coverage_version: version,
-      evidence_count: 2,
-      geometry: { type: 'MultiPolygon', coordinates: [[[[174.77, -41.29], [174.78, -41.29], [174.77, -41.29]]]] },
+      manifest: {
+        snapshot_id: version,
+        dataset_revision: version,
+        coverage_rule_version: 4,
+        as_of: '2026-10-24T00:00:00.000Z',
+        expected_pages: 1,
+        expected_tiles: 1,
+        expected_evidence_count: 2,
+        regions: [],
+        complete: false,
+      },
+      page: {
+        snapshot_id: version,
+        page_index: 0,
+        tiles: [{
+          id: 'tile-1',
+          bbox: [174.7, -41.4, 174.9, -41.1],
+          evidence_count: 2,
+          geometry_sha256: `sha-${version}`,
+          geometry: { type: 'MultiPolygon', coordinates: [[[[174.77, -41.29], [174.78, -41.29], [174.77, -41.28], [174.77, -41.29]]]] },
+        }],
+        next_cursor: null,
+        complete: true,
+      },
     }),
   };
 }
@@ -69,6 +90,51 @@ describe('prepared Memory viewport handoff', () => {
     resolveRequest(response('coalesced'));
     await first;
     expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('coalesced');
+  });
+
+  test('Recenter or a distant camera reuses the complete dataset without another request', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('all-regions-v1'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    await usePreparedMemoryCoverageStore.getState().loadViewport({
+      key: 'distant-camera',
+      bbox: [168.5, -46.0, 168.8, -45.7],
+    });
+    await usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'recenter' });
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready',
+      coverage: { snapshotId: 'all-regions-v1', complete: true, expectedTiles: 1 },
+    });
+  });
+
+  test('a missing terminal page never publishes incomplete data as complete', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        manifest: {
+          snapshot_id: 'missing-page', dataset_revision: '7', coverage_rule_version: 4,
+          as_of: '2026-10-24T00:00:00.000Z', expected_pages: 2, expected_tiles: 2,
+          expected_evidence_count: 4, regions: [], complete: false,
+        },
+        page: {
+          snapshot_id: 'missing-page', page_index: 0, tiles: [{
+            id: 'tile-1', bbox: [174.7, -41.4, 174.9, -41.1], evidence_count: 2,
+            geometry_sha256: 'sha-1', geometry: { type: 'MultiPolygon', coordinates: [] },
+          }],
+          next_cursor: null,
+          complete: true,
+        },
+      }),
+    });
+
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      coverage: null,
+      status: 'error',
+      lastFailure: { kind: 'payload', stage: 'completeness', causeCode: 'INCOMPLETE_SNAPSHOT' },
+    });
   });
 
   test('an account change drops the prior account geometry before accepting a response', async () => {
