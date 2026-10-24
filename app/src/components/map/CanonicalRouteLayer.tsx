@@ -62,22 +62,10 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
     properties: { text: label.text, direction: label.direction, occurrenceIds: label.occurrenceIds.join(',') },
     geometry: { type: 'Point' as const, coordinates: [label.coordinate.lng, label.coordinate.lat] },
   }));
-  const turnConnectorFeatures = display.turnConnectors.map(connector => ({
-    type: 'Feature' as const,
-    id: connector.id,
-    properties: {
-      occurrenceIds: connector.occurrenceIds.join(','),
-      multiplicity: connector.multiplicity,
-      offsetPx: 0,
-      role: 'turn-connector',
-      displayOnly: true,
-    },
-    geometry: {
-      type: 'LineString' as const,
-      coordinates: connector.coordinates.map(point => [point.lng, point.lat]),
-    },
-  }));
-  const repeatPresentationFeatures = [...repeatLaneFeatures, ...turnConnectorFeatures];
+  // Reversals are split into opposing screen-offset lanes. Their round caps
+  // meet at the truthful turn anchor without a metre-scaled connector, so the
+  // overview and zoom 18/21 use the same visual proportions.
+  const repeatPresentationFeatures = repeatLaneFeatures;
   const gapFeatures = geometry.gaps.map(gap => ({
     type: 'Feature' as const,
     id: gap.id,
@@ -138,40 +126,14 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
             }}
           />
           <LineLayer
-            id={`${idPrefix}-turn-connector-casing`}
-            slot="top"
-            filter={['==', ['get', 'role'], 'turn-connector']}
-            style={{
-              lineColor: theme.mapRouteCasing,
-              lineWidth: 10,
-              lineOffset: 0,
-              lineOpacity: 0.9,
-              lineCap: 'round',
-              lineJoin: 'round',
-            }}
-          />
-          <LineLayer
             id={`${idPrefix}-repeat-lane-line`}
             slot="top"
             filter={['==', ['get', 'role'], 'repeat-lane']}
             style={{
               lineColor: theme.mapRouteLine,
-              lineWidth: 5.5,
+              lineWidth: 7,
               lineOffset: ['get', 'offsetPx'],
               lineOpacity: 0.98,
-              lineCap: 'round',
-              lineJoin: 'round',
-            }}
-          />
-          <LineLayer
-            id={`${idPrefix}-turn-connector-fill`}
-            slot="top"
-            filter={['==', ['get', 'role'], 'turn-connector']}
-            style={{
-              lineColor: theme.mapRouteLine,
-              lineWidth: 7,
-              lineOffset: 0,
-              lineOpacity: 0.99,
               lineCap: 'round',
               lineJoin: 'round',
             }}

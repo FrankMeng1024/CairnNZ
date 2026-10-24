@@ -894,18 +894,16 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.queryByTestId('source-ordered-route-repeat-labels')).toBeNull();
     const repeatLane = screen.getByTestId('source-ordered-route-repeat-lanes').props.shape.features
       .filter((feature: any) => feature.properties.role === 'repeat-lane');
-    expect(repeatLane).toHaveLength(1);
-    expect(repeatLane[0].properties.offsetPx).toBeGreaterThan(0);
+    expect(repeatLane).toHaveLength(2);
+    expect(repeatLane.every((feature: any) => feature.properties.offsetPx > 0)).toBe(true);
     expect(screen.getByTestId('layer-ordered-route-repeat-lane-line').props.style).toMatchObject({
       lineOffset: ['get', 'offsetPx'],
       lineCap: 'round',
       lineJoin: 'round',
     });
     expect(screen.getByTestId('source-ordered-route-repeat-lanes').props.shape.features
-      .find((feature: any) => feature.properties.role === 'turn-connector').geometry.type).toBe('LineString');
-    expect(screen.getByTestId('layer-ordered-route-turn-connector-fill').props.style).toMatchObject({
-      lineCap: 'round', lineJoin: 'round',
-    });
+      .find((feature: any) => feature.properties.role === 'turn-connector')).toBeUndefined();
+    expect(screen.getByTestId('layer-ordered-route-repeat-lane-line').props.style.lineWidth).toBe(7);
     fireEvent.press(screen.getByLabelText('Undo last Route edit'));
     expect(screen.queryByTestId('source-ordered-route-repeat-lanes')).toBeNull();
   });

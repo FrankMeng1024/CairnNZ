@@ -27,8 +27,7 @@ export interface RouteRepeatLabel {
 export interface RouteTurnConnector {
   id: string;
   coordinate: RoutePoint;
-  /** Explicit display-only semicircle joining the two offset lane arms. */
-  coordinates: RoutePoint[];
+  /** Display-only screen-space cap anchor. No invented persisted geometry. */
   occurrenceIds: string[];
   multiplicity: number;
 }
@@ -39,7 +38,7 @@ export interface RouteDisplayGeometry {
   ordinaryLines: RouteDisplayLine[];
   repeatLanes: RouteRepeatLane[];
   repeatLabels: RouteRepeatLabel[];
-  /** Display-only caps joining offset lanes at proven consecutive turnbacks. */
+  /** Truthful reversal anchors retained for diagnostics; no connector geometry. */
   turnConnectors: RouteTurnConnector[];
 }
 
@@ -59,7 +58,6 @@ const RETRACE_TURN_BRIDGE_M = 18;
 const RETRACE_LABEL_MIN_M = 40;
 const RETRACE_MIN_SUSTAINED_OVERLAP_M = 18;
 const RETRACE_LANE_OFFSET_PX = 3.5;
-const RETRACE_TURN_RADIUS_M = 1.55;
 
 function clone(point: RoutePoint): RoutePoint {
   return { ...point };
@@ -76,15 +74,6 @@ function localMetres(point: RoutePoint, origin: RoutePoint): [number, number] {
   const latScale = 111_132;
   const lngScale = 111_320 * Math.cos(origin.lat * Math.PI / 180);
   return [(point.lng - origin.lng) * lngScale, (point.lat - origin.lat) * latScale];
-}
-
-function fromLocalMetres(origin: RoutePoint, eastM: number, northM: number): RoutePoint {
-  const latScale = 111_132;
-  const lngScale = 111_320 * Math.cos(origin.lat * Math.PI / 180);
-  return {
-    lat: origin.lat + northM / latScale,
-    lng: origin.lng + eastM / lngScale,
-  };
 }
 
 function pointToSegmentDistanceM(point: RoutePoint, a: RoutePoint, b: RoutePoint): number {
@@ -382,10 +371,13 @@ export function buildRouteDisplayGeometry(
 
   const repeatLanes: RouteRepeatLane[] = [];
   let activeRepeat: RouteRepeatLane | null = null;
+  let activeRepeatSegmentIndex = -1;
+  const firstRepeatedSegmentIndex = repeated.findIndex(Boolean);
 
   const flushRepeat = () => {
     if (activeRepeat) repeatLanes.push(activeRepeat);
     activeRepeat = null;
+    activeRepeatSegmentIndex = -1;
   };
 
   segments.forEach((segment, index) => {
@@ -393,6 +385,8 @@ export function buildRouteDisplayGeometry(
       const multiplicity = traversalMultiplicity(matchIndexes[index]);
       if (activeRepeat
         && !segment.breakBefore
+        && activeRepeatSegmentIndex >= 0
+        && headingDot(segments[activeRepeatSegmentIndex], segment) > 0
         && routePointDistanceM(activeRepeat.coordinates.at(-1)!, segment.a) <= CONNECTED_M) {
         activeRepeat.coordinates.push(clone(segment.b));
         if (!activeRepeat.occurrenceIds.includes(segment.occurrenceId)) {
@@ -400,6 +394,7 @@ export function buildRouteDisplayGeometry(
         }
         activeRepeat.coverageIds.push(segment.id);
         activeRepeat.multiplicity = Math.max(activeRepeat.multiplicity, multiplicity);
+        activeRepeatSegmentIndex = index;
       } else {
         flushRepeat();
         activeRepeat = {
@@ -407,13 +402,17 @@ export function buildRouteDisplayGeometry(
           coordinates: [clone(segment.a), clone(segment.b)],
           occurrenceIds: [segment.occurrenceId],
           coverageIds: [segment.id],
-          direction: 'forward',
+          direction: firstRepeatedSegmentIndex < 0
+            || headingDot(segments[firstRepeatedSegmentIndex], segment) >= 0
+            ? 'forward'
+            : 'backward',
           multiplicity,
           // Mapbox applies a positive offset relative to traversal direction.
           // Consecutive A→B→A legs therefore appear on opposite sides of the
           // untouched canonical centerline and remain joined by a rounded U.
           offsetPx: RETRACE_LANE_OFFSET_PX,
         };
+        activeRepeatSegmentIndex = index;
       }
       return;
     }
@@ -434,12 +433,11 @@ export function buildRouteDisplayGeometry(
     return false;
   };
 
-  // Mapbox offsets each traversal relative to its travel direction. At a
-  // genuine consecutive A→B→A reversal that creates the desired parallel
-  // lanes, but a 180-degree line join alone leaves two separated tips. Add a
-  // small display-only U only where both adjacent arms have independent,
-  // sustained repeat evidence. This is presentation metadata: it never enters
-  // canonical geometry, distance, persistence, or exploration authority.
+  // Each traversal is split at a genuine reversal. Mapbox therefore applies
+  // the same pixel offset to two opposing line directions, yielding two
+  // parallel arms whose round screen-space caps form a stable, natural U at
+  // every zoom. The anchor below remains metadata only; no metre-scaled loop
+  // or connector is added to canonical or display coordinates.
   const turnConnectors: RouteTurnConnector[] = [];
   for (let right = 1; right < segments.length; right += 1) {
     const left = right - 1;
@@ -449,26 +447,6 @@ export function buildRouteDisplayGeometry(
     if (!hasDirectRepeatEvidence(left, -1) || !hasDirectRepeatEvidence(right, 1)) continue;
 
     const coordinate = interpolate(segments[left].b, segments[right].a, 0.5);
-    const [incomingEast, incomingNorth] = localMetres(coordinate, segments[left].a);
-    const incomingLength = Math.hypot(incomingEast, incomingNorth);
-    if (incomingLength <= Number.EPSILON) continue;
-    const forwardEast = incomingEast / incomingLength;
-    const forwardNorth = incomingNorth / incomingLength;
-    const perpendicularEast = -forwardNorth;
-    const perpendicularNorth = forwardEast;
-    // Start on one offset arm, bulge beyond the truthful turnback in the
-    // incoming direction, and finish on the opposite arm. The geometry is
-    // never fed back into the canonical draft, editor transactions or save.
-    const connectorCoordinates = Array.from({ length: 9 }, (_, index) => {
-      const angle = Math.PI / 2 - Math.PI * index / 8;
-      const forwardM = Math.cos(angle) * RETRACE_TURN_RADIUS_M;
-      const perpendicularM = Math.sin(angle) * RETRACE_TURN_RADIUS_M;
-      return fromLocalMetres(
-        coordinate,
-        forwardEast * forwardM + perpendicularEast * perpendicularM,
-        forwardNorth * forwardM + perpendicularNorth * perpendicularM,
-      );
-    });
     const multiplicity = Math.max(
       traversalMultiplicity(matchIndexes[left]),
       traversalMultiplicity(matchIndexes[right]),
@@ -487,13 +465,12 @@ export function buildRouteDisplayGeometry(
     turnConnectors.push({
       id: `turn:${segments[left].id}:${segments[right].id}`,
       coordinate,
-      coordinates: connectorCoordinates,
       occurrenceIds,
       multiplicity,
     });
   }
 
-  const repeatLabels: RouteRepeatLabel[] = repeatLanes
+  const repeatLabelCandidates: RouteRepeatLabel[] = repeatLanes
     .filter(lane => lane.multiplicity >= 3
       && lane.coordinates.slice(1).reduce(
         (sum, point, index) => sum + routePointDistanceM(lane.coordinates[index], point),
@@ -504,7 +481,7 @@ export function buildRouteDisplayGeometry(
         routePointDistanceM(lane.coordinates[index], point)
       ));
       const totalLength = segmentLengths.reduce((sum, value) => sum + value, 0);
-      const labelDistance = totalLength * 0.25;
+      const labelDistance = totalLength * 0.5;
       let traversed = 0;
       let coordinate = clone(lane.coordinates[0]);
       for (let index = 0; index < segmentLengths.length; index += 1) {
@@ -526,6 +503,12 @@ export function buildRouteDisplayGeometry(
         direction: lane.direction,
       };
     });
+  const repeatLabels = repeatLabelCandidates.filter((candidate, index, candidates) => (
+    candidates.findIndex(other => (
+      other.text === candidate.text
+      && routePointDistanceM(other.coordinate, candidate.coordinate) <= RETRACE_CORRIDOR_M * 2
+    )) === index
+  ));
 
   return { baseLines, ordinaryLines, repeatLanes, repeatLabels, turnConnectors };
 }

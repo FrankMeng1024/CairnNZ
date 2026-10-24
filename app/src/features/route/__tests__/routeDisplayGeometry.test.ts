@@ -1,6 +1,6 @@
 import { canonicalRouteGeometry, canonicalRouteGeometryFingerprint } from '../canonicalRouteGeometry';
 import { buildRouteDisplayGeometry } from '../routeDisplayGeometry';
-import { appendOrderedSegment, createEmptyOrderedDraft, routePointDistanceM } from '../orderedRouteDraft';
+import { appendOrderedSegment, createEmptyOrderedDraft } from '../orderedRouteDraft';
 
 const origin = { lat: -41.2865, lng: 174.7762 };
 const p = (eastM: number, northM = 0) => ({
@@ -31,22 +31,21 @@ describe('display-only repeated traversal projection', () => {
     const display = buildRouteDisplayGeometry(canonical);
     expect(display.baseLines).toHaveLength(1);
     expect(display.baseLines[0].coordinates).toEqual([p(0), p(50), p(100), p(50), p(0)]);
-    expect(display.repeatLanes).toHaveLength(1);
-    expect(display.repeatLanes[0].offsetPx).toBeGreaterThan(0);
-    expect(display.repeatLanes[0].multiplicity).toBe(2);
-    expect(display.repeatLanes[0].coordinates).toEqual(expect.arrayContaining([p(100)]));
+    expect(display.repeatLanes).toHaveLength(2);
+    expect(display.repeatLanes.every(lane => lane.offsetPx > 0)).toBe(true);
+    expect(display.repeatLanes.every(lane => lane.multiplicity === 2)).toBe(true);
+    expect(display.repeatLanes.flatMap(lane => lane.coordinates)).toEqual(expect.arrayContaining([p(100)]));
     expect(display.repeatLabels).toEqual([]);
-    // A positive Mapbox lineOffset separates the two lanes but cannot join a
-    // 180-degree cusp by itself. The display contract therefore needs an
-    // explicit, ordered, display-only semicircle at the genuine turnback.
+    // Opposing traversals are separate screen-offset lines. Their round caps
+    // meet at the genuine turn without a metre-scaled loop that distorts as
+    // the camera zoom changes.
     expect(display.turnConnectors).toHaveLength(1);
     expect(display.turnConnectors[0].coordinate).toEqual(p(100));
     expect(display.turnConnectors[0].occurrenceIds).toEqual(expect.arrayContaining([
       'legacy-route:1',
       'legacy-route:2',
     ]));
-    expect(display.turnConnectors[0].coordinates).toHaveLength(9);
-    expect(routePointDistanceM(display.turnConnectors[0].coordinates[0], display.turnConnectors[0].coordinates.at(-1)!)).toBeGreaterThan(2.5);
+    expect(display.turnConnectors[0]).not.toHaveProperty('coordinates');
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 
@@ -65,8 +64,9 @@ describe('display-only repeated traversal projection', () => {
   test('five passes stay a continuous serpentine and use a traversal count without arrows', () => {
     const canonical = canonicalRouteGeometry({ points: [p(0), p(100), p(0), p(100), p(0), p(100)] });
     const display = buildRouteDisplayGeometry(canonical);
-    expect(display.repeatLanes).toHaveLength(1);
-    expect(display.repeatLanes[0].multiplicity).toBe(5);
+    expect(display.repeatLanes).toHaveLength(5);
+    expect(display.repeatLanes.every(lane => lane.multiplicity === 5)).toBe(true);
+    expect(new Set(display.repeatLanes.map(lane => lane.direction))).toEqual(new Set(['forward', 'backward']));
     expect(display.repeatLabels.map(label => label.text)).toEqual(['5 passes']);
     expect(display.repeatLabels[0].text).not.toMatch(/[←→]/);
   });
@@ -104,7 +104,7 @@ describe('display-only repeated traversal projection', () => {
       points: [p(0), p(30, 18), p(70, 18), p(100), p(70, 18), p(30, 18)],
     });
     const display = buildRouteDisplayGeometry(canonical);
-    expect(display.repeatLanes).toHaveLength(1);
+    expect(display.repeatLanes).toHaveLength(2);
     expect(display.repeatLanes.flatMap(lane => lane.occurrenceIds)).toHaveLength(4);
     expect(display.baseLines.flatMap(line => line.coordinates)).toContainEqual(p(0));
     expect(display.repeatLanes.flatMap(line => line.coordinates)).toContainEqual(p(100));
@@ -124,8 +124,8 @@ describe('display-only repeated traversal projection', () => {
       points: [p(0), p(100), p(75), p(50), p(25), p(0)],
     });
     const display = buildRouteDisplayGeometry(canonical);
-    expect(display.repeatLanes).toHaveLength(1);
-    expect(display.repeatLanes[0].multiplicity).toBe(2);
+    expect(display.repeatLanes).toHaveLength(2);
+    expect(display.repeatLanes.every(lane => lane.multiplicity === 2)).toBe(true);
     expect(display.baseLines).toHaveLength(1);
     expect(display.baseLines[0].coordinates).toEqual([p(0), p(100), p(75), p(50), p(25), p(0)]);
   });

@@ -15,7 +15,9 @@ import sharp from 'sharp';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
 const outputDir = path.resolve(process.env.CAIRN10_ROUTE_VISUAL_OUTPUT || '/tmp/cairn10-route-visual-gate');
-const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const usesLocalStyle = process.env.CAIRN_QA_LOCAL_STYLE === '1';
+const chromePath = process.env.CAIRN_QA_CHROME_PATH
+  || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const hash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const origin = { lat: -41.2865, lng: 174.7762 };
 const point = (eastM, northM = 0) => ({
@@ -124,6 +126,18 @@ const analyseTurnPixels = async (screenshotPath, projected, approachProjected, t
   const outerTurn = componentNear(localTurn.x + ux * 1.5, localTurn.y + uy * 1.5, 4);
   const armsShareComponent = Boolean(leftArm && rightArm && leftArm.componentId === rightArm.componentId);
   const connectorSharesComponent = Boolean(armsShareComponent && outerTurn && outerTurn.componentId === leftArm.componentId);
+  let forwardExtentPx = 0;
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      if (!mask[y * info.width + x]) continue;
+      const relativeX = x - localTurn.x;
+      const relativeY = y - localTurn.y;
+      const forward = relativeX * ux + relativeY * uy;
+      const perpendicular = Math.abs(relativeX * px + relativeY * py);
+      if (perpendicular <= 12) forwardExtentPx = Math.max(forwardExtentPx, forward);
+    }
+  }
+  const stableScreenCap = forwardExtentPx <= 8;
   const legacyConnected = centreRoutePixels >= 12 && largest.count >= 75 && Math.max(largest.width, largest.height) >= 24;
   return {
     crop: { width: info.width, height: info.height },
@@ -135,7 +149,9 @@ const analyseTurnPixels = async (screenshotPath, projected, approachProjected, t
     legacyConnected,
     armsShareComponent,
     connectorSharesComponent,
-    connected: connectorSharesComponent,
+    forwardExtentPx,
+    stableScreenCap,
+    connected: connectorSharesComponent && stableScreenCap,
   };
 };
 
@@ -150,8 +166,18 @@ const negativeControl = await analyseTurnPixels(
   { x: 2, y: 22 },
   [0xff, 0x00, 0xff],
 );
+const omegaScreenshot = path.join(outputDir, 'negative-connected-omega.png');
+await sharp({ create: { width: 55, height: 45, channels: 4, background: '#101010' } })
+  .composite([{ input: Buffer.from('<svg width="55" height="45"><path d="M2 19 H37 M2 25 H37" stroke="#ff00ff" stroke-width="4"/><circle cx="40" cy="22" r="9" fill="none" stroke="#ff00ff" stroke-width="4"/></svg>') }])
+  .png().toFile(omegaScreenshot);
+const omegaNegativeControl = await analyseTurnPixels(
+  omegaScreenshot,
+  { x: 37, y: 22 },
+  { x: 2, y: 22 },
+  [0xff, 0x00, 0xff],
+);
 const browser = await chromium.launch({
-  headless: true,
+  headless: process.env.CAIRN_VISUAL_HEADED !== '1',
   ...(fs.existsSync(chromePath) ? { executablePath: chromePath } : {}),
   args: ['--enable-webgl', '--ignore-gpu-blocklist'],
 });
@@ -164,15 +190,42 @@ page.on('console', message => {
   if (message.type() === 'error' && !value.includes('Failed to load resource')
     && !value.includes("Cannot read properties of undefined (reading 'send')")) runtimeErrors.push(`console: ${value}`);
 });
-await page.addInitScript(() => {
+await page.addInitScript(({ localStyle }) => {
+  globalThis.__cairnMapQaLocalStyle = localStyle;
+  // Keep the local style source-free, but retain actual WebGL pixels. The
+  // adapter's structural test mode intentionally suppresses the renderer and
+  // therefore cannot serve as visual evidence.
+  globalThis.__cairnMapQaTestMode = false;
   localStorage.setItem('cairn_jwt', 'cairn10-route-visual-isolated');
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
   localStorage.setItem('cairn_onboarding_v1_done_cairn10-isolated-qa', 'true');
-});
+}, { localStyle: usesLocalStyle });
+await page.route('https://events.mapbox.com/**', intercepted => intercepted.fulfill({ status: 204, body: '' }));
 await page.route('**/api/**', async intercepted => {
   const url = new URL(intercepted.request().url());
   const json = body => intercepted.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   if (url.pathname === '/api/auth/me') return json({ user: { id: 'cairn10-isolated-qa', name: 'Route QA', email: 'route-qa@example.invalid' } });
+  if (url.pathname === '/api/memory/coverage-snapshot') return json({
+    manifest: {
+      snapshot_id: 'cairn10-empty-complete-v1',
+      as_of: '2026-10-24T00:00:00.000Z',
+      coverage_rule_version: 4,
+      dataset_revision: 'empty-v1',
+      expected_pages: 0,
+      expected_tiles: 0,
+      expected_evidence_count: 0,
+      regions: [],
+      complete: true,
+    },
+    page: {
+      snapshot_id: 'cairn10-empty-complete-v1',
+      page_index: 0,
+      tiles: [],
+      next_cursor: null,
+      complete: true,
+      terminal_status: 'complete',
+    },
+  });
   if (url.pathname === '/api/memory/coverage') return json({ coverage_rule_version: 4, coverage_version: 'empty', evidence_count: 0, geometry: { type: 'MultiPolygon', coordinates: [] } });
   if (url.pathname === '/api/friend-sharing/sources') return json({ sources: [] });
   if (url.pathname === '/api/memory-subscriptions') return json({ subscriptions: [], count: 0, limit: null });
@@ -209,14 +262,24 @@ for (const fixture of selectedFixtures) {
   await page.getByText('Updating exploration…', { exact: true }).waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
   const turn = fixture.turns[0] ?? fixture.points.at(-1);
   const views = fixture.id === 'two-pass'
-    ? [{ id: 'overview', zoom: 16.8, bearing: 0 }, { id: 'z18', zoom: 18, bearing: 28 }]
+    ? [
+      { id: 'overview-z15_5', zoom: 15.5, bearing: 0 },
+      { id: 'z17', zoom: 17, bearing: 18 },
+      { id: 'z18', zoom: 18, bearing: 28 },
+      { id: 'z19_5', zoom: 19.5, bearing: 42 },
+      { id: 'z21', zoom: 21, bearing: 67 },
+    ]
     : [{ id: 'check', zoom: 17, bearing: fixture.id === 'curved-return' ? 41 : 0 }];
   const captures = [];
   for (const view of views) {
-    await page.evaluate(({ turnPoint, zoom, bearing }) => globalThis.__cairnMap.jumpTo({ center: [turnPoint.lng, turnPoint.lat], zoom, bearing }), { turnPoint: turn, ...view });
+    await page.evaluate(({ turnPoint, zoom, bearing }) => {
+      globalThis.__cairnMap.repaint = true;
+      globalThis.__cairnMap.jumpTo({ center: [turnPoint.lng, turnPoint.lat], zoom, bearing });
+      globalThis.__cairnMap.triggerRepaint?.();
+    }, { turnPoint: turn, ...view });
     await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 30_000 });
     await page.waitForFunction(() => globalThis.__cairnMap?.areTilesLoaded?.() === true, null, { timeout: 30_000 });
-    await page.waitForTimeout(180);
+    await page.waitForTimeout(350);
     const turnIndex = fixture.points.findIndex(point => point.lat === turn.lat && point.lng === turn.lng);
     const approach = fixture.points[Math.max(0, turnIndex - 1)];
     const projected = await page.evaluate(({ turnPoint, approachPoint }) => {
@@ -231,15 +294,15 @@ for (const fixture of selectedFixtures) {
     const screenshot = `${fixture.id}-${view.id}-390x844.png`;
     const screenshotPath = path.join(outputDir, screenshot);
     await page.screenshot({ path: screenshotPath });
+    if (fixture.id === 'two-pass' && view.id === 'z18') {
+      await page.locator('.mapboxgl-canvas').first().screenshot({ path: path.join(outputDir, 'two-pass-z18-canvas-only.png') });
+    }
     let pixels = null;
     let connectivityScreenshot = null;
     if (fixture.passes > 1) {
       connectivityScreenshot = `${fixture.id}-${view.id}-connectivity-mask.png`;
       await page.evaluate(() => {
         const map = globalThis.__cairnMap;
-        for (const id of ['ordered-route-repeat-lane-line', 'ordered-route-turn-connector-fill']) {
-          if (map.getLayer(id)) map.setPaintProperty(id, 'line-color', '#ff00ff');
-        }
         for (const id of ['ordered-route-repeat-label-text', 'ordered-route-endpoint-circles', 'ordered-route-endpoint-labels']) {
           if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
         }
@@ -257,12 +320,9 @@ for (const fixture of selectedFixtures) {
       }, { turnPoint: turn, approachPoint: approach });
       const connectivityPath = path.join(outputDir, connectivityScreenshot);
       await page.screenshot({ path: connectivityPath });
-      pixels = await analyseTurnPixels(connectivityPath, settledProjected.turn, settledProjected.approach, [0xff, 0x00, 0xff]);
+      pixels = await analyseTurnPixels(connectivityPath, settledProjected.turn, settledProjected.approach);
       await page.evaluate(() => {
         const map = globalThis.__cairnMap;
-        for (const id of ['ordered-route-repeat-lane-line', 'ordered-route-turn-connector-fill']) {
-          if (map.getLayer(id)) map.setPaintProperty(id, 'line-color', '#2F684F');
-        }
         for (const id of ['ordered-route-repeat-label-text', 'ordered-route-endpoint-circles', 'ordered-route-endpoint-labels']) {
           if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
         }
@@ -270,14 +330,14 @@ for (const fixture of selectedFixtures) {
       await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 15_000 });
     }
     captures.push({ ...view, screenshot, connectivityScreenshot, pixels });
+    await page.evaluate(() => { globalThis.__cairnMap.repaint = false; });
   }
   const runtime = await page.evaluate(() => {
     const map = globalThis.__cairnMap;
     const layers = (map.getStyle()?.layers ?? []).filter(layer => layer.id.startsWith('ordered-route-'));
-    const connectors = layers.filter(layer => layer.id.includes('turn-connector'));
     const repeats = layers.filter(layer => layer.id.includes('repeat-lane'));
-    let connectorFeatures = 0;
-    try { connectorFeatures = connectors.length ? map.queryRenderedFeatures(undefined, { layers: connectors.map(layer => layer.id) }).length : 0; } catch {}
+    let repeatFeatures = 0;
+    try { repeatFeatures = repeats.length ? map.queryRenderedFeatures(undefined, { layers: repeats.map(layer => layer.id) }).length : 0; } catch {}
     let endpointProperties = [];
     try {
       endpointProperties = map.queryRenderedFeatures(undefined, { layers: ['ordered-route-endpoint-circles'] })
@@ -285,9 +345,36 @@ for (const fixture of selectedFixtures) {
     } catch {}
     return {
       styleLoaded: Boolean(map.isStyleLoaded()),
-      connectorLayerIds: connectors.map(layer => layer.id),
+      canvas: (() => {
+        const canvas = map.getCanvas?.();
+        const rect = canvas?.getBoundingClientRect?.();
+        return canvas && rect ? {
+          width: canvas.width,
+          height: canvas.height,
+          rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+          opacity: getComputedStyle(canvas).opacity,
+          visibility: getComputedStyle(canvas).visibility,
+        } : null;
+      })(),
+      centreElementStack: document.elementsFromPoint(195, 422).map(element => ({
+        tag: element.tagName,
+        className: typeof element.className === 'string' ? element.className : '',
+        testId: element.getAttribute?.('data-testid'),
+        background: getComputedStyle(element).backgroundColor,
+        position: getComputedStyle(element).position,
+        zIndex: getComputedStyle(element).zIndex,
+      })),
+      orderedLayerStack: layers.map(layer => ({
+        id: layer.id,
+        type: layer.type,
+        color: layer.type === 'line' ? map.getPaintProperty?.(layer.id, 'line-color') : null,
+        width: layer.type === 'line' ? map.getPaintProperty?.(layer.id, 'line-width') : null,
+        visibility: map.getLayoutProperty?.(layer.id, 'visibility') ?? 'visible',
+      })),
+      nearbyStyleLayerIds: (map.getStyle()?.layers ?? []).map(layer => layer.id),
+      connectorLayerIds: layers.filter(layer => layer.id.includes('turn-connector')).map(layer => layer.id),
       repeatLayerIds: repeats.map(layer => layer.id),
-      connectorFeatures,
+      repeatFeatures,
       endpointProperties,
       endpointSourceProperties: map.getSource?.('ordered-route-endpoints')?._data?.features?.map(feature => feature.properties) ?? [],
       endpointRadius: map.getPaintProperty?.('ordered-route-endpoint-circles', 'circle-radius') ?? null,
@@ -297,7 +384,7 @@ for (const fixture of selectedFixtures) {
   const visualExpected = fixture.passes > 1;
   const pass = runtime.styleLoaded
     && (visualExpected
-      ? runtime.connectorLayerIds.length === 2 && runtime.connectorFeatures > 0 && captures.every(capture => capture.pixels?.connected)
+      ? runtime.connectorLayerIds.length === 0 && runtime.repeatFeatures > 0 && captures.every(capture => capture.pixels?.connected)
       : runtime.connectorLayerIds.length === 0 && runtime.repeatLayerIds.length === 0);
   results.push({ id: fixture.id, pointCount: fixture.points.length, geometryHash: hash(fixture.points), passes: fixture.passes, turnCount: fixture.turns.length, captures, runtime, pass });
 }
@@ -307,7 +394,11 @@ const twoPass = fixtures.find(fixture => fixture.id === 'two-pass');
 await page.evaluate(routeId => globalThis.__cairnStores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'MapHistory', params: { routeId } }] }), twoPass.clientRouteId);
 await page.getByTestId('route-detail-panel').waitFor({ state: 'visible', timeout: 30_000 });
 await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
-await page.evaluate(turnPoint => globalThis.__cairnMap.jumpTo({ center: [turnPoint.lng, turnPoint.lat], zoom: 18, bearing: 28 }), twoPass.turns[0]);
+await page.evaluate(turnPoint => {
+  globalThis.__cairnMap.repaint = true;
+  globalThis.__cairnMap.jumpTo({ center: [turnPoint.lng, turnPoint.lat], zoom: 18, bearing: 28 });
+  globalThis.__cairnMap.triggerRepaint?.();
+}, twoPass.turns[0]);
 await page.waitForTimeout(300);
 const detailApproach = twoPass.points[twoPass.points.findIndex(point => point.lat === twoPass.turns[0].lat && point.lng === twoPass.turns[0].lng) - 1];
 const detailProjected = await page.evaluate(({ turnPoint, approachPoint }) => {
@@ -321,9 +412,6 @@ await page.screenshot({ path: path.join(outputDir, detailScreenshot) });
 await page.evaluate(() => {
   const map = globalThis.__cairnMap;
   for (const layer of map.getStyle().layers ?? []) {
-    if ((layer.id.includes('repeat-lane-line') || layer.id.includes('turn-connector-fill')) && map.getLayer(layer.id)) {
-      map.setPaintProperty(layer.id, 'line-color', '#ff00ff');
-    }
     if ((layer.id.includes('repeat-label') || layer.id.includes('endpoint')) && map.getLayer(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'none');
   }
 });
@@ -339,20 +427,20 @@ const settledDetailProjected = await page.evaluate(({ turnPoint, approachPoint }
 }, { turnPoint: twoPass.turns[0], approachPoint: detailApproach });
 const detailConnectivityScreenshot = 'two-pass-detail-z18-connectivity-mask.png';
 await page.screenshot({ path: path.join(outputDir, detailConnectivityScreenshot) });
-const detailPixels = await analyseTurnPixels(path.join(outputDir, detailConnectivityScreenshot), settledDetailProjected.turn, settledDetailProjected.approach, [0xff, 0x00, 0xff]);
+const detailPixels = await analyseTurnPixels(path.join(outputDir, detailConnectivityScreenshot), settledDetailProjected.turn, settledDetailProjected.approach);
 await page.evaluate(() => {
   const map = globalThis.__cairnMap;
   for (const layer of map.getStyle().layers ?? []) {
-    if ((layer.id.includes('repeat-lane-line') || layer.id.includes('turn-connector-fill')) && map.getLayer(layer.id)) {
-      map.setPaintProperty(layer.id, 'line-color', '#2F684F');
-    }
     if ((layer.id.includes('repeat-label') || layer.id.includes('endpoint')) && map.getLayer(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'visible');
   }
 });
 await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 15_000 });
 const detailRuntime = await page.evaluate(() => {
   const layers = (globalThis.__cairnMap.getStyle()?.layers ?? []).filter(layer => layer.id.startsWith('route-detail-'));
-  return { connectorLayerIds: layers.filter(layer => layer.id.includes('turn-connector')).map(layer => layer.id) };
+  return {
+    connectorLayerIds: layers.filter(layer => layer.id.includes('turn-connector')).map(layer => layer.id),
+    repeatLayerIds: layers.filter(layer => layer.id.includes('repeat-lane')).map(layer => layer.id),
+  };
 });
 
 // Real ease frames supply the short interaction clip; the final pixel result
@@ -372,11 +460,15 @@ const clip = 'route-u-turn-zoom-bearing.webm';
 execFileSync('/usr/local/bin/ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-framerate', '8', '-i', path.join(outputDir, 'route-turn-frame-%02d.png'), '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuv420p', '-an', path.join(outputDir, clip)]);
 const report = {
   generatedAt: new Date().toISOString(),
-  evidenceClass: 'CURRENT_PRODUCTION_EDITOR_AND_DETAIL_REAL_MAPBOX_SCREENSHOT_PIXELS_AT_390x844',
-  boundary: 'Synthetic public-place geometry tests display projection only; canonical/persisted route coordinates remain unchanged. RNMapbox iPhone pixels remain native pending.',
+  evidenceClass: usesLocalStyle
+    ? 'CURRENT_PRODUCTION_EDITOR_AND_DETAIL_INSTALLED_MAPBOX_GL_SCREENSHOT_PIXELS_WITH_LOCAL_QA_STYLE_AT_390x844'
+    : 'CURRENT_PRODUCTION_EDITOR_AND_DETAIL_REAL_HOSTED_MAPBOX_SCREENSHOT_PIXELS_AT_390x844',
+  boundary: usesLocalStyle
+    ? 'No hosted Mapbox credential was available. This exercises the installed Mapbox GL renderer and production layers with a source-free local QA style; hosted-provider and RNMapbox iPhone pixels remain pending. Synthetic public-place geometry tests display projection only; canonical/persisted route coordinates remain unchanged.'
+    : 'Synthetic public-place geometry tests display projection only; canonical/persisted route coordinates remain unchanged. RNMapbox iPhone pixels remain native pending.',
   rawCoordinateArraysPersisted: false,
   results,
-  detail: { screenshot: detailScreenshot, pixels: detailPixels, runtime: detailRuntime, pass: detailPixels.connected && detailRuntime.connectorLayerIds.length === 2 },
+  detail: { screenshot: detailScreenshot, pixels: detailPixels, runtime: detailRuntime, pass: detailPixels.connected && detailRuntime.connectorLayerIds.length === 0 && detailRuntime.repeatLayerIds.length === 2 },
   negativeControl: {
     screenshot: path.basename(negativeScreenshot),
     measurements: negativeControl,
@@ -384,11 +476,25 @@ const report = {
     correctedConnected: negativeControl.connected,
     pass: negativeControl.legacyConnected === true && negativeControl.connected === false,
   },
+  omegaNegativeControl: {
+    screenshot: path.basename(omegaScreenshot),
+    measurements: omegaNegativeControl,
+    connectedBeforeShapeGate: omegaNegativeControl.connectorSharesComponent,
+    rejectedAsOmega: omegaNegativeControl.connected === false && omegaNegativeControl.stableScreenCap === false,
+    pass: omegaNegativeControl.connectorSharesComponent === true
+      && omegaNegativeControl.stableScreenCap === false
+      && omegaNegativeControl.connected === false,
+  },
   interactionClip: clip,
   interactionFrames: frames,
   runtimeErrors,
-  verdict: results.every(result => result.pass) && detailPixels.connected && detailRuntime.connectorLayerIds.length === 2
-    && negativeControl.legacyConnected === true && negativeControl.connected === false && runtimeErrors.length === 0 ? 'PASS' : 'FAIL',
+  verdict: results.every(result => result.pass) && detailPixels.connected
+    && detailRuntime.connectorLayerIds.length === 0 && detailRuntime.repeatLayerIds.length === 2
+    && negativeControl.legacyConnected === true && negativeControl.connected === false
+    && omegaNegativeControl.connectorSharesComponent === true
+    && omegaNegativeControl.stableScreenCap === false
+    && omegaNegativeControl.connected === false
+    && runtimeErrors.length === 0 ? 'PASS' : 'FAIL',
 };
 fs.writeFileSync(path.join(outputDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({ outputDir, verdict: report.verdict, fixtures: results.map(result => ({ id: result.id, pass: result.pass })) }));
