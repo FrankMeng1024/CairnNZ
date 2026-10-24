@@ -199,8 +199,11 @@ export function memoryFogCombinedPreparationSettled(input: {
   sourceStates: Record<string, { status?: string }>;
 }): boolean {
   if (input.scope !== 'combined') return true;
-  if (input.subscriptionsLoading) return false;
+  // Empty Friends is a complete target: Mine. Remote preference persistence
+  // and a stale Friends request may finish independently without owning the
+  // visible content transition.
   if (input.selectedFriendIds.length === 0) return true;
+  if (input.subscriptionsLoading) return false;
   if (!input.requiredViewportKey
     || input.activeViewportKey !== input.requiredViewportKey
     || input.friendLoading) return false;

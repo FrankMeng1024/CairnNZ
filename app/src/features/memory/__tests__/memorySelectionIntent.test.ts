@@ -67,11 +67,82 @@ describe('Memory friend selection intent', () => {
     });
   });
 
-  test('projection requests wait until the selection grant mutation settles', () => {
+  test('projection requests wait for a new selection grant but zero selection bypasses pending preference persistence', () => {
     const fogLayer = fs.readFileSync(path.resolve(__dirname, '../components/FogLayer.tsx'), 'utf8');
     const memoryScreen = fs.readFileSync(path.resolve(__dirname, '../screens/MemoryScreen.tsx'), 'utf8');
     expect(fogLayer).toContain("scope === 'combined' && !selectionPendingKey");
+    expect(fogLayer).toMatch(/selectedFriendIds\.length === 0[\s\S]{0,120}subscriptionsLoading/);
     expect(memoryScreen).toContain('selectionStillPending');
     expect(memoryScreen).toMatch(/selectionStillPending\s+\? Promise\.resolve\(\)/);
+  });
+
+  test('deselect then reselect is persisted in request order and an old DELETE cannot win', async () => {
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 31, friend_name: 'QA Friend' }],
+      availableSources: [{ ...source, selected: true }],
+    });
+    let releaseDelete!: () => void;
+    const deleteGate = new Promise<void>(resolve => { releaseDelete = resolve; });
+    mockAuthenticatedFetch.mockImplementation(async (_path: string, init: any) => {
+      if (init.method === 'DELETE') {
+        await deleteGate;
+        return { ok: true, status: 204 };
+      }
+      return { ok: true, status: 201 };
+    });
+
+    const deselect = useMemorySubscriptionsStore.getState().unsubscribe(31);
+    const reselect = useMemorySubscriptionsStore.getState().subscribe(31);
+    expect(useMemorySubscriptionsStore.getState().isSubscribed(31)).toBe(true);
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+
+    releaseDelete();
+    await expect(Promise.all([deselect, reselect])).resolves.toEqual([0, 201]);
+    expect(mockAuthenticatedFetch.mock.calls.map(([, init]) => init.method)).toEqual(['DELETE', 'POST']);
+    expect(useMemorySubscriptionsStore.getState().isSubscribed(31)).toBe(true);
+    expect(useMemorySubscriptionsStore.getState().selectionPending).toEqual({});
+  });
+
+  test('last-friend DELETE 503 leaves immediate Mine intent and restart does not resurrect the friend', async () => {
+    const { storage } = require('../../../store/storage');
+    const values = new Map<string, string>();
+    storage.getItem.mockImplementation(async (key: string) => values.get(key) ?? null);
+    storage.setItem.mockImplementation(async (key: string, value: string) => { values.set(key, value); });
+    storage.removeItem.mockImplementation(async (key: string) => { values.delete(key); });
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 31, friend_name: 'QA Friend' }],
+      availableSources: [{ ...source, selected: true }],
+    });
+    mockAuthenticatedFetch.mockResolvedValueOnce({ ok: false, status: 503 });
+
+    const pendingDelete = useMemorySubscriptionsStore.getState().unsubscribe(31);
+    expect(useMemorySubscriptionsStore.getState().subscriptions).toEqual([]);
+    expect(useMemorySubscriptionsStore.getState().availableSources[0].selected).toBe(false);
+    await expect(pendingDelete).resolves.toBe(503);
+    expect(useMemorySubscriptionsStore.getState()).toMatchObject({
+      subscriptions: [],
+      selectionPending: { '31': 'deselect' },
+      selectionError: 'unavailable',
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    useMemorySubscriptionsStore.getState().reset();
+    useMemorySubscriptionsStore.setState({ availableSources: [{ ...source, selected: true }] });
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ limit: null, subscriptions: [{ friend_id: 31, friend_name: 'QA Friend' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ sources: [{ ...source, selected: true }] }),
+      });
+
+    await expect(useMemorySubscriptionsStore.getState().load()).resolves.toBe(true);
+    expect(useMemorySubscriptionsStore.getState().subscriptions).toEqual([]);
+    expect(useMemorySubscriptionsStore.getState().availableSources[0].selected).toBe(false);
+    expect(useMemorySubscriptionsStore.getState().selectionPending).toEqual({ '31': 'deselect' });
   });
 });

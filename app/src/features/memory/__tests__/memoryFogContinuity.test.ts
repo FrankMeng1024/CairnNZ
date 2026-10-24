@@ -72,6 +72,18 @@ describe('Memory evidence rendering continuity', () => {
     })).toBe(true);
   });
 
+  test('zero selected friends immediately reuses Mine even while preference persistence is pending', () => {
+    expect(memoryFogCombinedPreparationSettled({
+      scope: 'combined',
+      subscriptionsLoading: true,
+      selectedFriendIds: [],
+      friendLoading: true,
+      activeViewportKey: 'old-friend-viewport',
+      requiredViewportKey: 'current-mine-viewport',
+      sourceStates: { '31': { status: 'loading' } },
+    })).toBe(true);
+  });
+
   test('prepared Mine and Friends are subtracted exactly without a redundant union', () => {
     const mine = {
       type: 'Feature' as const,

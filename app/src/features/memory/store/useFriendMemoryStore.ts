@@ -4,7 +4,12 @@ import { storage } from '../../../store/storage';
 import type { MultiPolygon } from 'geojson';
 import type { MemoryCoverageViewport } from '../services/memoryCoverageViewport';
 import { log } from '../../../services/appLog';
-import { classifyFriendMemoryFailure, type FriendMemoryFailure } from '../services/friendMemoryFailure';
+import {
+  friendMemoryPresentationFailure,
+  memoryOperationFailure,
+  type FriendMemoryFailure,
+  type MemoryOperationFailure,
+} from '../services/friendMemoryFailure';
 
 export interface FriendProjectionCell {
   id: string;
@@ -47,6 +52,7 @@ interface FriendMemoryState {
   version: number;
   loading: boolean;
   error: FriendMemoryFailure | null;
+  lastFailure: MemoryOperationFailure | null;
   sourceStates: Record<string, FriendProjectionSourceState>;
   /** Current-session authorization proof, separate from viewport geometry.
    * A viewport refresh may retain a previously painted authorized scene;
@@ -267,6 +273,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
   version: 0,
   loading: false,
   error: null,
+  lastFailure: null,
   sourceStates: {},
   authorizedSourceVersions: {},
   lastObservedWallClockMs: 0,
@@ -287,7 +294,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     // and deliberately does not hold up the fresh authorization/API path.
     void retireLegacyPersistentGeometry(userId).catch(() => {});
     if (hydrateRequest !== hydrationSequence || hydrateAccountGeneration !== accountGeneration) return;
-    set({ userId, projections: {}, sourceStates: {}, authorizedSourceVersions: {}, activeViewport: null, lastObservedWallClockMs: now, version: get().version + 1, loading: false, error: null });
+    set({ userId, projections: {}, sourceStates: {}, authorizedSourceVersions: {}, activeViewport: null, lastObservedWallClockMs: now, version: get().version + 1, loading: false, error: null, lastFailure: null });
   },
 
   loadSelectedProjections: async (friendIds, viewport) => {
@@ -316,14 +323,14 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     if (now < get().lastObservedWallClockMs) {
       fenceAllProjectionAuthority();
       set({
-        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null,
+        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null, lastFailure: null,
         version: get().version + 1, lastObservedWallClockMs: now,
       });
     }
     const requestAccountGeneration = accountGeneration;
     if (selectedIds.length === 0) {
       const retained = Object.fromEntries(Object.entries(get().projections).filter(([id]) => selectedSet.has(Number(id))));
-      set({ projections: retained, loading: false, error: null, version: get().version + 1 });
+      set({ projections: retained, loading: false, error: null, lastFailure: null, version: get().version + 1 });
       return;
     }
     const reusableIds = new Set(selectedIds.filter(friendId => {
@@ -358,6 +365,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         sourceStates: nextStates,
         loading: false,
         error: null,
+        lastFailure: null,
         lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs),
       });
       return;
@@ -381,6 +389,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     set({
       loading: true,
       error: null,
+      lastFailure: null,
       lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs),
       sourceStates: {
         ...get().sourceStates,
@@ -393,6 +402,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       },
     });
     let aggregateError: FriendMemoryState['error'] = null;
+    let aggregateFailure: MemoryOperationFailure | null = null;
     try {
       let nextRequestIndex = 0;
       const runNext = async (): Promise<void> => {
@@ -416,11 +426,42 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           signal: controller.signal,
         });
         if (!response.ok) {
-          const httpError = new Error(`HTTP ${response.status}`) as Error & { httpStatus?: number };
+          const httpError = new Error(`HTTP ${response.status}`) as Error & {
+            httpStatus?: number;
+            operationStage?: string;
+          };
           httpError.httpStatus = response.status;
+          httpError.operationStage = 'http';
           throw httpError;
         }
-        const body = await response.json();
+        let body: any;
+        try {
+          body = await response.json();
+        } catch (error) {
+          const payloadError = error as Error & {
+            httpStatus?: number;
+            operationStage?: string;
+            invalidPayload?: boolean;
+          };
+          payloadError.httpStatus = response.status;
+          payloadError.operationStage = 'decode';
+          payloadError.invalidPayload = true;
+          throw payloadError;
+        }
+        if (!body || typeof body !== 'object' || !Array.isArray(body.projections)
+          || !Array.isArray(body.revoked_friend_ids)) {
+          const payloadError = new Error('Invalid Friend Memory response schema') as Error & {
+            httpStatus?: number;
+            operationStage?: string;
+            invalidPayload?: boolean;
+            code?: string;
+          };
+          payloadError.httpStatus = response.status;
+          payloadError.operationStage = 'validate';
+          payloadError.invalidPayload = true;
+          payloadError.code = 'INVALID_SCHEMA';
+          throw payloadError;
+        }
         if (String(useAppStore.getState().user?.id ?? '') !== userId
           || get().userId !== userId
           || requestAccountGeneration !== accountGeneration
@@ -444,7 +485,17 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           if (!incoming || !validProjection(candidate, receivedAt)
             || (Number.isFinite(Number(source?.authorization_version))
               && candidate.authorizationVersion < Number(source?.authorization_version))) {
-            throw new Error('Invalid projection response');
+            const projectionError = new Error('Invalid projection response') as Error & {
+              httpStatus?: number;
+              operationStage?: string;
+              invalidPayload?: boolean;
+              code?: string;
+            };
+            projectionError.httpStatus = response.status;
+            projectionError.operationStage = 'validate';
+            projectionError.invalidPayload = true;
+            projectionError.code = 'INVALID_PROJECTION';
+            throw projectionError;
           }
           const existing = next[request.id];
           if (!existing
@@ -485,14 +536,33 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           || requestAccountGeneration !== accountGeneration
           || request.generation !== sourceGeneration(request.id)
           || latestSourceRequests.get(request.id) !== request.sequence) return;
-        const httpStatus = Number(error?.httpStatus);
-        const errorCategory = classifyFriendMemoryFailure({ httpStatus, timedOut });
+        const httpStatus = Number.isFinite(Number(error?.httpStatus)) ? Number(error.httpStatus) : undefined;
+        const failure = memoryOperationFailure({
+          error,
+          httpStatus,
+          operation: 'friend-coverage',
+          stage: error?.operationStage ?? 'transport',
+          targetRevision: `${request.id}:${requestedViewport.key}:${request.sequence}`,
+          timedOut,
+          cancelled: error?.name === 'AbortError' && !timedOut,
+          invalidPayload: Boolean(error?.invalidPayload),
+          causeCode: error?.code,
+        });
+        // A superseding request owns its own terminal state. Never present an
+        // intentional abort as a network outage for the old target.
+        if (failure.kind === 'cancelled') return;
+        const errorCategory = friendMemoryPresentationFailure(failure);
+        aggregateFailure = failure;
         if (errorCategory === 'unauthorized'
           || (errorCategory === 'unavailable' && aggregateError !== 'unauthorized')
           || aggregateError == null) aggregateError = errorCategory;
         log('o86.memory.friend_coverage_failed', {
           selected_source_index: requestIndex,
           request_ms: Date.now() - requestStartedAtMs,
+          failure_kind: failure.kind,
+          operation_stage: failure.stage,
+          target_revision: failure.targetRevision,
+          http_status: failure.httpStatus,
           error: String(error?.message ?? error).slice(0, 100),
         });
         const currentTime = Date.now();
@@ -516,6 +586,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
             },
           },
           version: get().version + 1,
+          lastFailure: failure,
           lastObservedWallClockMs: Math.max(currentTime, get().lastObservedWallClockMs),
         });
       } finally {
@@ -533,7 +604,12 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           .map((subscription: { friend_id: number }) => String(subscription.friend_id)));
         const next = Object.fromEntries(Object.entries(get().projections)
           .filter(([id, projection]) => currentlySelected.has(id) && validProjection(projection, Date.now())));
-        set({ projections: next, version: get().version + 1, error: aggregateError });
+        set({
+          projections: next,
+          version: get().version + 1,
+          error: aggregateError,
+          lastFailure: aggregateFailure,
+        });
       }
     } finally {
       const remainingLoads = Math.max(
@@ -618,7 +694,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     if (now < get().lastObservedWallClockMs) {
       fenceAllProjectionAuthority();
       set({
-        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null,
+        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null, lastFailure: null,
         version: get().version + 1, lastObservedWallClockMs: now,
       });
       return [];
@@ -663,7 +739,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     if (now < get().lastObservedWallClockMs) {
       fenceAllProjectionAuthority();
       set({
-        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null,
+        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null, lastFailure: null,
         version: get().version + 1, lastObservedWallClockMs: now,
       });
       return [];
@@ -692,7 +768,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     if (now < get().lastObservedWallClockMs) {
       fenceAllProjectionAuthority();
       set({
-        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null,
+        projections: {}, sourceStates: {}, authorizedSourceVersions: {}, loading: false, error: null, lastFailure: null,
         version: get().version + 1, lastObservedWallClockMs: now,
       });
       return [];
@@ -724,6 +800,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     version: get().version + 1,
     loading: false,
     error: null,
+    lastFailure: null,
     sourceStates: {},
     authorizedSourceVersions: {},
     lastObservedWallClockMs: 0,

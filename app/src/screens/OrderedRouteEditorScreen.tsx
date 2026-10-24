@@ -410,11 +410,10 @@ export function OrderedRouteEditorScreen() {
   const routeFriendAuthorizationLost = planningMemoryScope === 'combined' && memorySubscriptions.some(
     subscription => friendMemorySourceStates[String(subscription.friend_id)]?.status === 'unauthorized',
   );
-  const routeFogExactTerminal = Boolean(routeFogTargetKey) && (
-    routeFogReadyKey === routeFogTargetKey
-    || routeFogUnavailableKey === routeFogTargetKey
-  );
-  const routeSceneReady = mapReady && routeFogExactTerminal;
+  // Route core needs a loaded, interactive style/map. Exploration Fog is an
+  // optional context layer with its own small status below; it must never own
+  // the editor-wide readiness gate.
+  const routeCoreReady = mapReady;
   const setTool = useCallback((next: PlannerTool) => {
     setMode(next === 'draw' ? 'DrawArmed' : next === 'point' ? 'PointTargeting' : next === 'trim' ? 'TrimPreview' : 'Browse');
   }, []);
@@ -1141,12 +1140,12 @@ export function OrderedRouteEditorScreen() {
       }
       return;
     }
-    if (routeSceneReady) {
+    if (routeCoreReady) {
       routeSceneReadyIdentityRef.current = routeSceneIdentity;
       routeSceneEverReadyRef.current = true;
       setRouteSceneEverReady(true);
     }
-  }, [routeSceneIdentity, routeSceneReady]);
+  }, [routeCoreReady, routeSceneIdentity]);
 
   const region = getCurrentRegion();
   const fallbackCenter: [number, number] = [region.centerLng, region.centerLat];
@@ -2252,7 +2251,13 @@ export function OrderedRouteEditorScreen() {
           zoomEnabled={tool !== 'draw'}
           rotateEnabled={tool !== 'draw'}
           pitchEnabled={tool !== 'draw'}
-          onDidFinishLoadingMap={() => setMapLoadState('loading')}
+          onDidFinishLoadingMap={() => {
+            // RNMapbox guarantees this callback for the loaded style/map
+            // capability needed by Draw/Point/Trim. A fully-rendered-frame
+            // callback is optional and remains useful only as paint evidence.
+            setMapReady(true);
+            setMapLoadState('loading');
+          }}
           onDidFinishRenderingMapFully={() => {
             setMapReady(true);
             setMapLoadState('loading');
@@ -2529,7 +2534,7 @@ export function OrderedRouteEditorScreen() {
           ) : null}
         </MapView>
       ) : null}
-      {MapView && showPlannerMap && !routeSceneReady && !routeSceneEverReady ? (
+      {MapView && showPlannerMap && !routeCoreReady && !routeSceneEverReady ? (
         <MapLoadOverlay
           state={mapLoadState}
           onRetry={retryRouteScene}

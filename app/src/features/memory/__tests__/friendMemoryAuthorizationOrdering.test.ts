@@ -210,6 +210,56 @@ describe('friend Memory authorization cache ordering', () => {
     jest.useRealTimers();
   });
 
+  test.each([
+    {
+      label: 'invalid JSON',
+      json: async () => { throw new SyntaxError('Unexpected token < in JSON'); },
+      stage: 'decode',
+      causeCode: 'SyntaxError',
+    },
+    {
+      label: 'schema-invalid JSON',
+      json: async () => ({ projections: 'not-an-array' }),
+      stage: 'validate',
+      causeCode: 'INVALID_SCHEMA',
+    },
+  ])('HTTP 200 $label is a terminal payload failure, never offline', async ({ json, stage, causeCode }) => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    const authenticatedFetch = jest.fn(async () => ({ ok: true, status: 200, json }));
+    jest.doMock('../../../store/storage', () => ({
+      storage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined), removeItem: jest.fn(async () => undefined) },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    const { useMemorySubscriptionsStore } = require('../store/useMemorySubscriptionsStore');
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 11, friend_name: 'Mia' }],
+      availableSources: [{
+        friend_id: '11', friend_name: 'Mia', selected: true,
+        authorization_version: 4, effective_at: new Date(0).toISOString(),
+        sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
+      }],
+    });
+
+    await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
+
+    expect(useFriendMemoryStore.getState()).toMatchObject({
+      loading: false,
+      error: 'unavailable',
+      sourceStates: { '11': { status: 'error', cellCount: 0 } },
+      lastFailure: {
+        kind: 'payload',
+        operation: 'friend-coverage',
+        stage,
+        httpStatus: 200,
+        causeCode,
+      },
+    });
+  });
+
   test('fails closed when the wall clock moves behind the last observed server cache time', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(999_000);
     const value = projection();

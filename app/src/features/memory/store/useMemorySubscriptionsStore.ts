@@ -11,7 +11,13 @@
  */
 import { create } from 'zustand';
 import { authenticatedFetch } from '../../../services/apiService';
-import { classifyFriendMemoryFailure, type FriendMemoryFailure } from '../services/friendMemoryFailure';
+import { storage } from '../../../store/storage';
+import {
+  classifyFriendMemoryFailure,
+  memoryOperationFailure,
+  type FriendMemoryFailure,
+  type MemoryOperationFailure,
+} from '../services/friendMemoryFailure';
 
 interface MemorySubscription {
   friend_id: number;
@@ -40,6 +46,7 @@ interface State {
    * only response that may fail closed and remove it. */
   selectionPending: Record<string, 'select' | 'deselect'>;
   selectionError: FriendMemoryFailure | null;
+  selectionLastFailure: MemoryOperationFailure | null;
   /** Last raw HTTP status from a mutation, for UI to map 409 → paywall trigger. */
   // O1 batch 37: lastMutationStatus removed — 0 external readers; callers use the return value directly.
 
@@ -61,6 +68,62 @@ interface State {
 
 let subscriptionGeneration = 0;
 const selectionMutationGenerations = new Map<string, number>();
+const selectionMutationTails = new Map<string, Promise<void>>();
+const selectionIntentPersistenceTails = new Map<string, Promise<void>>();
+const SELECTION_INTENT_PREFIX = 'cairn:memory-selection-intent:v1:';
+
+function selectionIntentKey(userId: string): string {
+  return `${SELECTION_INTENT_PREFIX}${userId}`;
+}
+
+function persistSelectionIntents(
+  userId: string,
+  pending: Record<string, 'select' | 'deselect'>,
+): void {
+  if (!userId) return;
+  const previous = selectionIntentPersistenceTails.get(userId) ?? Promise.resolve();
+  const write = previous.catch(() => undefined).then(async () => {
+    if (Object.keys(pending).length === 0) {
+      await storage.removeItem(selectionIntentKey(userId));
+    } else {
+      await storage.setItem(selectionIntentKey(userId), JSON.stringify(pending));
+    }
+  });
+  const tail = write.then(() => undefined, () => undefined);
+  selectionIntentPersistenceTails.set(userId, tail);
+  void tail.finally(() => {
+    if (selectionIntentPersistenceTails.get(userId) === tail) {
+      selectionIntentPersistenceTails.delete(userId);
+    }
+  });
+}
+
+async function readSelectionIntents(userId: string): Promise<Record<string, 'select' | 'deselect'>> {
+  try {
+    const raw = await storage.getItem(selectionIntentKey(userId));
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, 'select' | 'deselect'] => (
+      /^\d+$/.test(entry[0]) && (entry[1] === 'select' || entry[1] === 'deselect')
+    )));
+  } catch {
+    return {};
+  }
+}
+
+function enqueueSelectionMutation<T>(friendId: number, operation: () => Promise<T>): Promise<T> {
+  const key = String(friendId);
+  const previous = selectionMutationTails.get(key);
+  const current = previous
+    ? previous.catch(() => undefined).then(operation)
+    : operation();
+  const tail = current.then(() => undefined, () => undefined);
+  selectionMutationTails.set(key, tail);
+  void tail.finally(() => {
+    if (selectionMutationTails.get(key) === tail) selectionMutationTails.delete(key);
+  });
+  return current;
+}
 
 function nextSelectionMutationGeneration(friendId: number): number {
   const key = String(friendId);
@@ -134,6 +197,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
   error: null,
   selectionPending: {},
   selectionError: null,
+  selectionLastFailure: null,
   // O1 batch 37: lastMutationStatus removed
 
   load: async () => {
@@ -155,6 +219,8 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     const viewerAtStart = String(useAppStore.getState().user?.id ?? '');
     if (!viewerAtStart) return false;
     const generationAtStart = subscriptionGeneration;
+    set({ loading: true, error: null });
+    const durableIntentsPromise = readSelectionIntents(viewerAtStart);
     // A routine sources refresh (including opening the picker) must not erase
     // a still-valid, short-lived server proof. Focus/account transitions can
     // deliberately call suspendVisibility() before this read; a successful
@@ -162,12 +228,25 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     // failed read leaves that explicit hard fence in place.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useFriendMemoryStore } = require('./useFriendMemoryStore');
-    set({ loading: true, error: null });
     try {
-      const [res, sourcesResponse] = await Promise.all([
+      // Start authority reads immediately; durable intent hydration is local
+      // bookkeeping and must not postpone the request or defeat single-flight.
+      const responsePromise = Promise.all([
         authenticatedFetch('/api/memory-subscriptions', { expectedUserId: viewerAtStart }),
         authenticatedFetch('/api/friend-sharing/sources', { expectedUserId: viewerAtStart }),
       ]);
+      const durableIntents = await durableIntentsPromise;
+      if (generationAtStart !== subscriptionGeneration
+        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) {
+        void responsePromise.catch(() => undefined);
+        return false;
+      }
+      if (Object.keys(durableIntents).length > 0) {
+        set(state => ({
+          selectionPending: { ...durableIntents, ...state.selectionPending },
+        }));
+      }
+      const [res, sourcesResponse] = await responsePromise;
       if (generationAtStart !== subscriptionGeneration
         || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart) return false;
       const sourcesBody = sourcesResponse.ok ? await sourcesResponse.json() : null;
@@ -251,51 +330,77 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         : item),
       selectionPending: { ...state.selectionPending, [String(friendId)]: 'select' },
       selectionError: null,
+      selectionLastFailure: null,
     }));
-    try {
-      const res = await authenticatedFetch('/api/memory-subscriptions', {
-        method: 'POST',
-        body: JSON.stringify({ friend_id: friendId }),
-        expectedUserId: viewerAtStart,
-      });
-      if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-        || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
-      if (res.ok || res.status === 409) {
-        set(state => {
-          const selectionPending = { ...state.selectionPending };
-          delete selectionPending[String(friendId)];
-          return { selectionPending, selectionError: null };
+    persistSelectionIntents(viewerAtStart, get().selectionPending);
+    return enqueueSelectionMutation(friendId, async () => {
+      try {
+        const res = await authenticatedFetch('/api/memory-subscriptions', {
+          method: 'POST',
+          body: JSON.stringify({ friend_id: friendId }),
+          expectedUserId: viewerAtStart,
         });
-      } else if (res.status === 401 || res.status === 403) {
-        set(state => {
-          const selectionPending = { ...state.selectionPending };
-          delete selectionPending[String(friendId)];
-          return {
-            subscriptions: state.subscriptions.filter(item => Number(item.friend_id) !== friendId),
-            availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
-              ? { ...item, selected: false, sharing_status: 'not_shared' }
-              : item),
-            selectionPending,
-            selectionError: 'unauthorized',
-          };
-        });
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { useFriendMemoryStore } = require('./useFriendMemoryStore');
-        useFriendMemoryStore.getState().invalidateFriend(friendId);
-        await useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart);
-      } else {
-        set({ selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }) });
+        if (generationAtStart !== subscriptionGeneration
+          || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
+          || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+        if (res.ok || res.status === 409) {
+          set(state => {
+            const selectionPending = { ...state.selectionPending };
+            delete selectionPending[String(friendId)];
+            return { selectionPending, selectionError: null, selectionLastFailure: null };
+          });
+          persistSelectionIntents(viewerAtStart, get().selectionPending);
+        } else {
+          const failure = memoryOperationFailure({
+            httpStatus: res.status,
+            operation: 'memory-selection',
+            stage: 'persist-select',
+            targetRevision: `${friendId}:select:${mutationGeneration}`,
+          });
+          if (res.status === 401 || res.status === 403) {
+            set(state => {
+              const selectionPending = { ...state.selectionPending };
+              delete selectionPending[String(friendId)];
+              return {
+                subscriptions: state.subscriptions.filter(item => Number(item.friend_id) !== friendId),
+                availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
+                  ? { ...item, selected: false, sharing_status: 'not_shared' }
+                  : item),
+                selectionPending,
+                selectionError: 'unauthorized' as const,
+                selectionLastFailure: failure,
+              };
+            });
+            persistSelectionIntents(viewerAtStart, get().selectionPending);
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useFriendMemoryStore } = require('./useFriendMemoryStore');
+            useFriendMemoryStore.getState().invalidateFriend(friendId);
+            await useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart);
+          } else {
+            set({
+              selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }),
+              selectionLastFailure: failure,
+            });
+          }
+        }
+        return res.status;
+      } catch (error) {
+        if (generationAtStart === subscriptionGeneration
+          && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
+          && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
+          set({
+            selectionError: 'offline',
+            selectionLastFailure: memoryOperationFailure({
+              error,
+              operation: 'memory-selection',
+              stage: 'persist-select',
+              targetRevision: `${friendId}:select:${mutationGeneration}`,
+            }),
+          });
+        }
+        return 0;
       }
-      return res.status;
-    } catch {
-      if (generationAtStart === subscriptionGeneration
-        && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
-        && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
-        set({ selectionError: 'offline' });
-      }
-      return 0;
-    }
+    });
   },
 
   unsubscribe: async (friendId) => {
@@ -317,45 +422,70 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         : item),
       selectionPending: { ...state.selectionPending, [String(friendId)]: 'deselect' },
       selectionError: null,
+      selectionLastFailure: null,
     }));
+    persistSelectionIntents(viewerAtStart, get().selectionPending);
     useFriendMemoryStore.getState().invalidateFriend(friendId);
     // Privacy state is fenced synchronously above. Durable cache cleanup must
     // not prevent the authoritative DELETE from being attempted if local
     // storage itself is unhealthy.
     void useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart)
       .catch(() => undefined);
-    try {
-      const res = await authenticatedFetch(`/api/memory-subscriptions/${friendId}`, {
-        method: 'DELETE',
-        expectedUserId: viewerAtStart,
-      });
-      if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-        || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
-      if (res.ok || res.status === 404) {
-        set(state => {
-          const selectionPending = { ...state.selectionPending };
-          delete selectionPending[String(friendId)];
-          return { selectionPending, selectionError: null };
+    return enqueueSelectionMutation(friendId, async () => {
+      try {
+        const res = await authenticatedFetch(`/api/memory-subscriptions/${friendId}`, {
+          method: 'DELETE',
+          expectedUserId: viewerAtStart,
         });
-      } else if (res.status === 401 || res.status === 403) {
-        set(state => {
-          const selectionPending = { ...state.selectionPending };
-          delete selectionPending[String(friendId)];
-          return { selectionPending, selectionError: 'unauthorized' };
-        });
-      } else {
-        set({ selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }) });
+        if (generationAtStart !== subscriptionGeneration
+          || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
+          || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+        if (res.ok || res.status === 404) {
+          set(state => {
+            const selectionPending = { ...state.selectionPending };
+            delete selectionPending[String(friendId)];
+            return { selectionPending, selectionError: null, selectionLastFailure: null };
+          });
+          persistSelectionIntents(viewerAtStart, get().selectionPending);
+        } else {
+          const failure = memoryOperationFailure({
+            httpStatus: res.status,
+            operation: 'memory-selection',
+            stage: 'persist-deselect',
+            targetRevision: `${friendId}:deselect:${mutationGeneration}`,
+          });
+          if (res.status === 401 || res.status === 403) {
+            set(state => {
+              const selectionPending = { ...state.selectionPending };
+              delete selectionPending[String(friendId)];
+              return { selectionPending, selectionError: 'unauthorized' as const, selectionLastFailure: failure };
+            });
+            persistSelectionIntents(viewerAtStart, get().selectionPending);
+          } else {
+            set({
+              selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }),
+              selectionLastFailure: failure,
+            });
+          }
+        }
+        return res.status;
+      } catch (error) {
+        if (generationAtStart === subscriptionGeneration
+          && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
+          && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
+          set({
+            selectionError: 'offline',
+            selectionLastFailure: memoryOperationFailure({
+              error,
+              operation: 'memory-selection',
+              stage: 'persist-deselect',
+              targetRevision: `${friendId}:deselect:${mutationGeneration}`,
+            }),
+          });
+        }
+        return 0;
       }
-      return res.status;
-    } catch {
-      if (generationAtStart === subscriptionGeneration
-        && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
-        && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
-        set({ selectionError: 'offline' });
-      }
-      return 0;
-    }
+    });
   },
 
   retrySelectionIntents: async () => {
@@ -381,12 +511,14 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       selectionPending: Object.fromEntries(Object.entries(get().selectionPending)
         .filter(([id]) => Number(id) !== numericId)),
       selectionError: null,
+      selectionLastFailure: null,
     });
   },
 
   reset: () => {
     subscriptionGeneration += 1;
     selectionMutationGenerations.clear();
+    selectionMutationTails.clear();
     set({
       limit: Number.POSITIVE_INFINITY,
       subscriptions: [],
@@ -395,6 +527,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       error: null,
       selectionPending: {},
       selectionError: null,
+      selectionLastFailure: null,
       // O1 batch 37: lastMutationStatus removed
     });
   },

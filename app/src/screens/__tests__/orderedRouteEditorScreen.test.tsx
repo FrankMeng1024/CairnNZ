@@ -375,35 +375,26 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(mockLoadSelectedProjections).toHaveBeenCalledTimes(1);
   });
 
-  test('R01 cold Route scene waits for the exact Mapbox-painted Fog authority and rejects stale callbacks', async () => {
+  test('R01 cold Route core becomes usable on the native loading-map capability without a full-render or Fog callback', async () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     expect(screen.getByTestId('ordered-route-map-load-overlay')).toBeTruthy();
 
     act(() => {
-      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingMapFully');
-      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-old', false);
       mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-current', false);
-      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-old', ['memory-fog-src']);
-      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
-    });
-    expect(screen.getByTestId('ordered-route-map-load-overlay')).toBeTruthy();
-
-    act(() => {
-      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-current', ['memory-fog-src']);
-      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishLoadingMap');
     });
     await waitFor(() => expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull());
+    expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
+    expect(screen.getByTestId('route-tool-draw').props.accessibilityState?.disabled).not.toBe(true);
+    expect(await screen.findByTestId('route-scene-status')).toBeTruthy();
   });
 
   test('a transient Mapbox resource error after a ready scene keeps the usable Route visible', async () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     act(() => {
-      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingMapFully');
-      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-ready', false);
-      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-ready', ['memory-fog-src']);
-      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishLoadingMap');
     });
     await waitFor(() => expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull());
     expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
@@ -423,10 +414,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     const screen = render(<OrderedRouteEditorScreen />);
     await screen.findByDisplayValue('Screen Route');
     act(() => {
-      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingMapFully');
-      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-day', false);
-      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-day', ['memory-fog-src']);
-      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishLoadingMap');
     });
     await waitFor(() => expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull());
 
