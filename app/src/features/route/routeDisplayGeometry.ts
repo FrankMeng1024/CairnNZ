@@ -27,10 +27,10 @@ export interface RouteRepeatLabel {
 export interface RouteTurnConnector {
   id: string;
   coordinate: RoutePoint;
+  /** Explicit display-only semicircle joining the two offset lane arms. */
+  coordinates: RoutePoint[];
   occurrenceIds: string[];
   multiplicity: number;
-  /** Rotate the display-only U so its open side faces the repeated arms. */
-  rotationDeg: number;
 }
 
 export interface RouteDisplayGeometry {
@@ -59,6 +59,7 @@ const RETRACE_TURN_BRIDGE_M = 18;
 const RETRACE_LABEL_MIN_M = 40;
 const RETRACE_MIN_SUSTAINED_OVERLAP_M = 18;
 const RETRACE_LANE_OFFSET_PX = 3.5;
+const RETRACE_TURN_RADIUS_M = 1.55;
 
 function clone(point: RoutePoint): RoutePoint {
   return { ...point };
@@ -77,10 +78,13 @@ function localMetres(point: RoutePoint, origin: RoutePoint): [number, number] {
   return [(point.lng - origin.lng) * lngScale, (point.lat - origin.lat) * latScale];
 }
 
-/** Map bearing: north=0, east=90. */
-function bearingDeg(from: RoutePoint, to: RoutePoint): number {
-  const [east, north] = localMetres(to, from);
-  return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+function fromLocalMetres(origin: RoutePoint, eastM: number, northM: number): RoutePoint {
+  const latScale = 111_132;
+  const lngScale = 111_320 * Math.cos(origin.lat * Math.PI / 180);
+  return {
+    lat: origin.lat + northM / latScale,
+    lng: origin.lng + eastM / lngScale,
+  };
 }
 
 function pointToSegmentDistanceM(point: RoutePoint, a: RoutePoint, b: RoutePoint): number {
@@ -433,7 +437,7 @@ export function buildRouteDisplayGeometry(
   // Mapbox offsets each traversal relative to its travel direction. At a
   // genuine consecutive A→B→A reversal that creates the desired parallel
   // lanes, but a 180-degree line join alone leaves two separated tips. Add a
-  // small screen-space U only where both adjacent arms have independent,
+  // small display-only U only where both adjacent arms have independent,
   // sustained repeat evidence. This is presentation metadata: it never enters
   // canonical geometry, distance, persistence, or exploration authority.
   const turnConnectors: RouteTurnConnector[] = [];
@@ -445,6 +449,26 @@ export function buildRouteDisplayGeometry(
     if (!hasDirectRepeatEvidence(left, -1) || !hasDirectRepeatEvidence(right, 1)) continue;
 
     const coordinate = interpolate(segments[left].b, segments[right].a, 0.5);
+    const [incomingEast, incomingNorth] = localMetres(coordinate, segments[left].a);
+    const incomingLength = Math.hypot(incomingEast, incomingNorth);
+    if (incomingLength <= Number.EPSILON) continue;
+    const forwardEast = incomingEast / incomingLength;
+    const forwardNorth = incomingNorth / incomingLength;
+    const perpendicularEast = -forwardNorth;
+    const perpendicularNorth = forwardEast;
+    // Start on one offset arm, bulge beyond the truthful turnback in the
+    // incoming direction, and finish on the opposite arm. The geometry is
+    // never fed back into the canonical draft, editor transactions or save.
+    const connectorCoordinates = Array.from({ length: 9 }, (_, index) => {
+      const angle = Math.PI / 2 - Math.PI * index / 8;
+      const forwardM = Math.cos(angle) * RETRACE_TURN_RADIUS_M;
+      const perpendicularM = Math.sin(angle) * RETRACE_TURN_RADIUS_M;
+      return fromLocalMetres(
+        coordinate,
+        forwardEast * forwardM + perpendicularEast * perpendicularM,
+        forwardNorth * forwardM + perpendicularNorth * perpendicularM,
+      );
+    });
     const multiplicity = Math.max(
       traversalMultiplicity(matchIndexes[left]),
       traversalMultiplicity(matchIndexes[right]),
@@ -463,16 +487,14 @@ export function buildRouteDisplayGeometry(
     turnConnectors.push({
       id: `turn:${segments[left].id}:${segments[right].id}`,
       coordinate,
+      coordinates: connectorCoordinates,
       occurrenceIds,
       multiplicity,
-      // The letter U opens toward north before rotation. Point that opening
-      // back along the incoming arm, away from the genuine turnback.
-      rotationDeg: bearingDeg(coordinate, segments[left].a),
     });
   }
 
   const repeatLabels: RouteRepeatLabel[] = repeatLanes
-    .filter(lane => lane.multiplicity >= 2
+    .filter(lane => lane.multiplicity >= 3
       && lane.coordinates.slice(1).reduce(
         (sum, point, index) => sum + routePointDistanceM(lane.coordinates[index], point),
         0,

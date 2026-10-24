@@ -34,6 +34,7 @@ let mockFriendMemoryError: 'offline' | 'unavailable' | null = null;
 let mockFriendSourceStates: Record<string, { status: string; cellCount: number; error?: string }> = {};
 let mockMemoryScopeOwner: string | null = 'owner-a';
 let mockMemoryScope: 'self' | 'combined' = 'self';
+let mockMapTheme: 'day' | 'night' = 'day';
 const mockSetMemoryScope = jest.fn((scope: 'self' | 'combined') => { mockMemoryScope = scope; });
 const mockStroke = [
   { lat: -41.2865, lng: 174.7767 },
@@ -201,11 +202,11 @@ jest.mock('../../hooks/useVisualTheme', () => {
   const { DAY_VISUAL_THEME } = jest.requireActual('../../components/tokens');
   return { useVisualTheme: () => DAY_VISUAL_THEME };
 });
-jest.mock('../../hooks/useMapTheme', () => ({ useMapTheme: () => 'day' }));
+jest.mock('../../hooks/useMapTheme', () => ({ useMapTheme: () => mockMapTheme }));
 jest.mock('../../utils/distanceFormat', () => ({ useDistance: () => ({ unit: 'km', format: (metres: number) => String(metres) }) }));
 jest.mock('../../config/regions', () => ({ getCurrentRegion: () => ({ centerLng: 174.77, centerLat: -41.28, defaultZoom: 12 }) }));
 jest.mock('../../config/mapbox', () => ({
-  buildStandardConfig: () => ({}), getMapStyleForTheme: () => ({ kind: 'url', url: 'mapbox://styles/test' }), themeToStandardPreset: () => 'day',
+  buildStandardConfig: () => ({}), getMapStyleForTheme: (_layer: string, theme: string) => ({ kind: 'url', url: `mapbox://styles/test-${theme}` }), themeToStandardPreset: (theme: string) => theme,
 }));
 jest.mock('../../features/route/routePlannerDraftPersistence', () => ({
   loadRoutePlannerDraft: jest.fn(async () => mockRecoveredDraftEnabled ? ({
@@ -276,6 +277,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     mockFriendSourceStates = {};
     mockMemoryScopeOwner = 'owner-a';
     mockMemoryScope = 'self';
+    mockMapTheme = 'day';
     mockEmittedStroke = mockStroke;
     mockSessionState.sessions = [];
     mockLoadActivityTrackPoints.mockResolvedValue([]);
@@ -414,6 +416,30 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     });
 
     expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull();
+    expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
+  });
+
+  test('a required new style scene cannot inherit the prior scene ready flag', async () => {
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    act(() => {
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingMapFully');
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogPreparing?.('fog-day', false);
+      mockFogLayer.mock.calls.at(-1)?.[0].onFogReady?.('fog-day', ['memory-fog-src']);
+      fireEvent(screen.getByTestId('mock-map'), 'didFinishRenderingFrameFully');
+    });
+    await waitFor(() => expect(screen.queryByTestId('ordered-route-map-load-overlay')).toBeNull());
+
+    mockMapTheme = 'night';
+    screen.rerender(<OrderedRouteEditorScreen />);
+    await waitFor(() => expect(screen.getByTestId('ordered-route-map-load-overlay')).toBeTruthy());
+    act(() => {
+      fireEvent(screen.getByTestId('mock-map'), 'mapLoadingError', {
+        type: 'style',
+        message: 'required night style unavailable',
+      });
+    });
+    expect(screen.getByTestId('ordered-route-map-load-overlay').props.state).toBe('error');
     expect(screen.getByTestId('source-ordered-route-parts')).toBeTruthy();
   });
 
@@ -875,13 +901,11 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       properties: { center: [174.7775, -41.2864], zoom: 14 },
     });
     await waitFor(() => expect(mockFogLayer.mock.calls.at(-1)?.[0].viewport).not.toBeNull());
-    const repeat = screen.getByTestId('source-ordered-route-repeat-labels').props.shape.features;
-    expect(repeat).toHaveLength(1);
-    expect(repeat[0].properties.text).toBe('2 passes');
-    expect(repeat[0].geometry).toMatchObject({
-      type: 'Point', coordinates: [expect.any(Number), expect.any(Number)],
-    });
-    const repeatLane = screen.getByTestId('source-ordered-route-repeat-lanes').props.shape.features;
+    // Exactly two passes rely on the visible connected U; a redundant label
+    // can obscure the tight turnback on a phone-sized map.
+    expect(screen.queryByTestId('source-ordered-route-repeat-labels')).toBeNull();
+    const repeatLane = screen.getByTestId('source-ordered-route-repeat-lanes').props.shape.features
+      .filter((feature: any) => feature.properties.role === 'repeat-lane');
     expect(repeatLane).toHaveLength(1);
     expect(repeatLane[0].properties.offsetPx).toBeGreaterThan(0);
     expect(screen.getByTestId('layer-ordered-route-repeat-lane-line').props.style).toMatchObject({
@@ -889,8 +913,13 @@ describe('OrderedRouteEditorScreen closure UI', () => {
       lineCap: 'round',
       lineJoin: 'round',
     });
+    expect(screen.getByTestId('source-ordered-route-repeat-lanes').props.shape.features
+      .find((feature: any) => feature.properties.role === 'turn-connector').geometry.type).toBe('LineString');
+    expect(screen.getByTestId('layer-ordered-route-turn-connector-fill').props.style).toMatchObject({
+      lineCap: 'round', lineJoin: 'round',
+    });
     fireEvent.press(screen.getByLabelText('Undo last Route edit'));
-    expect(screen.queryByTestId('source-ordered-route-repeat-labels')).toBeNull();
+    expect(screen.queryByTestId('source-ordered-route-repeat-lanes')).toBeNull();
   });
 
   test('a user pan while Point provider work is pending fences later automatic camera ownership', async () => {
@@ -1300,6 +1329,21 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByTestId('route-point-confirm')).toBeTruthy();
     expect(mockResolvePoint).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Undo last Route edit').props.accessibilityState.disabled).toBe(true);
+  });
+
+  test('Mapbox NoSegment explains the coverage limit and immediately permits Point or Draw recovery', async () => {
+    mockResolvePoint.mockResolvedValueOnce({ outcome: 'rejected', reason: 'no-route', providerCode: 'NO_ROUTE' });
+    const screen = render(<OrderedRouteEditorScreen />);
+    await screen.findByDisplayValue('Screen Route');
+    const before = screen.getByTestId('source-ordered-route-parts').props.shape.features;
+    fireEvent.press(screen.getByText('Point'));
+    fireEvent.press(screen.getByTestId('route-point-confirm'));
+    expect(await screen.findByText('No walkable map segment near this Point or Route end. Move the Point, or Draw this section.')).toBeTruthy();
+    expect(screen.getByTestId('source-ordered-route-parts').props.shape.features).toEqual(before);
+    expect(screen.queryByTestId('source-ordered-route-pending-endpoint')).toBeNull();
+    expect(screen.getByTestId('route-point-confirm').props.disabled).not.toBe(true);
+    fireEvent.press(screen.getByTestId('route-tool-draw'));
+    expect(screen.getByTestId('emit-route-stroke')).toBeTruthy();
   });
 
   test('R03 classified Point failure keeps the editor usable for the next Point and Draw', async () => {

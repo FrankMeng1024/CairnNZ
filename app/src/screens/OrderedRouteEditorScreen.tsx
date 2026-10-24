@@ -197,7 +197,7 @@ function providerReason(reason: RouteProviderReason, providerCode?: string): str
     if (providerCode === 'NETWORK') return 'Walking routing needs a connection. Your Route is unchanged.';
   }
   switch (reason) {
-    case 'no-route': return 'No nearby path found. You can draw this section.';
+    case 'no-route': return 'No walkable map segment near this Point or Route end. Move the Point, or Draw this section.';
     case 'no-match': return 'No mapped path fits this drawing. Redraw with clearer attachments.';
     case 'split-match': return 'No mapped path fits this drawing. Your Route is unchanged.';
     case 'endpoint-shift': return 'The mapped result moved an endpoint. Review it before applying.';
@@ -320,6 +320,8 @@ export function OrderedRouteEditorScreen() {
   const [routeFogUnavailableKey, setRouteFogUnavailableKey] = useState('');
   const [routeSceneEverReady, setRouteSceneEverReady] = useState(false);
   const routeSceneEverReadyRef = useRef(false);
+  const routeSceneIdentityRef = useRef('');
+  const routeSceneReadyIdentityRef = useRef('');
   const [memoryCoverageView, setMemoryCoverageView] = useState<MemoryCoverageViewport | null>(null);
   const [routeGrowthAnimation, setRouteGrowthAnimation] = useState<RouteGrowthAnimation | null>(null);
   const routeGrowthAnimationRef = useRef<RouteGrowthAnimation | null>(null);
@@ -435,13 +437,6 @@ export function OrderedRouteEditorScreen() {
     const timer = setTimeout(() => setShowRouteFogPending(true), 180);
     return () => clearTimeout(timer);
   }, [routeFogPending, routeSceneEverReady]);
-
-  useEffect(() => {
-    if (routeSceneReady) {
-      routeSceneEverReadyRef.current = true;
-      setRouteSceneEverReady(true);
-    }
-  }, [routeSceneReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1131,6 +1126,28 @@ export function OrderedRouteEditorScreen() {
   }, [abandonUnsavedCreation, name, nav, permission, readOnlyShared, routeId]);
   const mapStyle = getMapStyleForTheme('outdoors', mapTheme);
   const lightPreset = themeToStandardPreset(mapTheme);
+  const routeSceneIdentity = `${ownerId ?? 'anonymous'}:${routeId ?? draft?.draftId ?? 'new'}:${mapEpoch}:${mapTheme}:${mapStyle.kind === 'url' ? mapStyle.url : JSON.stringify(mapStyle.json)}`;
+
+  useEffect(() => {
+    const previousIdentity = routeSceneIdentityRef.current;
+    if (previousIdentity !== routeSceneIdentity) {
+      routeSceneIdentityRef.current = routeSceneIdentity;
+      routeSceneReadyIdentityRef.current = '';
+      routeSceneEverReadyRef.current = false;
+      if (previousIdentity) {
+        setRouteSceneEverReady(false);
+        setMapReady(false);
+        setMapLoadState('loading');
+      }
+      return;
+    }
+    if (routeSceneReady) {
+      routeSceneReadyIdentityRef.current = routeSceneIdentity;
+      routeSceneEverReadyRef.current = true;
+      setRouteSceneEverReady(true);
+    }
+  }, [routeSceneIdentity, routeSceneReady]);
+
   const region = getCurrentRegion();
   const fallbackCenter: [number, number] = [region.centerLng, region.centerLat];
   const initialLocationCenter: [number, number] = initialLocation.status === 'ready'
@@ -1209,6 +1226,8 @@ export function OrderedRouteEditorScreen() {
       setMapReady(false);
       setMapLoadState('loading');
       setRouteSceneEverReady(false);
+      routeSceneEverReadyRef.current = false;
+      routeSceneReadyIdentityRef.current = '';
       routeFogPaintReadyKeyRef.current = '';
       setMapEpoch(value => value + 1);
       return;
@@ -2262,7 +2281,8 @@ export function OrderedRouteEditorScreen() {
             // A tile/glyph/resource callback can arrive after a complete scene
             // is already usable. Preserve that safe rendered scene; only an
             // initial style/map failure owns the cold-start error state.
-            if (routeSceneEverReadyRef.current) {
+            if (routeSceneEverReadyRef.current
+              && routeSceneReadyIdentityRef.current === routeSceneIdentityRef.current) {
               mapViewRef.current?.requestRender?.();
               return;
             }

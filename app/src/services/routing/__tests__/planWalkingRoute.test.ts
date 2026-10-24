@@ -57,6 +57,23 @@ describe('planWalkingRoute', () => {
     )).rejects.toEqual(expect.objectContaining({ code: 'INVALID_RESPONSE' }));
   });
 
+  test.each(['NoSegment', 'NoRoute'])(
+    'classifies Mapbox HTTP 200 %s as an honest no-route result',
+    async providerCode => {
+      const { planWalkingRoute } = loadWithToken(`pk.${'n'.repeat(48)}`);
+      global.fetch = jest.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ code: providerCode, routes: [] }),
+      })) as any;
+
+      await expect(planWalkingRoute(
+        { lat: -36.85, lng: 174.76 },
+        { lat: -36.83, lng: 174.78 },
+      )).rejects.toEqual(expect.objectContaining({ code: 'NO_ROUTE' }));
+    },
+  );
+
   test.each([
     [401, 'UNAUTHORIZED'],
     [403, 'UNAUTHORIZED'],

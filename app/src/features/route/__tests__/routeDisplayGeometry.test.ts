@@ -1,6 +1,6 @@
 import { canonicalRouteGeometry, canonicalRouteGeometryFingerprint } from '../canonicalRouteGeometry';
 import { buildRouteDisplayGeometry } from '../routeDisplayGeometry';
-import { appendOrderedSegment, createEmptyOrderedDraft } from '../orderedRouteDraft';
+import { appendOrderedSegment, createEmptyOrderedDraft, routePointDistanceM } from '../orderedRouteDraft';
 
 const origin = { lat: -41.2865, lng: 174.7762 };
 const p = (eastM: number, northM = 0) => ({
@@ -35,7 +35,7 @@ describe('display-only repeated traversal projection', () => {
     expect(display.repeatLanes[0].offsetPx).toBeGreaterThan(0);
     expect(display.repeatLanes[0].multiplicity).toBe(2);
     expect(display.repeatLanes[0].coordinates).toEqual(expect.arrayContaining([p(100)]));
-    expect(display.repeatLabels.map(label => label.text)).toEqual(['2 passes']);
+    expect(display.repeatLabels).toEqual([]);
     // A positive Mapbox lineOffset separates the two lanes but cannot join a
     // 180-degree cusp by itself. The display contract therefore needs an
     // explicit, ordered, display-only semicircle at the genuine turnback.
@@ -45,8 +45,8 @@ describe('display-only repeated traversal projection', () => {
       'legacy-route:1',
       'legacy-route:2',
     ]));
-    expect(display.turnConnectors[0].rotationDeg).toBeGreaterThanOrEqual(0);
-    expect(display.turnConnectors[0].rotationDeg).toBeLessThan(360);
+    expect(display.turnConnectors[0].coordinates).toHaveLength(9);
+    expect(routePointDistanceM(display.turnConnectors[0].coordinates[0], display.turnConnectors[0].coordinates.at(-1)!)).toBeGreaterThan(2.5);
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 

@@ -50,7 +50,7 @@ if (selectedFixtureId && selectedFixtures.length !== 1) {
   throw new Error(`Unknown CAIRN10_VISUAL_FIXTURE: ${selectedFixtureId}`);
 }
 
-const analyseTurnPixels = async (screenshotPath, projected) => {
+const analyseTurnPixels = async (screenshotPath, projected, approachProjected, target = [0x2f, 0x68, 0x4f]) => {
   const radius = 22;
   const metadata = await sharp(screenshotPath).metadata();
   const left = Math.max(0, Math.round(projected.x) - radius);
@@ -58,23 +58,26 @@ const analyseTurnPixels = async (screenshotPath, projected) => {
   const width = Math.min(radius * 2 + 1, metadata.width - left);
   const height = Math.min(radius * 2 + 1, metadata.height - top);
   const { data, info } = await sharp(screenshotPath).extract({ left, top, width, height }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const target = [0x2f, 0x68, 0x4f];
+  const colorTolerance = target[0] === 0xff && target[1] === 0 ? 110 : 34;
   const mask = new Uint8Array(info.width * info.height);
   for (let index = 0; index < mask.length; index += 1) {
     const offset = index * 4;
     const delta = Math.hypot(data[offset] - target[0], data[offset + 1] - target[1], data[offset + 2] - target[2]);
-    if (delta <= 34 && data[offset + 3] >= 220) mask[index] = 1;
+    if (delta <= colorTolerance && data[offset + 3] >= 220) mask[index] = 1;
   }
   const seen = new Uint8Array(mask.length);
+  const componentIds = new Int32Array(mask.length).fill(-1);
   const components = [];
   for (let seed = 0; seed < mask.length; seed += 1) {
     if (!mask[seed] || seen[seed]) continue;
     const queue = [seed];
     seen[seed] = 1;
+    const componentId = components.length;
     let count = 0; let minX = info.width; let maxX = 0; let minY = info.height; let maxY = 0;
     while (queue.length) {
       const current = queue.pop();
       const x = current % info.width; const y = Math.floor(current / info.width);
+      componentIds[current] = componentId;
       count += 1; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx; const ny = y + dy;
@@ -95,17 +98,58 @@ const analyseTurnPixels = async (screenshotPath, projected) => {
     }
   }
   const largest = components[0] ?? { count: 0, width: 0, height: 0 };
+  const dx = projected.x - approachProjected.x;
+  const dy = projected.y - approachProjected.y;
+  const directionLength = Math.max(1, Math.hypot(dx, dy));
+  const ux = dx / directionLength; const uy = dy / directionLength;
+  const px = -uy; const py = ux;
+  const componentNear = (x, y, searchRadius = 5) => {
+    let nearest = null;
+    for (let sy = Math.max(0, Math.round(y) - searchRadius); sy <= Math.min(info.height - 1, Math.round(y) + searchRadius); sy += 1) {
+      for (let sx = Math.max(0, Math.round(x) - searchRadius); sx <= Math.min(info.width - 1, Math.round(x) + searchRadius); sx += 1) {
+        const index = sy * info.width + sx;
+        if (!mask[index] || componentIds[index] < 0) continue;
+        const distance = Math.hypot(sx - x, sy - y);
+        if (!nearest || distance < nearest.distance) nearest = { componentId: componentIds[index], distance };
+      }
+    }
+    return nearest;
+  };
+  const localTurn = { x: projected.x - left, y: projected.y - top };
+  const armDistance = Math.min(14, Math.max(8, directionLength * 0.22));
+  const armOffset = 3.5;
+  const armBase = { x: localTurn.x - ux * armDistance, y: localTurn.y - uy * armDistance };
+  const leftArm = componentNear(armBase.x + px * armOffset, armBase.y + py * armOffset);
+  const rightArm = componentNear(armBase.x - px * armOffset, armBase.y - py * armOffset);
+  const outerTurn = componentNear(localTurn.x + ux * 1.5, localTurn.y + uy * 1.5, 4);
+  const armsShareComponent = Boolean(leftArm && rightArm && leftArm.componentId === rightArm.componentId);
+  const connectorSharesComponent = Boolean(armsShareComponent && outerTurn && outerTurn.componentId === leftArm.componentId);
+  const legacyConnected = centreRoutePixels >= 12 && largest.count >= 75 && Math.max(largest.width, largest.height) >= 24;
   return {
     crop: { width: info.width, height: info.height },
     routePixelCount: mask.reduce((sum, value) => sum + value, 0),
     componentCount: components.length,
     largest,
     centreRoutePixels,
-    connected: centreRoutePixels >= 12 && largest.count >= 75 && Math.max(largest.width, largest.height) >= 24,
+    armSeeds: { left: leftArm, right: rightArm, outerTurn },
+    legacyConnected,
+    armsShareComponent,
+    connectorSharesComponent,
+    connected: connectorSharesComponent,
   };
 };
 
 fs.mkdirSync(outputDir, { recursive: true });
+const negativeScreenshot = path.join(outputDir, 'negative-disconnected-parallel-lines.png');
+await sharp({ create: { width: 45, height: 45, channels: 4, background: '#101010' } })
+  .composite([{ input: Buffer.from(`<svg width="45" height="45"><path d="M2 19 H42" stroke="#ff00ff" stroke-width="4"/><path d="M2 25 H42" stroke="#ff00ff" stroke-width="4"/></svg>`) }])
+  .png().toFile(negativeScreenshot);
+const negativeControl = await analyseTurnPixels(
+  negativeScreenshot,
+  { x: 37, y: 22 },
+  { x: 2, y: 22 },
+  [0xff, 0x00, 0xff],
+);
 const browser = await chromium.launch({
   headless: true,
   ...(fs.existsSync(chromePath) ? { executablePath: chromePath } : {}),
@@ -162,9 +206,10 @@ for (const fixture of selectedFixtures) {
     throw error;
   }
   await page.waitForFunction(() => globalThis.__cairnMap?.areTilesLoaded?.() === true, null, { timeout: 30_000 });
+  await page.getByText('Updating exploration…', { exact: true }).waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
   const turn = fixture.turns[0] ?? fixture.points.at(-1);
   const views = fixture.id === 'two-pass'
-    ? [{ id: 'overview', zoom: 15.5, bearing: 0 }, { id: 'z18', zoom: 18, bearing: 28 }]
+    ? [{ id: 'overview', zoom: 16.8, bearing: 0 }, { id: 'z18', zoom: 18, bearing: 28 }]
     : [{ id: 'check', zoom: 17, bearing: fixture.id === 'curved-return' ? 41 : 0 }];
   const captures = [];
   for (const view of views) {
@@ -172,16 +217,59 @@ for (const fixture of selectedFixtures) {
     await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 30_000 });
     await page.waitForFunction(() => globalThis.__cairnMap?.areTilesLoaded?.() === true, null, { timeout: 30_000 });
     await page.waitForTimeout(180);
-    const projected = await page.evaluate(turnPoint => {
+    const turnIndex = fixture.points.findIndex(point => point.lat === turn.lat && point.lng === turn.lng);
+    const approach = fixture.points[Math.max(0, turnIndex - 1)];
+    const projected = await page.evaluate(({ turnPoint, approachPoint }) => {
       const projectedPoint = globalThis.__cairnMap.project([turnPoint.lng, turnPoint.lat]);
+      const projectedApproach = globalThis.__cairnMap.project([approachPoint.lng, approachPoint.lat]);
       const rect = globalThis.__cairnMap.getCanvas().getBoundingClientRect();
-      return { x: rect.left + projectedPoint.x, y: rect.top + projectedPoint.y };
-    }, turn);
+      return {
+        turn: { x: rect.left + projectedPoint.x, y: rect.top + projectedPoint.y },
+        approach: { x: rect.left + projectedApproach.x, y: rect.top + projectedApproach.y },
+      };
+    }, { turnPoint: turn, approachPoint: approach });
     const screenshot = `${fixture.id}-${view.id}-390x844.png`;
     const screenshotPath = path.join(outputDir, screenshot);
     await page.screenshot({ path: screenshotPath });
-    const pixels = fixture.passes > 1 ? await analyseTurnPixels(screenshotPath, projected) : null;
-    captures.push({ ...view, screenshot, pixels });
+    let pixels = null;
+    let connectivityScreenshot = null;
+    if (fixture.passes > 1) {
+      connectivityScreenshot = `${fixture.id}-${view.id}-connectivity-mask.png`;
+      await page.evaluate(() => {
+        const map = globalThis.__cairnMap;
+        for (const id of ['ordered-route-repeat-lane-line', 'ordered-route-turn-connector-fill']) {
+          if (map.getLayer(id)) map.setPaintProperty(id, 'line-color', '#ff00ff');
+        }
+        for (const id of ['ordered-route-repeat-label-text', 'ordered-route-endpoint-circles', 'ordered-route-endpoint-labels']) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+        }
+      });
+      await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 15_000 });
+      await page.waitForTimeout(250);
+      const settledProjected = await page.evaluate(({ turnPoint, approachPoint }) => {
+        const projectedPoint = globalThis.__cairnMap.project([turnPoint.lng, turnPoint.lat]);
+        const projectedApproach = globalThis.__cairnMap.project([approachPoint.lng, approachPoint.lat]);
+        const rect = globalThis.__cairnMap.getCanvas().getBoundingClientRect();
+        return {
+          turn: { x: rect.left + projectedPoint.x, y: rect.top + projectedPoint.y },
+          approach: { x: rect.left + projectedApproach.x, y: rect.top + projectedApproach.y },
+        };
+      }, { turnPoint: turn, approachPoint: approach });
+      const connectivityPath = path.join(outputDir, connectivityScreenshot);
+      await page.screenshot({ path: connectivityPath });
+      pixels = await analyseTurnPixels(connectivityPath, settledProjected.turn, settledProjected.approach, [0xff, 0x00, 0xff]);
+      await page.evaluate(() => {
+        const map = globalThis.__cairnMap;
+        for (const id of ['ordered-route-repeat-lane-line', 'ordered-route-turn-connector-fill']) {
+          if (map.getLayer(id)) map.setPaintProperty(id, 'line-color', '#2F684F');
+        }
+        for (const id of ['ordered-route-repeat-label-text', 'ordered-route-endpoint-circles', 'ordered-route-endpoint-labels']) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
+        }
+      });
+      await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 15_000 });
+    }
+    captures.push({ ...view, screenshot, connectivityScreenshot, pixels });
   }
   const runtime = await page.evaluate(() => {
     const map = globalThis.__cairnMap;
@@ -221,14 +309,47 @@ await page.getByTestId('route-detail-panel').waitFor({ state: 'visible', timeout
 await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
 await page.evaluate(turnPoint => globalThis.__cairnMap.jumpTo({ center: [turnPoint.lng, turnPoint.lat], zoom: 18, bearing: 28 }), twoPass.turns[0]);
 await page.waitForTimeout(300);
-const detailProjected = await page.evaluate(turnPoint => {
+const detailApproach = twoPass.points[twoPass.points.findIndex(point => point.lat === twoPass.turns[0].lat && point.lng === twoPass.turns[0].lng) - 1];
+const detailProjected = await page.evaluate(({ turnPoint, approachPoint }) => {
   const p = globalThis.__cairnMap.project([turnPoint.lng, turnPoint.lat]);
+  const a = globalThis.__cairnMap.project([approachPoint.lng, approachPoint.lat]);
   const rect = globalThis.__cairnMap.getCanvas().getBoundingClientRect();
-  return { x: rect.left + p.x, y: rect.top + p.y };
-}, twoPass.turns[0]);
+  return { turn: { x: rect.left + p.x, y: rect.top + p.y }, approach: { x: rect.left + a.x, y: rect.top + a.y } };
+}, { turnPoint: twoPass.turns[0], approachPoint: detailApproach });
 const detailScreenshot = 'two-pass-detail-z18-390x844.png';
 await page.screenshot({ path: path.join(outputDir, detailScreenshot) });
-const detailPixels = await analyseTurnPixels(path.join(outputDir, detailScreenshot), detailProjected);
+await page.evaluate(() => {
+  const map = globalThis.__cairnMap;
+  for (const layer of map.getStyle().layers ?? []) {
+    if ((layer.id.includes('repeat-lane-line') || layer.id.includes('turn-connector-fill')) && map.getLayer(layer.id)) {
+      map.setPaintProperty(layer.id, 'line-color', '#ff00ff');
+    }
+    if ((layer.id.includes('repeat-label') || layer.id.includes('endpoint')) && map.getLayer(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'none');
+  }
+});
+await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 15_000 });
+// Route Detail performs one final panel-aware camera fit after the shell is
+// mounted. Measure against the settled camera, not its earlier projection.
+await page.waitForTimeout(350);
+const settledDetailProjected = await page.evaluate(({ turnPoint, approachPoint }) => {
+  const p = globalThis.__cairnMap.project([turnPoint.lng, turnPoint.lat]);
+  const a = globalThis.__cairnMap.project([approachPoint.lng, approachPoint.lat]);
+  const rect = globalThis.__cairnMap.getCanvas().getBoundingClientRect();
+  return { turn: { x: rect.left + p.x, y: rect.top + p.y }, approach: { x: rect.left + a.x, y: rect.top + a.y } };
+}, { turnPoint: twoPass.turns[0], approachPoint: detailApproach });
+const detailConnectivityScreenshot = 'two-pass-detail-z18-connectivity-mask.png';
+await page.screenshot({ path: path.join(outputDir, detailConnectivityScreenshot) });
+const detailPixels = await analyseTurnPixels(path.join(outputDir, detailConnectivityScreenshot), settledDetailProjected.turn, settledDetailProjected.approach, [0xff, 0x00, 0xff]);
+await page.evaluate(() => {
+  const map = globalThis.__cairnMap;
+  for (const layer of map.getStyle().layers ?? []) {
+    if ((layer.id.includes('repeat-lane-line') || layer.id.includes('turn-connector-fill')) && map.getLayer(layer.id)) {
+      map.setPaintProperty(layer.id, 'line-color', '#2F684F');
+    }
+    if ((layer.id.includes('repeat-label') || layer.id.includes('endpoint')) && map.getLayer(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'visible');
+  }
+});
+await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 15_000 });
 const detailRuntime = await page.evaluate(() => {
   const layers = (globalThis.__cairnMap.getStyle()?.layers ?? []).filter(layer => layer.id.startsWith('route-detail-'));
   return { connectorLayerIds: layers.filter(layer => layer.id.includes('turn-connector')).map(layer => layer.id) };
@@ -256,10 +377,18 @@ const report = {
   rawCoordinateArraysPersisted: false,
   results,
   detail: { screenshot: detailScreenshot, pixels: detailPixels, runtime: detailRuntime, pass: detailPixels.connected && detailRuntime.connectorLayerIds.length === 2 },
+  negativeControl: {
+    screenshot: path.basename(negativeScreenshot),
+    measurements: negativeControl,
+    legacyConnected: negativeControl.legacyConnected,
+    correctedConnected: negativeControl.connected,
+    pass: negativeControl.legacyConnected === true && negativeControl.connected === false,
+  },
   interactionClip: clip,
   interactionFrames: frames,
   runtimeErrors,
-  verdict: results.every(result => result.pass) && detailPixels.connected && detailRuntime.connectorLayerIds.length === 2 && runtimeErrors.length === 0 ? 'PASS' : 'FAIL',
+  verdict: results.every(result => result.pass) && detailPixels.connected && detailRuntime.connectorLayerIds.length === 2
+    && negativeControl.legacyConnected === true && negativeControl.connected === false && runtimeErrors.length === 0 ? 'PASS' : 'FAIL',
 };
 fs.writeFileSync(path.join(outputDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({ outputDir, verdict: report.verdict, fixtures: results.map(result => ({ id: result.id, pass: result.pass })) }));

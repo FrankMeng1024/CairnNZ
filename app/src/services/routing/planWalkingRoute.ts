@@ -59,7 +59,12 @@ export async function planWalkingRoute(
   const payload = await response.json().catch(() => null) as any;
   const raw = payload?.routes?.[0]?.geometry?.coordinates;
   if (!Array.isArray(raw) || raw.length < 2) {
-    throw new WalkingPlanError(payload?.code === 'NoRoute' ? 'NO_ROUTE' : 'INVALID_RESPONSE');
+    // Directions returns HTTP 200 with `NoSegment` when one of the selected
+    // coordinates has no walking-network segment inside the requested radius.
+    // This is a truthful provider coverage result, not a malformed response.
+    // Keep the Route unchanged and let Point offer Draw as the safe fallback.
+    const code = payload?.code;
+    throw new WalkingPlanError(code === 'NoRoute' || code === 'NoSegment' ? 'NO_ROUTE' : 'INVALID_RESPONSE');
   }
   const points = raw
     .filter((coordinate: unknown) => Array.isArray(coordinate) && coordinate.length >= 2)

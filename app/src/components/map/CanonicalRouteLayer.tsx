@@ -49,7 +49,7 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
       coverageIds: lane.coverageIds.join(','),
       multiplicity: lane.multiplicity,
       offsetPx: lane.offsetPx,
-      role: 'canonical-presentation',
+      role: 'repeat-lane',
     },
     geometry: {
       type: 'LineString' as const,
@@ -68,12 +68,16 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
     properties: {
       occurrenceIds: connector.occurrenceIds.join(','),
       multiplicity: connector.multiplicity,
-      rotationDeg: connector.rotationDeg,
-      glyph: 'U',
+      offsetPx: 0,
+      role: 'turn-connector',
       displayOnly: true,
     },
-    geometry: { type: 'Point' as const, coordinates: [connector.coordinate.lng, connector.coordinate.lat] },
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: connector.coordinates.map(point => [point.lng, point.lat]),
+    },
   }));
+  const repeatPresentationFeatures = [...repeatLaneFeatures, ...turnConnectorFeatures];
   const gapFeatures = geometry.gaps.map(gap => ({
     type: 'Feature' as const,
     id: gap.id,
@@ -115,14 +119,15 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           />
         </ShapeSource>
       ) : null}
-      {repeatLaneFeatures.length > 0 ? (
+      {repeatPresentationFeatures.length > 0 ? (
         <ShapeSource
           id={`${idPrefix}-repeat-lanes`}
-          shape={{ type: 'FeatureCollection', features: repeatLaneFeatures }}
+          shape={{ type: 'FeatureCollection', features: repeatPresentationFeatures }}
         >
           <LineLayer
             id={`${idPrefix}-repeat-lane-casing`}
             slot="top"
+            filter={['==', ['get', 'role'], 'repeat-lane']}
             style={{
               lineColor: theme.mapRouteCasing,
               lineWidth: 9,
@@ -133,8 +138,22 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
             }}
           />
           <LineLayer
+            id={`${idPrefix}-turn-connector-casing`}
+            slot="top"
+            filter={['==', ['get', 'role'], 'turn-connector']}
+            style={{
+              lineColor: theme.mapRouteCasing,
+              lineWidth: 10,
+              lineOffset: 0,
+              lineOpacity: 0.9,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
+          <LineLayer
             id={`${idPrefix}-repeat-lane-line`}
             slot="top"
+            filter={['==', ['get', 'role'], 'repeat-lane']}
             style={{
               lineColor: theme.mapRouteLine,
               lineWidth: 5.5,
@@ -144,46 +163,17 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
               lineJoin: 'round',
             }}
           />
-        </ShapeSource>
-      ) : null}
-      {SymbolLayer && turnConnectorFeatures.length > 0 ? (
-        <ShapeSource
-          id={`${idPrefix}-turn-connectors`}
-          shape={{ type: 'FeatureCollection', features: turnConnectorFeatures }}
-        >
-          <SymbolLayer
-            id={`${idPrefix}-turn-connector-casing`}
-            slot="top"
-            style={{
-              textField: ['get', 'glyph'],
-              // On three-or-more traversals a genuine turnback can coincide
-              // with the final Start/End marker. Keep the connector visible
-              // around that marker without moving its truthful coordinate.
-              textSize: ['case', ['>=', ['get', 'multiplicity'], 3], 30, 18],
-              textColor: theme.mapRouteCasing,
-              textRotate: ['get', 'rotationDeg'],
-              textRotationAlignment: 'map',
-              textPitchAlignment: 'map',
-              textAllowOverlap: true,
-              textIgnorePlacement: true,
-              textAnchor: 'center',
-              textOffset: [0, -0.04],
-            }}
-          />
-          <SymbolLayer
+          <LineLayer
             id={`${idPrefix}-turn-connector-fill`}
             slot="top"
+            filter={['==', ['get', 'role'], 'turn-connector']}
             style={{
-              textField: ['get', 'glyph'],
-              textSize: ['case', ['>=', ['get', 'multiplicity'], 3], 25, 14],
-              textColor: theme.mapRouteLine,
-              textRotate: ['get', 'rotationDeg'],
-              textRotationAlignment: 'map',
-              textPitchAlignment: 'map',
-              textAllowOverlap: true,
-              textIgnorePlacement: true,
-              textAnchor: 'center',
-              textOffset: [0, -0.04],
+              lineColor: theme.mapRouteLine,
+              lineWidth: 7,
+              lineOffset: 0,
+              lineOpacity: 0.99,
+              lineCap: 'round',
+              lineJoin: 'round',
             }}
           />
         </ShapeSource>

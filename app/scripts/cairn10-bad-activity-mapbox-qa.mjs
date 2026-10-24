@@ -29,6 +29,11 @@ const distanceM = (a, b) => {
   const latitude = (a.lat + b.lat) * Math.PI / 360;
   return Math.hypot((a.lng - b.lng) * 111_320 * Math.cos(latitude), (a.lat - b.lat) * 110_574);
 };
+const offsetPoint = (value, eastM, northM) => ({
+  ...value,
+  lat: value.lat + northM / 110_574,
+  lng: value.lng + eastM / (111_320 * Math.cos(value.lat * Math.PI / 180)),
+});
 const draftReceipt = draft => ({
   draftIdHash: sha(draft.draftId),
   origin: draft.origin,
@@ -302,6 +307,11 @@ const hashLocalActivity = () => page.evaluate(({ userId, id }) => {
   const points = JSON.parse(localStorage.getItem(`cairn_trackpoints_${userId}_${id}`) ?? '[]');
   return points.map(value => [Number(value.lat).toFixed(7), Number(value.lng).toFixed(7)]);
 }, { userId: ownerId, id: sourceId }).then(hashPoints);
+const discardPendingLocalEditor = async () => {
+  const discard = page.getByText('Discard changes', { exact: true });
+  await discard.waitFor({ state: 'visible', timeout: 1_500 }).catch(() => {});
+  if (await discard.isVisible().catch(() => false)) await discard.click();
+};
 
 async function openActivityImport() {
   await page.evaluate(({ user, session, points }) => {
@@ -320,6 +330,7 @@ async function openActivityImport() {
       routes: [{ name: 'Home' }, { name: 'MapHistory', params: { sessionId: session.id, activityBackContext: 'activities' } }],
     });
   }, { user: qaUser, session: sourceSession, points: sourcePoints });
+  await discardPendingLocalEditor();
   await waitRoute('MapHistory');
   await page.getByTestId('activity-create-route').waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 40_000 }).catch(() => {});
@@ -428,6 +439,72 @@ try {
   if (results.point.committed) await page.getByTestId('route-undo').click();
   else await page.getByTestId('route-tool-point').click();
   await page.waitForTimeout(150);
+
+  // Comparable Owner-area positive control through the same production
+  // screen handler. The exact Activity End above is outside Mapbox's
+  // walking graph; a disposable browser-local draft moves only that End
+  // 30 m east, where the bounded coverage probe returned a supported,
+  // endpoint-faithful candidate inside the editor's 12 m safety fence.
+  // candidate. It is never persisted and never substituted into Activity
+  // evidence.
+  const supportedDraft = JSON.parse(JSON.stringify(beforePoint));
+  supportedDraft.draftId = `${supportedDraft.draftId}:cairn11-supported-point`;
+  supportedDraft.revision = 0;
+  const supportedEndPart = supportedDraft.parts.at(-1);
+  supportedEndPart.points[supportedEndPart.points.length - 1] = offsetPoint(supportedEndPart.points.at(-1), 30, 0);
+  supportedDraft.endPoint = supportedEndPart.points.at(-1);
+  const supportedRouteId = 'cairn11-owner-area-supported-point';
+  await page.evaluate(({ routeId, userId, orderedDraft }) => {
+    const points = orderedDraft.parts.flatMap(part => part.points);
+    const route = {
+      ownerId: userId, clientRouteId: routeId, name: 'Owner-area Point positive control',
+      permission: 'personal', creationOrigin: 'activity', resolutionState: 'gapped',
+      distanceM: 0, elevationGainM: 0, createdAt: Date.now(), updatedAt: Date.now(),
+      points, orderedDraft,
+    };
+    globalThis.__cairnStores.useRouteStore.setState({ routes: [route], routeOwnerId: userId });
+    globalThis.__cairnStores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'RouteEditor', params: { routeId } }] });
+  }, { routeId: supportedRouteId, userId: ownerId, orderedDraft: supportedDraft });
+  await discardPendingLocalEditor();
+  await page.waitForFunction(routeId => globalThis.__cairnStores?.navigationRef?.getCurrentRoute?.()?.params?.routeId === routeId,
+    supportedRouteId, { timeout: 15_000 });
+  await waitEditor();
+  const supportedBefore = await currentDraft();
+  const supportedProviderStart = providerCalls.length;
+  await page.getByTestId('route-tool-point').click();
+  await page.evaluate(target => globalThis.__cairnMap.jumpTo({ center: [target.lng, target.lat], zoom: 18, bearing: 0, pitch: 0 }), pointTarget);
+  await page.waitForTimeout(300);
+  const supportedResponse = page.waitForResponse(response => response.url().includes('/directions/v5/mapbox/walking/'), { timeout: 25_000 });
+  await page.getByTestId('route-point-confirm').click();
+  await supportedResponse;
+  await page.waitForFunction(revision => globalThis.__cairnRouteEditorQa?.getCurrentDraft?.()?.revision > revision,
+    supportedBefore.revision, { timeout: 25_000 }).catch(() => {});
+  await page.waitForFunction(() => document.querySelector('[data-testid="route-point-confirm"]')?.getAttribute('aria-disabled') !== 'true',
+    null, { timeout: 25_000 });
+  await Promise.all(providerTasks);
+  const supportedAfter = await currentDraft();
+  const supportedCommitted = supportedAfter.revision === supportedBefore.revision + 1;
+  const supportedCommittedReceipt = draftReceipt(supportedAfter);
+  let supportedUndoRestored = false;
+  if (supportedCommitted) {
+    await page.getByTestId('route-undo').click();
+    await page.waitForFunction(revision => globalThis.__cairnRouteEditorQa?.getCurrentDraft?.()?.revision === revision,
+      supportedBefore.revision, { timeout: 10_000 });
+    supportedUndoRestored = draftReceipt(await currentDraft()).orderedPartSha256 === draftReceipt(supportedBefore).orderedPartSha256;
+  }
+  results.point.supportedOwnerAreaControl = {
+    startOffsetFromOriginalEndM: [30, 0],
+    targetSha256: hashPoints([pointTarget]),
+    providerCalls: providerCalls.slice(supportedProviderStart),
+    committed: supportedCommitted,
+    committedResolution: supportedCommitted
+      ? supportedAfter.parts.find(part => !supportedBefore.parts.some(old => old.id === part.id))?.resolution ?? null
+      : null,
+    committedGeometrySha256: supportedCommitted ? supportedCommittedReceipt.orderedPartSha256 : null,
+    undoRestored: supportedUndoRestored,
+    productionWrites: 0,
+  };
+  await openActivityImport();
 
   // Real Trim UI gesture followed by atomic Undo on the unmodified import.
   const beforeTrim = await currentDraft();
@@ -571,6 +648,10 @@ try {
         && results.point.failurePreservedRevision && results.point.addAvailableAfterFailure,
       actualPointOutcomeReturnedWithoutPoisoningEditor: results.point.addAvailableAfterFailure
         && results.point.liveProviderCalls.some(value => value.endpoint === 'directions'),
+      supportedOwnerAreaPointCommittedAndUndoRestored: results.point.supportedOwnerAreaControl.committed
+        && results.point.supportedOwnerAreaControl.undoRestored
+        && results.point.supportedOwnerAreaControl.providerCalls.some(value => value.endpoint === 'directions'
+          && value.httpStatus === 200 && value.resultCode === 'Ok' && value.routeCount > 0),
       trimCommittedAndUndoRestored: results.trim.committed && results.trim.undoRestored,
       directGapBridgeWithoutTrim: results.gapJourney.classifiedIntent === 'replace-across-gap'
         && results.gapJourney.gapRemoved,
