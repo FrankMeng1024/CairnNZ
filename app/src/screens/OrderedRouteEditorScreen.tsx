@@ -2481,6 +2481,7 @@ export function OrderedRouteEditorScreen() {
           <FogLayer
             scopeOverride={planningMemoryScope} opacityScale={0.42}
             viewport={memoryCoverageView}
+            slot="top"
             belowLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
             onFogPreparing={(readinessKey, retainsDisplayedScene) => {
               routeFogTargetKeyRef.current = readinessKey;

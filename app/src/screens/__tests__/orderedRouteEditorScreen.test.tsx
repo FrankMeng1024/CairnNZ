@@ -312,6 +312,7 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByTestId('layer-ordered-route-fog-boundary').props.style).toEqual({ circleRadius: 0, circleOpacity: 0 });
     expect(screen.getByTestId('layer-ordered-route-line').props.aboveLayerID).toBe('ordered-route-fog-boundary');
     expect(mockFogLayer).toHaveBeenLastCalledWith(expect.objectContaining({
+      slot: 'top',
       belowLayerID: 'ordered-route-fog-boundary',
     }));
     const headerStyle = StyleSheet.flatten(screen.getByTestId('route-editor-header').props.style);

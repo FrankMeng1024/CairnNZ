@@ -1055,6 +1055,12 @@ interface LayerProps {
   /** RNMapbox-compatible ordering hint for late optional layers. */
   aboveLayerID?: string;
   belowLayerID?: string;
+  /**
+   * Native Mapbox Standard slot. Mapbox GL JS v2 does not implement Standard
+   * slots, so Web intentionally records relative order only and does not pass
+   * this through to the v2 style specification.
+   */
+  slot?: 'bottom' | 'middle' | 'top';
 }
 
 function useWebLayerPosition(id: string, aboveLayerID?: string, belowLayerID?: string): void {

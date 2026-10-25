@@ -64,6 +64,7 @@ const selectedFixtureId = process.env.CAIRN10_VISUAL_FIXTURE?.trim();
 const selectedFixtures = selectedFixtureId
   ? fixtures.filter(fixture => fixture.id === selectedFixtureId)
   : fixtures;
+const runCairn20ControlMatrix = process.env.CAIRN20_CONTROL_MATRIX === '1';
 if (selectedFixtureId && selectedFixtures.length !== 1) {
   throw new Error(`Unknown CAIRN10_VISUAL_FIXTURE: ${selectedFixtureId}`);
 }
@@ -335,6 +336,7 @@ await page.evaluate(routes => {
 
 const frames = [];
 const results = [];
+let cairn20ControlMatrix = null;
 for (const fixture of selectedFixtures) {
   await page.evaluate(routeId => globalThis.__cairnStores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'RouteEditor', params: { routeId } }] }), fixture.clientRouteId);
   await page.getByText('Edit Route', { exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
@@ -367,6 +369,198 @@ for (const fixture of selectedFixtures) {
     { id: 'z19_5', zoom: 19.5, bearing: 42 },
     { id: 'z21', zoom: 21, bearing: 67 },
   ];
+  if (runCairn20ControlMatrix && fixture.id === 'two-pass') {
+    const turnIndex = fixture.points.findIndex(point => point.lat === turn.lat && point.lng === turn.lng);
+    const approach = fixture.points[Math.max(0, turnIndex - 1)];
+    await page.evaluate(async ({ turnPoint }) => {
+      const map = globalThis.__cairnMap;
+      await new Promise(resolve => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          map.off?.('idle', finish);
+          resolve();
+        };
+        map.once?.('idle', finish);
+        map.jumpTo({ center: [turnPoint.lng, turnPoint.lat], zoom: 18, bearing: 28 });
+        map.repaint = true;
+        map.triggerRepaint?.();
+        setTimeout(finish, 1_000);
+      });
+      for (const layer of map.getStyle()?.layers ?? []) {
+        if (!layer.id.startsWith('ordered-route-')) continue;
+        const canonical = layer.id === 'ordered-route-fog-boundary'
+          || layer.id === 'ordered-route-casing'
+          || layer.id === 'ordered-route-line';
+        if (map.getLayer(layer.id)) map.setLayoutProperty(layer.id, 'visibility', canonical ? 'visible' : 'none');
+      }
+      map.triggerRepaint?.();
+    }, { turnPoint: turn });
+    const projected = await page.evaluate(({ turnPoint, approachPoint }) => {
+      const map = globalThis.__cairnMap;
+      const p = map.project([turnPoint.lng, turnPoint.lat]);
+      const a = map.project([approachPoint.lng, approachPoint.lat]);
+      const rect = map.getCanvas().getBoundingClientRect();
+      return {
+        pageTurn: { x: rect.left + p.x, y: rect.top + p.y },
+        pageApproach: { x: rect.left + a.x, y: rect.top + a.y },
+        canvasTurn: { x: p.x, y: p.y },
+        canvasApproach: { x: a.x, y: a.y },
+      };
+    }, { turnPoint: turn, approachPoint: approach });
+    const captureControl = async ({ id, sourceId, layerIds, declaredSlots }) => {
+      await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true, null, { timeout: 30_000 });
+      const styleLoadedBeforeCapture = await page.evaluate(() => globalThis.__cairnMap?.isStyleLoaded?.() === true);
+      await page.evaluate(() => new Promise(resolve => {
+        const map = globalThis.__cairnMap;
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          map.off?.('render', finish);
+          resolve();
+        };
+        map.once?.('render', finish);
+        map.repaint = true;
+        map.triggerRepaint?.();
+        setTimeout(finish, 500);
+      }));
+      // A Mapbox `render` event establishes draw submission. Two animation
+      // frames establish browser composition without an arbitrary sleep; this
+      // prevents the control oracle from racing the compositor on this host.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const screenshot = `cairn20-control-${id}-page.png`;
+      const screenshotPath = path.join(outputDir, screenshot);
+      const pixelCapture = await captureUntilRoutePixels(page, screenshotPath, projected.pageTurn, projected.pageApproach);
+      const framebuffer = `cairn20-control-${id}-framebuffer.png`;
+      const framebufferPath = path.join(outputDir, framebuffer);
+      const canvasDataUrl = await page.evaluate(() => globalThis.__cairnMap?.getCanvas?.()?.toDataURL?.('image/png') ?? '');
+      if (canvasDataUrl.startsWith('data:image/png;base64,')) {
+        fs.writeFileSync(framebufferPath, Buffer.from(canvasDataUrl.slice('data:image/png;base64,'.length), 'base64'));
+      }
+      const runtime = await page.evaluate(({ expectedSourceId, expectedLayerIds }) => {
+        const map = globalThis.__cairnMap;
+        const style = map.getStyle?.();
+        const source = map.getSource?.(expectedSourceId);
+        return {
+          styleLoaded: Boolean(map.isStyleLoaded?.()),
+          tilesLoaded: Boolean(map.areTilesLoaded?.()),
+          sourcePresent: Boolean(source),
+          sourceFeatureCount: source?._data?.features?.length ?? null,
+          sourceCoordinateCounts: source?._data?.features?.map(feature => feature.geometry?.coordinates?.length ?? null) ?? [],
+          layers: expectedLayerIds.map(layerId => {
+            const layer = map.getLayer?.(layerId);
+            return {
+              id: layerId,
+              present: Boolean(layer),
+              type: layer?.type ?? null,
+              runtimeSlot: layer?.slot ?? null,
+              visibility: layer ? (map.getLayoutProperty?.(layerId, 'visibility') ?? 'visible') : null,
+            };
+          }),
+          allLayerIds: style?.layers?.map(layer => layer.id) ?? [],
+          camera: {
+            center: map.getCenter?.()?.toArray?.() ?? null,
+            zoom: map.getZoom?.() ?? null,
+            bearing: map.getBearing?.() ?? null,
+          },
+        };
+      }, { expectedSourceId: sourceId, expectedLayerIds: layerIds });
+      return {
+        id,
+        screenshot,
+        framebuffer: fs.existsSync(framebufferPath) ? framebuffer : null,
+        pixels: pixelCapture.pixels,
+        pixelCaptureAttempts: pixelCapture.attempts,
+        framebufferPixels: fs.existsSync(framebufferPath)
+          ? await analyseTurnPixels(framebufferPath, projected.canvasTurn, projected.canvasApproach)
+          : null,
+        framebufferHealth: await readWebGlFramebufferHealth(page),
+        styleLoadedBeforeCapture,
+        declaredSlots,
+        runtime,
+      };
+    };
+    const controls = [];
+    controls.push(await captureControl({
+      id: 'D-canonical-boundary-fog',
+      sourceId: 'ordered-route-parts',
+      layerIds: ['memory-fog', 'ordered-route-fog-boundary', 'ordered-route-casing', 'ordered-route-line'],
+      declaredSlots: { fog: 'top', boundary: 'top', route: 'top' },
+    }));
+    await page.evaluate(() => {
+      const map = globalThis.__cairnMap;
+      for (const layer of map.getStyle()?.layers ?? []) {
+        if (layer.id.startsWith('memory-') && map.getLayer(layer.id)) map.removeLayer(layer.id);
+      }
+      map.triggerRepaint?.();
+    });
+    controls.push(await captureControl({
+      id: 'C-canonical-boundary-no-fog',
+      sourceId: 'ordered-route-parts',
+      layerIds: ['ordered-route-fog-boundary', 'ordered-route-casing', 'ordered-route-line'],
+      declaredSlots: { boundary: 'top', route: 'top' },
+    }));
+    await page.evaluate(() => {
+      const map = globalThis.__cairnMap;
+      if (map.getLayer('ordered-route-fog-boundary')) map.removeLayer('ordered-route-fog-boundary');
+      map.triggerRepaint?.();
+    });
+    controls.push(await captureControl({
+      id: 'B-canonical-no-boundary-no-fog',
+      sourceId: 'ordered-route-parts',
+      layerIds: ['ordered-route-casing', 'ordered-route-line'],
+      declaredSlots: { route: 'top' },
+    }));
+    await page.evaluate(({ coordinates }) => {
+      const map = globalThis.__cairnMap;
+      for (const layer of map.getStyle()?.layers ?? []) {
+        if (layer.id.startsWith('ordered-route-') && map.getLayer(layer.id)) {
+          map.setLayoutProperty(layer.id, 'visibility', 'none');
+        }
+      }
+      if (!map.getSource('cairn20-control-source')) {
+        map.addSource('cairn20-control-source', {
+          type: 'geojson',
+          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } },
+        });
+      }
+      if (!map.getLayer('cairn20-control-line')) {
+        map.addLayer({
+          id: 'cairn20-control-line',
+          type: 'line',
+          source: 'cairn20-control-source',
+          paint: { 'line-color': '#2F684F', 'line-width': 7, 'line-opacity': 1 },
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+        });
+      }
+      map.triggerRepaint?.();
+    }, { coordinates: fixture.points.map(point => [point.lng, point.lat]) });
+    controls.push(await captureControl({
+      id: 'A-simple-green-line',
+      sourceId: 'cairn20-control-source',
+      layerIds: ['cairn20-control-line'],
+      declaredSlots: { control: 'not-applicable-local-style' },
+    }));
+    cairn20ControlMatrix = controls.sort((left, right) => left.id.localeCompare(right.id));
+
+    // Restore a fresh production Editor after the destructive diagnostic
+    // controls. The ordinary five-zoom gate below must not inherit hidden or
+    // removed layers from A-D.
+    await page.evaluate(routeId => globalThis.__cairnStores.navigationRef.reset({
+      index: 1,
+      routes: [{ name: 'Home' }, { name: 'RouteEditor', params: { routeId } }],
+    }), fixture.clientRouteId);
+    await page.getByText('Edit Route', { exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
+    await page.getByTestId('ordered-route-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+    await page.waitForFunction(() => {
+      const map = globalThis.__cairnMap;
+      const source = map?.getSource?.('ordered-route-parts');
+      return Boolean(map?.getLayer?.('ordered-route-fog-boundary'))
+        && Boolean(source?._data?.features?.length);
+    }, null, { timeout: 30_000 });
+  }
   const captures = [];
   for (const view of views) {
     await page.evaluate(async ({ turnPoint, zoom, bearing }) => {
@@ -663,6 +857,14 @@ if (compositorVideo) {
 await browser.close();
 const clip = 'route-u-turn-zoom-bearing.webm';
 execFileSync('/usr/local/bin/ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-framerate', '8', '-i', path.join(outputDir, 'route-turn-frame-%02d.png'), '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuv420p', '-an', path.join(outputDir, clip)]);
+const cairn20ControlMatrixPass = !runCairn20ControlMatrix || Boolean(cairn20ControlMatrix?.every(control =>
+  control.styleLoadedBeforeCapture
+  && control.runtime.sourcePresent
+  && control.runtime.layers.every(layer => layer.present && layer.visibility !== 'none')
+  && control.pixels.routePixelCount >= 20
+  && (control.framebufferPixels?.routePixelCount ?? 0) >= 20
+  && control.framebufferHealth.nonZeroRgbPixels > 0
+  && control.framebufferHealth.routeLikePixels > 0));
 const report = {
   generatedAt: new Date().toISOString(),
   evidenceClass: usesLocalStyle
@@ -675,6 +877,17 @@ const report = {
   screenshotCaptureMethod: 'PLAYWRIGHT_PAGE_SCREENSHOT',
   framebufferCaptureMethod: 'WEBGL_READPIXELS_AND_PRESERVED_CANVAS_TODATAURL',
   results,
+  cairn20ControlMatrix,
+  cairn20ControlMatrixPass,
+  cairn20EditorDetailMatchedCamera: cairn20ControlMatrix ? {
+    editorControlId: 'D-canonical-boundary-fog',
+    detailCaptureId: 'two-pass-detail-z18',
+    center: [twoPass.turns[0].lng, twoPass.turns[0].lat],
+    zoom: 18,
+    bearing: 28,
+    editorPixels: cairn20ControlMatrix.find(control => control.id === 'D-canonical-boundary-fog')?.pixels ?? null,
+    detailPixels,
+  } : null,
   detail: {
     screenshot: detailScreenshot,
     pixels: detailPixels,
@@ -707,7 +920,8 @@ const report = {
   compositorVideo: compositorVideoFile,
   interactionFrames: frames,
   runtimeErrors,
-  verdict: results.every(result => result.pass) && detailPixels.connected
+  verdict: cairn20ControlMatrixPass
+    && results.every(result => result.pass) && detailPixels.connected
     && detailRuntime.connectorLayerIds.length === 0
     && detailRuntime.repeatLayerIds.length === 2
     && detailRuntime.turnCapLayerIds.length === 1

@@ -143,6 +143,48 @@ describe('prepared Memory viewport handoff', () => {
     });
   });
 
+  test('an ACK during the first-ever GET fences its old response and fetches the post-ACK snapshot', async () => {
+    let releaseOldSnapshot!: (value: ReturnType<typeof response>) => void;
+    mockAuthenticatedFetch
+      .mockImplementationOnce(() => new Promise(resolve => { releaseOldSnapshot = resolve; }))
+      .mockResolvedValueOnce(response('snapshot-after-concurrent-ack'));
+
+    const firstEntry = usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      coverage: null,
+      status: 'loading',
+      serverCoverageDirty: false,
+    });
+
+    // This is the automatic Memory POST ACK while the original snapshot GET
+    // is still in flight. Its dirty generation must outlive the old response.
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      serverCoverageDirty: true,
+      serverCoverageDirtyGeneration: 1,
+    });
+
+    releaseOldSnapshot(response('snapshot-before-concurrent-ack'));
+    await firstEntry;
+    for (let attempt = 0; attempt < 20 && mockAuthenticatedFetch.mock.calls.length < 2; attempt += 1) {
+      await Promise.resolve();
+    }
+    for (let attempt = 0; attempt < 20
+      && usePreparedMemoryCoverageStore.getState().coverage?.snapshotId !== 'snapshot-after-concurrent-ack'; attempt += 1) {
+      await Promise.resolve();
+    }
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready',
+      serverCoverageDirty: false,
+      coverage: {
+        snapshotId: 'snapshot-after-concurrent-ack',
+        datasetRevision: 'snapshot-after-concurrent-ack',
+      },
+    });
+  });
+
   test('two ACKs before first Memory entry coalesce into one complete acquisition', async () => {
     mockAuthenticatedFetch.mockResolvedValueOnce(response('snapshot-after-two-acks'));
     usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();

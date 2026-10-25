@@ -63,6 +63,13 @@ interface Props {
   /** Settled Mapbox viewport used by the bounded O86 prepared read model. */
   viewport?: MemoryCoverageViewport | null;
   /**
+   * Optional Mapbox Standard slot owned by the containing presentation.
+   * Route planning supplies `top` so Fog and its Route-owned boundary share
+   * one slot before relative ordering is applied. Ordinary Memory leaves this
+   * unset and preserves its existing above-basemap presentation.
+   */
+  slot?: 'bottom' | 'middle' | 'top';
+  /**
    * Optional stable presentation boundary owned by the containing map.
    * Planning maps use this to keep optional Fog below core Route layers
    * without making Route wait for any Fog-owned layer to exist.
@@ -1454,6 +1461,7 @@ export function FogLayer({
   scopeOverride,
   opacityScale = 1,
   viewport,
+  slot,
   belowLayerID,
 }: Props) {
   const theme = useVisualTheme();
@@ -2289,6 +2297,7 @@ export function FogLayer({
     >
       <FillLayer
         id="memory-fog"
+        slot={slot}
         belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'fog']}
         style={{
@@ -2317,6 +2326,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-fog-edge-outer"
+          slot={slot}
           belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'fog']}
           style={{
@@ -2330,6 +2340,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-fog-edge-inner"
+          slot={slot}
           belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'fog']}
           style={{
@@ -2342,6 +2353,7 @@ export function FogLayer({
       ) : null}
       <FillLayer
         id="memory-mine"
+        slot={slot}
         belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'mine']}
         style={{
@@ -2352,6 +2364,7 @@ export function FogLayer({
       />
       <FillLayer
         id="memory-friend-union"
+        slot={slot}
         belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'friend']}
         style={{
@@ -2363,6 +2376,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-friend-union-edge"
+          slot={slot}
           belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'friend']}
           style={{
@@ -2375,6 +2389,7 @@ export function FogLayer({
       ) : null}
       <FillLayer
         id="memory-overlap"
+        slot={slot}
         belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'overlap']}
         style={{
@@ -2386,6 +2401,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-overlap-edge"
+          slot={slot}
           belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'overlap']}
           style={{
