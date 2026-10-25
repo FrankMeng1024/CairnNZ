@@ -229,6 +229,7 @@ export function ActivityStartDock({
   onChooseRoute,
   onStart,
   onOpenSettings,
+  onHeightChange,
   starting = false,
   startError,
 }: {
@@ -242,6 +243,7 @@ export function ActivityStartDock({
   onChooseRoute: () => void;
   onStart: () => void;
   onOpenSettings?: () => void;
+  onHeightChange?: (height: number) => void;
   starting?: boolean;
   startError?: string | null;
 }) {
@@ -256,6 +258,7 @@ export function ActivityStartDock({
       pointerEvents="box-none"
       style={[styles.bottomLayer, { paddingBottom: safeBottom + Spacing.sm }]}
       testID={`activity-${mode}-start-dock`}
+      onLayout={event => onHeightChange?.(Math.ceil(event.nativeEvent.layout.height))}
     >
       <View
         style={[
@@ -349,6 +352,7 @@ export function ActivityControlDock({
   onPauseResume,
   onCairn,
   onFinish,
+  onHeightChange,
 }: {
   mode: ActivityRecordingMode;
   phase: 'tracking' | 'paused' | 'resuming' | 'pausing' | 'finishing';
@@ -359,6 +363,7 @@ export function ActivityControlDock({
   onPauseResume: () => void;
   onCairn: () => void;
   onFinish: () => void;
+  onHeightChange?: (height: number) => void;
 }) {
   const theme = useVisualTheme();
   const modeMeta = modePresentation(mode, theme.primaryAction);
@@ -373,6 +378,7 @@ export function ActivityControlDock({
       pointerEvents="box-none"
       style={[styles.bottomLayer, { paddingBottom: safeBottom + Spacing.sm }]}
       testID={`activity-${mode}-control-dock`}
+      onLayout={event => onHeightChange?.(Math.ceil(event.nativeEvent.layout.height))}
     >
       <View
         style={[

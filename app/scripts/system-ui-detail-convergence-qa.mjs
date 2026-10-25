@@ -4,7 +4,9 @@ import { chromium } from 'playwright';
 import sharp from 'sharp';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
-const outputDir = path.resolve('..', 'docs', 'review', 'system-ui-detail-convergence-gate');
+const outputDir = process.env.CAIRN_QA_ARTIFACT_DIR
+  ? path.resolve(process.env.CAIRN_QA_ARTIFACT_DIR)
+  : path.resolve('..', 'docs', 'review', 'system-ui-detail-convergence-gate');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(outputDir, { recursive: true });
 
@@ -177,14 +179,14 @@ await sharp({ create: { width: boardW, height: boardH, channels: 3, background: 
   .composite(composites).jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
   .toFile(path.join(outputDir, 'centralized-detail-convergence-board.jpg'));
 
-const modalComposites = [];
-for (let i = 0; i < times.length; i += 1) {
-  const time = times[i];
-  const left = margin + i * (tileW + gap);
-  modalComposites.push({ input: path.join(outputDir, `friends-add-sheet-${time}-390x844.png`), left, top: margin });
+const modalFiles = times
+  .map(time => ({ time, file: path.join(outputDir, `friends-add-sheet-${time}-390x844.png`) }))
+  .filter(item => fs.existsSync(item.file));
+if (modalFiles.length > 0) {
+  const modalComposites = modalFiles.map((item, index) => ({ input: item.file, left: margin + index * (tileW + gap), top: margin }));
+  await sharp({ create: { width: margin * 2 + modalFiles.length * tileW + Math.max(0, modalFiles.length - 1) * gap, height: margin * 2 + tileH, channels: 3, background: '#151A19' } })
+    .composite(modalComposites).jpeg({ quality: 92 }).toFile(path.join(outputDir, 'modal-material-review-board.jpg'));
 }
-await sharp({ create: { width: margin * 2 + times.length * tileW + 2 * gap, height: margin * 2 + tileH, channels: 3, background: '#151A19' } })
-  .composite(modalComposites).jpeg({ quality: 92 }).toFile(path.join(outputDir, 'modal-material-review-board.jpg'));
 
 const uniqueErrors = [...new Set(runtimeErrors)].filter((line) => !line.includes('favicon'));
 fs.writeFileSync(path.join(outputDir, 'runtime-errors.txt'), uniqueErrors.length ? `${uniqueErrors.join('\n')}\n` : 'none\n');

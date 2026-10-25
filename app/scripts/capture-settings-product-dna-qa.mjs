@@ -6,7 +6,9 @@ import { chromium } from 'playwright';
 import sharp from 'sharp';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8097';
-const output = path.resolve('_review/settings-product-dna');
+const output = process.env.CAIRN_QA_ARTIFACT_DIR
+  ? path.resolve(process.env.CAIRN_QA_ARTIFACT_DIR)
+  : path.resolve('_review/settings-product-dna');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(output, { recursive: true });
 
@@ -21,6 +23,7 @@ const context = await browser.newContext({
 const page = await context.newPage();
 const runtimeErrors = [];
 const captures = [];
+const scrollEvidence = [];
 let accountVariant = 'password';
 let exportVariant = 'ready';
 let feedbackFails = false;
@@ -90,11 +93,33 @@ const mountRoot = async (theme = 'day') => {
   await page.getByTestId('settings-root').waitFor({ state: 'visible' });
   await settle();
 };
-const capture = async (name, viewport = null) => {
+const capture = async (name, viewport = null, scroll = null) => {
   if (viewport) await page.setViewportSize(viewport);
   await settle(250);
+  const naturalScroll = await page.evaluate(() => ({
+    windowY: window.scrollY,
+    scrollers: [...document.querySelectorAll('*')]
+      .filter(element => element.scrollTop > 0)
+      .map(element => ({ tag: element.tagName, testId: element.getAttribute('data-testid'), scrollTop: element.scrollTop }))
+      .slice(0, 12),
+  }));
+  if (scroll?.testId) {
+    await page.getByTestId(scroll.testId).evaluate((element, top) => { element.scrollTop = top; }, scroll.top ?? 0);
+    await settle(120);
+  }
   const target = path.join(output, `${name}.png`);
   await page.screenshot({ path: target, fullPage: false });
+  scrollEvidence.push({
+    name,
+    natural: naturalScroll,
+    captured: await page.evaluate(() => ({
+      windowY: window.scrollY,
+      scrollers: [...document.querySelectorAll('*')]
+        .filter(element => element.scrollTop > 0)
+        .map(element => ({ tag: element.tagName, testId: element.getAttribute('data-testid'), scrollTop: element.scrollTop }))
+        .slice(0, 12),
+    })),
+  });
   captures.push({ name, file: `${name}.png`, viewport: page.viewportSize() });
 };
 
@@ -145,6 +170,8 @@ await mountRoot('night');
 await page.getByTestId('settings-privacy-row').click();
 await page.getByTestId('settings-privacy').waitFor({ state: 'visible' });
 await page.getByText('Ready to download', { exact: true }).waitFor({ state: 'visible' });
+await capture('privacy-overview-night-390x844', null, { testId: 'settings-privacy', top: 0 });
+await page.getByTestId('settings-export-card').scrollIntoViewIfNeeded();
 await capture('privacy-export-ready-night-390x844');
 
 exportVariant = 'permission-limited';
@@ -153,12 +180,14 @@ await mountRoot('day');
 await page.getByTestId('settings-privacy-row').click();
 await page.getByTestId('settings-privacy').waitFor({ state: 'visible' });
 await settle(700);
-await capture('privacy-permission-limited-day-390x844');
+await capture('privacy-permission-limited-day-390x844', null, { testId: 'settings-privacy', top: 0 });
 
 feedbackFails = true;
 await mountRoot('day');
 await page.getByTestId('settings-help-row').click();
 await page.getByTestId('settings-help').waitFor({ state: 'visible' });
+await capture('help-overview-day-390x844', null, { testId: 'settings-help', top: 0 });
+await page.getByTestId('settings-feedback-card').scrollIntoViewIfNeeded();
 await capture('help-feedback-day-390x844');
 await page.getByTestId('settings-feedback-input').fill('The trail detail did not open.');
 await page.getByTestId('settings-feedback-send').click();
@@ -168,13 +197,20 @@ await capture('help-feedback-failed-day-390x844');
 await page.setViewportSize({ width: 320, height: 568 });
 await mountRoot('day');
 await capture('root-day-small-320x568');
+await page.getByTestId('settings-help-row').click();
+await page.getByTestId('settings-help').waitFor({ state: 'visible' });
+await capture('help-day-small-320x568', null, { testId: 'settings-help', top: 0 });
+await mountRoot('day');
+await page.getByTestId('settings-privacy-row').click();
+await page.getByTestId('settings-privacy').waitFor({ state: 'visible' });
+await capture('privacy-day-small-320x568', null, { testId: 'settings-privacy', top: 0 });
 await page.setViewportSize({ width: 430, height: 932 });
 await mountRoot('night');
 await capture('root-night-large-430x932');
 
 const uniqueErrors = [...new Set(runtimeErrors)];
 fs.writeFileSync(path.join(output, 'runtime-errors.txt'), uniqueErrors.length ? `${uniqueErrors.join('\n')}\n` : 'none\n');
-fs.writeFileSync(path.join(output, 'runtime-metrics.json'), `${JSON.stringify({ baseUrl, captures }, null, 2)}\n`);
+fs.writeFileSync(path.join(output, 'runtime-metrics.json'), `${JSON.stringify({ baseUrl, captures, scrollEvidence }, null, 2)}\n`);
 
 const boardEntries = [
   ['root-day-390x844', 'Root · Day'],
@@ -183,11 +219,15 @@ const boardEntries = [
   ['account-password-day-390x844', 'Account · Password'],
   ['account-apple-sunset-390x844', 'Account · Apple'],
   ['account-delete-confirmation-day-390x844', 'Delete contract'],
+  ['privacy-overview-night-390x844', 'Privacy · Overview'],
   ['privacy-export-ready-night-390x844', 'Privacy · Ready'],
   ['privacy-permission-limited-day-390x844', 'Privacy · Permission off'],
+  ['help-overview-day-390x844', 'Help · Overview'],
   ['help-feedback-day-390x844', 'Help · Feedback'],
   ['help-feedback-failed-day-390x844', 'Feedback · Failed'],
   ['root-day-small-320x568', 'Root · Small'],
+  ['help-day-small-320x568', 'Help · Small'],
+  ['privacy-day-small-320x568', 'Privacy · Small'],
   ['root-night-large-430x932', 'Root · Large'],
 ];
 const tileW = 234;

@@ -393,10 +393,10 @@ await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visib
 await capture('01-day-plant-only-me', { route: 'Plant', theme: 'day', fixture: 'isolated QA', interaction: 'Hike Activity route' });
 await page.getByRole('textbox', { name: 'Cairn note' }).fill('The pavement shines, and the city sounds softer for a minute.');
 await page.getByRole('textbox', { name: 'Short title' }).fill('Plane trees after rain');
-await page.getByLabel('Visibility Friends').click();
+await page.getByLabel('Visibility: Friends').click();
 await setTheme('sunset');
 await capture('02-sunset-plant-friends', { route: 'Plant', theme: 'sunset', fixture: 'isolated QA', interaction: 'Hike Activity route' });
-await page.getByLabel('Visibility Public').click();
+await page.getByLabel('Visibility: Public').click();
 await setTheme('night');
 await capture('03-night-plant-public', { route: 'Plant', theme: 'night', fixture: 'isolated QA', interaction: 'Hike Activity route' });
 

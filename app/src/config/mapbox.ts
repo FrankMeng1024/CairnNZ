@@ -160,10 +160,13 @@ export type MapTheme = 'day' | 'sunset' | 'night';
  * Rendered by the <StyleImport id="basemap"> child inside the MapView.
  * Only meaningful when the loaded styleURL is Standard (mapbox/standard).
  */
-export type StandardLightPreset = 'day' | 'dusk' | 'night';
+export type StandardLightPreset = 'dawn' | 'day' | 'dusk' | 'night';
 
 export function themeToStandardPreset(theme: MapTheme): StandardLightPreset {
-  if (theme === 'sunset') return 'dusk';
+  // Cairn Sunset is warm remaining daylight, not a purple after-dark map.
+  // Dawn gives Standard a softer amber light while Cairn's semantic colour
+  // overrides below keep the palette aligned with the approved Friends theme.
+  if (theme === 'sunset') return 'dawn';
   if (theme === 'night') return 'night';
   return 'day';
 }
@@ -200,6 +203,34 @@ export function themeToStandardPreset(theme: MapTheme): StandardLightPreset {
 type StandardConfig = { [key: string]: string | boolean };
 
 export function buildStandardConfig(theme: MapTheme): StandardConfig {
+  const semanticPalette: StandardConfig = theme === 'sunset'
+    ? {
+        colorLand: '#D8CDBF',
+        colorWater: '#7F9DA5',
+        colorGreenspace: '#879878',
+        colorRoads: '#F4EBDD',
+        colorTrunks: '#E7C49B',
+        colorMotorways: '#DDB478',
+        colorBuildings: '#C9B9AA',
+        colorPlaceLabels: '#273A34',
+        colorRoadLabels: '#43534D',
+        colorAdminBoundaries: '#756C65',
+      }
+    : theme === 'night'
+      ? {
+          colorLand: '#263440',
+          colorWater: '#17364A',
+          colorGreenspace: '#31483F',
+          colorRoads: '#68766F',
+          colorTrunks: '#958B73',
+          colorMotorways: '#B9A36F',
+          colorBuildings: '#33424D',
+          colorPlaceLabels: '#E2E8E5',
+          colorRoadLabels: '#C7D1CD',
+          colorAdminBoundaries: '#75858C',
+        }
+      : {};
+
   return {
     lightPreset: themeToStandardPreset(theme),
     // O38: restore cartographic hierarchy. `faded` deliberately suppresses
@@ -216,6 +247,7 @@ export function buildStandardConfig(theme: MapTheme): StandardConfig {
     showPlaceLabels: true,
     showPointOfInterestLabels: true,
     showRoadLabels: true,
+    ...semanticPalette,
   };
 }
 

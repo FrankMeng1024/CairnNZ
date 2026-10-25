@@ -56,6 +56,7 @@ const POINT_MOTION_RASTER_LAYER_ID = 'cairn-point-motion-basemap-layer';
 // to access Mapbox tiles or emitted by production builds.
 const LOCAL_QA_MAPBOX_TOKEN = 'pk.cairn-local-qa-no-network';
 const WEB_SUNSET_STYLE = require('../../../../assets/map-styles/sunset-2d.json');
+const WEB_NIGHT_STYLE = require('../../../../assets/map-styles/night-2d.json');
 const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
   && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
 
@@ -426,18 +427,18 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   const standardLightPreset = React.Children.toArray(children).reduce<string | null>((preset, child) => {
     if (preset || !React.isValidElement(child)) return preset;
     const candidate = (child.props as any)?.config?.lightPreset;
-    return candidate === 'day' || candidate === 'dusk' || candidate === 'night'
+    return candidate === 'dawn' || candidate === 'day' || candidate === 'dusk' || candidate === 'night'
       ? candidate
       : null;
   }, null);
   // GL JS v2 cannot consume Standard imports. Keep Web on genuine supported
   // Mapbox/vector styles while preserving the app's actual three-state
-  // contract: outdoors for Day, the packaged Mapbox-vector Sunset style for
-  // Dusk, and Mapbox Navigation Night for Night. Native continues to receive
-  // Standard plus its real lightPreset unchanged.
+  // contract: outdoors for Day and Cairn's packaged Mapbox-vector styles for
+  // warm Sunset and comfortable Night. Native continues to receive Standard
+  // plus its real lightPreset and semantic colour configuration unchanged.
   const webStandardFallback = standardLightPreset === 'night'
-    ? 'mapbox://styles/mapbox/navigation-night-v1'
-    : standardLightPreset === 'dusk'
+    ? WEB_NIGHT_STYLE
+    : standardLightPreset === 'dawn' || standardLightPreset === 'dusk'
       ? WEB_SUNSET_STYLE
       : 'mapbox://styles/mapbox/outdoors-v12';
   const rewrittenStyleURL = (styleURL === 'mapbox://styles/mapbox/standard')

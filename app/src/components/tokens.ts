@@ -301,10 +301,10 @@ export const SUNSET_VISUAL_THEME: VisualThemeTokens = {
   mapCairnPublicClusterFill: '#8B6749',
   mapCairnMixedClusterFill: '#6B6247',
   mapCairnClusterText: '#FFF9F0',
-  mapRouteLine: '#675F45',
-  mapRouteCasing: 'rgba(255,248,239,0.90)',
-  mapRoutePending: '#8B7C58',
-  mapRouteGap: '#873230',
+  mapRouteLine: '#2E604C',
+  mapRouteCasing: 'rgba(255,245,232,0.94)',
+  mapRoutePending: '#8E6B38',
+  mapRouteGap: '#9B3F3A',
 };
 
 export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
@@ -381,8 +381,8 @@ export const NIGHT_VISUAL_THEME: VisualThemeTokens = {
   mapCairnPublicClusterFill: '#C99468',
   mapCairnMixedClusterFill: '#A9B792',
   mapCairnClusterText: '#152019',
-  mapRouteLine: '#B7C9AA',
-  mapRouteCasing: 'rgba(18,27,38,0.92)',
+  mapRouteLine: '#C8DDB0',
+  mapRouteCasing: 'rgba(22,36,50,0.94)',
   mapRoutePending: '#D0B879',
   mapRouteGap: '#FFACA4',
 };

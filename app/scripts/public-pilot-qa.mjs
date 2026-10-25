@@ -24,6 +24,7 @@ const errors = [];
 const expectedMapFailures = [];
 const rendererWarnings = [];
 const captures = [];
+const detailOnly = process.env.CAIRN_PUBLIC_DETAIL_ONLY === '1';
 
 const summary = () => ({
   id: '501', author: { id: '100', name: 'Aroha' }, type: 'cairn',
@@ -210,6 +211,32 @@ const openMemoryNormally = async ({ requireLoadedMap = true } = {}) => {
 
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await waitBridge();
+if (detailOnly) {
+  await setActor('B');
+  await page.evaluate(({ entry, loadedDetail }) => {
+    globalThis.__cairnStores.usePublicCairnStore.setState({
+      enabled: true,
+      entries: [entry],
+      details: { [entry.id]: loadedDetail },
+    });
+  }, { entry: summary(), loadedDetail: detail() });
+  for (const [theme, viewport] of [
+    ['day', { width: 320, height: 568 }],
+    ['sunset', { width: 390, height: 844 }],
+    ['night', { width: 430, height: 932 }],
+  ]) {
+    await setTheme(theme);
+    await page.evaluate(() => globalThis.__cairnStores.navigationRef.navigate('PublicCairnDetail', { cairnId: '501' }));
+    await page.getByTestId('public-cairn-detail').waitFor({ state: 'visible', timeout: 15_000 });
+    await capture(`${theme}-public-readonly-detail-back`, viewport);
+    await page.getByRole('button', { name: 'Back' }).click();
+    await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Home', null, { timeout: 10_000 });
+  }
+  fs.writeFileSync(path.join(outputDir, 'detail-only-results.json'), `${JSON.stringify({ captures, errors, requests }, null, 2)}\n`);
+  await browser.close();
+  console.log(JSON.stringify({ outputDir, captures: captures.length, errors }));
+  process.exit(errors.length ? 1 : 0);
+}
 await setActor('A');
 await page.evaluate(({ activityId, fixtureNow }) => {
   globalThis.__cairnStores.useTrackingStore.setState({
@@ -220,9 +247,11 @@ await page.evaluate(({ activityId, fixtureNow }) => {
 }, { activityId: sourceActivityId, fixtureNow: now });
 await page.getByText('Leave a Cairn', { exact: true }).click();
 await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Plant');
-await page.getByLabel('Title').fill('Wind through the tōtara');
-await page.getByLabel('Note').fill('A quiet place to pause above the harbour.');
-await page.getByLabel('Visibility Public').click();
+const confirmSpot = page.getByText('Confirm this spot', { exact: true });
+if (await confirmSpot.isVisible().catch(() => false)) await confirmSpot.click();
+await page.getByRole('textbox', { name: 'Short title' }).fill('Wind through the tōtara');
+await page.getByRole('textbox', { name: 'Cairn note' }).fill('A quiet place to pause above the harbour.');
+await page.getByLabel('Visibility: Public').click();
 await page.getByTestId('plant-submit').click();
 await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Home', null, { timeout: 20_000 });
 await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.setState({

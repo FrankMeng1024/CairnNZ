@@ -55,13 +55,6 @@ type Props = {
   onViewActivity?: () => void;
 };
 
-/** Concept palette — locked to docs/ui-redesign/sleep-run-2026-08-15. */
-const PAPER_BG = '#F9F6F3';
-const CTA_GREEN = '#455D3C';
-const TITLE_INK = '#1E2A24';
-const MUTED_INK = '#8A8579';
-const HAIRLINE = '#E9E3D8';
-
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(s / 3600);
@@ -242,15 +235,13 @@ export function StopSummarySheet({
   const elevVal = dist.formatElevation(summary.elevationGainM, 0);
   const elevLbl = `${dist.elevUnit} elev`;
 
-  // R21 (2026-08-18 user "hike complete和confirm page也要follow 白天夜间"):
-  // read Appearance so the sheet + text tokens swap into slate/cream when
-  // the user's picked Dark (or Auto at night). Kept as inline overrides so
-  // day rendering matches the concept 1:1.
+  // The summary is a shared semantic sheet in all three appearances.
   const completeTheme = useVisualTheme();
-  const completeIsDark = completeTheme.mode === 'night';
-  const sheetBg = completeIsDark ? completeTheme.surfaceElevated : PAPER_BG;
-  const titleInk = completeIsDark ? completeTheme.foreground : TITLE_INK;
-  const mutedInk = completeIsDark ? completeTheme.foregroundSecondary : MUTED_INK;
+  const sheetBg = completeTheme.sheetSurface;
+  const titleInk = completeTheme.textPrimary;
+  const mutedInk = completeTheme.textSecondary;
+  const actionColor = completeTheme.primaryAction;
+  const actionForeground = completeTheme.onPrimary;
   const committedSync = completionSync;
   const visibleProgress: ActivityFinishProgress | null = saving
     ? finishProgress ?? {
@@ -277,7 +268,7 @@ export function StopSummarySheet({
   ] as const : [];
 
   return (
-    <Animated.View style={[stopSheetStyles.scrim, { opacity }]} pointerEvents="auto">
+    <Animated.View style={[stopSheetStyles.scrim, { opacity, backgroundColor: completeTheme.scrim }]} pointerEvents="auto">
       <TouchableOpacity
         style={StyleSheet.absoluteFillObject}
         activeOpacity={1}
@@ -288,33 +279,14 @@ export function StopSummarySheet({
         <Animated.View
           style={[
             stopSheetStyles.sheet,
-            { backgroundColor: sheetBg, transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, 20) + 8 },
+            { backgroundColor: sheetBg, borderColor: completeTheme.borderSubtle, shadowColor: completeTheme.shadow, transform: [{ translateY: slideY }], paddingBottom: Math.max(insets.bottom, 20) + 8 },
           ]}
         >
-          <View style={stopSheetStyles.handle} />
+          <View style={[stopSheetStyles.handle, { backgroundColor: completeTheme.borderStrong }]} />
 
-          {/* Header row: title on the left, X close on the right.
-              R21 (2026-08-18 user "hike complete 不需要右上角分享"):
-              share button removed. X still cancels (resume tracking). */}
+          {/* Outside tap is the quiet cancel/resume action when not saving. */}
           <View style={stopSheetStyles.headerRow}>
             <Text style={[stopSheetStyles.title, { color: titleInk }]} numberOfLines={1}>{heading}</Text>
-            <View style={stopSheetStyles.headerActions}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (saving) return;
-                  Keyboard.dismiss();
-                  dismiss(onCancel);
-                }}
-                style={stopSheetStyles.closeHit}
-                activeOpacity={0.6}
-                disabled={saving}
-                accessibilityRole="button"
-                accessibilityLabel={committed ? cairnText('stop-summary-sheet.close-activity-summary') : cairnText('stop-summary-sheet.close-and-keep-tracking')}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[stopSheetStyles.closeX, { color: titleInk }, saving && { opacity: 0.4 }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
           </View>
 
           {visibleProgress ? (
@@ -323,11 +295,11 @@ export function StopSummarySheet({
                 <View key={row.key} style={stopSheetStyles.progressRow} testID={`activity-finish-${row.key}`}>
                   <View style={stopSheetStyles.progressIndicator}>
                     {row.state === 'current' ? (
-                      <ActivityIndicator size="small" color={CTA_GREEN} />
+                      <ActivityIndicator size="small" color={actionColor} />
                     ) : (
                       <Text style={[
                         stopSheetStyles.progressGlyph,
-                        { color: row.state === 'complete' ? CTA_GREEN : mutedInk },
+                        { color: row.state === 'complete' ? actionColor : mutedInk },
                       ]}>{row.state === 'complete' ? '✓' : row.state === 'waiting' ? '☁' : row.state === 'attention' ? '!' : '○'}</Text>
                     )}
                   </View>
@@ -368,13 +340,13 @@ export function StopSummarySheet({
               like a mystery blank div when the hike had 0 points. */}
           {summary.trackPoints.length >= 2 && (
             <View
-              style={[stopSheetStyles.miniMapCard, completeIsDark ? { backgroundColor: 'rgba(240,238,230,0.06)', borderColor: 'rgba(220,230,240,0.14)' } : null]}
+              style={[stopSheetStyles.miniMapCard, { backgroundColor: completeTheme.surfaceSecondary, borderColor: completeTheme.borderSubtle }]}
               onLayout={(e) => setMiniMapWidth(e.nativeEvent.layout.width)}
             >
               {miniMapWidth > 0 && (
                 <MiniMapPolyline
                   points={summary.trackPoints}
-                  stroke={CTA_GREEN}
+                  stroke={actionColor}
                   width={miniMapWidth}
                   height={120}
                 />
@@ -393,7 +365,7 @@ export function StopSummarySheet({
             <>
               <Text style={[stopSheetStyles.nameLabel, { color: mutedInk }]}>{isRun ? cairnText('stop-summary-sheet.name-this-run-optional') : cairnText('stop-summary-sheet.name-this-hike-optional')}</Text>
               <TextInput
-                style={[stopSheetStyles.nameInput, { color: titleInk, borderColor: completeIsDark ? 'rgba(220,230,240,0.14)' : 'rgba(20,42,30,0.10)', backgroundColor: completeIsDark ? 'rgba(240,238,230,0.06)' : 'rgba(255,253,247,0.5)' }]}
+                style={[stopSheetStyles.nameInput, { color: titleInk, borderColor: completeTheme.borderSubtle, backgroundColor: completeTheme.inputSurface }]}
                 placeholder={defaultName}
                 placeholderTextColor={mutedInk}
                 value={name}
@@ -411,9 +383,9 @@ export function StopSummarySheet({
           {/* Primary CTA — "View Activity" saves the hike and jumps to
               the MapHistory detail. R21 (2026-08-18 user "去掉done"):
               secondary Done button removed — a single explicit CTA is
-              clearer. Cancel/close is still via the X in the header. */}
+              clearer. Cancel/close remains available by tapping outside the sheet. */}
           <TouchableOpacity
-            style={[stopSheetStyles.saveBtn, saving && { opacity: 0.7 }]}
+            style={[stopSheetStyles.saveBtn, { backgroundColor: actionColor }, saving && { opacity: 0.7 }]}
             onPress={() => {
               if (saving) return;
               // O11 (2026-07-27): dismiss keyboard before invoking parent
@@ -433,11 +405,11 @@ export function StopSummarySheet({
           >
             {saving ? (
               <>
-                <ActivityIndicator size="small" color={PAPER_BG} />
-                <Text style={stopSheetStyles.saveText} numberOfLines={1}>{cairnText('stop-summary-sheet.finishing')}</Text>
+                <ActivityIndicator size="small" color={actionForeground} />
+                <Text style={[stopSheetStyles.saveText, { color: actionForeground }]} numberOfLines={1}>{cairnText('stop-summary-sheet.finishing')}</Text>
               </>
             ) : (
-              <Text style={stopSheetStyles.saveText}>{committed ? cairnText('stop-summary-sheet.view-activity') : cairnText('stop-summary-sheet.finish-value', { value1: label.toLowerCase() })}</Text>
+              <Text style={[stopSheetStyles.saveText, { color: actionForeground }]}>{committed ? cairnText('stop-summary-sheet.view-activity') : cairnText('stop-summary-sheet.finish-value', { value1: label.toLowerCase() })}</Text>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -449,19 +421,17 @@ export function StopSummarySheet({
 const stopSheetStyles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
     zIndex: 200,
   },
   sheet: {
-    backgroundColor: PAPER_BG,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderWidth: 1,
     paddingTop: 10,
     paddingHorizontal: 24,
     gap: 16,
     // Shadow-overlay equivalent — sheet lifts off the scrim.
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.10,
     shadowRadius: 24,
@@ -471,20 +441,14 @@ const stopSheetStyles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: HAIRLINE,
     alignSelf: 'center',
     marginBottom: 8,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     paddingHorizontal: 4,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   progressRail: {
     alignSelf: 'stretch',
@@ -518,21 +482,11 @@ const stopSheetStyles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: '500',
   },
-  closeHit: {
-    padding: 6,
-    marginRight: -6,
-  },
-  closeX: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: MUTED_INK,
-    lineHeight: 20,
-  },
   miniMapCard: {
     alignSelf: 'stretch',
     height: 120,
     borderRadius: 16,
-    backgroundColor: '#EFEAE0',
+    borderWidth: 1,
     overflow: 'hidden',
   },
   routePreviewLabel: {
@@ -545,7 +499,6 @@ const stopSheetStyles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: TITLE_INK,
     letterSpacing: -0.4,
     textAlign: 'left',
     flexShrink: 1,
@@ -564,7 +517,6 @@ const stopSheetStyles = StyleSheet.create({
   statVal: {
     fontSize: 30,
     fontWeight: '900',
-    color: CTA_GREEN,
     letterSpacing: -0.8,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
@@ -572,13 +524,11 @@ const stopSheetStyles = StyleSheet.create({
   statLbl: {
     fontSize: 12,
     fontWeight: '600',
-    color: MUTED_INK,
     textAlign: 'center',
   },
   nameLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: MUTED_INK,
     marginBottom: -8,
     marginTop: 4,
   },
@@ -586,11 +536,8 @@ const stopSheetStyles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
     paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: HAIRLINE,
     fontSize: 15,
-    color: TITLE_INK,
   },
   finalRouteNote: {
     fontSize: 13,
@@ -601,14 +548,12 @@ const stopSheetStyles = StyleSheet.create({
   saveBtn: {
     height: 56,
     borderRadius: 28,
-    backgroundColor: CTA_GREEN,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   saveText: {
-    color: PAPER_BG,
     fontSize: 17,
     fontWeight: '700',
     textAlign: 'center',

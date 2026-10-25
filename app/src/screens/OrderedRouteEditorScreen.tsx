@@ -2687,8 +2687,12 @@ export function OrderedRouteEditorScreen() {
         styles.topBar,
         { paddingTop: insets.top + Spacing.lg, paddingBottom: Spacing.xs },
       ]} pointerEvents="box-none" testID="route-editor-header">
-        <BackButton variant="inline" onPress={() => nav.goBack()} />
-        <Text testID="route-editor-title" pointerEvents="none" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? cairnText('ordered-route-editor-screen.shared-route') : routeId ? cairnText('ordered-route-editor-screen.edit-route') : cairnText('ordered-route-editor-screen.create-route')}</Text>
+        <BackButton variant="mapInline" onPress={() => nav.goBack()} />
+        <View pointerEvents="none" style={styles.topTitleWrap}>
+          <View style={[styles.topTitleChip, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}>
+            <Text testID="route-editor-title" style={[styles.topTitle, { color: theme.foreground }]}>{readOnlyShared ? cairnText('ordered-route-editor-screen.shared-route') : routeId ? cairnText('ordered-route-editor-screen.edit-route') : cairnText('ordered-route-editor-screen.create-route')}</Text>
+          </View>
+        </View>
         <View style={styles.topUtilityPlaceholder} />
       </View>
 
@@ -2874,7 +2878,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm, paddingHorizontal: Spacing.base, zIndex: 40, borderBottomWidth: 0 },
-  topTitle: { flex: 1, fontSize: FontSize.h3, fontWeight: '700', textAlign: 'center' },
+  topTitleWrap: { flex: 1, alignItems: 'center' },
+  topTitleChip: { minHeight: 36, maxWidth: '100%', borderWidth: 1, borderRadius: RadiusRole.button, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  topTitle: { fontSize: FontSize.h3, fontWeight: '700', textAlign: 'center' },
   topSubtitle: { marginTop: 2, fontSize: FontSize.tiny, fontWeight: '600' },
   topUtility: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   topUtilityPlaceholder: { width: 44, height: 44 },

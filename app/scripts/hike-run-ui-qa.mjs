@@ -177,7 +177,9 @@ const exerciseRecordingControls = async () => {
   await page.getByRole('button', { name: 'Finish hike and view activity' }).waitFor();
   await settle(400);
   await page.screenshot({ path: path.join(outputDir, 'hike-finish-intent-day-390x844.png'), fullPage: false });
-  await page.getByRole('button', { name: 'Close and keep tracking' }).click();
+  // Non-blocking finish sheets dismiss by tapping the exposed map, without
+  // duplicating that action as a top-right X.
+  await page.mouse.click(380, 280);
   await page.waitForFunction(() => globalThis.__cairnStores.useTrackingStore.getState().status === 'tracking');
 
   await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.setState({ status: 'idle', isFinishing: false }));
@@ -210,7 +212,7 @@ const exerciseRecordingControls = async () => {
   await page.evaluate(() => window.scrollTo(0, 0));
   await settle(400);
   await page.screenshot({ path: path.join(outputDir, 'run-finish-intent-day-390x844.png'), fullPage: false });
-  await page.getByRole('button', { name: 'Close and keep tracking' }).click();
+  await page.mouse.click(380, 280);
   await page.waitForFunction(() => globalThis.__cairnStores.useTrackingStore.getState().status === 'tracking');
 
   return page.evaluate(() => globalThis.__activityUiInteractionCounts);
@@ -260,8 +262,8 @@ for (const theme of ['day', 'sunset', 'night']) {
     results.push(await capture({ theme, mode, scenario }));
   }
 }
-results.push(await capture({ theme: 'day', mode: 'hike', scenario: 'tracking', viewport: { width: 360, height: 640 } }));
-results.push(await capture({ theme: 'day', mode: 'run', scenario: 'paused', viewport: { width: 360, height: 640 } }));
+results.push(await capture({ theme: 'day', mode: 'hike', scenario: 'tracking', viewport: { width: 320, height: 568 } }));
+results.push(await capture({ theme: 'day', mode: 'run', scenario: 'paused', viewport: { width: 320, height: 568 } }));
 results.push(await capture({ theme: 'night', mode: 'hike', scenario: 'prestart', viewport: { width: 430, height: 932 } }));
 results.push(await capture({ theme: 'night', mode: 'run', scenario: 'tracking', viewport: { width: 430, height: 932 } }));
 

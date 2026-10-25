@@ -40,7 +40,7 @@ import {
   updateIncrementalRoutePresentation,
 } from '../features/activity/confirmedRoutePresentation';
 import {
-  ACTIVITY_MAP_ORNAMENTS,
+  activityMapOrnamentsAbove,
   activityMapPresentation,
 } from '../features/activity/activityMapPresentation';
 import { useIsFocused } from '@react-navigation/native';
@@ -433,6 +433,8 @@ type HikingMapProps = {
   /** Fixed target only while choosing an origin, destination, or reacquisition. */
   simulatorCenterPickerVisible?: boolean;
   recenterImperativeRef?: React.MutableRefObject<(() => void) | null>;
+  /** Measured obscured height of the active bottom dock/sheet. */
+  ornamentBottomClearance?: number;
 };
 
 export function HikingMap({
@@ -441,6 +443,7 @@ export function HikingMap({
   simulatorEnabled, simulatorControlsEnabled = simulatorEnabled,
   simulatorCenterPickerVisible = false,
   trackStartVariant = null, activityVariant = 'hike',
+  ornamentBottomClearance = 132,
 }: HikingMapProps) {
   const isFocused = useIsFocused();
   const telemetryScreenPrefix = activityVariant === 'run' ? 'run' : 'hike';
@@ -463,6 +466,7 @@ export function HikingMap({
   const mapTheme = useMapTheme();
   const hikeLightPreset = themeToStandardPreset(mapTheme);
   const mapPresentation = activityMapPresentation(mapTheme, activityVariant);
+  const activityMapOrnaments = activityMapOrnamentsAbove(ornamentBottomClearance);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [mapAppState, setMapAppState] = useState(AppState.currentState);
   const [routeStyleGeneration, setRouteStyleGeneration] = useState(0);
@@ -1319,8 +1323,8 @@ export function HikingMap({
           : { styleJSON: resolvedMapStyle.json })}
         logoEnabled
         attributionEnabled
-        logoPosition={ACTIVITY_MAP_ORNAMENTS.logoPosition}
-        attributionPosition={ACTIVITY_MAP_ORNAMENTS.attributionPosition}
+        logoPosition={activityMapOrnaments.logoPosition}
+        attributionPosition={activityMapOrnaments.attributionPosition}
         // Mapbox's built-in compass is hidden — we draw our own as a
         // bottom-left chip so it sits in a predictable spot relative to
         // Place Flag (right). showCompass is also
