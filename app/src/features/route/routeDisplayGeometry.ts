@@ -266,18 +266,6 @@ export function buildRouteDisplayGeometry(
     baseLines.push(activeBase);
   });
 
-  const segments: DisplaySegment[] = [];
-  geometry.parts.forEach((part, partIndex) => {
-    part.points.slice(0, -1).forEach((point, pointIndex) => {
-      segments.push(...subdivide(
-        `${part.id}:${pointIndex}`,
-        point,
-        part.points[pointIndex + 1],
-        pointIndex === 0 && partIndex > 0 && gapAfter.has(geometry.parts[partIndex - 1].id),
-      ));
-    });
-  });
-
   if (options.repeatPresentationEnabled === false) return {
     baseLines,
     ordinaryLines: baseLines.map(line => ({
@@ -290,6 +278,18 @@ export function buildRouteDisplayGeometry(
     repeatLabels: [],
     turnConnectors: [],
   };
+
+  const segments: DisplaySegment[] = [];
+  geometry.parts.forEach((part, partIndex) => {
+    part.points.slice(0, -1).forEach((point, pointIndex) => {
+      segments.push(...subdivide(
+        `${part.id}:${pointIndex}`,
+        point,
+        part.points[pointIndex + 1],
+        pointIndex === 0 && partIndex > 0 && gapAfter.has(geometry.parts[partIndex - 1].id),
+      ));
+    });
+  });
 
   const matchIndexes = segments.map(() => [] as number[]);
   // A route can contain hundreds of accepted observations. Compare only
@@ -512,4 +512,35 @@ export function buildRouteDisplayGeometry(
   ));
 
   return { baseLines, ordinaryLines, repeatLanes, repeatLabels, turnConnectors };
+}
+
+function displayPointIsFinite(point: RoutePoint): boolean {
+  return Number.isFinite(point.lat) && Number.isFinite(point.lng);
+}
+
+/**
+ * Optional repeat presentation must never be able to remove route truth.
+ * Any malformed display lane/cap falls back to the untouched canonical
+ * polylines. The fallback is presentation-only and is never persisted.
+ */
+export function routeDisplayPresentationIsValid(display: RouteDisplayGeometry): boolean {
+  return display.baseLines.every(line => (
+    line.coordinates.length >= 2 && line.coordinates.every(displayPointIsFinite)
+  )) && display.repeatLanes.every(lane => (
+    lane.coordinates.length >= 2
+    && lane.coordinates.every(displayPointIsFinite)
+    && Number.isFinite(lane.offsetPx)
+  )) && display.turnConnectors.every(connector => displayPointIsFinite(connector.coordinate));
+}
+
+export function buildReliableRouteDisplayGeometry(
+  geometry: CanonicalRouteGeometry,
+): RouteDisplayGeometry {
+  try {
+    const display = buildRouteDisplayGeometry(geometry);
+    if (routeDisplayPresentationIsValid(display)) return display;
+  } catch {
+    // The raw canonical path below is the deterministic safety presentation.
+  }
+  return buildRouteDisplayGeometry(geometry, { repeatPresentationEnabled: false });
 }

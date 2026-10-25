@@ -66,7 +66,6 @@ if (typeof window !== 'undefined') mapboxgl.prewarm();
 const LOCAL_QA_STYLE = {
   version: 8 as const,
   name: 'Cairn local QA canvas',
-  glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
   // Keep the SDK's genuine compact attribution control measurable without
   // contacting a tile provider. This source is empty; its attribution is
   // consumed by Mapbox GL's own control rather than rendered by Cairn.
@@ -1045,6 +1044,45 @@ interface LayerProps {
   style?: Record<string, any>;
   __sourceId?: string;
   filter?: any[];
+  /** RNMapbox-compatible ordering hint for late optional layers. */
+  aboveLayerID?: string;
+}
+
+function useWebLayerAbove(id: string, aboveLayerID?: string): void {
+  const mapCtx = React.useContext(MapInstanceContext);
+  useEffect(() => {
+    if (!aboveLayerID) return undefined;
+    let disposed = false;
+    let frame: number | null = null;
+    let map: any = null;
+    const apply = () => {
+      if (disposed || !map?.getLayer?.(id) || !map.getLayer?.(aboveLayerID)) return;
+      const layers = map.getStyle?.()?.layers ?? [];
+      const layerIndex = layers.findIndex((layer: any) => layer.id === id);
+      const anchorIndex = layers.findIndex((layer: any) => layer.id === aboveLayerID);
+      // moveLayer itself emits styledata. Only move when the optional layer
+      // actually arrived above this route layer, otherwise the listener can
+      // create an endless styledata/moveLayer render loop.
+      if (layerIndex < 0 || anchorIndex < 0 || layerIndex > anchorIndex) return;
+      try { map.moveLayer(id); } catch { /* style replacement */ }
+    };
+    const attach = () => {
+      if (disposed) return;
+      map = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
+      if (!map) {
+        frame = requestAnimationFrame(attach);
+        return;
+      }
+      map.on?.('styledata', apply);
+      apply();
+    };
+    attach();
+    return () => {
+      disposed = true;
+      if (frame != null) cancelAnimationFrame(frame);
+      map?.off?.('styledata', apply);
+    };
+  }, [aboveLayerID, id, mapCtx]);
 }
 
 export function FillLayer({ id, style, __sourceId, filter }: LayerProps) {
@@ -1061,8 +1099,9 @@ export function FillLayer({ id, style, __sourceId, filter }: LayerProps) {
 }
 
 // ── LineLayer ─────────────────────────────────────────────────────────
-export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ id, style, __sourceId, filter }, ref) {
+export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ id, style, __sourceId, filter, aboveLayerID }, ref) {
   const mapCtx = React.useContext(MapInstanceContext);
+  useWebLayerAbove(id, aboveLayerID);
   React.useImperativeHandle(ref, () => ({
     setNativeProps: (props: { style?: Record<string, any> }) => {
       const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
@@ -1106,7 +1145,8 @@ export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ 
   );
 });
 
-export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
+export function CircleLayer({ id, style, __sourceId, filter, aboveLayerID }: LayerProps) {
+  useWebLayerAbove(id, aboveLayerID);
   const supportedStyle: Record<string, any> = {};
   for (const [key, value] of Object.entries(style ?? {})) {
     // Native Standard uses this valid v11 paint property. GL JS v2 rejects
@@ -1118,7 +1158,8 @@ export function CircleLayer({ id, style, __sourceId, filter }: LayerProps) {
   return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(supportedStyle) as any} />;
 }
 
-export function SymbolLayer({ id, style, __sourceId, filter }: LayerProps) {
+export function SymbolLayer({ id, style, __sourceId, filter, aboveLayerID }: LayerProps) {
+  useWebLayerAbove(id, aboveLayerID);
   // The opt-in local QA style intentionally has no remote glyph endpoint. A
   // text symbol would therefore be rejected by Mapbox GL before the screen's
   // structural assertions run. Native and normal Web maps keep the real

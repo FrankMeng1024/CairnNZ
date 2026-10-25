@@ -6,6 +6,8 @@ import {
   LocalizationBoundary,
   cairnText,
   normalizeCairnLocale,
+  resolveCairnTextForRuntime,
+  resolveCairnRuntimeLocale,
   setCairnLocaleOverride,
 } from '../runtime';
 
@@ -18,6 +20,50 @@ describe('single Cairn text catalog runtime', () => {
     expect(normalizeCairnLocale('en-AU')).toBe('en-NZ');
     expect(normalizeCairnLocale('zh-CN')).toBe('en-NZ');
   });
+
+  it.each(['en-NZ', 'en-US', 'ja-JP', 'zh-CN'])(
+    'keeps the production runtime in en-NZ for device locale %s',
+    deviceLanguageTag => {
+      expect(resolveCairnRuntimeLocale({
+        production: true,
+        qaOverride: 'ja-JP',
+        deviceLanguageTag,
+      })).toBe('en-NZ');
+    },
+  );
+
+  it('allows an explicit non-production QA locale without using device locale', () => {
+    expect(resolveCairnRuntimeLocale({
+      production: false,
+      qaOverride: 'ja-JP',
+      deviceLanguageTag: 'zh-CN',
+    })).toBe('ja-JP');
+    expect(resolveCairnRuntimeLocale({
+      production: false,
+      deviceLanguageTag: 'ja-JP',
+    })).toBe('en-NZ');
+  });
+
+  it.each(['en-NZ', 'en-US', 'ja-JP', 'zh-CN'])(
+    'renders representative App/Auth/Memory/Route/Friends/Settings production copy in English on %s',
+    deviceLanguageTag => {
+      const keys = [
+        'app.restoring-your-journey',
+        'auth-generated.auth-screen-generated.cairnnz',
+        'memory.memory-scope-toggle.mine',
+        'ordered-route-editor-screen.edit-route',
+        'friends-screen.friends',
+        'settings-screen.settings',
+      ] as const;
+      for (const key of keys) {
+        expect(resolveCairnTextForRuntime(key, {}, {
+          production: true,
+          qaOverride: 'ja-JP',
+          deviceLanguageTag,
+        })).toBe(CAIRN_TEXT[key]['en-NZ']);
+      }
+    },
+  );
 
   it('renders approved Japanese, explicit pending fallback and pseudo-expanded QA copy', () => {
     setCairnLocaleOverride('ja-JP');

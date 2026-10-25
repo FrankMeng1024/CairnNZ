@@ -87,6 +87,7 @@ describe('Memory server reconciliation', () => {
   });
 
   test('presence-only sync preserves original observation time and does not require a coverage-length change', async () => {
+    const markServerCoverageDirty = jest.fn();
     const witness = {
       cid: '11111111-1111-4111-8111-111111111111',
       firstLat: -45.031,
@@ -135,6 +136,11 @@ describe('Memory server reconciliation', () => {
       };
     });
     jest.doMock('../../../services/apiService', () => ({ authenticatedFetch }));
+    jest.doMock('../store/usePreparedMemoryCoverageStore', () => ({
+      usePreparedMemoryCoverageStore: {
+        getState: () => ({ markServerCoverageDirty }),
+      },
+    }));
     jest.doMock('../../../services/bootDiagnostics', () => ({ markBootPhase: jest.fn() }));
     jest.doMock('../../../services/appLog', () => ({ log: jest.fn() }));
 
@@ -150,6 +156,7 @@ describe('Memory server reconciliation', () => {
       evidence_source: 'passive_real',
     });
     expect(state.markPresenceWitnessesSynced).toHaveBeenCalledWith([witness], [witness.cid]);
+    expect(markServerCoverageDirty).toHaveBeenCalledTimes(1);
     expect(authenticatedFetch).not.toHaveBeenCalledWith(
       '/api/cairn-memory/discover',
       expect.anything(),

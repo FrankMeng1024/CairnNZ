@@ -1,16 +1,18 @@
 import React from 'react';
 import type { VisualThemeTokens } from '../tokens';
 import type { CanonicalRouteGeometry } from '../../features/route/canonicalRouteGeometry';
-import { buildRouteDisplayGeometry } from '../../features/route/routeDisplayGeometry';
+import { buildReliableRouteDisplayGeometry } from '../../features/route/routeDisplayGeometry';
 
 interface Props {
   geometry: CanonicalRouteGeometry;
   theme: VisualThemeTokens;
   ShapeSource: any;
   LineLayer: any;
+  CircleLayer?: any;
   SymbolLayer?: any;
   idPrefix: string;
   hiddenPartId?: string;
+  aboveLayerID?: string;
 }
 
 /** One Mapbox line contract for draft, saved, reopened and received Routes. */
@@ -19,22 +21,28 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
   theme,
   ShapeSource,
   LineLayer,
+  CircleLayer,
   SymbolLayer,
   idPrefix,
   hiddenPartId,
+  aboveLayerID,
 }: Props) {
   if (!ShapeSource || !LineLayer) return null;
   const visibleGeometry = hiddenPartId
     ? { ...geometry, parts: geometry.parts.filter(part => part.id !== hiddenPartId) }
     : geometry;
-  const display = buildRouteDisplayGeometry(visibleGeometry);
-  const features = display.ordinaryLines.map(line => ({
+  const display = buildReliableRouteDisplayGeometry(visibleGeometry);
+  // Always paint the untouched canonical line. Repeat lanes are optional
+  // decoration above it, never the only representation of route truth.
+  // This guarantees a continuous, visible fallback if display classification
+  // or an optional repeat layer is unavailable at runtime.
+  const features = display.baseLines.map(line => ({
       type: 'Feature' as const,
       id: line.id,
       properties: {
         occurrenceIds: line.occurrenceIds.join(','),
         coverageIds: line.coverageIds.join(','),
-        role: 'canonical-presentation',
+        role: 'canonical-safety',
       },
       geometry: {
         type: 'LineString' as const,
@@ -62,9 +70,23 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
     properties: { text: label.text, direction: label.direction, occurrenceIds: label.occurrenceIds.join(',') },
     geometry: { type: 'Point' as const, coordinates: [label.coordinate.lng, label.coordinate.lat] },
   }));
-  // Reversals are split into opposing screen-offset lanes. Their round caps
-  // meet at the truthful turn anchor without a metre-scaled connector, so the
-  // overview and zoom 18/21 use the same visual proportions.
+  const turnCapFeatures = display.turnConnectors.map(connector => ({
+    type: 'Feature' as const,
+    id: connector.id,
+    properties: {
+      occurrenceIds: connector.occurrenceIds.join(','),
+      multiplicity: connector.multiplicity,
+      role: 'repeat-turn-cap',
+    },
+    geometry: {
+      type: 'Point' as const,
+      coordinates: [connector.coordinate.lng, connector.coordinate.lat],
+    },
+  }));
+  // Reversals are split into opposing screen-offset lanes. A small filled
+  // screen-space cap at the truthful turn anchor joins their anti-aliased
+  // inner edges. It is not persisted route geometry and cannot grow into the
+  // old metre-scaled Omega loop as the map zoom changes.
   const repeatPresentationFeatures = repeatLaneFeatures;
   const gapFeatures = geometry.gaps.map(gap => ({
     type: 'Feature' as const,
@@ -86,9 +108,10 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           <LineLayer
             id={`${idPrefix}-casing`}
             slot="top"
+            aboveLayerID={aboveLayerID}
             style={{
               lineColor: theme.mapRouteCasing,
-              lineWidth: 9,
+              lineWidth: display.repeatLanes.length > 0 ? 6 : 9,
               lineOpacity: 0.78,
               lineCap: 'round',
               lineJoin: 'round',
@@ -97,9 +120,10 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           <LineLayer
             id={`${idPrefix}-line`}
             slot="top"
+            aboveLayerID={aboveLayerID}
             style={{
               lineColor: theme.mapRouteLine,
-              lineWidth: 6,
+              lineWidth: display.repeatLanes.length > 0 ? 3.5 : 6,
               lineOpacity: 0.96,
               lineCap: 'round',
               lineJoin: 'round',
@@ -115,6 +139,7 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           <LineLayer
             id={`${idPrefix}-repeat-lane-casing`}
             slot="top"
+            aboveLayerID={aboveLayerID}
             filter={['==', ['get', 'role'], 'repeat-lane']}
             style={{
               lineColor: theme.mapRouteCasing,
@@ -128,6 +153,7 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           <LineLayer
             id={`${idPrefix}-repeat-lane-line`}
             slot="top"
+            aboveLayerID={aboveLayerID}
             filter={['==', ['get', 'role'], 'repeat-lane']}
             style={{
               lineColor: theme.mapRouteLine,
@@ -140,6 +166,23 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           />
         </ShapeSource>
       ) : null}
+      {CircleLayer && turnCapFeatures.length > 0 ? (
+        <ShapeSource
+          id={`${idPrefix}-repeat-turn-caps`}
+          shape={{ type: 'FeatureCollection', features: turnCapFeatures }}
+        >
+          <CircleLayer
+            id={`${idPrefix}-repeat-turn-cap`}
+            slot="top"
+            aboveLayerID={aboveLayerID}
+            style={{
+              circleRadius: 5.25,
+              circleColor: theme.mapRouteLine,
+              circleOpacity: 0.98,
+            }}
+          />
+        </ShapeSource>
+      ) : null}
       {SymbolLayer && repeatLabelFeatures.length > 0 ? (
         <ShapeSource
           id={`${idPrefix}-repeat-labels`}
@@ -148,6 +191,7 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           <SymbolLayer
             id={`${idPrefix}-repeat-label-text`}
             slot="top"
+            aboveLayerID={aboveLayerID}
             minZoomLevel={16}
             style={{
               textField: ['get', 'text'],
@@ -170,6 +214,7 @@ export const CanonicalRouteLayer = React.memo(function CanonicalRouteLayer({
           <LineLayer
             id={`${idPrefix}-gap-line`}
             slot="top"
+            aboveLayerID={aboveLayerID}
             style={{
               lineColor: theme.mapRouteGap,
               lineWidth: 3,

@@ -180,4 +180,17 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(detail).toContain('canonicalRouteGeometry(selectedRoute)');
     expect(editor).toContain('canonicalRouteGeometry({ orderedDraft: displayDraft })');
   });
+
+  test('Editor and Detail retain canonical route truth and optional Fog cannot own route visibility', () => {
+    const canonicalLayer = read('src/components/map/CanonicalRouteLayer.tsx');
+    const fogLayer = read('src/features/memory/components/FogLayer.tsx');
+    expect(canonicalLayer).toContain('buildReliableRouteDisplayGeometry');
+    expect(canonicalLayer).toContain('display.baseLines.map');
+    expect(canonicalLayer).toContain('role: \'canonical-safety\'');
+    expect(canonicalLayer).toContain('aboveLayerID={aboveLayerID}');
+    expect(canonicalLayer).toContain('repeat-turn-cap');
+    expect(editor).toContain("const ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID = 'memory-overlap-edge'");
+    expect(editor).toContain('aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID}');
+    expect(fogLayer).toContain('id="memory-overlap-edge"');
+  });
 });

@@ -1,5 +1,9 @@
 import { canonicalRouteGeometry, canonicalRouteGeometryFingerprint } from '../canonicalRouteGeometry';
-import { buildRouteDisplayGeometry } from '../routeDisplayGeometry';
+import {
+  buildReliableRouteDisplayGeometry,
+  buildRouteDisplayGeometry,
+  routeDisplayPresentationIsValid,
+} from '../routeDisplayGeometry';
 import { appendOrderedSegment, createEmptyOrderedDraft } from '../orderedRouteDraft';
 
 const origin = { lat: -41.2865, lng: 174.7762 };
@@ -49,6 +53,18 @@ describe('display-only repeated traversal projection', () => {
     expect(canonicalRouteGeometryFingerprint(canonical)).toBe(before);
   });
 
+  test('rejects a malformed optional lane while the reliable result retains the complete canonical path', () => {
+    const canonical = canonicalRouteGeometry({ points: [p(0), p(50), p(100), p(50), p(0)] });
+    const display = buildRouteDisplayGeometry(canonical);
+    display.repeatLanes[0].offsetPx = Number.NaN;
+    expect(routeDisplayPresentationIsValid(display)).toBe(false);
+
+    const reliable = buildReliableRouteDisplayGeometry(canonical);
+    expect(routeDisplayPresentationIsValid(reliable)).toBe(true);
+    expect(reliable.baseLines).toHaveLength(1);
+    expect(reliable.baseLines[0].coordinates).toEqual([p(0), p(50), p(100), p(50), p(0)]);
+  });
+
   test('R06 a dense slightly wobbly one-way stroke is not a repeated traversal', () => {
     const canonical = canonicalRouteGeometry({
       points: [
@@ -85,6 +101,32 @@ describe('display-only repeated traversal projection', () => {
   test('nearby parallel geometry is not mistaken for the same traversal', () => {
     const canonical = canonicalRouteGeometry({ points: [p(0, 0), p(100, 0), p(100, 8), p(0, 8)] });
     expect(buildRouteDisplayGeometry(canonical).repeatLanes).toEqual([]);
+  });
+
+  test('a short turnback and a long-distance return both retain canonical truth and a real turn cap', () => {
+    for (const endM of [32, 2_500]) {
+      const canonical = canonicalRouteGeometry({ points: [p(0), p(endM / 2), p(endM), p(endM / 2), p(0)] });
+      const display = buildReliableRouteDisplayGeometry(canonical);
+      expect(display.baseLines[0].coordinates).toEqual([
+        p(0), p(endM / 2), p(endM), p(endM / 2), p(0),
+      ]);
+      expect(display.repeatLanes).toHaveLength(2);
+      expect(display.turnConnectors).toHaveLength(1);
+      expect(display.turnConnectors[0].coordinate).toEqual(p(endM));
+    }
+  });
+
+  test('a closed O and mixed repeated/ordinary route never lose their original continuous polyline', () => {
+    const closed = [p(0), p(60), p(60, 45), p(0, 45), p(0)];
+    const closedDisplay = buildReliableRouteDisplayGeometry(canonicalRouteGeometry({ points: closed }));
+    expect(closedDisplay.baseLines[0].coordinates).toEqual(closed);
+    expect(closedDisplay.repeatLanes).toEqual([]);
+
+    const mixed = [p(0), p(45), p(90), p(45), p(0), p(0, 55), p(45, 80)];
+    const mixedDisplay = buildReliableRouteDisplayGeometry(canonicalRouteGeometry({ points: mixed }));
+    expect(mixedDisplay.baseLines[0].coordinates).toEqual(mixed);
+    expect(mixedDisplay.repeatLanes.length).toBeGreaterThan(0);
+    expect(mixedDisplay.ordinaryLines.length).toBeGreaterThan(0);
   });
 
   test('a crossing-only figure eight does not manufacture passes or parallel lanes', () => {

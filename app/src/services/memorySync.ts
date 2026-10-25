@@ -606,8 +606,8 @@ async function pushPendingPoints(options?: { sourceActivityClientId?: string }):
         // until this source-owned viewport response incorporates them. A
         // witness may also promote an older, already-ACKed passive segment.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        void require('../features/memory/store/usePreparedMemoryCoverageStore')
-          .usePreparedMemoryCoverageStore.getState().refreshCurrentViewport();
+        require('../features/memory/store/usePreparedMemoryCoverageStore')
+          .usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
       }
       const completeEcho = echoShapeValid
         && presenceEchoShapeValid

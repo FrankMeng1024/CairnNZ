@@ -110,6 +110,7 @@ const HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE = 248;
 let MapView: any = null;
 let CameraComponent: any = null;
 let LineLayer: any = null;
+let CircleLayer: any = null;
 let ShapeSource: any = null;
 let SymbolLayer: any = null;
 let PointAnnotation: any = null;
@@ -123,6 +124,7 @@ try {
     MapView = Mapbox.MapView;
     CameraComponent = Mapbox.Camera;
     LineLayer = Mapbox.LineLayer;
+    CircleLayer = Mapbox.CircleLayer;
     ShapeSource = Mapbox.ShapeSource;
     SymbolLayer = Mapbox.SymbolLayer;
     PointAnnotation = Mapbox.PointAnnotation;
@@ -395,6 +397,7 @@ function NativeTrackMap({
           theme={visualTheme}
           ShapeSource={ShapeSource}
           LineLayer={LineLayer}
+          CircleLayer={CircleLayer}
           SymbolLayer={SymbolLayer}
           idPrefix={`route-detail-${geometryIdentity}`}
         />

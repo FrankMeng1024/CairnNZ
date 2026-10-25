@@ -1,5 +1,4 @@
 import React from 'react';
-import { getLocales } from 'expo-localization';
 import { CAIRN_TEXT, type CairnPluralText, type CairnTextKey } from './cairnText';
 
 export type CairnRuntimeLocale = 'en-NZ' | 'ja-JP' | 'en-XA';
@@ -8,7 +7,7 @@ export type CairnTextParams = Readonly<Record<string, string | number | Date | n
 let localeOverride: CairnRuntimeLocale | null = null;
 let revision = 0;
 const listeners = new Set<() => void>();
-let cachedDeviceLocale: 'en-NZ' | 'ja-JP' | null = null;
+const QA_LOCALE_OVERRIDE_ENABLED = process.env.NODE_ENV !== 'production';
 
 export function normalizeCairnLocale(languageTag?: string | null): 'en-NZ' | 'ja-JP' {
   const normalized = String(languageTag ?? '').replace('_', '-').toLowerCase();
@@ -16,23 +15,32 @@ export function normalizeCairnLocale(languageTag?: string | null): 'en-NZ' | 'ja
   return 'en-NZ';
 }
 
-function deviceLocale(): 'en-NZ' | 'ja-JP' {
-  if (cachedDeviceLocale) return cachedDeviceLocale;
-  try {
-    cachedDeviceLocale = normalizeCairnLocale(getLocales()[0]?.languageTag);
-  } catch {
-    cachedDeviceLocale = 'en-NZ';
-  }
-  return cachedDeviceLocale;
+/**
+ * Cairn's current product runtime is English-only. Device language, region,
+ * GPS, city and IP are deliberately absent from this decision. The catalog's
+ * Japanese draft and pseudo locale remain reachable only in non-production
+ * QA through an explicit override.
+ */
+export function resolveCairnRuntimeLocale(input: {
+  production: boolean;
+  qaOverride?: CairnRuntimeLocale | null;
+  deviceLanguageTag?: string | null;
+}): CairnRuntimeLocale {
+  void input.deviceLanguageTag;
+  return !input.production && input.qaOverride ? input.qaOverride : 'en-NZ';
 }
 
 export function getCairnLocale(): CairnRuntimeLocale {
-  return localeOverride ?? deviceLocale();
+  return resolveCairnRuntimeLocale({
+    production: !QA_LOCALE_OVERRIDE_ENABLED,
+    qaOverride: localeOverride,
+  });
 }
 
 export function setCairnLocaleOverride(locale: CairnRuntimeLocale | null): void {
-  if (localeOverride === locale) return;
-  localeOverride = locale;
+  const next = QA_LOCALE_OVERRIDE_ENABLED ? locale : null;
+  if (localeOverride === next) return;
+  localeOverride = next;
   revision += 1;
   listeners.forEach(listener => listener());
 }
@@ -68,9 +76,12 @@ function pseudoExpand(value: string): string {
   return `⟦${expanded} ···⟧`;
 }
 
-export function cairnText(key: CairnTextKey, params: CairnTextParams = {}): string {
+function renderCairnText(
+  key: CairnTextKey,
+  params: CairnTextParams,
+  active: CairnRuntimeLocale,
+): string {
   const entry = CAIRN_TEXT[key];
-  const active = getCairnLocale();
   const resolvedLocale = active === 'ja-JP' ? 'ja-JP' : 'en-NZ';
   if (!entry) {
     const fallback = CAIRN_TEXT['common.text-unavailable'][resolvedLocale]
@@ -80,6 +91,18 @@ export function cairnText(key: CairnTextKey, params: CairnTextParams = {}): stri
   const candidate = entry[resolvedLocale] ?? entry['en-NZ'];
   const rendered = interpolate(pluralValue(candidate, resolvedLocale, params), params);
   return active === 'en-XA' ? pseudoExpand(rendered) : rendered;
+}
+
+export function resolveCairnTextForRuntime(
+  key: CairnTextKey,
+  params: CairnTextParams,
+  input: Parameters<typeof resolveCairnRuntimeLocale>[0],
+): string {
+  return renderCairnText(key, params, resolveCairnRuntimeLocale(input));
+}
+
+export function cairnText(key: CairnTextKey, params: CairnTextParams = {}): string {
+  return renderCairnText(key, params, getCairnLocale());
 }
 
 export function formatCairnNumber(value: number, options?: Intl.NumberFormatOptions): string {
@@ -101,7 +124,7 @@ export function LocalizationBoundary({ children }: { children: React.ReactNode }
   return <>{React.Children.map(children, child => React.isValidElement(child) ? React.cloneElement(child) : child)}</>;
 }
 
-if (typeof globalThis !== 'undefined') {
+if (QA_LOCALE_OVERRIDE_ENABLED && typeof globalThis !== 'undefined') {
   (globalThis as typeof globalThis & {
     __cairnI18n?: {
       getLocale: typeof getCairnLocale;

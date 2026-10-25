@@ -18,6 +18,7 @@ const mapboxNetwork = { requested: [], finished: [], failed: [], abortedOnReload
 let createdMarker = null;
 let failNextMarkerUpdate = false;
 const motionEvidence = [];
+const foundDetailOnly = process.env.CAIRN18_FOUND_DETAIL_ONLY === '1';
 
 fs.mkdirSync(outputDir, { recursive: true });
 fs.mkdirSync(path.join(outputDir, 'video'), { recursive: true });
@@ -92,7 +93,9 @@ const context = await browser.newContext({
   geolocation: { latitude: 31.2341, longitude: 121.4312, accuracy: 11 },
   permissions: ['geolocation'],
   reducedMotion: 'no-preference',
-  recordVideo: { dir: path.join(outputDir, 'video'), size: { width: 390, height: 844 } },
+  ...(foundDetailOnly
+    ? {}
+    : { recordVideo: { dir: path.join(outputDir, 'video'), size: { width: 390, height: 844 } } }),
 });
 await context.addInitScript(() => {
   globalThis.__cairnMapQaLocalStyle = false;
@@ -246,6 +249,12 @@ await page.route('**/api/**', async route => {
 });
 
 const settle = (ms = 650) => page.waitForTimeout(ms);
+const waitForStablePaper = testId => page.waitForFunction(id => {
+  const paper = document.querySelector(`[data-testid="${id}"]`);
+  if (!paper) return false;
+  const style = getComputedStyle(paper);
+  return Number.parseFloat(style.opacity || '0') >= 0.99;
+}, testId, { timeout: 10_000 });
 const capture = async (name, metadata = {}) => {
   const viewport = page.viewportSize();
   const file = path.join(outputDir, `${name}-${viewport.width}x${viewport.height}.png`);
@@ -332,6 +341,53 @@ await page.waitForFunction(() => globalThis.__cairnStores.usePublicCairnStore.ge
 
 await setTheme('day');
 await primeActivityPlant();
+if (foundDetailOnly) {
+  await navigate('AllCairns', { initialSection: 'found' });
+  await page.getByTestId('found-cairn-row-900').waitFor({ state: 'visible', timeout: 20_000 });
+  await page.getByTestId('found-cairn-row-900').click();
+  await routeName('AcquiredCairnDetail');
+  await page.getByTestId('acquired-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
+  await waitForStablePaper('acquired-cairn-paper');
+  await capture('found-detail-latest-stable', {
+    route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA', stable: true,
+  });
+  const latestStyles = await page.evaluate(() => {
+    const paper = document.querySelector('[data-testid="acquired-cairn-paper"]');
+    const texts = paper ? [...paper.querySelectorAll('[dir="auto"]')] : [];
+    return {
+      paperOpacity: paper ? getComputedStyle(paper).opacity : null,
+      paperBackground: paper ? getComputedStyle(paper).backgroundColor : null,
+      textSamples: texts.slice(0, 10).map(node => ({
+        text: node.textContent,
+        color: getComputedStyle(node).color,
+        opacity: getComputedStyle(node).opacity,
+      })),
+    };
+  });
+  const earlier = page.getByText('Earlier', { exact: true });
+  if (await earlier.isVisible().catch(() => false)) {
+    await earlier.click();
+    await waitForStablePaper('acquired-cairn-paper');
+    await capture('found-detail-history-stable', {
+      route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA', stable: true,
+    });
+  }
+  const result = {
+    schema: 'cairnnz.o92.followup.found-detail-stable.v1',
+    generated_at: new Date().toISOString(),
+    evidence_class: 'production-screen-controlled-http-web-not-iphone',
+    latestStyles,
+    captures,
+    runtime_errors: runtimeErrors,
+    request_count: requests.length,
+  };
+  fs.writeFileSync(path.join(outputDir, 'FOUND_DETAIL_RESULTS.json'), `${JSON.stringify(result, null, 2)}\n`);
+  fs.writeFileSync(path.join(outputDir, 'REQUESTS.json'), `${JSON.stringify(requests, null, 2)}\n`);
+  await context.close();
+  await browser.close();
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.exit(runtimeErrors.length ? 1 : 0);
+}
 await navigate('Plant', { origin: { kind: 'activity', clientActivityId: activityId, ownerGeneration, activityMode: 'hiking' } });
 await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visible' });
 await capture('01-day-plant-only-me', { route: 'Plant', theme: 'day', fixture: 'isolated QA', interaction: 'Hike Activity route' });
@@ -454,11 +510,12 @@ await capture('09-day-library-i-found', { route: 'AllCairns', theme: 'day', fixt
 await page.getByTestId('found-cairn-row-900').click();
 await routeName('AcquiredCairnDetail');
 await page.getByTestId('acquired-cairn-paper').waitFor({ state: 'visible', timeout: 20_000 });
+await waitForStablePaper('acquired-cairn-paper');
 await capture('10-day-found-detail-latest', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA' });
 const previous = page.getByText('Earlier', { exact: true });
 if (await previous.isVisible().catch(() => false)) {
   await previous.click();
-  await settle();
+  await waitForStablePaper('acquired-cairn-paper');
   await capture('11-day-found-detail-history', { route: 'AcquiredCairnDetail', theme: 'day', fixture: 'isolated QA' });
 }
 const closeStartedAt = Date.now();

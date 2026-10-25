@@ -4095,8 +4095,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
               // Keep the just-finished Activity visible while the prepared
               // read model takes ownership of its already-accepted coverage.
               // eslint-disable-next-line @typescript-eslint/no-require-imports
-              void require('../features/memory/store/usePreparedMemoryCoverageStore')
-                .usePreparedMemoryCoverageStore.getState().refreshCurrentViewport();
+              require('../features/memory/store/usePreparedMemoryCoverageStore')
+                .usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
             }
           } catch (markErr) {
             crashLogger.breadcrumb(`v412:mark_synced_failed ${String(markErr).slice(0, 60)}`);

@@ -51,10 +51,15 @@ interface PreparedMemoryCoverageState {
   error: string | null;
   lastFailure: MemoryOperationFailure | null;
   version: number;
+  /** Successful server writes that are not yet represented by a newer snapshot. */
+  serverCoverageDirty: boolean;
+  serverCoverageDirtyBaseline: string | null;
+  serverCoverageDirtyGeneration: number;
   /** Diagnostic/refresh hint only. Rendering supplies its own viewport. */
   viewport: MemoryCoverageViewport | null;
   loadViewport: (viewport: MemoryCoverageViewport, force?: boolean) => Promise<void>;
   refreshCurrentViewport: () => Promise<void>;
+  markServerCoverageDirty: () => void;
   reset: () => void;
 }
 
@@ -122,13 +127,17 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
   error: null,
   lastFailure: null,
   version: 0,
+  serverCoverageDirty: false,
+  serverCoverageDirtyBaseline: null,
+  serverCoverageDirtyGeneration: 0,
   viewport: null,
 
   loadViewport: async (viewport, force = false) => {
     const userId = String(useAppStore.getState().user?.id ?? '');
     if (!userId) return;
     const accountChanged = get().userId !== userId;
-    if (!accountChanged && get().coverage?.complete && get().status === 'ready' && !force) {
+    if (!accountChanged && get().coverage?.complete && get().status === 'ready'
+      && !get().serverCoverageDirty && !force) {
       if (get().viewport?.key !== viewport.key) set({ viewport });
       return;
     }
@@ -157,6 +166,8 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       version: accountChanged ? get().version + 1 : get().version,
     });
     const requestStartedAtMs = Date.now();
+    const dirtyGenerationAtStart = get().serverCoverageDirtyGeneration;
+    const dirtyBaselineAtStart = get().serverCoverageDirtyBaseline;
     const requestId = `mine-snapshot-${sequence}`;
     let stage = 'manifest';
     let targetRevision = `mine:pending:${sequence}`;
@@ -276,6 +287,12 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         type: 'MultiPolygon',
         coordinates: tiles.flatMap(tile => tile.geometry.coordinates),
       };
+      const stateBeforePublish = get();
+      const refreshedPastDirtyBaseline = stateBeforePublish.serverCoverageDirty
+        && stateBeforePublish.serverCoverageDirtyGeneration === dirtyGenerationAtStart
+        && (dirtyBaselineAtStart == null
+          || snapshotId !== dirtyBaselineAtStart
+          || expectedEvidenceCount !== retained?.evidenceCount);
       set({
         coverage: {
           viewportKey: 'all-authorized',
@@ -296,6 +313,12 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         error: null,
         lastFailure: null,
         version: get().version + 1,
+        serverCoverageDirty: refreshedPastDirtyBaseline
+          ? false
+          : stateBeforePublish.serverCoverageDirty,
+        serverCoverageDirtyBaseline: refreshedPastDirtyBaseline
+          ? null
+          : stateBeforePublish.serverCoverageDirtyBaseline,
       });
       log('o92.memory.snapshot_complete', {
         request_id: requestId,
@@ -353,6 +376,22 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
     if (viewport) await get().loadViewport(viewport, true);
   },
 
+  markServerCoverageDirty: () => {
+    const state = get();
+    set({
+      serverCoverageDirty: true,
+      serverCoverageDirtyBaseline: state.serverCoverageDirty
+        ? state.serverCoverageDirtyBaseline
+        : state.coverage?.snapshotId ?? null,
+      serverCoverageDirtyGeneration: state.serverCoverageDirtyGeneration + 1,
+    });
+    if (state.status === 'loading' || state.status === 'refreshing') {
+      refreshAfterLoad = true;
+      return;
+    }
+    if (state.viewport) void get().loadViewport(state.viewport, true);
+  },
+
   reset: () => {
     requestSequence += 1;
     refreshAfterLoad = false;
@@ -364,6 +403,9 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       status: 'idle',
       error: null,
       lastFailure: null,
+      serverCoverageDirty: false,
+      serverCoverageDirtyBaseline: null,
+      serverCoverageDirtyGeneration: 0,
       viewport: null,
       version: get().version + 1,
     });

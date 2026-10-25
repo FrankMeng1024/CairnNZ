@@ -108,6 +108,110 @@ describe('prepared Memory viewport handoff', () => {
     });
   });
 
+  test('a successful automatic sync cannot leave a ready cache stale when no screen owns a viewport', async () => {
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce(response('before-automatic-memory'))
+      .mockResolvedValueOnce(response('after-automatic-memory'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+
+    // Leaving Memory can remove the current presentation viewport while the
+    // complete in-memory snapshot remains reusable. This is the exact passive
+    // recording boundary used by memorySync after its server ACK.
+    usePreparedMemoryCoverageStore.setState({ viewport: null });
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+    await usePreparedMemoryCoverageStore.getState().loadViewport({
+      ...viewport,
+      key: 'memory-re-entry-after-automatic-sync',
+    });
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+    expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion)
+      .toBe('after-automatic-memory');
+  });
+
+  test('an unchanged snapshot remains dirty and retries on the next city entry', async () => {
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce(response('before-passive-write'))
+      .mockResolvedValueOnce(response('before-passive-write'))
+      .mockResolvedValueOnce(response('after-passive-write'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    usePreparedMemoryCoverageStore.setState({ viewport: null });
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+
+    await usePreparedMemoryCoverageStore.getState().loadViewport({
+      ...viewport,
+      key: 'same-city-first-re-entry',
+    });
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      serverCoverageDirty: true,
+      coverage: { snapshotId: 'before-passive-write' },
+    });
+
+    usePreparedMemoryCoverageStore.setState({ viewport: null });
+    await usePreparedMemoryCoverageStore.getState().loadViewport({
+      key: 'different-city-second-re-entry',
+      bbox: [168.5, -46.0, 168.8, -45.7],
+    });
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(3);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      serverCoverageDirty: false,
+      coverage: { snapshotId: 'after-passive-write' },
+    });
+  });
+
+  test('a failed dirty refresh retries successfully without discarding the complete scene', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('before-retry'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    usePreparedMemoryCoverageStore.setState({ viewport: null });
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+    mockAuthenticatedFetch.mockResolvedValueOnce({ ok: false, status: 503 });
+
+    await usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'failed-re-entry' });
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'error',
+      serverCoverageDirty: true,
+      coverage: { snapshotId: 'before-retry' },
+    });
+
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('after-retry'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'successful-re-entry' });
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready',
+      serverCoverageDirty: false,
+      coverage: { snapshotId: 'after-retry' },
+    });
+  });
+
+  test('a server write arriving during refresh fences the older response and schedules another fetch', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('before-delayed-write'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    usePreparedMemoryCoverageStore.setState({ viewport: null });
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+
+    let releaseOlder!: (value: ReturnType<typeof response>) => void;
+    mockAuthenticatedFetch
+      .mockImplementationOnce(() => new Promise(resolve => { releaseOlder = resolve; }))
+      .mockResolvedValueOnce(response('after-latest-write'));
+    const pending = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'delayed-refresh' });
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+    releaseOlder(response('after-first-write'));
+    await pending;
+    for (let attempt = 0; attempt < 10 && mockAuthenticatedFetch.mock.calls.length < 3; attempt += 1) {
+      await Promise.resolve();
+    }
+    for (let attempt = 0; attempt < 10
+      && usePreparedMemoryCoverageStore.getState().coverage?.snapshotId !== 'after-latest-write'; attempt += 1) {
+      await Promise.resolve();
+    }
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(3);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready',
+      serverCoverageDirty: false,
+      coverage: { snapshotId: 'after-latest-write' },
+    });
+  });
+
   test('a missing terminal page never publishes incomplete data as complete', async () => {
     mockAuthenticatedFetch.mockResolvedValueOnce({
       ok: true,
