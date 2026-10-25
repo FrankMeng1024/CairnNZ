@@ -129,6 +129,54 @@ describe('prepared Memory viewport handoff', () => {
       .toBe('after-automatic-memory');
   });
 
+  test('a first-ever read after an ACK accepts the first complete post-ACK snapshot', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('snapshot-after-first-ack'));
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready',
+      serverCoverageDirty: false,
+      coverage: { snapshotId: 'snapshot-after-first-ack' },
+    });
+  });
+
+  test('two ACKs before first Memory entry coalesce into one complete acquisition', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('snapshot-after-two-acks'));
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready',
+      serverCoverageDirty: false,
+      coverage: { snapshotId: 'snapshot-after-two-acks' },
+    });
+  });
+
+  test('a first-ever 503 retains dirty and the next complete snapshot terminates it', async () => {
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+    mockAuthenticatedFetch.mockResolvedValueOnce({ ok: false, status: 503 });
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'error',
+      coverage: null,
+      serverCoverageDirty: true,
+    });
+
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('snapshot-after-first-503'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'first-entry-retry' });
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready',
+      serverCoverageDirty: false,
+      coverage: { snapshotId: 'snapshot-after-first-503' },
+    });
+  });
+
   test('an unchanged snapshot remains dirty and retries on the next city entry', async () => {
     mockAuthenticatedFetch
       .mockResolvedValueOnce(response('before-passive-write'))
@@ -254,6 +302,30 @@ describe('prepared Memory viewport handoff', () => {
     expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('viewer-b');
   });
 
+  test('an account switch during a dirty request cannot transfer its late geometry', async () => {
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('viewer-a-initial'));
+    await usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
+    usePreparedMemoryCoverageStore.setState({ viewport: null });
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
+
+    let releaseViewerA!: (value: ReturnType<typeof response>) => void;
+    mockAuthenticatedFetch.mockImplementationOnce(() => new Promise(resolve => { releaseViewerA = resolve; }));
+    const viewerARequest = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'viewer-a-dirty' });
+
+    mockUserId = 'viewer-b';
+    mockAuthenticatedFetch.mockResolvedValueOnce(response('viewer-b-current'));
+    const viewerBRequest = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'viewer-b-first' }, true);
+    releaseViewerA(response('viewer-a-late'));
+    await Promise.all([viewerARequest, viewerBRequest]);
+
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      userId: 'viewer-b',
+      status: 'ready',
+      serverCoverageDirty: false,
+      coverage: { snapshotId: 'viewer-b-current', datasetRevision: 'viewer-b-current' },
+    });
+  });
+
   test('times out a request that never resolves and exposes a retryable error', async () => {
     jest.useFakeTimers();
     mockAuthenticatedFetch.mockImplementation((_path: string, init: RequestInit) => new Promise((_resolve, reject) => {
@@ -283,6 +355,7 @@ describe('prepared Memory viewport handoff', () => {
       init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
     }));
 
+    usePreparedMemoryCoverageStore.getState().markServerCoverageDirty();
     const pending = usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
     const requestSignal = mockAuthenticatedFetch.mock.calls[0][1].signal as AbortSignal;
     usePreparedMemoryCoverageStore.getState().reset();
@@ -294,6 +367,7 @@ describe('prepared Memory viewport handoff', () => {
       userId: null,
       coverage: null,
       status: 'idle',
+      serverCoverageDirty: false,
     });
   });
 });

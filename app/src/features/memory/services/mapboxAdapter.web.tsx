@@ -46,6 +46,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { guardMapboxGl2RetiredDispatcher } from './mapboxGl2LifecycleGuard';
 import { queryWebShapeSourcePressFeatures } from './mapboxAdapterWebPress';
 import { hasRenderedHostedMapboxBasemap } from './mapboxWebReadiness';
+import { reconcileWebLayerPosition } from './mapboxLayerPosition';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
@@ -448,6 +449,12 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
     && Boolean((window as any).__cairnMapQaLocalStyle);
   const localQaTestMode = localQaStyleEnabled
     && (window as any).__cairnMapQaTestMode !== false;
+  // Explicit visual-harness-only framebuffer retention. Production never
+  // sets this global; ordinary Web rendering keeps Mapbox's default. The
+  // retained buffer lets the harness distinguish a blank Mapbox draw from a
+  // compositor/page-screenshot capture failure on older macOS/Intel hosts.
+  const localQaPreserveDrawingBuffer = localQaStyleEnabled
+    && Boolean((window as any).__cairnMapQaPreserveDrawingBuffer);
   const effectiveStyleIdentity = localQaStyleEnabled
     ? 'local-qa-style'
     : styleJSON ?? styleUrl;
@@ -488,6 +495,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
       }}>
         <MapGL
           {...(localQaTestMode ? ({ testMode: true } as any) : {})}
+          preserveDrawingBuffer={localQaPreserveDrawingBuffer}
           ref={(r) => {
             const previous = mapRef.current?.getMap?.() ?? mapRef.current;
             mapRef.current = r;
@@ -1046,25 +1054,22 @@ interface LayerProps {
   filter?: any[];
   /** RNMapbox-compatible ordering hint for late optional layers. */
   aboveLayerID?: string;
+  belowLayerID?: string;
 }
 
-function useWebLayerAbove(id: string, aboveLayerID?: string): void {
+function useWebLayerPosition(id: string, aboveLayerID?: string, belowLayerID?: string): void {
   const mapCtx = React.useContext(MapInstanceContext);
   useEffect(() => {
-    if (!aboveLayerID) return undefined;
+    const anchorID = belowLayerID ?? aboveLayerID;
+    if (!anchorID) return undefined;
     let disposed = false;
     let frame: number | null = null;
     let map: any = null;
     const apply = () => {
-      if (disposed || !map?.getLayer?.(id) || !map.getLayer?.(aboveLayerID)) return;
-      const layers = map.getStyle?.()?.layers ?? [];
-      const layerIndex = layers.findIndex((layer: any) => layer.id === id);
-      const anchorIndex = layers.findIndex((layer: any) => layer.id === aboveLayerID);
-      // moveLayer itself emits styledata. Only move when the optional layer
-      // actually arrived above this route layer, otherwise the listener can
-      // create an endless styledata/moveLayer render loop.
-      if (layerIndex < 0 || anchorIndex < 0 || layerIndex > anchorIndex) return;
-      try { map.moveLayer(id); } catch { /* style replacement */ }
+      if (disposed) return;
+      // moveLayer itself emits styledata. The reconciler is idempotent and
+      // moves only when the relation is wrong, preventing a render loop.
+      try { reconcileWebLayerPosition(map, id, aboveLayerID, belowLayerID); } catch { /* style replacement */ }
     };
     const attach = () => {
       if (disposed) return;
@@ -1082,10 +1087,11 @@ function useWebLayerAbove(id: string, aboveLayerID?: string): void {
       if (frame != null) cancelAnimationFrame(frame);
       map?.off?.('styledata', apply);
     };
-  }, [aboveLayerID, id, mapCtx]);
+  }, [aboveLayerID, belowLayerID, id, mapCtx]);
 }
 
-export function FillLayer({ id, style, __sourceId, filter }: LayerProps) {
+export function FillLayer({ id, style, __sourceId, filter, aboveLayerID, belowLayerID }: LayerProps) {
+  useWebLayerPosition(id, aboveLayerID, belowLayerID);
   const filterProps = filter ? { filter: filter as any } : {};
   return (
     <Layer
@@ -1099,9 +1105,9 @@ export function FillLayer({ id, style, __sourceId, filter }: LayerProps) {
 }
 
 // ── LineLayer ─────────────────────────────────────────────────────────
-export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ id, style, __sourceId, filter, aboveLayerID }, ref) {
+export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ id, style, __sourceId, filter, aboveLayerID, belowLayerID }, ref) {
   const mapCtx = React.useContext(MapInstanceContext);
-  useWebLayerAbove(id, aboveLayerID);
+  useWebLayerPosition(id, aboveLayerID, belowLayerID);
   React.useImperativeHandle(ref, () => ({
     setNativeProps: (props: { style?: Record<string, any> }) => {
       const inner = mapCtx?.current?.getMap?.() ?? mapCtx?.current;
@@ -1145,8 +1151,8 @@ export const LineLayer = React.forwardRef<any, LayerProps>(function LineLayer({ 
   );
 });
 
-export function CircleLayer({ id, style, __sourceId, filter, aboveLayerID }: LayerProps) {
-  useWebLayerAbove(id, aboveLayerID);
+export function CircleLayer({ id, style, __sourceId, filter, aboveLayerID, belowLayerID }: LayerProps) {
+  useWebLayerPosition(id, aboveLayerID, belowLayerID);
   const supportedStyle: Record<string, any> = {};
   for (const [key, value] of Object.entries(style ?? {})) {
     // Native Standard uses this valid v11 paint property. GL JS v2 rejects
@@ -1158,8 +1164,8 @@ export function CircleLayer({ id, style, __sourceId, filter, aboveLayerID }: Lay
   return <Layer id={id} type="circle" source={__sourceId} {...filterProps} paint={paintToKebab(supportedStyle) as any} />;
 }
 
-export function SymbolLayer({ id, style, __sourceId, filter, aboveLayerID }: LayerProps) {
-  useWebLayerAbove(id, aboveLayerID);
+export function SymbolLayer({ id, style, __sourceId, filter, aboveLayerID, belowLayerID }: LayerProps) {
+  useWebLayerPosition(id, aboveLayerID, belowLayerID);
   // The opt-in local QA style intentionally has no remote glyph endpoint. A
   // text symbol would therefore be rejected by Mapbox GL before the screen's
   // structural assertions run. Native and normal Web maps keep the real

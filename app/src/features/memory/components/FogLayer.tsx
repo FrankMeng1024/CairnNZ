@@ -62,6 +62,12 @@ interface Props {
   opacityScale?: number;
   /** Settled Mapbox viewport used by the bounded O86 prepared read model. */
   viewport?: MemoryCoverageViewport | null;
+  /**
+   * Optional stable presentation boundary owned by the containing map.
+   * Planning maps use this to keep optional Fog below core Route layers
+   * without making Route wait for any Fog-owned layer to exist.
+   */
+  belowLayerID?: string;
 }
 
 // Bug-6 fix: module-level cache so FogLayer unmount/remount (tab switch)
@@ -1448,6 +1454,7 @@ export function FogLayer({
   scopeOverride,
   opacityScale = 1,
   viewport,
+  belowLayerID,
 }: Props) {
   const theme = useVisualTheme();
   const Mapbox = getMapbox();
@@ -2282,6 +2289,7 @@ export function FogLayer({
     >
       <FillLayer
         id="memory-fog"
+        belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'fog']}
         style={{
           // Gate 1: unexplored terrain is a natural mineral veil, not a
@@ -2309,6 +2317,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-fog-edge-outer"
+          belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'fog']}
           style={{
             lineColor: theme.mapFogEdgeOuter,
@@ -2321,6 +2330,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-fog-edge-inner"
+          belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'fog']}
           style={{
             lineColor: theme.mapFogEdgeInner,
@@ -2332,6 +2342,7 @@ export function FogLayer({
       ) : null}
       <FillLayer
         id="memory-mine"
+        belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'mine']}
         style={{
           fillColor: theme.mapMineMemoryFill,
@@ -2341,6 +2352,7 @@ export function FogLayer({
       />
       <FillLayer
         id="memory-friend-union"
+        belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'friend']}
         style={{
           fillColor: theme.mapFriendMemoryFill,
@@ -2351,6 +2363,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-friend-union-edge"
+          belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'friend']}
           style={{
             lineColor: theme.mapFriendMemoryFill,
@@ -2362,6 +2375,7 @@ export function FogLayer({
       ) : null}
       <FillLayer
         id="memory-overlap"
+        belowLayerID={belowLayerID}
         filter={['==', ['get', 'cairnFogKind'], 'overlap']}
         style={{
           fillColor: theme.mapMemoryOverlapFill,
@@ -2372,6 +2386,7 @@ export function FogLayer({
       {LineLayer ? (
         <LineLayer
           id="memory-overlap-edge"
+          belowLayerID={belowLayerID}
           filter={['==', ['get', 'cairnFogKind'], 'overlap']}
           style={{
             lineColor: theme.mapMemoryOverlapFill,

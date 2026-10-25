@@ -90,7 +90,7 @@ jest.mock('@rnmapbox/maps', () => {
     return ReactModule.createElement(View, { testID: 'mock-map', onCameraChanged, ...props }, children);
   });
   const source = ({ id, shape, children }: any) => ReactModule.createElement(View, { testID: `source-${id}`, shape }, children);
-  const layer = ({ id, style, slot }: any) => ReactModule.createElement(View, { testID: `layer-${id}`, style, slot });
+  const layer = ({ id, style, slot, ...props }: any) => ReactModule.createElement(View, { testID: `layer-${id}`, style, slot, ...props });
   const UserLocation = ({ children, ...props }: any) => ReactModule.createElement(View, { testID: 'mock-user-location', ...props }, children);
   return {
     MapView, Camera,
@@ -306,6 +306,14 @@ describe('OrderedRouteEditorScreen closure UI', () => {
     expect(screen.getByTestId('source-ordered-route-endpoints').props.shape.features.map((feature: any) => feature.properties.role)).toEqual(['Start', 'End']);
     expect(screen.getByTestId('layer-ordered-route-line').props.slot).toBe('top');
     expect(screen.getByTestId('layer-ordered-route-line').props.style.lineColor).toBe('#2F684F');
+    expect(screen.getByTestId('source-ordered-route-fog-boundary-source').props.shape).toEqual(expect.objectContaining({
+      geometry: { type: 'Point', coordinates: [0, 0] },
+    }));
+    expect(screen.getByTestId('layer-ordered-route-fog-boundary').props.style).toEqual({ circleRadius: 0, circleOpacity: 0 });
+    expect(screen.getByTestId('layer-ordered-route-line').props.aboveLayerID).toBe('ordered-route-fog-boundary');
+    expect(mockFogLayer).toHaveBeenLastCalledWith(expect.objectContaining({
+      belowLayerID: 'ordered-route-fog-boundary',
+    }));
     const headerStyle = StyleSheet.flatten(screen.getByTestId('route-editor-header').props.style);
     expect(headerStyle.backgroundColor).toBeUndefined();
     expect(headerStyle.borderBottomWidth).toBe(0);

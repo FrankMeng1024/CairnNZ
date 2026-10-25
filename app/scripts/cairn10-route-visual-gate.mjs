@@ -36,6 +36,7 @@ const fixtures = [
   { id: 'different-density', points: [point(0), point(100), point(75), point(50), point(25), point(0)], passes: 2, turns: [point(100)] },
   { id: 'parallel-streets', points: [point(0), point(100), point(100, 8), point(0, 8)], passes: 1, turns: [] },
   { id: 'closed-o', points: [point(0), point(60), point(60, 45), point(0, 45), point(0)], passes: 1, turns: [] },
+  { id: 'figure-eight-crossing', points: [point(0), point(45, 45), point(90), point(0, 45), point(45), point(90, 45)], passes: 1, turns: [] },
   { id: 'mixed-repeat-ordinary', points: [point(0), point(45), point(90), point(45), point(0), point(0, 55), point(45, 80)], passes: 2, turns: [point(90)] },
   {
     id: 'true-gap',
@@ -202,6 +203,40 @@ const captureUntilRoutePixels = async (page, screenshotPath, projected, approach
   return { pixels, attempts };
 };
 
+const readWebGlFramebufferHealth = async page => page.evaluate(() => {
+  const canvas = globalThis.__cairnMap?.getCanvas?.();
+  const gl = canvas?.getContext?.('webgl2') ?? canvas?.getContext?.('webgl');
+  if (!canvas || !gl) return { contextCreated: false };
+  const width = gl.drawingBufferWidth;
+  const height = gl.drawingBufferHeight;
+  const pixels = new Uint8Array(Math.max(0, width * height * 4));
+  gl.finish?.();
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  let alphaPixels = 0;
+  let nonZeroRgbPixels = 0;
+  let routeLikePixels = 0;
+  for (let offset = 0; offset < pixels.length; offset += 4) {
+    const red = pixels[offset];
+    const green = pixels[offset + 1];
+    const blue = pixels[offset + 2];
+    if (pixels[offset + 3] > 0) alphaPixels += 1;
+    if (red > 0 || green > 0 || blue > 0) nonZeroRgbPixels += 1;
+    if (Math.hypot(red - 0x2f, green - 0x68, blue - 0x4f) <= 34 && pixels[offset + 3] >= 220) routeLikePixels += 1;
+  }
+  return {
+    contextCreated: true,
+    contextLost: Boolean(gl.isContextLost?.()),
+    width,
+    height,
+    alphaPixels,
+    nonZeroRgbPixels,
+    routeLikePixels,
+    preserveDrawingBuffer: gl.getContextAttributes?.()?.preserveDrawingBuffer ?? null,
+    error: gl.getError?.() ?? null,
+    dataUrlLength: canvas.toDataURL?.('image/png')?.length ?? 0,
+  };
+});
+
 fs.mkdirSync(outputDir, { recursive: true });
 const negativeScreenshot = path.join(outputDir, 'negative-disconnected-parallel-lines.png');
 await sharp({ create: { width: 45, height: 45, channels: 4, background: '#101010' } })
@@ -253,6 +288,7 @@ await page.addInitScript(({ localStyle }) => {
   // adapter's structural test mode intentionally suppresses the renderer and
   // therefore cannot serve as visual evidence.
   globalThis.__cairnMapQaTestMode = false;
+  globalThis.__cairnMapQaPreserveDrawingBuffer = true;
   localStorage.setItem('cairn_jwt', 'cairn10-route-visual-isolated');
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
   localStorage.setItem('cairn_onboarding_v1_done_cairn10-isolated-qa', 'true');
@@ -324,15 +360,13 @@ for (const fixture of selectedFixtures) {
   }, null, { timeout: 30_000 });
   await page.getByText('Updating exploration…', { exact: true }).waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
   const turn = fixture.turns[0] ?? fixture.points.at(-1);
-  const views = fixture.id === 'two-pass' || fixture.id === 'closed-o'
-    ? [
-      { id: 'overview-z15_5', zoom: 15.5, bearing: 0 },
-      { id: 'z17', zoom: 17, bearing: 18 },
-      { id: 'z18', zoom: 18, bearing: 28 },
-      { id: 'z19_5', zoom: 19.5, bearing: 42 },
-      { id: 'z21', zoom: 21, bearing: 67 },
-    ]
-    : [{ id: 'check', zoom: 17, bearing: fixture.id === 'curved-return' ? 41 : 0 }];
+  const views = [
+    { id: 'overview-z15_5', zoom: 15.5, bearing: 0 },
+    { id: 'z17', zoom: 17, bearing: fixture.id === 'curved-return' ? 41 : 18 },
+    { id: 'z18', zoom: 18, bearing: 28 },
+    { id: 'z19_5', zoom: 19.5, bearing: 42 },
+    { id: 'z21', zoom: 21, bearing: 67 },
+  ];
   const captures = [];
   for (const view of views) {
     await page.evaluate(async ({ turnPoint, zoom, bearing }) => {
@@ -357,15 +391,6 @@ for (const fixture of selectedFixtures) {
     await page.waitForTimeout(350);
     const turnIndex = fixture.points.findIndex(point => point.lat === turn.lat && point.lng === turn.lng);
     const approach = fixture.points[Math.max(0, turnIndex - 1)];
-    const projected = await page.evaluate(({ turnPoint, approachPoint }) => {
-      const projectedPoint = globalThis.__cairnMap.project([turnPoint.lng, turnPoint.lat]);
-      const projectedApproach = globalThis.__cairnMap.project([approachPoint.lng, approachPoint.lat]);
-      const rect = globalThis.__cairnMap.getCanvas().getBoundingClientRect();
-      return {
-        turn: { x: rect.left + projectedPoint.x, y: rect.top + projectedPoint.y },
-        approach: { x: rect.left + projectedApproach.x, y: rect.top + projectedApproach.y },
-      };
-    }, { turnPoint: turn, approachPoint: approach });
     const screenshot = `${fixture.id}-${view.id}-390x844.png`;
     const screenshotPath = path.join(outputDir, screenshot);
     const connectivityScreenshot = `${fixture.id}-${view.id}-connectivity-mask.png`;
@@ -384,6 +409,8 @@ for (const fixture of selectedFixtures) {
         return {
           turn: { x: rect.left + projectedPoint.x, y: rect.top + projectedPoint.y },
           approach: { x: rect.left + projectedApproach.x, y: rect.top + projectedApproach.y },
+          canvasTurn: { x: projectedPoint.x, y: projectedPoint.y },
+          canvasApproach: { x: projectedApproach.x, y: projectedApproach.y },
         };
     }, { turnPoint: turn, approachPoint: approach });
     const connectivityPath = path.join(outputDir, connectivityScreenshot);
@@ -401,15 +428,26 @@ for (const fixture of selectedFixtures) {
       map.triggerRepaint?.();
     });
     await page.screenshot({ path: screenshotPath });
+    let captureSurfaces = null;
     if (fixture.id === 'two-pass' && view.id === 'z18') {
-      await page.locator('.mapboxgl-canvas').first().screenshot({ path: path.join(outputDir, 'two-pass-z18-canvas-only.png') });
+      const canvasOnlyPath = path.join(outputDir, 'two-pass-z18-canvas-only.png');
+      const framebufferPath = path.join(outputDir, 'two-pass-z18-framebuffer.png');
+      await page.locator('.mapboxgl-canvas').first().screenshot({ path: canvasOnlyPath });
       const canvasDataUrl = await page.evaluate(() => globalThis.__cairnMap?.getCanvas?.()?.toDataURL?.('image/png') ?? '');
       if (canvasDataUrl.startsWith('data:image/png;base64,')) {
         fs.writeFileSync(
-          path.join(outputDir, 'two-pass-z18-framebuffer.png'),
+          framebufferPath,
           Buffer.from(canvasDataUrl.slice('data:image/png;base64,'.length), 'base64'),
         );
       }
+      captureSurfaces = {
+        page: pixelCapture.pixels,
+        canvas: await analyseTurnPixels(canvasOnlyPath, settledProjected.canvasTurn, settledProjected.canvasApproach),
+        framebuffer: fs.existsSync(framebufferPath)
+          ? await analyseTurnPixels(framebufferPath, settledProjected.canvasTurn, settledProjected.canvasApproach)
+          : null,
+        webgl: await readWebGlFramebufferHealth(page),
+      };
     }
     captures.push({
       ...view,
@@ -417,6 +455,7 @@ for (const fixture of selectedFixtures) {
       connectivityScreenshot,
       pixels: pixelCapture.pixels,
       pixelCaptureAttempts: pixelCapture.attempts,
+      captureSurfaces,
     });
   }
   const runtime = await page.evaluate(() => {
@@ -463,6 +502,20 @@ for (const fixture of selectedFixtures) {
         visibility: map.getLayoutProperty?.(layer.id, 'visibility') ?? 'visible',
       })),
       nearbyStyleLayerIds: (map.getStyle()?.layers ?? []).map(layer => layer.id),
+      routeFogOrder: (() => {
+        const ids = (map.getStyle()?.layers ?? []).map(layer => layer.id);
+        const boundaryIndex = ids.indexOf('ordered-route-fog-boundary');
+        const fogIndices = ids.map((id, index) => id.startsWith('memory-') ? index : -1).filter(index => index >= 0);
+        const routeIndices = ids.map((id, index) => id.startsWith('ordered-route-') && id !== 'ordered-route-fog-boundary' ? index : -1).filter(index => index >= 0);
+        return {
+          boundaryIndex,
+          maxFogIndex: fogIndices.length ? Math.max(...fogIndices) : null,
+          minRouteIndex: routeIndices.length ? Math.min(...routeIndices) : null,
+          safe: boundaryIndex >= 0
+            && (fogIndices.length === 0 || Math.max(...fogIndices) < boundaryIndex)
+            && routeIndices.length > 0 && Math.min(...routeIndices) > boundaryIndex,
+        };
+      })(),
       connectorLayerIds: layers.filter(layer => layer.id.includes('turn-connector')).map(layer => layer.id),
       turnCapLayerIds: layers.filter(layer => layer.id.includes('repeat-turn-cap')).map(layer => layer.id),
       repeatLayerIds: repeats.map(layer => layer.id),
@@ -486,6 +539,7 @@ for (const fixture of selectedFixtures) {
   });
   const visualExpected = fixture.passes > 1;
   const pass = runtime.styleLoaded
+    && runtime.routeFogOrder.safe
     && (visualExpected
       ? runtime.connectorLayerIds.length === 0
         && runtime.turnCapLayerIds.length === 1
@@ -619,6 +673,7 @@ const report = {
     : 'Synthetic public-place geometry tests display projection only; canonical/persisted route coordinates remain unchanged. RNMapbox iPhone pixels remain native pending.',
   rawCoordinateArraysPersisted: false,
   screenshotCaptureMethod: 'PLAYWRIGHT_PAGE_SCREENSHOT',
+  framebufferCaptureMethod: 'WEBGL_READPIXELS_AND_PRESERVED_CANVAS_TODATAURL',
   results,
   detail: {
     screenshot: detailScreenshot,

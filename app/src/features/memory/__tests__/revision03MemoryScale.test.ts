@@ -484,11 +484,9 @@ describe('revision-03 representative distinct Memory scale and foreground respon
     }, {})).sort((left, right) => right.durationMs - left.durationMs);
     process.stderr.write(`scale-10000-slowest-slices=${JSON.stringify(slowestSlices)}\n`);
     process.stderr.write(`scale-10000-phase-maxima=${JSON.stringify(phaseMaxima)}\n`);
-    expect(maxSynchronousSliceMs).toBeLessThan(BUDGETS.maxSynchronousGeometrySliceMs);
-    expect(renderPreparationMs).toBeLessThan(BUDGETS.maxSynchronousGeometrySliceMs);
-    expect(composeFogShapeMs).toBeLessThan(BUDGETS.maxSynchronousGeometrySliceMs);
-    expect(Math.max(...eventLoopDelaySamples)).toBeLessThan(BUDGETS.maxEventLoopSchedulingDelayMs);
-    expect(totalMs).toBeLessThan(BUDGETS.diagnostic10000Ms);
+    // Persist the diagnostic before enforcing its frozen budget. A genuine
+    // over-budget run must retain p50/p95/tile/itemCount evidence instead of
+    // failing before the receipt is written.
     output.cases.push({
       id: 'DISTINCT-10000-DIAGNOSTIC', rawFixes: 10_000, acceptedCanonicalPoints: 10_000,
       spatiallyUniqueCoverageFootprints: 10_000, temporalWitnesses: 0,
@@ -506,6 +504,11 @@ describe('revision-03 representative distinct Memory scale and foreground respon
       displayedGeometry: { ...topology(evidence.geometry), vertices: vertexCount(evidence.geometry.coordinates) },
       claimBoundary: 'diagnostic maximum tested; not an unlimited-support claim',
     });
+    expect(maxSynchronousSliceMs).toBeLessThan(BUDGETS.maxSynchronousGeometrySliceMs);
+    expect(renderPreparationMs).toBeLessThan(BUDGETS.maxSynchronousGeometrySliceMs);
+    expect(composeFogShapeMs).toBeLessThan(BUDGETS.maxSynchronousGeometrySliceMs);
+    expect(Math.max(...eventLoopDelaySamples)).toBeLessThan(BUDGETS.maxEventLoopSchedulingDelayMs);
+    expect(totalMs).toBeLessThan(BUDGETS.diagnostic10000Ms);
   });
 
   test('a single tiled footprint stays within the exact 30 m ground-distance authority', async () => {

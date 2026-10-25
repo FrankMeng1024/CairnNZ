@@ -189,8 +189,11 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(canonicalLayer).toContain('role: \'canonical-safety\'');
     expect(canonicalLayer).toContain('aboveLayerID={aboveLayerID}');
     expect(canonicalLayer).toContain('repeat-turn-cap');
-    expect(editor).toContain("const ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID = 'memory-overlap-edge'");
-    expect(editor).toContain('aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID}');
+    expect(editor).toContain("ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID = 'ordered-route-fog-boundary'");
+    expect(editor).toContain('aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}');
+    expect(editor).toContain('belowLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}');
+    expect(editor).not.toContain("ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID = 'memory-overlap-edge'");
     expect(fogLayer).toContain('id="memory-overlap-edge"');
+    expect(fogLayer).toContain('belowLayerID={belowLayerID}');
   });
 });

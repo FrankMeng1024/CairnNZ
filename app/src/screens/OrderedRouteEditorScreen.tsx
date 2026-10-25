@@ -125,7 +125,12 @@ let CircleLayer: any = null;
 let SymbolLayer: any = null;
 let StyleImport: any = null;
 let UserLocation: any = null;
-const ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID = 'memory-overlap-edge';
+// This transparent boundary is a core Route-map layer and is mounted even
+// when optional Memory/Friends Fog is absent, loading, failed or remounting.
+// RNMapbox 10.3.1 waits indefinitely for a missing aboveLayerID/belowLayerID;
+// Route therefore references only this guaranteed boundary, while Fog is
+// constrained below it. No Route layer references a Fog-owned id.
+export const ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID = 'ordered-route-fog-boundary';
 if (Platform.OS === 'web') {
   const Mapbox = getMapbox();
   MapView = Mapbox.MapView;
@@ -2433,12 +2438,28 @@ export function OrderedRouteEditorScreen() {
               }}
             />
           ) : <Camera ref={cameraRef} defaultSettings={{ centerCoordinate: initialLocationCenter, zoomLevel: initialLocation.status === 'ready' ? 14 : Math.max(region.defaultZoom, 10), animationDuration: 0 }} /> : null}
+          {ShapeSource && CircleLayer ? (
+            <ShapeSource
+              id="ordered-route-fog-boundary-source"
+              shape={{
+                type: 'Feature',
+                properties: { role: 'route-fog-boundary' },
+                geometry: { type: 'Point', coordinates: [0, 0] },
+              }}
+            >
+              <CircleLayer
+                id={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
+                slot="top"
+                style={{ circleRadius: 0, circleOpacity: 0 }}
+              />
+            </ShapeSource>
+          ) : null}
           {UserLocation && locationPermissionGranted ? (
             <UserLocation visible={mapReady} animated>
               <CircleLayer
                 id="ordered-route-user-location-ring"
                 slot="top"
-                aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID}
+                aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
                 style={{
                   circleRadius: ['interpolate', ['linear'], ['zoom'], 4, 2.5, 10, 4.5, 14, 7, 18, 9],
                   circleColor: '#FFFFFF',
@@ -2448,7 +2469,7 @@ export function OrderedRouteEditorScreen() {
               <CircleLayer
                 id="ordered-route-user-location-dot"
                 slot="top"
-                aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID}
+                aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
                 style={{
                   circleRadius: ['interpolate', ['linear'], ['zoom'], 4, 1.6, 10, 3, 14, 5, 18, 6.5],
                   circleColor: 'rgba(51, 181, 229, 1)',
@@ -2460,6 +2481,7 @@ export function OrderedRouteEditorScreen() {
           <FogLayer
             scopeOverride={planningMemoryScope} opacityScale={0.42}
             viewport={memoryCoverageView}
+            belowLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
             onFogPreparing={(readinessKey, retainsDisplayedScene) => {
               routeFogTargetKeyRef.current = readinessKey;
               routeFogGeometryReadyKeyRef.current = '';
@@ -2491,7 +2513,7 @@ export function OrderedRouteEditorScreen() {
           />
           {ShapeSource && LineLayer && trimOriginalFeature ? (
             <ShapeSource id="ordered-route-trim-original" shape={trimOriginalFeature}>
-              <LineLayer id="ordered-route-trim-original-line" slot="top" aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID} style={{ lineColor: theme.foregroundSecondary, lineWidth: 7, lineOpacity: 0.34, lineDasharray: [1.5, 1.2], lineCap: 'round', lineJoin: 'round' }} />
+              <LineLayer id="ordered-route-trim-original-line" slot="top" aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID} style={{ lineColor: theme.foregroundSecondary, lineWidth: 7, lineOpacity: 0.34, lineDasharray: [1.5, 1.2], lineCap: 'round', lineJoin: 'round' }} />
             </ShapeSource>
           ) : null}
           <CanonicalRouteLayer
@@ -2502,27 +2524,27 @@ export function OrderedRouteEditorScreen() {
             CircleLayer={CircleLayer}
             SymbolLayer={SymbolLayer}
             idPrefix="ordered-route"
-            aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID}
+            aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
             hiddenPartId={routeGrowthAnimation?.canonicalOverlap ? undefined : routeGrowthAnimation?.hiddenPartId}
           />
           {ShapeSource && LineLayer && animationFeature ? (
             <ShapeSource ref={routeGrowthSourceRef} id="ordered-route-growth" shape={animationFeature} lineMetrics>
-              <LineLayer ref={routeGrowthLineRef} id="ordered-route-growth-line" slot="top" aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID} style={{ lineColor: theme.mapRouteLine, lineWidth: 6, lineCap: 'round', lineJoin: 'round', lineTrimOffset: [0, 1] }} />
+              <LineLayer ref={routeGrowthLineRef} id="ordered-route-growth-line" slot="top" aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID} style={{ lineColor: theme.mapRouteLine, lineWidth: 6, lineCap: 'round', lineJoin: 'round', lineTrimOffset: [0, 1] }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && LineLayer && pendingFeature ? (
             <ShapeSource id="ordered-route-pending" shape={pendingFeature}>
-              <LineLayer id="ordered-route-pending-line" slot="top" aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID} style={{ lineColor: theme.mapRoutePending, lineWidth: 5, lineDasharray: [1.5, 1.2], lineOpacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
+              <LineLayer id="ordered-route-pending-line" slot="top" aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID} style={{ lineColor: theme.mapRoutePending, lineWidth: 5, lineDasharray: [1.5, 1.2], lineOpacity: 0.9, lineCap: 'round', lineJoin: 'round' }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && CircleLayer && pendingEndpointFeature ? (
             <ShapeSource id="ordered-route-pending-endpoint" shape={pendingEndpointFeature}>
-              <CircleLayer id="ordered-route-pending-endpoint-circle" slot="top" aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID} style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRoutePending, circleStrokeWidth: 3 }} />
+              <CircleLayer id="ordered-route-pending-endpoint-circle" slot="top" aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID} style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRoutePending, circleStrokeWidth: 3 }} />
             </ShapeSource>
           ) : null}
           {ShapeSource && CircleLayer && routeEndpoints.length ? (
             <ShapeSource id="ordered-route-endpoints" shape={{ type: 'FeatureCollection', features: routeEndpoints }}>
-              <CircleLayer id="ordered-route-endpoint-circles" slot="top" aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID} style={{
+              <CircleLayer id="ordered-route-endpoint-circles" slot="top" aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID} style={{
                 // At an endpoint that was also an earlier real turnback, keep
                 // Start/End legible without covering the display-only U.
                 circleRadius: ['case', ['boolean', ['get', 'turnback'], false], 3, 7],
@@ -2530,12 +2552,12 @@ export function OrderedRouteEditorScreen() {
                 circleStrokeColor: theme.mapRouteLine,
                 circleStrokeWidth: ['case', ['boolean', ['get', 'turnback'], false], 1.5, 3],
               }} />
-              {SymbolLayer ? <SymbolLayer id="ordered-route-endpoint-labels" slot="top" aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID} style={{ textField: ['get', 'role'], textSize: 11, textOffset: [0, 1.55], textColor: theme.foreground, textHaloColor: theme.surfaceElevated, textHaloWidth: 1.5, textAllowOverlap: true }} /> : null}
+              {SymbolLayer ? <SymbolLayer id="ordered-route-endpoint-labels" slot="top" aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID} style={{ textField: ['get', 'role'], textSize: 11, textOffset: [0, 1.55], textColor: theme.foreground, textHaloColor: theme.surfaceElevated, textHaloWidth: 1.5, textAllowOverlap: true }} /> : null}
             </ShapeSource>
           ) : null}
           {ShapeSource && CircleLayer && draft.startPoint && draft.parts.length === 0 ? (
             <ShapeSource id="ordered-route-start" shape={{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [draft.startPoint.lng, draft.startPoint.lat] } }}>
-              <CircleLayer id="ordered-route-start-ring" slot="top" aboveLayerID={ROUTE_ABOVE_OPTIONAL_MEMORY_LAYER_ID} style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRouteLine, circleStrokeWidth: 3 }} />
+              <CircleLayer id="ordered-route-start-ring" slot="top" aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID} style={{ circleRadius: 8, circleColor: theme.surfaceElevated, circleStrokeColor: theme.mapRouteLine, circleStrokeWidth: 3 }} />
             </ShapeSource>
           ) : null}
         </MapView>
