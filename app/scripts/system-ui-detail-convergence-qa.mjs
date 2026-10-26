@@ -79,6 +79,31 @@ async function setTime(time) {
 
 async function waitForStableRouteDetail() {
   await page.locator('[data-testid="route-detail-panel"]:visible').last().waitFor({ state: 'visible', timeout: 30_000 });
+  await page.waitForFunction(() => {
+    const visible = selector => [...document.querySelectorAll(selector)].filter(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }).at(-1)?.getBoundingClientRect();
+    const panel = visible('[data-testid="route-detail-panel"]');
+    const logo = visible('.mapboxgl-ctrl-logo');
+    const attribution = visible('.mapboxgl-ctrl-attrib');
+    return Boolean(panel && logo && attribution
+      && logo.bottom + 8 <= panel.top
+      && attribution.bottom + 8 <= panel.top);
+  }, null, { timeout: 30_000, polling: 'raf' });
+  const initialSafety = await page.evaluate(() => {
+    const visible = selector => [...document.querySelectorAll(selector)].filter(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }).at(-1)?.getBoundingClientRect();
+    const panel = visible('[data-testid="route-detail-panel"]');
+    const logo = visible('.mapboxgl-ctrl-logo');
+    const attribution = visible('.mapboxgl-ctrl-attrib');
+    return {
+      safe: Boolean(panel && logo && attribution && logo.bottom + 8 <= panel.top && attribution.bottom + 8 <= panel.top),
+      gap: panel && logo && attribution ? Math.min(panel.top - logo.bottom, panel.top - attribution.bottom) : null,
+    };
+  });
   await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
   await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true
     && globalThis.__cairnMap?.areTilesLoaded?.() === true, null, { timeout: 30_000 });
@@ -100,9 +125,10 @@ async function waitForStableRouteDetail() {
     globalThis.__cairnSystemRouteStable = state;
     return state.frames >= 5;
   }, null, { timeout: 30_000, polling: 'raf' });
+  return initialSafety;
 }
 
-async function inspectRouteDetailCapture(file, theme) {
+async function inspectRouteDetailCapture(file, theme, entryPath, viewport, initialSafety) {
   const geometry = await page.evaluate(() => {
     const visibleElement = selector => [...document.querySelectorAll(selector)].filter(element => {
       const rect = element.getBoundingClientRect();
@@ -152,9 +178,9 @@ async function inspectRouteDetailCapture(file, theme) {
     ? Math.min(geometry.panel.y - geometry.logo.y - geometry.logo.height,
       geometry.panel.y - geometry.attribution.y - geometry.attribution.height)
     : -1;
-  routeDetailEvidence.push({ theme, file, ...geometry, gap, logoPixelsVisible, attributionPixelsVisible,
+  routeDetailEvidence.push({ theme, entryPath, viewport, file, initialSafety, ...geometry, gap, logoPixelsVisible, attributionPixelsVisible,
     pass: geometry.styleLoaded && geometry.tilesLoaded && geometry.logoUnobscured && geometry.attributionUnobscured
-      && logoPixelsVisible && attributionPixelsVisible && gap >= 8 });
+      && logoPixelsVisible && attributionPixelsVisible && initialSafety?.safe === true && gap >= 8 && gap <= 24 });
 }
 
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
@@ -233,10 +259,10 @@ for (const time of times) {
         await settle(600);
       }
     }
-    if (screen.key === 'route-detail') await waitForStableRouteDetail();
+    const routeInitialSafety = screen.key === 'route-detail' ? await waitForStableRouteDetail() : null;
     const captureFile = path.join(outputDir, `${screen.key}-${time}-390x844.png`);
     await page.screenshot({ path: captureFile });
-    if (screen.key === 'route-detail') await inspectRouteDetailCapture(captureFile, time);
+    if (screen.key === 'route-detail') await inspectRouteDetailCapture(captureFile, time, 'activity-detail-reused-instance', { width: 390, height: 844 }, routeInitialSafety);
   }
   await navigate('Friends');
   const addFriend = page.getByLabel('Add friend').last();

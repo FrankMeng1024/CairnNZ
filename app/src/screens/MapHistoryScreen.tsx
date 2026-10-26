@@ -1023,6 +1023,13 @@ function MapHistoryObjectScreen() {
   const [routeUseLoadingMode, setRouteUseLoadingMode] = useState<'hiking' | 'running' | null>(null);
   const [routeDeleteConfirm, setRouteDeleteConfirm] = useState(false);
   const [routeDetailPanelHeight, setRouteDetailPanelHeight] = useState(0);
+  useEffect(() => {
+    // MapHistory can be reused in-place when navigation changes from an
+    // Activity detail to a Route detail (or between own/received routes).
+    // Reset to the conservative first-frame clearance, then let the distinct
+    // Route panel mount publish its exact height through onLayout.
+    setRouteDetailPanelHeight(0);
+  }, [targetRouteId, targetSharedDeliveryId]);
   const routeFriends = useFriendStore(s => s.friends);
   const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
   const [routeShareOpen, setRouteShareOpen] = useState(false);
@@ -1930,6 +1937,7 @@ function MapHistoryObjectScreen() {
       {isRouteDetail && selectedRoute ? (
         <>
         <View
+          key={`route-detail-panel-${targetSharedDeliveryId ?? selectedRoute.id}`}
           style={[styles.singleSessionPanel, styles.routeDetailPanel, { paddingBottom: Math.max(insets.bottom, Spacing.base) + Spacing.sm, backgroundColor: visualTheme.surfaceElevated, borderColor: visualTheme.border, shadowColor: visualTheme.shadow }]}
           testID="route-detail-panel"
           onLayout={event => {

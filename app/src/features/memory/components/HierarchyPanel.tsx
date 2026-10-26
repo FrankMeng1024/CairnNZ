@@ -262,10 +262,9 @@ export function HierarchyPanel({
                       ]}
                     />
                     <Text
+                      testID={`hierarchy-row-name-${item.id}`}
                       style={[styles.rowName, { color: theme.foreground }, isHere && [styles.rowNameHere, { color: theme.primary }]]}
-                      numberOfLines={2}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.75}
+                      numberOfLines={3}
                     >
                       {item.name_en}
                     </Text>
@@ -290,8 +289,12 @@ export function HierarchyPanel({
               })}
             </ScrollView>
             {isScrollable && showScrollHint ? (
-              <View style={styles.scrollHint} pointerEvents="none">
-                <Text style={[styles.scrollHintText, { color: theme.muted, backgroundColor: theme.surfaceElevated }]}>{cairnText('memory.hierarchy-panel.more')}</Text>
+              <View
+                style={[styles.scrollHint, { backgroundColor: theme.surfaceElevated, borderTopColor: theme.border }]}
+                pointerEvents="none"
+                testID="hierarchy-scroll-hint"
+              >
+                <Text style={[styles.scrollHintText, { color: theme.muted }]}>{cairnText('memory.hierarchy-panel.more')}</Text>
               </View>
             ) : null}
           </View>
@@ -376,7 +379,10 @@ const styles = StyleSheet.create({
   errorText: { fontSize: FontSize.small, color: '#a89a82', textAlign: 'center' },
   listContainer: { position: 'relative' },
   list: { maxHeight: LIST_MAX_HEIGHT },
-  listContent: { paddingVertical: 4 },
+  // The final row must be able to scroll completely clear of the fixed locked
+  // summary/legend. The hint is a real layout row below this viewport, not an
+  // absolute overlay on top of city copy.
+  listContent: { paddingTop: 4, paddingBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -430,18 +436,17 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   scrollHint: {
-    position: 'absolute',
-    bottom: 4, left: 0, right: 0,
+    minHeight: 22,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   scrollHintText: {
     fontSize: FontSize.tiny,
     color: '#a89a82',
     letterSpacing: 0.5,
-    backgroundColor: 'rgba(255,255,255,0.9)',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingVertical: 3,
   },
   emptyBanner: {
     paddingHorizontal: 14,

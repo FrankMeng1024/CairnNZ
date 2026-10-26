@@ -19,7 +19,16 @@ const compactScenarios = [
   { theme: 'day', time: timeContexts[0], viewport: { width: 320, height: 568 } },
   { theme: 'night', time: timeContexts[1], viewport: { width: 430, height: 932 } },
 ];
-const scenarios = [...primaryScenarios, ...compactScenarios];
+const requestedScenarios = (process.env.CAIRN_MEMORY_QA_SCENARIOS || '')
+  .split(',').map(value => value.trim()).filter(Boolean);
+const repeatCount = Math.max(1, Number(process.env.CAIRN_MEMORY_QA_REPEAT || 1));
+const seedLocationAfterMount = process.env.CAIRN_MEMORY_QA_SEED_AFTER_MOUNT !== '0';
+const locationOnly = process.env.CAIRN_MEMORY_QA_LOCATION_ONLY === '1';
+const scenarioPool = [...primaryScenarios, ...compactScenarios]
+  .filter(({ theme, time, viewport }) => requestedScenarios.length === 0
+    || requestedScenarios.includes(`${theme}-${time.name}-${viewport.width}x${viewport.height}`));
+const scenarios = Array.from({ length: repeatCount }, (_, repeatIndex) => scenarioPool
+  .map(scenario => ({ ...scenario, repeatIndex }))).flat();
 
 const auckland = { id: 'nz-auckland', parent_id: 'nz', level: 3, name_en: 'Auckland', bbox: [174.70, -36.92, 174.90, -36.78], anchor: [174.7633, -36.8485] };
 const wellington = { id: 'nz-wellington', parent_id: 'nz', level: 3, name_en: 'Wellington', bbox: [174.70, -41.36, 174.86, -41.22], anchor: [174.7762, -41.2865] };
@@ -59,9 +68,10 @@ function noOverlap(a, b) {
 }
 
 async function runScenario(scenario) {
-  const { theme, time, viewport } = scenario;
+  const { theme, time, viewport, repeatIndex } = scenario;
   const fixedMs = new Date(time.iso).getTime();
-  const scenarioKey = `${theme}-${time.name}-${viewport.width}x${viewport.height}`;
+  const scenarioBaseKey = `${theme}-${time.name}-${viewport.width}x${viewport.height}`;
+  const scenarioKey = repeatCount > 1 ? `${scenarioBaseKey}-repeat-${repeatIndex + 1}` : scenarioBaseKey;
   const user = {
     id: `memory-city-${scenarioKey}`, name: 'Aroha', email: `${scenarioKey}@example.invalid`,
     createdAt: '2026-01-01T00:00:00.000Z', dateOfBirth: '1990-01-01', hasPassword: true, providers: ['email'],
@@ -183,16 +193,121 @@ async function runScenario(scenario) {
   });
 
   const shot = async state => {
-    const file = path.join(outputDir, `memory-${theme}-${time.name}-${viewport.width}x${viewport.height}-${state}.png`);
+    const repeatSuffix = repeatCount > 1 ? `-repeat-${repeatIndex + 1}` : '';
+    const file = path.join(outputDir, `memory-${theme}-${time.name}-${viewport.width}x${viewport.height}${repeatSuffix}-${state}.png`);
     await page.screenshot({ path: file });
     captureManifest.push({ screen: 'memory', theme, time: time.name, viewport: `${viewport.width}x${viewport.height}`, state, file });
     return file;
+  };
+
+  const waitForStableMemoryMap = async ({ bbox, expectedCoverage, panelOpen }) => {
+    const stabilityKey = `${scenarioKey}:${expectedCoverage}:${panelOpen ? 'panel' : 'map'}`;
+    await page.waitForFunction(({ targetBounds, coverageKind, key, expectPanel }) => {
+      const map = globalThis.__cairnMap;
+      const canvas = document.querySelector('.mapboxgl-map canvas');
+      const panelVisible = Boolean(document.querySelector('[data-testid="hierarchy-panel"]'));
+      if (!map || !canvas || panelVisible !== expectPanel
+        || document.querySelector('[data-testid="memory-entry-veil"]')
+        || document.querySelector('[data-testid="memory-finding-location"]')
+        || map.isStyleLoaded?.() !== true
+        || map.areTilesLoaded?.() !== true
+        || map.isMoving?.() === true
+        || !map.getSource?.('memory-fog-src')
+        || !map.getLayer?.('memory-fog')) return false;
+      const center = map.getCenter?.();
+      if (!center || center.lng < targetBounds[0] || center.lng > targetBounds[2]
+        || center.lat < targetBounds[1] || center.lat > targetBounds[3]) return false;
+      let basemapCount = 0;
+      let mineCount = 0;
+      let friendCount = 0;
+      let overlapCount = 0;
+      try {
+        const styleLayers = map.getStyle?.()?.layers ?? [];
+        const basemapLayers = styleLayers
+          .filter(layer => !String(layer.id).startsWith('memory-'))
+          .map(layer => layer.id);
+        basemapCount = basemapLayers.length
+          ? map.queryRenderedFeatures(undefined, { layers: basemapLayers }).length
+          : 0;
+        const point = map.project(center);
+        const countLayer = id => map.getLayer?.(id)
+          ? map.queryRenderedFeatures(point, { layers: [id] }).length
+          : 0;
+        mineCount = countLayer('memory-mine');
+        friendCount = countLayer('memory-friend-union');
+        overlapCount = countLayer('memory-overlap');
+      } catch { return false; }
+      const coverageReady = coverageKind === 'mine'
+        ? mineCount + overlapCount > 0
+        : coverageKind === 'friends'
+          ? friendCount + overlapCount > 0
+          : mineCount + friendCount + overlapCount > 0;
+      const legalVisible = [...document.querySelectorAll('.mapboxgl-ctrl-logo, .mapboxgl-ctrl-attrib')]
+        .filter(element => {
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        }).length >= 2;
+      const interactive = map.dragPan?.isEnabled?.() !== false
+        && map.scrollZoom?.isEnabled?.() !== false;
+      if (!coverageReady || basemapCount === 0 || !legalVisible || !interactive
+        || canvas.width === 0 || canvas.height === 0) return false;
+      const signature = [
+        center.lng.toFixed(5), center.lat.toFixed(5), map.getZoom?.().toFixed?.(3),
+        canvas.width, canvas.height, mineCount, friendCount, overlapCount,
+      ].join('|');
+      const samples = globalThis.__cairnMemoryStableSamples ??= {};
+      const previous = samples[key] ?? { signature: '', frames: 0 };
+      const next = {
+        signature,
+        frames: previous.signature === signature ? previous.frames + 1 : 0,
+      };
+      samples[key] = next;
+      return next.frames >= 7;
+    }, {
+      targetBounds: bbox,
+      coverageKind: expectedCoverage,
+      key: stabilityKey,
+      expectPanel: panelOpen,
+    }, { timeout: 60_000, polling: 100 });
+    return page.evaluate(() => {
+      const map = globalThis.__cairnMap;
+      const center = map.getCenter();
+      const point = map.project(center);
+      const countLayer = id => map.getLayer?.(id)
+        ? map.queryRenderedFeatures(point, { layers: [id] }).length
+        : 0;
+      const visible = selector => [...document.querySelectorAll(selector)].filter(element => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      }).at(-1);
+      const logo = visible('.mapboxgl-ctrl-logo')?.getBoundingClientRect?.();
+      const attribution = visible('.mapboxgl-ctrl-attrib')?.getBoundingClientRect?.();
+      return {
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+        styleLoaded: map.isStyleLoaded() === true,
+        tilesLoaded: map.areTilesLoaded() === true,
+        moving: map.isMoving() === true,
+        fogSourcePresent: Boolean(map.getSource('memory-fog-src')),
+        coverageAtCenter: {
+          mine: countLayer('memory-mine'),
+          friends: countLayer('memory-friend-union'),
+          overlap: countLayer('memory-overlap'),
+        },
+        legalControls: {
+          logo: logo ? { x: logo.x, y: logo.y, width: logo.width, height: logo.height } : null,
+          attribution: attribution ? { x: attribution.x, y: attribution.y, width: attribution.width, height: attribution.height } : null,
+        },
+      };
+    });
   };
 
   try {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
     await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.navigationRef), null, { timeout: 120_000 });
     await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120_000 });
+    const memoryEntryStartedAt = performance.now();
     await page.evaluate(({ userValue, appearance }) => {
       const stores = globalThis.__cairnStores;
       stores.useAppStore.setState({ user: userValue, isLoggedIn: true, hydrated: true, sessionExpired: false });
@@ -214,12 +329,19 @@ async function runScenario(scenario) {
     // Seed the local-only fresh fix after mount so the final visual evidence
     // represents a qualified current-location state, not a fixture-induced
     // "Finding your location" banner.
-    await page.evaluate(({ lat, lng }) => {
-      globalThis.__cairnStores.useMemoryStore.setState({
-        lastWatcherFix: { lat, lng, ts: Date.now(), accuracyM: 8, provenance: 'real' },
-      });
-    }, { lat: auckland.anchor[1], lng: auckland.anchor[0] });
-    await page.getByTestId('memory-finding-location').waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => {});
+    if (seedLocationAfterMount) {
+      await page.evaluate(({ lat, lng }) => {
+        globalThis.__cairnStores.useMemoryStore.setState({
+          lastWatcherFix: { lat, lng, ts: Date.now(), accuracyM: 8, provenance: 'real' },
+        });
+      }, { lat: auckland.anchor[1], lng: auckland.anchor[0] });
+    }
+    let findingLocationReadyWithinLimit = true;
+    const remainingLocationBudgetMs = Math.max(1, 10_000 - (performance.now() - memoryEntryStartedAt));
+    await page.getByTestId('memory-finding-location')
+      .waitFor({ state: 'hidden', timeout: remainingLocationBudgetMs })
+      .catch(() => { findingLocationReadyWithinLimit = false; });
+    const rawFindingLocationWaitMs = performance.now() - memoryEntryStartedAt;
     await page.waitForFunction(() => {
       const map = globalThis.__cairnMap;
       if (!map || document.querySelector('[data-testid="memory-entry-veil"]')) return false;
@@ -231,6 +353,39 @@ async function runScenario(scenario) {
       } catch { /* keep zero */ }
       return map.isStyleLoaded?.() === true && map.areTilesLoaded?.() === true && basemap > 0 && Boolean(fog);
     }, null, { timeout: 45_000, polling: 100 });
+    if (locationOnly) {
+      const postReadyMonitor = await page.evaluate(async () => {
+        const samples = [];
+        for (let index = 0; index < 48; index += 1) {
+          samples.push({
+            elapsedMs: index * 250,
+            visible: Boolean(document.querySelector('[data-testid="memory-finding-location"]')),
+          });
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        return {
+          samples,
+          visibleSampleCount: samples.filter(sample => sample.visible).length,
+          reappeared: samples.some(sample => sample.visible),
+        };
+      });
+      const findingLocationVisible = await page.getByTestId('memory-finding-location').isVisible().catch(() => false);
+      const failureState = await page.evaluate(() => ({
+        route: globalThis.__cairnStores?.getCurrentRoute?.() ?? null,
+        mapPresent: Boolean(globalThis.__cairnMap),
+        styleLoaded: globalThis.__cairnMap?.isStyleLoaded?.() === true,
+        tilesLoaded: globalThis.__cairnMap?.areTilesLoaded?.() === true,
+      }));
+      const probeScreenshot = await shot(findingLocationVisible ? 'location-timeout' : 'location-ready');
+      const pass = findingLocationReadyWithinLimit && !findingLocationVisible
+        && rawFindingLocationWaitMs < 10_000 && !postReadyMonitor.reappeared;
+      results.push({
+        scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport,
+        mode: 'location-only', seedLocationAfterMount, findingLocationWaitMs: rawFindingLocationWaitMs,
+        findingLocationVisible, postReadyMonitor, failureState, probeScreenshot, runtimeErrors: [...new Set(runtimeErrors)], pass,
+      });
+      return;
+    }
     await page.waitForFunction(id => globalThis.__cairnStores.useFriendMemoryStore.getState().sourceStates[String(id)]?.status === 'loaded', friendId, { timeout: 30_000 });
 
     const stable = await page.evaluate(async () => {
@@ -252,12 +407,16 @@ async function runScenario(scenario) {
     // Owner-local hydration may finish after the map becomes usable. Apply
     // the local QA fix once more at the actual capture boundary, then require
     // the location-status banner to be absent from every stable screenshot.
-    await page.evaluate(({ lat, lng }) => {
-      globalThis.__cairnStores.useMemoryStore.setState({
-        lastWatcherFix: { lat, lng, ts: Date.now(), accuracyM: 8, provenance: 'real' },
-      });
-    }, { lat: auckland.anchor[1], lng: auckland.anchor[0] });
+    if (seedLocationAfterMount) {
+      await page.evaluate(({ lat, lng }) => {
+        globalThis.__cairnStores.useMemoryStore.setState({
+          lastWatcherFix: { lat, lng, ts: Date.now(), accuracyM: 8, provenance: 'real' },
+        });
+      }, { lat: auckland.anchor[1], lng: auckland.anchor[0] });
+    }
+    const locationReadyStartedAt = performance.now();
     await page.getByTestId('memory-finding-location').waitFor({ state: 'hidden', timeout: 10_000 });
+    const findingLocationWaitMs = performance.now() - locationReadyStartedAt;
     const cityBox = await page.getByTestId('memory-city-switcher').boundingBox();
     const logoBox = await page.locator('.mapboxgl-ctrl-logo:visible').last().boundingBox();
     const attributionBox = await page.locator('.mapboxgl-ctrl-attrib:visible').last().boundingBox();
@@ -270,6 +429,17 @@ async function runScenario(scenario) {
     await page.getByTestId('memory-finding-location').waitFor({ state: 'hidden', timeout: 10_000 });
     const clickToPanelMs = performance.now() - openedAt;
     const panelBox = await page.getByTestId('hierarchy-panel').boundingBox();
+    const openListGeometry = await page.evaluate(() => {
+      const rect = selector => {
+        const value = document.querySelector(selector)?.getBoundingClientRect();
+        return value ? { top: value.top, bottom: value.bottom, left: value.left, right: value.right, width: value.width, height: value.height } : null;
+      };
+      return {
+        list: rect('[data-testid="hierarchy-list"]'),
+        hint: rect('[data-testid="hierarchy-scroll-hint"]'),
+        locked: rect('[data-testid="hierarchy-locked-summary"]'),
+      };
+    });
     const ownership = await page.evaluate(ids => Object.fromEntries(ids.map(id => {
       const row = document.querySelector(`[data-testid="hierarchy-row-${id}"]`);
       const badges = document.querySelector(`[data-testid="hierarchy-ownership-${id}"]`);
@@ -297,14 +467,30 @@ async function runScenario(scenario) {
       const viewport = document.querySelector('[data-testid="hierarchy-list"]')?.getBoundingClientRect();
       return Boolean(row && viewport && row.bottom > viewport.top && row.top < viewport.bottom);
     });
+    await list.evaluate(element => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event('scroll')); });
+    await page.waitForFunction(() => {
+      const element = document.querySelector('[data-testid="hierarchy-list"]');
+      return element && element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+    }, null, { timeout: 5_000 });
+    const finalRowGeometry = await page.evaluate(() => {
+      const listElement = document.querySelector('[data-testid="hierarchy-list"]');
+      const rows = [...document.querySelectorAll('[data-testid^="hierarchy-row-"]')]
+        .filter(element => !String(element.getAttribute('data-testid')).startsWith('hierarchy-row-name-'));
+      const last = rows.at(-1);
+      const listRect = listElement?.getBoundingClientRect();
+      const rowRect = last?.getBoundingClientRect();
+      const longName = document.querySelector('[data-testid="hierarchy-row-name-nz-long"]');
+      return {
+        list: listRect ? { top: listRect.top, bottom: listRect.bottom } : null,
+        lastRow: rowRect ? { top: rowRect.top, bottom: rowRect.bottom, height: rowRect.height } : null,
+        lastRowFullyVisible: Boolean(listRect && rowRect && rowRect.top >= listRect.top - 1 && rowRect.bottom <= listRect.bottom + 1),
+        longNameNotClipped: Boolean(longName && longName.scrollHeight <= longName.clientHeight + 1),
+        hintHiddenAtBottom: !document.querySelector('[data-testid="hierarchy-scroll-hint"]'),
+      };
+    });
     await shot('city-list-scrolled');
     await page.getByTestId(`hierarchy-row-${dunedin.id}`).click();
-    await page.waitForFunction(({ cityId, lng, lat }) => {
-      const manual = globalThis.__cairnStores.useMemoryCameraStore.getState().manualCity;
-      const center = globalThis.__cairnMap?.getCenter?.();
-      return manual?.cityId === cityId && center
-        && Math.hypot(center.lng - lng, center.lat - lat) < 0.2;
-    }, { cityId: dunedin.id, lng: dunedin.anchor[0], lat: dunedin.anchor[1] }, { timeout: 15_000, polling: 100 });
+    const mineStable = await waitForStableMemoryMap({ bbox: dunedin.bbox, expectedCoverage: 'mine', panelOpen: true });
     await page.getByTestId(`hierarchy-row-${dunedin.id}`).waitFor({ state: 'visible', timeout: 15_000 });
     const selection = await page.evaluate(() => {
       const center = globalThis.__cairnMap?.getCenter?.();
@@ -313,16 +499,10 @@ async function runScenario(scenario) {
     await shot('city-selected');
 
     let friendSelection = null;
-    if (theme === 'day' && time.name === 'daytime' && viewport.width === 390) {
+    let friendStable = null;
+    if (viewport.width === 390) {
       await page.getByTestId(`hierarchy-row-${wellington.id}`).click();
-      await page.waitForFunction(({ bbox }) => {
-        const center = globalThis.__cairnMap?.getCenter?.();
-        const manual = globalThis.__cairnStores.useMemoryCameraStore.getState().manualCity;
-        const scope = globalThis.__cairnStores.useMemoryScopeStore.getState().scope;
-        return center && manual == null && scope === 'combined'
-          && center.lng >= bbox[0] && center.lng <= bbox[2]
-          && center.lat >= bbox[1] && center.lat <= bbox[3];
-      }, { bbox: wellington.bbox }, { timeout: 15_000, polling: 100 });
+      friendStable = await waitForStableMemoryMap({ bbox: wellington.bbox, expectedCoverage: 'friends', panelOpen: true });
       friendSelection = await page.evaluate(() => {
         const center = globalThis.__cairnMap?.getCenter?.();
         return {
@@ -335,6 +515,12 @@ async function runScenario(scenario) {
     }
     await page.mouse.click(8, Math.round(viewport.height / 2));
     await page.getByTestId('hierarchy-panel').waitFor({ state: 'hidden', timeout: 10_000 });
+    const finalBounds = friendSelection ? wellington.bbox : dunedin.bbox;
+    const backToMapStable = await waitForStableMemoryMap({
+      bbox: finalBounds,
+      expectedCoverage: friendSelection ? 'friends' : 'mine',
+      panelOpen: false,
+    });
     await shot('back-to-map');
 
     let emptyStateCovered = true;
@@ -382,10 +568,23 @@ async function runScenario(scenario) {
       atLeastTwoCitiesAndLongName: ownership[auckland.id] && ownership[dunedin.id] && ownership[wellington.id] && longNameVisible,
       ownershipClear: ownership[auckland.id]?.badges === 'MF' && ownership[dunedin.id]?.badges === 'M' && ownership[wellington.id]?.badges === 'F',
       listActuallyScrollable: scrollEvidence.scrollHeight > scrollEvidence.clientHeight && scrollEvidence.scrollTop > 0,
+      scrollHintOutsideBody: Boolean(openListGeometry.list
+        && (!openListGeometry.hint || openListGeometry.hint.top >= openListGeometry.list.bottom - 1)
+        && (!openListGeometry.locked || !openListGeometry.hint || openListGeometry.locked.top >= openListGeometry.hint.bottom - 1)),
+      finalCityRowFullyReachable: finalRowGeometry.lastRowFullyVisible && finalRowGeometry.hintHiddenAtBottom,
+      longCityNameNotClipped: finalRowGeometry.longNameNotClipped,
       citySelectionApplied: selection.manualCity?.cityId === dunedin.id && selection.center && Math.hypot(selection.center[0] - dunedin.anchor[0], selection.center[1] - dunedin.anchor[1]) < 0.2,
-      friendOnlyCitySelectionApplied: friendSelection == null || (friendSelection.manualCity == null && friendSelection.scope === 'combined'
+      mineMapStableAfterSelection: mineStable.styleLoaded && mineStable.tilesLoaded && !mineStable.moving
+        && mineStable.fogSourcePresent && mineStable.coverageAtCenter.mine + mineStable.coverageAtCenter.overlap > 0,
+      friendOnlyCitySelectionApplied: viewport.width !== 390 || (friendSelection?.manualCity == null && friendSelection?.scope === 'combined'
         && friendSelection.center && friendSelection.center[0] >= wellington.bbox[0] && friendSelection.center[0] <= wellington.bbox[2]
         && friendSelection.center[1] >= wellington.bbox[1] && friendSelection.center[1] <= wellington.bbox[3]),
+      friendMapStableAfterSelection: viewport.width !== 390 || Boolean(friendStable?.styleLoaded && friendStable?.tilesLoaded
+        && !friendStable?.moving && friendStable?.fogSourcePresent
+        && friendStable.coverageAtCenter.friends + friendStable.coverageAtCenter.overlap > 0),
+      backToMapStable: backToMapStable.styleLoaded && backToMapStable.tilesLoaded && !backToMapStable.moving
+        && backToMapStable.fogSourcePresent && Boolean(backToMapStable.legalControls.logo && backToMapStable.legalControls.attribution),
+      findingLocationUnder10SecondsInSyntheticQa: findingLocationWaitMs < 10_000,
       outsideTapCloses: await page.getByTestId('hierarchy-panel').isHidden().catch(() => true),
       repeatedOpenClose,
       // With a qualified fresh location, the existing product contract gives
@@ -395,9 +594,22 @@ async function runScenario(scenario) {
       runtimeClean: runtimeErrors.length === 0,
       hostedMapboxResponses: mapNetwork.some(item => item.status >= 200 && item.status < 400),
     };
-    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, clickToPanelMs, cityBox, logoBox, attributionBox, panelBox, ownership, scrollEvidence, selection, friendSelection, stable, returnState, assertions, runtimeErrors: [...new Set(runtimeErrors)], mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()], pass: Object.values(assertions).every(Boolean) });
+    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, findingLocationWaitMs, clickToPanelMs, cityBox, logoBox, attributionBox, panelBox, openListGeometry, ownership, scrollEvidence, finalRowGeometry, selection, mineStable, friendSelection, friendStable, backToMapStable, stable, returnState, assertions, runtimeErrors: [...new Set(runtimeErrors)], mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()], pass: Object.values(assertions).every(Boolean) });
   } catch (error) {
-    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, runtimeErrors: [...new Set(runtimeErrors)], error: error?.stack || String(error), pass: false });
+    let failureScreenshot = null;
+    try { failureScreenshot = await shot('failure'); } catch { /* preserve the original failure */ }
+    const failureState = await page.evaluate(() => ({
+      route: globalThis.__cairnStores?.getCurrentRoute?.() ?? null,
+      findingLocationVisible: Boolean(document.querySelector('[data-testid="memory-finding-location"]')),
+      entryVeilVisible: Boolean(document.querySelector('[data-testid="memory-entry-veil"]')),
+      mapPresent: Boolean(globalThis.__cairnMap),
+      styleLoaded: globalThis.__cairnMap?.isStyleLoaded?.() === true,
+      tilesLoaded: globalThis.__cairnMap?.areTilesLoaded?.() === true,
+      center: globalThis.__cairnMap?.getCenter?.()
+        ? [globalThis.__cairnMap.getCenter().lng, globalThis.__cairnMap.getCenter().lat]
+        : null,
+    })).catch(() => null);
+    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, failureScreenshot, failureState, runtimeErrors: [...new Set(runtimeErrors)], error: error?.stack || String(error), pass: false });
   } finally {
     await context.close();
   }
@@ -409,6 +621,8 @@ await browser.close();
 const report = {
   generatedAt: new Date().toISOString(),
   sourceBoundary: 'Actual Expo Web Memory screen, hierarchy UI, Fog layers and hosted Mapbox style/tiles; local QA account/data only; not native iOS evidence',
+  seedLocationAfterMount,
+  locationOnly,
   themeTimeModel: 'Manual Day/Sunset/Night appearance overrides the auto clock by product design. Both NZ 10:00 and 21:00 contexts are genuinely re-rendered; within a fixed manual theme, identical material is expected.',
   captureCount: captureManifest.length,
   captureManifest,

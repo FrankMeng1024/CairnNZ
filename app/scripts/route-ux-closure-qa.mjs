@@ -234,11 +234,14 @@ for (const scenario of matrix) {
     const editorHeaderBackground = await page.getByTestId('route-editor-header')
       .evaluate(element => getComputedStyle(element).backgroundColor);
     const browseHasNoReservedContext = await page.getByTestId('route-context-slot').count() === 0;
-    const visibleRouteName = page.locator('[aria-label="Route name"]:visible').last();
     const visibleSave = page.locator('[data-testid="ordered-route-save"]:visible').last();
     await visibleSave.waitFor({ state: 'visible', timeout: 5_000 });
-    const nameBox = await box(visibleRouteName);
-    const saveBox = await box(visibleSave);
+    // Read both rectangles from the live composed page. The editor briefly
+    // replaces its dock while exploration refreshes; two sequential locator
+    // reads can otherwise straddle that replacement and report a false null
+    // even though the screenshot has a fully exposed Save action.
+    const nameBox = await exposedBox(page, '[aria-label="Route name"]');
+    const saveBox = await exposedBox(page, '[data-testid="ordered-route-save"]');
 
     await page.getByTestId('route-tool-draw').click();
     await page.screenshot({ path: path.join(outputDir, `${prefix}-draw.png`) });

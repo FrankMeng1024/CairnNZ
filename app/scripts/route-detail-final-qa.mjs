@@ -95,6 +95,7 @@ const page = await context.newPage();
 const runtimeErrors = [];
 const captures = [];
 const assertions = {};
+const layoutEvidence = {};
 const mapNetwork = [];
 const routeMutationNetwork = [];
 let activeMapEvidence = null;
@@ -308,6 +309,10 @@ async function assertOwnLayout(label, screenshotFile) {
   });
   const logoPixelsVisible = await ornamentPixelsVisible(screenshotFile, logo);
   const attributionPixelsVisible = await ornamentPixelsVisible(screenshotFile, attribution);
+  const legalControlGap = panel && logo && attribution
+    ? Math.min(panel.y - (logo.y + logo.height), panel.y - (attribution.y + attribution.height))
+    : null;
+  layoutEvidence[label] = { panel, logo, attribution, legalControlGap };
   assertions[label] = {
     realMapboxCanvas: Boolean(canvas && canvas.width > 0 && canvas.height > 0),
     styleLoaded: activeMapEvidence?.styleLoaded === true,
@@ -326,6 +331,7 @@ async function assertOwnLayout(label, screenshotFile) {
       && logo.x + logo.width <= width && attribution.x + attribution.width <= width
       && logo.y + logo.height <= height && attribution.y + attribution.height <= height),
     legalControlsAbovePanel: Boolean(panel && logo && attribution && logo.y + logo.height + 8 <= panel.y && attribution.y + attribution.height + 8 <= panel.y),
+    legalControlGapInStableBand: Boolean(legalControlGap != null && legalControlGap >= 8 && legalControlGap <= 24),
     legalControlsNotOccluded: hitEvidence.logo.unobscured && hitEvidence.attribution.unobscured,
     legalControlPixelsVisible: logoPixelsVisible && attributionPixelsVisible,
     logoAtLeft: Boolean(logo && logo.x + logo.width <= width / 2),
@@ -377,6 +383,64 @@ await currentRoute('Home');
 await openDetail({ routeId: ownRoute.id, theme: 'sunset', timeContext: daytime, viewport: { width: 390, height: 844 } });
 const reentryFile = await shot('route-detail-sunset-daytime-390x844-reentry');
 await assertOwnLayout('own-sunset-390-reentry', reentryFile);
+
+// Exercise the user-facing Trails row rather than navigating directly. The
+// resulting Route Detail must converge on the same measured ornament band at
+// compact, standard and large widths without a special navigation fixture.
+for (const trailsCase of [
+  { theme: 'day', viewport: { width: 320, height: 568 } },
+  { theme: 'sunset', viewport: { width: 390, height: 844 } },
+  { theme: 'night', viewport: { width: 430, height: 932 } },
+]) {
+  await page.setViewportSize(trailsCase.viewport);
+  await setTheme(trailsCase.theme);
+  await seedRoutes();
+  await page.evaluate(() => globalThis.__cairnStores.navigationRef.reset({
+    index: 1,
+    routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'routes' } }],
+  }));
+  await currentRoute('Routes');
+  await settle(800);
+  await seedRoutes();
+  await page.getByTestId(`route-record-${ownRoute.id}`).waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId(`route-record-${ownRoute.id}`).click();
+  await currentRoute('MapHistory');
+  await page.getByTestId('route-detail-panel').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+  await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true
+    && globalThis.__cairnMap?.areTilesLoaded?.() === true
+    && (globalThis.__cairnMap?.queryRenderedFeatures?.() ?? []).some(feature => !String(feature.source ?? '').startsWith('route-detail-')),
+  null, { timeout: 30_000 });
+  await page.evaluate(() => { delete globalThis.__cairnTrailsRouteStable; });
+  await page.waitForFunction(() => {
+    const visible = selector => [...document.querySelectorAll(selector)].filter(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }).at(-1)?.getBoundingClientRect();
+    const panel = visible('[data-testid="route-detail-panel"]');
+    const logo = visible('.mapboxgl-ctrl-logo');
+    const attribution = visible('.mapboxgl-ctrl-attrib');
+    if (!panel || !logo || !attribution) return false;
+    const signature = [panel.y, panel.height, logo.y, attribution.y].map(value => Math.round(value * 10) / 10).join('|');
+    const state = globalThis.__cairnTrailsRouteStable ?? { signature: '', frames: 0 };
+    state.frames = state.signature === signature ? state.frames + 1 : 0;
+    state.signature = signature;
+    globalThis.__cairnTrailsRouteStable = state;
+    return state.frames >= 5;
+  }, null, { timeout: 30_000, polling: 'raf' });
+  activeMapEvidence = await page.evaluate(() => {
+    const map = globalThis.__cairnMap;
+    return {
+      styleLoaded: map?.isStyleLoaded?.() === true,
+      tilesLoaded: map?.areTilesLoaded?.() === true,
+      renderedBasemapFeatureCount: (map?.queryRenderedFeatures?.() ?? [])
+        .filter(feature => !String(feature.source ?? '').startsWith('route-detail-')).length,
+    };
+  });
+  const trailsName = `route-detail-${trailsCase.theme}-daytime-${trailsCase.viewport.width}x${trailsCase.viewport.height}-trails-entry`;
+  const trailsEntryFile = await shot(trailsName);
+  await assertOwnLayout(`own-${trailsCase.theme}-${trailsCase.viewport.width}-trails-entry`, trailsEntryFile);
+}
 
 await openDetail({ sharedDeliveryId: receivedRoute.sharedDeliveryId, theme: 'sunset', timeContext: daytime, viewport: { width: 390, height: 844 } });
 assertions.receivedPermissions = {
@@ -495,6 +559,7 @@ const result = {
   sourceBoundary: 'Actual Expo Web components with real Mapbox GL style/tile rendering and synthetic local QA Route data; not native iOS evidence',
   captures,
   assertions,
+  layoutEvidence,
   mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()],
   routeMutationNetwork,
   runtimeErrors: [...new Set(runtimeErrors)],
