@@ -8,7 +8,12 @@ const {
   setExplicitMemoryGrant,
 } = require('../services/friendAuthorization');
 const { deriveFriendProjection } = require('../services/friendProjection');
-const { loadCoverageRegions, loadPreparedCoverage, parseViewport } = require('../services/memoryCoverage');
+const {
+  loadCoverageRegions,
+  loadCoverageSnapshotPage,
+  loadPreparedCoverage,
+  parseViewport,
+} = require('../services/memoryCoverage');
 
 const router = express.Router();
 router.use(authenticate);
@@ -323,6 +328,79 @@ router.post('/coverage', async (req, res) => {
     try { await conn.rollback(); } catch { /* noop */ }
     console.error('[friend-sharing/coverage]', error.message);
     return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+// Additive all-authorized-regions contract. One source per request keeps grant
+// revalidation and pagination independent; the client may fetch selected
+// sources concurrently without mixing their revisions.
+router.post('/coverage-snapshot', async (req, res) => {
+  const ownerId = Number(req.body?.friend_id ?? req.body?.friend_ids?.[0]);
+  if (!Number.isInteger(ownerId) || ownerId <= 0
+    || (Array.isArray(req.body?.friend_ids) && req.body.friend_ids.length !== 1)) {
+    return res.status(400).json({ error: 'Exactly one valid friend_id is required', code: 'INVALID_SOURCE' });
+  }
+  const viewerId = req.user.userId;
+  const startedAt = Date.now();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const lockIds = [...new Set([Number(viewerId), ownerId])].sort((a, b) => a - b);
+    await conn.query('SELECT id FROM users WHERE id IN (?) ORDER BY id FOR UPDATE', [lockIds]);
+    const grant = await currentMemoryGrant(conn, ownerId, viewerId, { requireSelected: true });
+    if (!grant) {
+      await conn.commit();
+      return res.json({ projections: [], revoked_friend_ids: [String(ownerId)], total_ms: Date.now() - startedAt });
+    }
+    const snapshotAuthority = [
+      'friend', viewerId, ownerId, grant.grant_epoch, Number(grant.authorization_version),
+    ].join(':');
+    const result = await loadCoverageSnapshotPage(conn, ownerId, 'shared', {
+      snapshotId: typeof req.body?.snapshot_id === 'string' ? req.body.snapshot_id : undefined,
+      visibleAt: typeof req.body?.as_of === 'string' ? req.body.as_of : undefined,
+      cursor: typeof req.body?.cursor === 'string' ? req.body.cursor : undefined,
+      pageSize: req.body?.page_size,
+      snapshotAuthority,
+    });
+    const revalidated = await currentMemoryGrant(conn, ownerId, viewerId, { requireSelected: true });
+    if (!revalidated
+      || revalidated.grant_epoch !== grant.grant_epoch
+      || Number(revalidated.authorization_version) !== Number(grant.authorization_version)) {
+      await conn.rollback();
+      return res.status(409).json({
+        error: 'Friend Memory authorization changed',
+        code: 'AUTHORIZATION_CHANGED',
+        revoked_friend_ids: [String(ownerId)],
+      });
+    }
+    await conn.commit();
+    const authorizedAt = new Date();
+    // Snapshot projections are reusable across cameras, but never become a
+    // durable authorization grant. Keep this lease deliberately short so a
+    // revoke is fail-closed even if the next sources refresh is unavailable.
+    const expiresAt = new Date(authorizedAt.getTime() + 5 * 60 * 1000);
+    return res.json({
+      projections: [{
+        source_friend_id: String(ownerId),
+        authorization_version: Number(grant.authorization_version),
+        coverage_scope: 'full_history_delayed_v1',
+        server_authorized_at: authorizedAt.toISOString(),
+        authorization_expires_at: expiresAt.toISOString(),
+        ...result,
+      }],
+      revoked_friend_ids: [],
+      total_ms: Date.now() - startedAt,
+    });
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* noop */ }
+    const status = Number(error?.httpStatus) || 500;
+    if (status >= 500) console.error('[friend-sharing/coverage-snapshot]', error.message);
+    return res.status(status).json({
+      error: status >= 500 ? 'Server error' : error.message,
+      code: error?.code ?? 'COVERAGE_SNAPSHOT_FAILED',
+    });
   } finally {
     conn.release();
   }

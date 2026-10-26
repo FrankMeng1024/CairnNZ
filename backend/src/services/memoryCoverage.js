@@ -11,12 +11,56 @@ const EARTH_RADIUS_M = 6371008.8;
 const MERCATOR_RADIUS_M = 6378137;
 const TILE_SIZE_M = 1000;
 const MAX_VIEWPORT_SPAN_DEGREES = 20;
+const DEFAULT_SNAPSHOT_PAGE_SIZE = 24;
+const MAX_SNAPSHOT_PAGE_SIZE = 64;
+const SNAPSHOT_MAX_AGE_MS = 30 * 60 * 1000;
 
 function mercatorTile(lat, lng) {
   const clamped = Math.max(-85.05112878, Math.min(85.05112878, Number(lat)));
   const x = MERCATOR_RADIUS_M * Number(lng) * Math.PI / 180;
   const y = MERCATOR_RADIUS_M * Math.log(Math.tan(Math.PI / 4 + clamped * Math.PI / 360));
   return { x: Math.floor(x / TILE_SIZE_M), y: Math.floor(y / TILE_SIZE_M) };
+}
+
+function latitudeFromMercatorY(y) {
+  return (2 * Math.atan(Math.exp(y / MERCATOR_RADIUS_M)) - Math.PI / 2) * 180 / Math.PI;
+}
+
+function coverageTileBbox(tile) {
+  const west = tile.x * TILE_SIZE_M / MERCATOR_RADIUS_M * 180 / Math.PI;
+  const east = (tile.x + 1) * TILE_SIZE_M / MERCATOR_RADIUS_M * 180 / Math.PI;
+  const south = latitudeFromMercatorY(tile.y * TILE_SIZE_M);
+  const north = latitudeFromMercatorY((tile.y + 1) * TILE_SIZE_M);
+  return [west, Math.min(south, north), east, Math.max(south, north)];
+}
+
+function snapshotPageSize(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return DEFAULT_SNAPSHOT_PAGE_SIZE;
+  return Math.min(MAX_SNAPSHOT_PAGE_SIZE, parsed);
+}
+
+function snapshotCursor(offset) {
+  return Buffer.from(JSON.stringify({ offset }), 'utf8').toString('base64url');
+}
+
+function parseSnapshotCursor(value) {
+  if (value == null || value === '') return 0;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
+    return Number.isInteger(parsed?.offset) && parsed.offset >= 0 ? parsed.offset : null;
+  } catch {
+    return null;
+  }
+}
+
+function snapshotVisibleAt(value, nowMs = Date.now()) {
+  if (value == null) return new Date(nowMs);
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)
+    || parsed > nowMs + 60_000
+    || nowMs - parsed > SNAPSHOT_MAX_AGE_MS) return null;
+  return new Date(parsed);
 }
 
 function coverageRing(latValue, lngValue) {
@@ -201,14 +245,21 @@ async function synchronizeCoverageEvidenceForSegments(db, ownerId, rawSegmentIds
   return inserted;
 }
 
-async function tileSummary(db, ownerId, visibility, tile) {
-  const ready = visibility === 'shared' ? 'AND evidence.share_ready_at <= UTC_TIMESTAMP(3)' : '';
+function visibilityFence(visibility, alias, visibleAt) {
+  if (visibility !== 'shared') return { sql: '', params: [] };
+  return visibleAt
+    ? { sql: `AND ${alias}.share_ready_at <= ?`, params: [visibleAt] }
+    : { sql: `AND ${alias}.share_ready_at <= UTC_TIMESTAMP(3)`, params: [] };
+}
+
+async function tileSummary(db, ownerId, visibility, tile, visibleAt = null) {
+  const ready = visibilityFence(visibility, 'evidence', visibleAt);
   const [rows] = await db.execute(
     `SELECT COUNT(*) AS evidence_count,COALESCE(MAX(memory_point_id),0) AS evidence_max_id
        FROM memory_coverage_evidence evidence
       WHERE evidence.owner_id=? AND evidence.coverage_rule_version=${COVERAGE_RULE_VERSION}
-        AND evidence.tile_x=? AND evidence.tile_y=? ${ready}`,
-    [ownerId, tile.x, tile.y],
+        AND evidence.tile_x=? AND evidence.tile_y=? ${ready.sql}`,
+    [ownerId, tile.x, tile.y, ...ready.params],
   );
   return {
     count: Number(rows[0]?.evidence_count) || 0,
@@ -216,16 +267,16 @@ async function tileSummary(db, ownerId, visibility, tile) {
   };
 }
 
-async function buildTile(db, ownerId, visibility, tile, summary) {
-  const ready = visibility === 'shared' ? 'AND evidence.share_ready_at <= UTC_TIMESTAMP(3)' : '';
+async function buildTile(db, ownerId, visibility, tile, summary, visibleAt = null) {
+  const ready = visibilityFence(visibility, 'evidence', visibleAt);
   const [rows] = await db.execute(
     `SELECT point.lat,point.lng
        FROM memory_coverage_evidence evidence
        JOIN memory_points point ON point.id=evidence.memory_point_id
       WHERE evidence.owner_id=? AND evidence.coverage_rule_version=${COVERAGE_RULE_VERSION}
-        AND evidence.tile_x=? AND evidence.tile_y=? ${ready}
+        AND evidence.tile_x=? AND evidence.tile_y=? ${ready.sql}
       ORDER BY evidence.memory_point_id`,
-    [ownerId, tile.x, tile.y],
+    [ownerId, tile.x, tile.y, ...ready.params],
   );
   const coordinates = unionPolygonInputs(rows.map(row => [coverageRing(row.lat, row.lng)]));
   const geometry = asGeometry(coordinates);
@@ -243,8 +294,8 @@ async function buildTile(db, ownerId, visibility, tile, summary) {
   return { geometry, hash, rebuilt: true, evidenceCount: summary.count };
 }
 
-async function loadTile(db, ownerId, visibility, tile) {
-  const summary = await tileSummary(db, ownerId, visibility, tile);
+async function loadTile(db, ownerId, visibility, tile, visibleAt = null, expectedSummary = null) {
+  const summary = expectedSummary ?? await tileSummary(db, ownerId, visibility, tile, visibleAt);
   const [cached] = await db.execute(
     `SELECT evidence_count,evidence_max_id,geometry_json,geometry_sha256
        FROM memory_coverage_tiles
@@ -262,7 +313,7 @@ async function loadTile(db, ownerId, visibility, tile) {
       evidenceCount: summary.count,
     };
   }
-  return buildTile(db, ownerId, visibility, tile, summary);
+  return buildTile(db, ownerId, visibility, tile, summary, visibleAt);
 }
 
 async function mapWithConcurrency(items, limit, worker) {
@@ -352,8 +403,8 @@ async function loadPreparedCoverage(db, ownerId, visibility, viewport) {
   };
 }
 
-async function loadCoverageRegions(db, ownerId, visibility) {
-  const ready = visibility === 'shared' ? 'AND mapped.share_ready_at<=UTC_TIMESTAMP(3)' : '';
+async function loadCoverageRegions(db, ownerId, visibility, visibleAt = null) {
+  const ready = visibilityFence(visibility, 'mapped', visibleAt);
   const [rows] = await db.execute(
     `SELECT ranked.id,ranked.parent_id,ranked.level,ranked.name_en,
             ranked.bbox_min_lng,ranked.bbox_min_lat,
@@ -375,11 +426,11 @@ async function loadCoverageRegions(db, ownerId, visibility) {
             AND evidence.coverage_rule_version=mapped.coverage_rule_version
            JOIN memory_points point ON point.id=evidence.memory_point_id
            JOIN regions region ON region.id COLLATE utf8mb4_unicode_ci=mapped.region_id
-          WHERE mapped.owner_id=? AND mapped.coverage_rule_version=${COVERAGE_RULE_VERSION} ${ready}
+          WHERE mapped.owner_id=? AND mapped.coverage_rule_version=${COVERAGE_RULE_VERSION} ${ready.sql}
        ) ranked
       WHERE ranked.recency_rank=1
       ORDER BY ranked.level,ranked.id`,
-    [ownerId],
+    [ownerId, ...ready.params],
   );
   return rows.map(region => ({
     id: String(region.id),
@@ -390,11 +441,160 @@ async function loadCoverageRegions(db, ownerId, visibility) {
       Number(region.bbox_min_lng), Number(region.bbox_min_lat),
       Number(region.bbox_max_lng), Number(region.bbox_max_lat),
     ],
-    // The most recent accepted coverage witness is a legitimate exploration
-    // anchor. Shared reads apply the same delayed-visibility fence as the
-    // region itself, so this never reveals an unready point.
-    anchor: [Number(region.anchor_lng), Number(region.anchor_lat)],
+    // Mine can navigate to its own latest accepted witness. Friends receive a
+    // coarse region centre only: coverage geometry is authorized, but a raw
+    // foreign observation coordinate is not a navigation/API contract.
+    anchor: visibility === 'shared'
+      ? [
+          (Number(region.bbox_min_lng) + Number(region.bbox_max_lng)) / 2,
+          (Number(region.bbox_min_lat) + Number(region.bbox_max_lat)) / 2,
+        ]
+      : [Number(region.anchor_lng), Number(region.anchor_lat)],
   }));
+}
+
+function snapshotChanged(message = 'Coverage snapshot changed') {
+  const error = new Error(message);
+  error.code = 'SNAPSHOT_CHANGED';
+  error.httpStatus = 409;
+  return error;
+}
+
+async function loadCoverageSnapshotManifest(db, ownerId, visibility, options = {}) {
+  const pageSize = snapshotPageSize(options.pageSize);
+  const visibleAt = snapshotVisibleAt(options.visibleAt);
+  if (!visibleAt) throw snapshotChanged('Coverage snapshot expired');
+  const ready = visibilityFence(visibility, 'evidence', visibility === 'shared' ? visibleAt : null);
+  const startedAt = Date.now();
+  const [tileRows] = await db.execute(
+    `SELECT evidence.tile_x,evidence.tile_y,COUNT(*) AS evidence_count,
+            COALESCE(MAX(evidence.memory_point_id),0) AS evidence_max_id
+       FROM memory_coverage_evidence evidence
+      WHERE evidence.owner_id=? AND evidence.coverage_rule_version=${COVERAGE_RULE_VERSION}
+        ${ready.sql}
+      GROUP BY evidence.tile_x,evidence.tile_y
+      ORDER BY evidence.tile_y,evidence.tile_x`,
+    [ownerId, ...ready.params],
+  );
+  const [stateRows] = await db.execute(
+    `SELECT evidence_revision FROM memory_coverage_source_state WHERE owner_id=?`,
+    [ownerId],
+  );
+  const regions = await loadCoverageRegions(
+    db,
+    ownerId,
+    visibility,
+    visibility === 'shared' ? visibleAt : null,
+  );
+  const tiles = tileRows.map(row => ({
+    id: `${Number(row.tile_x)}:${Number(row.tile_y)}`,
+    x: Number(row.tile_x),
+    y: Number(row.tile_y),
+    evidence_count: Number(row.evidence_count) || 0,
+    evidence_max_id: Number(row.evidence_max_id) || 0,
+    bbox: coverageTileBbox({ x: Number(row.tile_x), y: Number(row.tile_y) }),
+  }));
+  const datasetRevision = Number(stateRows[0]?.evidence_revision) || 0;
+  const asOf = visibleAt.toISOString();
+  const snapshotId = crypto.createHash('sha256').update(JSON.stringify({
+    owner: String(ownerId),
+    visibility,
+    authority: String(options.snapshotAuthority ?? ownerId),
+    rule: COVERAGE_RULE_VERSION,
+    datasetRevision,
+    asOf: visibility === 'shared' ? asOf : null,
+    pageSize,
+    tiles: tiles.map(tile => [tile.id, tile.evidence_count, tile.evidence_max_id]),
+  })).digest('hex');
+  return {
+    snapshot_id: snapshotId,
+    dataset_revision: String(datasetRevision),
+    coverage_rule_version: COVERAGE_RULE_VERSION,
+    radius_m: COVERAGE_RADIUS_M,
+    ring_steps: COVERAGE_RING_STEPS,
+    as_of: asOf,
+    page_size: pageSize,
+    expected_pages: tiles.length === 0 ? 0 : Math.ceil(tiles.length / pageSize),
+    expected_tiles: tiles.length,
+    expected_evidence_count: tiles.reduce((sum, tile) => sum + tile.evidence_count, 0),
+    regions,
+    terminal_status: tiles.length === 0 ? 'empty' : 'pages_required',
+    complete: tiles.length === 0,
+    manifest_ms: Date.now() - startedAt,
+    _tiles: tiles,
+    _visibleAt: visibility === 'shared' ? visibleAt : null,
+  };
+}
+
+function publicCoverageSnapshotManifest(manifest) {
+  const { _tiles, _visibleAt, ...value } = manifest;
+  void _tiles;
+  void _visibleAt;
+  return value;
+}
+
+async function loadCoverageSnapshotPage(db, ownerId, visibility, request = {}) {
+  const cursor = parseSnapshotCursor(request.cursor);
+  if (cursor == null) {
+    const error = new Error('Invalid coverage snapshot cursor');
+    error.code = 'INVALID_CURSOR';
+    error.httpStatus = 400;
+    throw error;
+  }
+  const manifest = await loadCoverageSnapshotManifest(db, ownerId, visibility, {
+    pageSize: request.pageSize,
+    visibleAt: request.visibleAt,
+    snapshotAuthority: request.snapshotAuthority,
+  });
+  if (request.snapshotId && request.snapshotId !== manifest.snapshot_id) throw snapshotChanged();
+  if (cursor > manifest._tiles.length
+    || (cursor !== manifest._tiles.length && cursor % manifest.page_size !== 0)) {
+    const error = new Error('Invalid coverage snapshot cursor offset');
+    error.code = 'INVALID_CURSOR';
+    error.httpStatus = 400;
+    throw error;
+  }
+  const pageRows = manifest._tiles.slice(cursor, cursor + manifest.page_size);
+  const buildStartedAt = Date.now();
+  const loaded = await mapWithConcurrency(pageRows, 4, tile => loadTile(
+    db,
+    ownerId,
+    visibility,
+    { x: tile.x, y: tile.y },
+    manifest._visibleAt,
+    { count: tile.evidence_count, maxId: tile.evidence_max_id },
+  ));
+  const revalidated = await loadCoverageSnapshotManifest(db, ownerId, visibility, {
+    pageSize: manifest.page_size,
+    visibleAt: manifest.as_of,
+    snapshotAuthority: request.snapshotAuthority,
+  });
+  if (revalidated.snapshot_id !== manifest.snapshot_id) throw snapshotChanged();
+  const nextOffset = cursor + pageRows.length;
+  const complete = nextOffset >= manifest._tiles.length;
+  return {
+    manifest: publicCoverageSnapshotManifest(manifest),
+    page: {
+      snapshot_id: manifest.snapshot_id,
+      page_index: manifest.page_size === 0 ? 0 : Math.floor(cursor / manifest.page_size),
+      tile_offset: cursor,
+      tile_count: pageRows.length,
+      evidence_count: pageRows.reduce((sum, tile) => sum + tile.evidence_count, 0),
+      tiles: pageRows.map((tile, index) => ({
+        id: tile.id,
+        bbox: tile.bbox,
+        evidence_count: tile.evidence_count,
+        geometry_sha256: loaded[index].hash,
+        geometry: loaded[index].geometry,
+      })),
+      next_cursor: complete ? null : snapshotCursor(nextOffset),
+      terminal_status: complete ? (manifest.expected_tiles === 0 ? 'empty' : 'complete') : 'more',
+      complete,
+      stage_ms: {
+        tile_materialization: Date.now() - buildStartedAt,
+      },
+    },
+  };
 }
 
 async function materializeOwnerCoverage(db, ownerId, { synchronize = true } = {}) {
@@ -452,15 +652,25 @@ module.exports = {
   COVERAGE_RULE_VERSION,
   COVERAGE_RADIUS_M,
   COVERAGE_RING_STEPS,
+  DEFAULT_SNAPSHOT_PAGE_SIZE,
+  MAX_SNAPSHOT_PAGE_SIZE,
+  SNAPSHOT_MAX_AGE_MS,
   coverageRing,
+  coverageTileBbox,
   mercatorTile,
   parseViewport,
+  parseSnapshotCursor,
+  snapshotPageSize,
+  snapshotVisibleAt,
   synchronizeCoverageEvidence,
   synchronizeCoverageEvidenceForClientIds,
   synchronizeCoverageEvidenceForActivity,
   synchronizeCoverageEvidenceForSegments,
   loadPreparedCoverage,
   loadCoverageRegions,
+  loadCoverageSnapshotManifest,
+  loadCoverageSnapshotPage,
+  publicCoverageSnapshotManifest,
   materializeOwnerCoverage,
   scheduleCoverageMaterialization,
   // Read-only test seam; production callers must use the scheduler function.
