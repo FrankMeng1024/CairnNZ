@@ -131,6 +131,7 @@ const issueText = `# Issue Register
 | V26-04 | P2 | Memory City | City popover used several fixed Day surfaces in Sunset/Night | Hard-coded panel auxiliary colors bypassed theme semantics | FIXED in HierarchyPanel only; no data/camera/Fog change | PASS 8 scenarios / ${memoryCount} captures |
 | V26-05 | P2 gate | Hike/Run | Ready state falsely reported missing metrics in first new gate | Metrics are intentionally absent before recording | QA FIXED: absence required in Ready, clipping required for active states | PASS 56 layouts / 4 interactions |
 | V26-06 | P2 test debt | Legacy O88 continuation | Old Memory encounter continuation times out after Cairn coverage | Script targets superseded Memory contracts; the current Cairn core and Memory City gates cover their supported contracts independently | OPEN test debt; Cairn core isolated and passed | Not counted as Memory City failure |
+| V26-07 | P1 gate | Memory City | Post-O94 city-selection gate timed out in all scenarios | Fixture labelled Dunedin walked but supplied only Auckland geometry; O94 correctly refuses arbitrary city-centre navigation without authorized coverage | QA FIXED: distinct Dunedin Mine and Wellington Friends polygons; both privacy paths asserted | PASS 8/8 scenarios; no product camera change |
 `;
 write('ISSUE_REGISTER_CN.md', issueText);
 
@@ -181,9 +182,9 @@ write('REQUIREMENT_STATUS_CN.md', `# 需求状态
 `);
 write('VALIDATION_REPORT_CN.md', `# 验证报告
 
-- Activity changed gate：PASS 646/646。
+- Activity changed gate：PASS；本轮 diff 未命中 Activity-impact rule，因此没有虚报未运行的 Activity suite。
 - Route fast gate：PASS 75/75。
-- Jest focused：PASS 88/88（6 suites）；O94 Memory focused：PASS 20/20（4 suites）。
+- Jest focused：PASS 98/98（7 suites，包含 O94 Memory、Route rendering、Mapbox ornaments、Friends handlers）。
 - Route Detail strict Web：PASS，19 captures，无 runtime error。
 - Settings scroll：PASS，36 transitions；root 最少真实滚动 305px，子页最大 scrollTop 0。
 - Memory City：PASS，8 scenarios / ${memoryCount} captures；hosted Mapbox Style/Tiles/Fog/source/rendered features。
@@ -191,8 +192,8 @@ write('VALIDATION_REPORT_CN.md', `# 验证报告
 - Trails：PASS，23 captures，大列表虚拟化受控。
 - Friends：PASS，Requests/Profile/confirmation/transitions。
 - Cairn core：PASS；旧 O88 Memory continuation 被隔离，不计产品 PASS。
-- 全仓 TypeScript：BASELINE FAIL（缺少 @playwright/test 类型、Preview navigation、Turf exports、既有测试类型）；本轮修改文件无新增错误。
-- Native iOS：NATIVE_PENDING（未创建 Native Build）。
+- 全仓 TypeScript：BASELINE FAIL，54 条（缺少 @playwright/test 类型、Preview navigation、Turf exports、既有测试类型）；本轮修改文件无新增错误。
+- Native iOS：NATIVE_PENDING（只有 Command Line Tools；没有 Xcode/simctl，且未创建 Native Build）。
 `);
 write('OPEN_ISSUES_CN.md', `# 尚未解决 / 边界
 
