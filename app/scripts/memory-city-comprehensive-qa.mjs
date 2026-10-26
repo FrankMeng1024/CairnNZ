@@ -35,8 +35,17 @@ const cityItems = [
   { id: 'nz-invercargill', name_en: 'Invercargill', state: 'walked', bbox: [168.25, -46.50, 168.50, -46.30] },
 ];
 const friendId = 26042;
-const mineGeometry = { type: 'MultiPolygon', coordinates: [[[[174.760, -36.851], [174.768, -36.851], [174.768, -36.844], [174.760, -36.844], [174.760, -36.851]]]] };
-const friendGeometry = { type: 'MultiPolygon', coordinates: [[[[174.763, -36.850], [174.771, -36.850], [174.771, -36.843], [174.763, -36.843], [174.763, -36.850]]]] };
+// O94 deliberately refuses arbitrary city-centre navigation: a city must
+// contain actual authorized Mine or Friends coverage. Keep distinct real
+// polygons in the fixture so the interaction gate proves both source paths.
+const mineGeometry = { type: 'MultiPolygon', coordinates: [
+  [[[174.760, -36.851], [174.768, -36.851], [174.768, -36.844], [174.760, -36.844], [174.760, -36.851]]],
+  [[[170.495, -45.885], [170.512, -45.885], [170.512, -45.870], [170.495, -45.870], [170.495, -45.885]]],
+] };
+const friendGeometry = { type: 'MultiPolygon', coordinates: [
+  [[[174.763, -36.850], [174.771, -36.850], [174.771, -36.843], [174.763, -36.843], [174.763, -36.850]]],
+  [[[174.768, -41.294], [174.784, -41.294], [174.784, -41.279], [174.768, -41.279], [174.768, -41.294]]],
+] };
 
 const browser = await chromium.launch({
   headless: true,
@@ -120,7 +129,7 @@ async function runScenario(scenario) {
       },
       page: {
         snapshot_id: `mine-${scenarioKey}`, page_index: 0, next_cursor: null, complete: true,
-        tiles: [{ id: 'mine-auckland', bbox: [174.70, -36.92, 174.90, -36.78], evidence_count: 8, geometry_sha256: 'qa-mine', geometry: mineGeometry }],
+        tiles: [{ id: 'mine-nz', bbox: [166, -48, 179, -34], evidence_count: 8, geometry_sha256: 'qa-mine', geometry: mineGeometry }],
       },
     });
     if (endpoint === '/api/friend-sharing/coverage-snapshot') return json({
@@ -135,7 +144,7 @@ async function runScenario(scenario) {
         },
         page: {
           snapshot_id: `friend-${scenarioKey}`, page_index: 0, next_cursor: null, complete: true,
-          tiles: [{ id: 'friend-auckland', bbox: [174.70, -36.92, 174.90, -36.78], evidence_count: 5, geometry_sha256: 'qa-friend', geometry: friendGeometry }],
+          tiles: [{ id: 'friend-nz', bbox: [166, -48, 179, -34], evidence_count: 5, geometry_sha256: 'qa-friend', geometry: friendGeometry }],
         },
       }],
     });
@@ -302,6 +311,28 @@ async function runScenario(scenario) {
       return { center: center ? [center.lng, center.lat] : null, manualCity: globalThis.__cairnStores.useMemoryCameraStore.getState().manualCity };
     });
     await shot('city-selected');
+
+    let friendSelection = null;
+    if (theme === 'day' && time.name === 'daytime' && viewport.width === 390) {
+      await page.getByTestId(`hierarchy-row-${wellington.id}`).click();
+      await page.waitForFunction(({ bbox }) => {
+        const center = globalThis.__cairnMap?.getCenter?.();
+        const manual = globalThis.__cairnStores.useMemoryCameraStore.getState().manualCity;
+        const scope = globalThis.__cairnStores.useMemoryScopeStore.getState().scope;
+        return center && manual == null && scope === 'combined'
+          && center.lng >= bbox[0] && center.lng <= bbox[2]
+          && center.lat >= bbox[1] && center.lat <= bbox[3];
+      }, { bbox: wellington.bbox }, { timeout: 15_000, polling: 100 });
+      friendSelection = await page.evaluate(() => {
+        const center = globalThis.__cairnMap?.getCenter?.();
+        return {
+          center: center ? [center.lng, center.lat] : null,
+          manualCity: globalThis.__cairnStores.useMemoryCameraStore.getState().manualCity,
+          scope: globalThis.__cairnStores.useMemoryScopeStore.getState().scope,
+        };
+      });
+      await shot('city-friends-selected');
+    }
     await page.mouse.click(8, Math.round(viewport.height / 2));
     await page.getByTestId('hierarchy-panel').waitFor({ state: 'hidden', timeout: 10_000 });
     await shot('back-to-map');
@@ -352,6 +383,9 @@ async function runScenario(scenario) {
       ownershipClear: ownership[auckland.id]?.badges === 'MF' && ownership[dunedin.id]?.badges === 'M' && ownership[wellington.id]?.badges === 'F',
       listActuallyScrollable: scrollEvidence.scrollHeight > scrollEvidence.clientHeight && scrollEvidence.scrollTop > 0,
       citySelectionApplied: selection.manualCity?.cityId === dunedin.id && selection.center && Math.hypot(selection.center[0] - dunedin.anchor[0], selection.center[1] - dunedin.anchor[1]) < 0.2,
+      friendOnlyCitySelectionApplied: friendSelection == null || (friendSelection.manualCity == null && friendSelection.scope === 'combined'
+        && friendSelection.center && friendSelection.center[0] >= wellington.bbox[0] && friendSelection.center[0] <= wellington.bbox[2]
+        && friendSelection.center[1] >= wellington.bbox[1] && friendSelection.center[1] <= wellington.bbox[3]),
       outsideTapCloses: await page.getByTestId('hierarchy-panel').isHidden().catch(() => true),
       repeatedOpenClose,
       // With a qualified fresh location, the existing product contract gives
@@ -361,7 +395,7 @@ async function runScenario(scenario) {
       runtimeClean: runtimeErrors.length === 0,
       hostedMapboxResponses: mapNetwork.some(item => item.status >= 200 && item.status < 400),
     };
-    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, clickToPanelMs, cityBox, logoBox, attributionBox, panelBox, ownership, scrollEvidence, selection, stable, returnState, assertions, runtimeErrors: [...new Set(runtimeErrors)], mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()], pass: Object.values(assertions).every(Boolean) });
+    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, clickToPanelMs, cityBox, logoBox, attributionBox, panelBox, ownership, scrollEvidence, selection, friendSelection, stable, returnState, assertions, runtimeErrors: [...new Set(runtimeErrors)], mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()], pass: Object.values(assertions).every(Boolean) });
   } catch (error) {
     results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, runtimeErrors: [...new Set(runtimeErrors)], error: error?.stack || String(error), pass: false });
   } finally {
