@@ -45,6 +45,12 @@ const navigate = async route => {
   await page.evaluate(name => globalThis.__cairnStores?.navigationRef?.navigate(name), route);
   await settle(900);
 };
+const waitForScenicBackdrop = () => page.waitForFunction(() => [...document.images].some(image => {
+  const rect = image.getBoundingClientRect();
+  return image.complete && image.naturalWidth > 0
+    && rect.width >= window.innerWidth * 0.9
+    && rect.height >= window.innerHeight * 0.75;
+}), null, { timeout: 15_000, polling: 'raf' });
 const setTime = async time => {
   await page.evaluate(nextTime => {
     const stores = globalThis.__cairnStores;
@@ -96,8 +102,10 @@ await page.waitForFunction(() => globalThis.__cairnStores?.getCurrentRoute?.() =
 for (const time of times) {
   await setTime(time);
   await navigate('Home');
+  await waitForScenicBackdrop();
   await shot(`home-${time}`);
   await navigate('Friends');
+  await waitForScenicBackdrop();
   await shot(`friends-${time}`);
 
   await navigate('TransientContractPreview');
