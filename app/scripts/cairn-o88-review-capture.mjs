@@ -19,6 +19,7 @@ let createdMarker = null;
 let failNextMarkerUpdate = false;
 const motionEvidence = [];
 const foundDetailOnly = process.env.CAIRN18_FOUND_DETAIL_ONLY === '1';
+const cairnCoreOnly = process.env.CAIRN26_CAIRN_CORE_ONLY === '1';
 
 fs.mkdirSync(outputDir, { recursive: true });
 fs.mkdirSync(path.join(outputDir, 'video'), { recursive: true });
@@ -542,6 +543,28 @@ motionEvidence.push({
   wall_ms: Date.now() - archiveStartedAt, result: 'server-accepted-then-paper-closed',
 });
 await capture('11b-day-found-archive-complete', { route: 'AllCairns', theme: 'day', fixture: 'isolated QA', interaction: 'Archive returned to Library' });
+
+if (cairnCoreOnly) {
+  const coreResult = {
+    generated_at: new Date().toISOString(),
+    source_boundary: 'Actual Expo Web Cairn create/detail/edit/delete/library components with local-only API fixtures; no production writes; Memory/Public Encounter continuation intentionally excluded.',
+    captures,
+    motion_evidence: motionEvidence,
+    request_count: requests.length,
+    runtime_errors: runtimeErrors,
+    mapbox: {
+      requested: mapboxNetwork.requested.length,
+      finished: mapboxNetwork.finished.length,
+      failed: mapboxNetwork.failed,
+    },
+    pass: runtimeErrors.length === 0 && mapboxNetwork.failed.length === 0 && mapboxNetwork.finished.length > 0,
+  };
+  fs.writeFileSync(path.join(outputDir, 'CAIRN_CORE_RESULTS.json'), `${JSON.stringify(coreResult, null, 2)}\n`);
+  await context.close();
+  await browser.close();
+  process.stdout.write(`${JSON.stringify({ outputDir, captureCount: captures.length, pass: coreResult.pass }, null, 2)}\n`);
+  process.exit(coreResult.pass ? 0 : 1);
+}
 
 await navigate('Memory');
 const gotIt = page.getByText('Got it', { exact: true }).last();

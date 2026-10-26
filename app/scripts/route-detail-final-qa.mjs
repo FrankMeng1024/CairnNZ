@@ -26,8 +26,8 @@ const points = [
   { lng: 174.7670, lat: -36.8469, alt: 82 },
 ];
 const ownRoute = {
-  id: 'route-detail-own',
-  clientRouteId: 'route-detail-own',
+  id: '9001',
+  remoteId: '9001',
   name: 'Milford Foreshore Track',
   createdAt: 1_760_000_000_000,
   updatedAt: 1_760_000_000_000,
@@ -47,8 +47,8 @@ const ownRoute = {
 };
 const longOwnRoute = {
   ...ownRoute,
-  id: 'route-detail-long',
-  clientRouteId: 'route-detail-long',
+  id: '9002',
+  remoteId: '9002',
   name: 'Milford Foreshore Track through the quiet beech forest and harbour edge',
   distanceM: 42860,
   elevationGainM: 3840,
@@ -77,8 +77,16 @@ const context = await browser.newContext({
   geolocation: { latitude: -36.8480, longitude: 174.7650, accuracy: 8 },
   permissions: ['geolocation'],
   reducedMotion: 'reduce',
+  timezoneId: 'Pacific/Auckland',
 });
 await context.addInitScript(() => {
+  const NativeDate = Date;
+  globalThis.__cairnQaNowMs = new NativeDate('2026-10-26T10:00:00+13:00').getTime();
+  class QaDate extends NativeDate {
+    constructor(...args) { super(...(args.length ? args : [globalThis.__cairnQaNowMs])); }
+    static now() { return globalThis.__cairnQaNowMs; }
+  }
+  globalThis.Date = QaDate;
   localStorage.setItem('cairn_jwt', 'route-detail-final-qa');
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
   localStorage.setItem('cairn_onboarding_v1_done_route-detail-final-qa', 'true');
@@ -135,7 +143,7 @@ async function setTheme(theme) {
     const stores = globalThis.__cairnStores;
     stores.useSettingsStore.getState().saveAll({ appearance: nextTheme, debugMode: false, mapLayer: 'outdoors' });
     stores.useWeatherStore.getState().setConditionOverride('sunny');
-    stores.useWeatherStore.getState().setDayNightOverride(nextTheme);
+    stores.useWeatherStore.getState().setDayNightOverride(null);
   }, theme);
   await settle(300);
 }
@@ -156,8 +164,12 @@ async function seedRoutes() {
     });
   }, { own: ownRoute, longOwn: longOwnRoute, received: receivedRoute, ownerId: user.id });
 }
-async function openDetail({ routeId, sharedDeliveryId, theme, viewport }) {
+async function openDetail({ routeId, sharedDeliveryId, theme, timeContext, viewport }) {
   await page.setViewportSize(viewport);
+  await page.evaluate(({ name, iso }) => {
+    globalThis.__cairnQaNowMs = new Date(iso).getTime();
+    globalThis.__cairnQaTimeContext = name;
+  }, timeContext);
   await setTheme(theme);
   await seedRoutes();
   await page.evaluate(params => {
@@ -171,13 +183,37 @@ async function openDetail({ routeId, sharedDeliveryId, theme, viewport }) {
   await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
   await page.locator('.mapboxgl-map:visible canvas').last().waitFor({ state: 'visible', timeout: 30_000 });
   await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.isStyleLoaded?.()), null, { timeout: 30_000 });
+  await page.waitForFunction(() => globalThis.__cairnMap?.areTilesLoaded?.() === true, null, { timeout: 30_000 });
   await page.waitForFunction(() => {
     try {
       const map = globalThis.__cairnMap;
       return (map?.queryRenderedFeatures?.() ?? []).some(feature => !String(feature.source ?? '').startsWith('route-detail-'));
     } catch { return false; }
   }, null, { timeout: 30_000 });
-  await settle(350);
+  // Require panel and both genuine Mapbox legal controls to remain at the
+  // same geometry for five animation frames. This replaces the former fixed
+  // delay that captured the Route Detail fallback clearance on one QA path.
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('[data-testid="route-detail-panel"]')?.getBoundingClientRect();
+    const logo = [...document.querySelectorAll('.mapboxgl-ctrl-logo')].filter(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+    }).at(-1)?.getBoundingClientRect();
+    const attribution = [...document.querySelectorAll('.mapboxgl-ctrl-attrib')].filter(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+    }).at(-1)?.getBoundingClientRect();
+    if (!panel || !logo || !attribution) return false;
+    const signature = [panel.x, panel.y, panel.width, panel.height, logo.x, logo.y, logo.width, logo.height,
+      attribution.x, attribution.y, attribution.width, attribution.height].map(value => Math.round(value * 10) / 10).join('|');
+    const state = globalThis.__cairnRouteDetailLayoutStable ?? { signature: '', frames: 0 };
+    state.frames = state.signature === signature ? state.frames + 1 : 0;
+    state.signature = signature;
+    globalThis.__cairnRouteDetailLayoutStable = state;
+    return state.frames >= 5;
+  }, null, { timeout: 30_000, polling: 'raf' });
   activeMapEvidence = await page.evaluate(() => {
     const map = globalThis.__cairnMap;
     let renderedBasemapFeatureCount = 0;
@@ -204,10 +240,20 @@ async function shot(name) {
   captures.push({ name, file, viewport });
   return file;
 }
+async function ornamentPixelsVisible(file, rect) {
+  if (!rect || rect.width < 4 || rect.height < 4) return false;
+  const metadata = await sharp(file).metadata();
+  const left = Math.max(0, Math.floor(rect.x));
+  const top = Math.max(0, Math.floor(rect.y));
+  const width = Math.max(1, Math.min((metadata.width ?? left + Math.ceil(rect.width)) - left, Math.ceil(rect.width)));
+  const height = Math.max(1, Math.min((metadata.height ?? top + Math.ceil(rect.height)) - top, Math.ceil(rect.height)));
+  const stats = await sharp(file).extract({ left, top, width, height }).stats();
+  return stats.entropy > 0.55 && stats.channels.slice(0, 3).some(channel => channel.stdev > 12);
+}
 async function box(testId) {
   return page.getByTestId(testId).boundingBox();
 }
-async function assertOwnLayout(label) {
+async function assertOwnLayout(label, screenshotFile) {
   const panel = await box('route-detail-panel');
   const share = await box('route-share-action');
   const hike = await box('route-use-action');
@@ -220,9 +266,34 @@ async function assertOwnLayout(label) {
   const ellipsisCount = await page.getByTestId('route-detail-header-more').count();
   const title = await page.getByLabel('Rename route').boundingBox();
   const width = page.viewportSize()?.width ?? 0;
+  const height = page.viewportSize()?.height ?? 0;
+  const hitEvidence = await page.evaluate(() => {
+    const inspect = selector => {
+      const element = [...document.querySelectorAll(selector)].filter(candidate => {
+        const rect = candidate.getBoundingClientRect();
+        const style = getComputedStyle(candidate);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+      }).at(-1);
+      if (!element) return { visible: false, unobscured: false };
+      const rect = element.getBoundingClientRect();
+      const points = [[0.2, 0.2], [0.5, 0.5], [0.8, 0.8]];
+      const unobscured = points.every(([px, py]) => {
+        const stack = document.elementsFromPoint(rect.x + rect.width * px, rect.y + rect.height * py);
+        const covering = stack.find(item => item === element || element.contains(item) || item.contains(element));
+        const coverIndex = covering ? stack.indexOf(covering) : -1;
+        return coverIndex >= 0
+          && !stack.slice(0, coverIndex).some(item => item.closest?.('[data-testid="route-detail-panel"]'));
+      });
+      return { visible: true, unobscured };
+    };
+    return { logo: inspect('.mapboxgl-ctrl-logo'), attribution: inspect('.mapboxgl-ctrl-attrib') };
+  });
+  const logoPixelsVisible = await ornamentPixelsVisible(screenshotFile, logo);
+  const attributionPixelsVisible = await ornamentPixelsVisible(screenshotFile, attribution);
   assertions[label] = {
     realMapboxCanvas: Boolean(canvas && canvas.width > 0 && canvas.height > 0),
     styleLoaded: activeMapEvidence?.styleLoaded === true,
+    tilesLoaded: activeMapEvidence?.tilesLoaded === true,
     realBasemapFeaturesRendered: (activeMapEvidence?.renderedBasemapFeatureCount ?? 0) > 0,
     noHeaderEllipsis: ellipsisCount === 0,
     shareTransparentHitArea: Boolean(share && share.width >= 44 && share.height >= 44),
@@ -232,7 +303,13 @@ async function assertOwnLayout(label) {
     actionsMin44: Boolean(hike && run && edit && hike.height >= 44 && run.height >= 44 && edit.height >= 44),
     destructiveBelowActions: Boolean(destructive && hike && destructive.y >= hike.y + hike.height),
     noHorizontalClipping: Boolean(panel && panel.x >= 0 && panel.x + panel.width <= width + 0.5 && share && share.x + share.width <= width),
-    legalControlsAbovePanel: Boolean(panel && logo && attribution && logo.y + logo.height <= panel.y && attribution.y + attribution.height <= panel.y),
+    legalControlsFullyInViewport: Boolean(logo && attribution && logo.x >= 0 && logo.y >= 0
+      && attribution.x >= 0 && attribution.y >= 0
+      && logo.x + logo.width <= width && attribution.x + attribution.width <= width
+      && logo.y + logo.height <= height && attribution.y + attribution.height <= height),
+    legalControlsAbovePanel: Boolean(panel && logo && attribution && logo.y + logo.height + 8 <= panel.y && attribution.y + attribution.height + 8 <= panel.y),
+    legalControlsNotOccluded: hitEvidence.logo.unobscured && hitEvidence.attribution.unobscured,
+    legalControlPixelsVisible: logoPixelsVisible && attributionPixelsVisible,
     logoAtLeft: Boolean(logo && logo.x + logo.width <= width / 2),
     attributionAtRight: Boolean(attribution && attribution.x >= width / 2),
   };
@@ -249,21 +326,41 @@ await page.evaluate(nextUser => {
 }, user);
 await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.navigationRef?.reset), null, { timeout: 30_000 });
 
-for (const theme of ['day', 'sunset', 'night']) {
-  await openDetail({ routeId: ownRoute.id, theme, viewport: { width: 390, height: 844 } });
-  await assertOwnLayout(`own-${theme}-390`);
-  await shot(`own-${theme}-390x844`);
+const daytime = { name: 'daytime', iso: '2026-10-26T10:00:00+13:00' };
+const nighttime = { name: 'nighttime', iso: '2026-10-26T21:00:00+13:00' };
+for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
+  for (const theme of ['day', 'sunset', 'night']) {
+    await openDetail({ routeId: ownRoute.id, theme, timeContext: daytime, viewport });
+    const name = `route-detail-${theme}-daytime-${viewport.width}x${viewport.height}-own`;
+    const file = await shot(name);
+    await assertOwnLayout(`own-${theme}-${viewport.width}`, file);
+  }
 }
 
-await openDetail({ routeId: longOwnRoute.id, theme: 'day', viewport: { width: 320, height: 568 } });
-await assertOwnLayout('long-day-320');
-await shot('long-name-day-320x568');
+for (const theme of ['day', 'sunset', 'night']) {
+  await openDetail({ routeId: ownRoute.id, theme, timeContext: nighttime, viewport: { width: 390, height: 844 } });
+  const name = `route-detail-${theme}-nighttime-390x844-own`;
+  const file = await shot(name);
+  await assertOwnLayout(`own-${theme}-nighttime-390`, file);
+}
 
-await openDetail({ routeId: longOwnRoute.id, theme: 'night', viewport: { width: 430, height: 932 } });
-await assertOwnLayout('long-night-430');
-await shot('long-name-night-430x932');
+await openDetail({ routeId: longOwnRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 320, height: 568 } });
+const longDayFile = await shot('route-detail-day-daytime-320x568-long-name');
+await assertOwnLayout('long-day-320', longDayFile);
 
-await openDetail({ sharedDeliveryId: receivedRoute.sharedDeliveryId, theme: 'sunset', viewport: { width: 390, height: 844 } });
+await openDetail({ routeId: longOwnRoute.id, theme: 'night', timeContext: nighttime, viewport: { width: 430, height: 932 } });
+const longNightFile = await shot('route-detail-night-nighttime-430x932-long-name');
+await assertOwnLayout('long-night-430', longNightFile);
+
+// Re-entry is a separate path: unmount the detail, then require the same
+// stable/visible legal-control contract when returning to it.
+await page.evaluate(() => globalThis.__cairnStores.navigationRef.reset({ index: 0, routes: [{ name: 'Home' }] }));
+await currentRoute('Home');
+await openDetail({ routeId: ownRoute.id, theme: 'sunset', timeContext: daytime, viewport: { width: 390, height: 844 } });
+const reentryFile = await shot('route-detail-sunset-daytime-390x844-reentry');
+await assertOwnLayout('own-sunset-390-reentry', reentryFile);
+
+await openDetail({ sharedDeliveryId: receivedRoute.sharedDeliveryId, theme: 'sunset', timeContext: daytime, viewport: { width: 390, height: 844 } });
 assertions.receivedPermissions = {
   shareAbsent: await page.getByTestId('route-share-action').count() === 0,
   removeVisible: await page.getByText('Remove', { exact: true }).isVisible(),
@@ -271,28 +368,28 @@ assertions.receivedPermissions = {
   hikeVisible: await page.getByTestId('route-use-action').isVisible(),
   runVisible: await page.getByTestId('route-use-run-action').isVisible(),
 };
-await shot('received-sunset-390x844');
+await shot('route-detail-sunset-daytime-390x844-received');
 await page.getByTestId('route-delete-action').click();
 await page.getByTestId('route-delete-confirmation').waitFor({ state: 'visible' });
 await settle(400);
-await shot('received-remove-confirmation-sunset-390x844');
+await shot('route-detail-sunset-daytime-390x844-received-remove-confirmation');
 await page.getByText('Keep Route', { exact: true }).click();
 
-await openDetail({ routeId: ownRoute.id, theme: 'day', viewport: { width: 390, height: 844 } });
+await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
 await page.getByTestId('route-share-action').click();
 await page.getByTestId('route-share-friend-picker').waitFor({ state: 'visible' });
 await settle(400);
 assertions.shareFlow = { pickerVisible: true, originalFriendVisible: await page.getByText('Mia Rangi', { exact: true }).isVisible() };
-await shot('share-picker-day-390x844');
+await shot('route-detail-day-daytime-390x844-share-picker');
 await page.getByText('Done', { exact: true }).click();
 await page.getByTestId('route-delete-action').click();
 await page.getByTestId('route-delete-confirmation').waitFor({ state: 'visible' });
 await settle(400);
-await shot('delete-confirmation-day-390x844');
+await shot('route-detail-day-daytime-390x844-delete-confirmation');
 await page.getByText('Keep Route', { exact: true }).click();
 
 async function assertNavigation(testId, expectedRoute, expectedParam) {
-  await openDetail({ routeId: ownRoute.id, theme: 'day', viewport: { width: 390, height: 844 } });
+  await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
   await page.getByTestId(testId).click();
   await currentRoute(expectedRoute);
   return page.evaluate(({ routeName, param }) => {
@@ -310,18 +407,18 @@ assertions.hikeNavigation = await assertNavigation('route-use-action', 'Hiking',
 assertions.runNavigation = await assertNavigation('route-use-run-action', 'Running', ownRoute.id);
 assertions.editNavigation = await assertNavigation('route-edit-action', 'RouteEditor', ownRoute.id);
 
-await openDetail({ routeId: ownRoute.id, theme: 'day', viewport: { width: 390, height: 844 } });
+await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
 await page.getByRole('button', { name: 'Back', exact: true }).click();
 await currentRoute('Home');
 assertions.backNavigation = { returnedHome: true };
 
-await openDetail({ routeId: ownRoute.id, theme: 'day', viewport: { width: 390, height: 844 } });
+await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
 await page.getByTestId('route-delete-action').click();
 await page.getByTestId('route-delete-confirm').click();
 await currentRoute('Home');
 assertions.deleteBehavior = await page.evaluate(id => ({ removed: !globalThis.__cairnStores.useRouteStore.getState().routes.some(route => route.id === id) }), ownRoute.id);
 
-await openDetail({ sharedDeliveryId: receivedRoute.sharedDeliveryId, theme: 'day', viewport: { width: 390, height: 844 } });
+await openDetail({ sharedDeliveryId: receivedRoute.sharedDeliveryId, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
 await page.getByTestId('route-delete-action').click();
 await page.getByTestId('route-delete-confirm').click();
 await page.getByTestId('route-delete-confirmation').waitFor({ state: 'hidden', timeout: 20_000 });
@@ -338,9 +435,9 @@ assertions.removeBehavior = await page.evaluate(deliveryId => {
 }, receivedRoute.sharedDeliveryId);
 
 const boardNames = [
-  'own-day-390x844', 'own-sunset-390x844', 'own-night-390x844',
-  'long-name-day-320x568', 'long-name-night-430x932', 'received-sunset-390x844',
-  'share-picker-day-390x844', 'delete-confirmation-day-390x844', 'received-remove-confirmation-sunset-390x844',
+  'route-detail-day-daytime-320x568-own', 'route-detail-sunset-daytime-390x844-own', 'route-detail-night-nighttime-430x932-own',
+  'route-detail-day-daytime-320x568-long-name', 'route-detail-night-nighttime-430x932-long-name', 'route-detail-sunset-daytime-390x844-received',
+  'route-detail-sunset-daytime-390x844-reentry', 'route-detail-day-daytime-390x844-delete-confirmation', 'route-detail-sunset-daytime-390x844-received-remove-confirmation',
 ];
 const thumbWidth = 320;
 const labelHeight = 38;

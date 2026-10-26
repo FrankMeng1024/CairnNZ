@@ -23,8 +23,18 @@ const context = await browser.newContext({
   geolocation: { latitude: -45.0312, longitude: 168.6626 },
   permissions: ['geolocation'],
   reducedMotion: 'reduce',
+  timezoneId: 'Pacific/Auckland',
 });
 const page = await context.newPage();
+await page.addInitScript(() => {
+  const NativeDate = Date;
+  globalThis.__cairnQaNowMs = new NativeDate('2026-10-26T10:00:00+13:00').getTime();
+  class QaDate extends NativeDate {
+    constructor(...args) { super(...(args.length ? args : [globalThis.__cairnQaNowMs])); }
+    static now() { return globalThis.__cairnQaNowMs; }
+  }
+  globalThis.Date = QaDate;
+});
 const runtimeErrors = [];
 page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
 page.on('console', message => {
@@ -53,9 +63,15 @@ const setTheme = async theme => {
     const stores = globalThis.__cairnStores;
     stores.useSettingsStore.getState().saveAll({ appearance: nextTheme, debugMode: false, mapLayer: 'outdoors' });
     stores.useWeatherStore.getState().setConditionOverride('sunny');
-    stores.useWeatherStore.getState().setDayNightOverride(nextTheme);
+    stores.useWeatherStore.getState().setDayNightOverride(null);
   }, theme);
   await settle(350);
+};
+const setTimeContext = async timeContext => {
+  await page.evaluate(({ name, iso }) => {
+    globalThis.__cairnQaNowMs = new Date(iso).getTime();
+    globalThis.__cairnQaTimeContext = name;
+  }, timeContext);
 };
 const setScenario = async (mode, scenario) => {
   await page.evaluate(({ nextMode, nextScenario }) => {
@@ -133,8 +149,9 @@ const checkLayout = async (mode, scenario, viewport) => {
   }
   return { top, bottom, viewport };
 };
-const capture = async ({ theme, mode, scenario, viewport = { width: 390, height: 844 } }) => {
+const capture = async ({ theme, timeContext, mode, scenario, viewport = { width: 390, height: 844 } }) => {
   await page.setViewportSize(viewport);
+  await setTimeContext(timeContext);
   await setTheme(theme);
   await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.setState({ status: 'idle', isFinishing: false }));
   await navigate(mode === 'hike' ? 'Hiking' : 'Running');
@@ -147,26 +164,44 @@ const capture = async ({ theme, mode, scenario, viewport = { width: 390, height:
       return Boolean(map?.isStyleLoaded?.()) && (map?.queryRenderedFeatures?.() ?? []).length > 0;
     } catch { return false; }
   }, null, { timeout: 30_000 });
+  await page.waitForFunction(() => globalThis.__cairnMap?.areTilesLoaded?.() === true, null, { timeout: 30_000 });
   const layout = await checkLayout(mode, scenario, viewport);
   const mapEvidence = await page.evaluate(() => {
     const map = globalThis.__cairnMap;
     return {
       styleLoaded: Boolean(map?.isStyleLoaded?.()),
       renderedFeatureCount: (map?.queryRenderedFeatures?.() ?? []).length,
+      tilesLoaded: Boolean(map?.areTilesLoaded?.()),
     };
   });
   const logo = await page.locator('.mapboxgl-ctrl-logo:visible').last().boundingBox();
   const attribution = await page.locator('.mapboxgl-ctrl-attrib:visible').last().boundingBox();
-  if (!logo || !attribution || logo.x + logo.width > viewport.width / 2 || attribution.x < viewport.width / 2) {
+  const bottom = layout.bottom;
+  if (!logo || !attribution || logo.x + logo.width > viewport.width / 2 || attribution.x < viewport.width / 2
+    || logo.y + logo.height + 8 > bottom.y || attribution.y + attribution.height + 8 > bottom.y) {
     throw new Error(`Mapbox legal controls misplaced ${mode}/${scenario}/${theme} ${JSON.stringify({ logo, attribution, viewport })}`);
   }
-  const filename = `${mode}-${scenario}-${theme}-${viewport.width}x${viewport.height}.png`;
+  const metricsLocator = page.getByTestId(`activity-${mode}-metrics`);
+  const metricsCount = await metricsLocator.count();
+  if (scenario === 'prestart' && metricsCount !== 0) throw new Error(`Ready state unexpectedly rendered metrics ${mode}`);
+  if (scenario !== 'prestart' && metricsCount === 0) throw new Error(`Active state missing metrics ${mode}/${scenario}`);
+  const metrics = metricsCount === 0 ? null : await metricsLocator.evaluate(element => ({
+    rect: (() => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; })(),
+    clippedText: [...element.querySelectorAll('*')].filter(node => {
+      const value = node.textContent?.trim();
+      if (!value || node.children.length > 0) return false;
+      return node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1;
+    }).map(node => ({ text: node.textContent, clientWidth: node.clientWidth, scrollWidth: node.scrollWidth, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight })),
+  }));
+  if (metrics?.clippedText.length) throw new Error(`Metric clipping ${mode}/${scenario}/${theme}/${viewport.width}: ${JSON.stringify(metrics.clippedText)}`);
+  const filename = `${mode}-${theme}-${timeContext.name}-${viewport.width}x${viewport.height}-${scenario}.png`;
   await page.screenshot({ path: path.join(outputDir, filename), fullPage: false });
-  return { filename, ...layout, mapEvidence, legalControls: { logo, attribution } };
+  return { filename, theme, time: timeContext.name, mode, scenario, ...layout, mapEvidence, metrics, legalControls: { logo, attribution } };
 };
 
 const exerciseRecordingControls = async () => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await setTimeContext({ name: 'daytime', iso: '2026-10-26T10:00:00+13:00' });
   await setTheme('day');
 
   await navigate('Hiking');
@@ -196,7 +231,7 @@ const exerciseRecordingControls = async () => {
   await page.getByRole('button', { name: 'Finish hike' }).click();
   await page.getByRole('button', { name: 'Finish hike and view activity' }).waitFor();
   await settle(400);
-  await page.screenshot({ path: path.join(outputDir, 'hike-finish-intent-day-390x844.png'), fullPage: false });
+  await page.screenshot({ path: path.join(outputDir, 'hike-day-daytime-390x844-finish-intent.png'), fullPage: false });
   // Non-blocking finish sheets dismiss by tapping the exposed map, without
   // duplicating that action as a top-right X.
   await page.mouse.click(380, 280);
@@ -231,7 +266,7 @@ const exerciseRecordingControls = async () => {
   await page.locator('input').last().blur();
   await page.evaluate(() => window.scrollTo(0, 0));
   await settle(400);
-  await page.screenshot({ path: path.join(outputDir, 'run-finish-intent-day-390x844.png'), fullPage: false });
+  await page.screenshot({ path: path.join(outputDir, 'run-day-daytime-390x844-finish-intent.png'), fullPage: false });
   await page.mouse.click(380, 280);
   await page.waitForFunction(() => globalThis.__cairnStores.useTrackingStore.getState().status === 'tracking');
 
@@ -277,23 +312,31 @@ const matrix = [
   ['run', 'degraded'],
 ];
 const results = [];
+const daytime = { name: 'daytime', iso: '2026-10-26T10:00:00+13:00' };
+const nighttime = { name: 'nighttime', iso: '2026-10-26T21:00:00+13:00' };
 for (const theme of ['day', 'sunset', 'night']) {
   for (const [mode, scenario] of matrix) {
-    results.push(await capture({ theme, mode, scenario }));
+    results.push(await capture({ theme, timeContext: daytime, mode, scenario }));
+  }
+}
+// Complete theme × local-time coverage for the primary live map state.
+for (const theme of ['day', 'sunset', 'night']) {
+  for (const mode of ['hike', 'run']) {
+    results.push(await capture({ theme, timeContext: nighttime, mode, scenario: 'tracking' }));
   }
 }
 for (const [mode, scenario] of matrix) {
-  results.push(await capture({ theme: 'day', mode, scenario, viewport: { width: 320, height: 568 } }));
+  results.push(await capture({ theme: 'day', timeContext: daytime, mode, scenario, viewport: { width: 320, height: 568 } }));
 }
 for (const [mode, scenario] of matrix) {
-  results.push(await capture({ theme: 'night', mode, scenario, viewport: { width: 430, height: 932 } }));
+  results.push(await capture({ theme: 'night', timeContext: nighttime, mode, scenario, viewport: { width: 430, height: 932 } }));
 }
 
 const interactions = await exerciseRecordingControls();
 
 await browser.close();
 
-const boardItems = results.filter(item => item.filename.includes('-day-390x844'));
+const boardItems = results.filter(item => item.theme === 'day' && item.time === 'daytime' && item.viewport.width === 390);
 const tileWidth = 390;
 const tileHeight = 844;
 const gap = 20;
@@ -312,7 +355,7 @@ for (let index = 0; index < boardItems.length; index += 1) {
   const left = index * (tileWidth + gap);
   composites.push({ input: path.join(outputDir, item.filename), left, top: labelHeight });
   composites.push({
-    input: Buffer.from(`<svg width="${tileWidth}" height="${labelHeight}"><rect width="100%" height="100%" fill="#17372D"/><text x="12" y="23" font-size="13" font-family="Arial" font-weight="700" fill="#FFFFFF">${item.filename.replace('-day-390x844.png', '')}</text></svg>`),
+    input: Buffer.from(`<svg width="${tileWidth}" height="${labelHeight}"><rect width="100%" height="100%" fill="#17372D"/><text x="12" y="23" font-size="13" font-family="Arial" font-weight="700" fill="#FFFFFF">${item.mode}-${item.scenario}</text></svg>`),
     left,
     top: 0,
   });

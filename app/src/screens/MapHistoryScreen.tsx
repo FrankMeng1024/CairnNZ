@@ -101,7 +101,11 @@ import {
 } from '../features/activitySimulator/snapLabActivityStore';
 import { cairnText } from '../i18n/runtime';
 
-const HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE = 248;
+// Route Detail measures its live panel and immediately replaces this value.
+// Keep the first Mapbox frame conservative: the compact action/title layout
+// can be taller than the former 248px panel on a 320px viewport, and legal
+// controls must never spend that first layout frame underneath the sheet.
+const HISTORY_ROUTE_ORNAMENT_FALLBACK_CLEARANCE = 340;
 
 // ── Conditional Mapbox import ─────────────────────────────────────────────
 // Native uses @rnmapbox/maps; Web uses Cairn's real Mapbox GL adapter so the

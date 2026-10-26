@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
 const outputDir = path.resolve(process.env.CAIRN_ROUTE_UX_QA_DIR || '/tmp/cairn-o87-route-ux-qa');
@@ -39,6 +40,64 @@ function overlaps(a, b) {
 async function box(locator) {
   try { return await locator.boundingBox({ timeout: 1_500 }); }
   catch { return null; }
+}
+
+function parseHexColor(value) {
+  const match = typeof value === 'string' && value.match(/^#([0-9a-f]{6})$/i);
+  if (match) return [0, 2, 4].map(offset => Number.parseInt(match[1].slice(offset, offset + 2), 16));
+  const rgb = typeof value === 'string' && value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  return rgb ? rgb.slice(1, 4).map(Number) : null;
+}
+
+async function repeatedRoutePixelEvidence(page, screenshotFile) {
+  const projection = await page.evaluate(({ from, through, to }) => {
+    const map = globalThis.__cairnMap;
+    if (!map) return null;
+    const a = map.project([from.lng, from.lat]);
+    const b = map.project([through.lng, through.lat]);
+    const c = map.project([to.lng, to.lat]);
+    const repeatLineId = (map.getStyle?.()?.layers ?? [])
+      .find(layer => layer.id.includes('repeat-lane-line'))?.id;
+    const color = repeatLineId ? map.getPaintProperty?.(repeatLineId, 'line-color') : null;
+    return { a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, c: { x: c.x, y: c.y }, color };
+  }, { from: routePoints[0], through: routePoints[1], to: routePoints[2] });
+  const target = parseHexColor(projection?.color);
+  if (!projection || !target) return { pass: false, reason: 'projection-or-color-unavailable' };
+  const { data, info } = await sharp(screenshotFile).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const tangentX = projection.c.x - projection.a.x;
+  const tangentY = projection.c.y - projection.a.y;
+  const length = Math.hypot(tangentX, tangentY) || 1;
+  const nx = -tangentY / length;
+  const ny = tangentX / length;
+  const closeToRoute = (x, y) => {
+    const px = Math.max(0, Math.min(info.width - 1, Math.round(x)));
+    const py = Math.max(0, Math.min(info.height - 1, Math.round(y)));
+    const index = (py * info.width + px) * info.channels;
+    const distance = Math.hypot(data[index] - target[0], data[index + 1] - target[1], data[index + 2] - target[2]);
+    return distance < 72;
+  };
+  const scans = [0.35, 0.5, 0.65].map(t => {
+    const x = projection.a.x + tangentX * t;
+    const y = projection.a.y + tangentY * t;
+    const hits = [];
+    for (let offset = -18; offset <= 18; offset += 1) {
+      let matched = 0;
+      for (let along = -2; along <= 2; along += 1) {
+        if (closeToRoute(x + nx * offset + tangentX / length * along,
+          y + ny * offset + tangentY / length * along)) matched += 1;
+      }
+      if (matched >= 2) hits.push(offset);
+    }
+    return { hits, min: hits.length ? Math.min(...hits) : null, max: hits.length ? Math.max(...hits) : null };
+  });
+  // Repeat lanes use a positive offset relative to each traversal's own
+  // direction. An outbound scan therefore sees the visible secondary lane on
+  // one side; the reversed leg produces the opposite arm at its own pixels.
+  // Require the lane to extend materially beyond the 3.5px canonical stroke
+  // in multiple scans rather than merely trusting layer/source existence.
+  const visiblyOffsetScans = scans.filter(scan => scan.min != null && scan.max != null
+    && scan.max - scan.min >= 11 && (scan.min <= -10 || scan.max >= 10)).length;
+  return { pass: visiblyOffsetScans >= 2, targetColor: projection.color, visiblyOffsetScans, scans };
 }
 
 const browser = await chromium.launch({
@@ -224,8 +283,8 @@ for (const scenario of matrix) {
     // fade. Capture the settled material, not an intentionally translucent
     // intermediate animation frame.
     await page.waitForTimeout(350);
-    const keepEditingBox = await box(page.getByText('Keep editing', { exact: true }));
-    const discardChangesBox = await box(page.getByText('Discard changes', { exact: true }));
+    const keepEditingBox = await box(page.getByRole('button', { name: 'Keep editing', exact: true }));
+    const discardChangesBox = await box(page.getByTestId('route-editor-confirm-leave'));
     const leaveConfirmationBox = await box(leaveConfirmation);
     await page.screenshot({ path: path.join(outputDir, `${prefix}-leave-confirm.png`) });
     const leaveConfirmationClear = await page.getByText('Your unsaved Route changes will be discarded.', { exact: true }).isVisible()
@@ -244,7 +303,8 @@ for (const scenario of matrix) {
       catch { return false; }
     }, null, { timeout: 5_000 }).catch(() => {});
     await page.waitForTimeout(180);
-    await page.screenshot({ path: path.join(outputDir, `${prefix}-detail.png`) });
+    const detailScreenshot = path.join(outputDir, `${prefix}-detail.png`);
+    await page.screenshot({ path: detailScreenshot });
     const detailPanel = await box(page.getByTestId('route-detail-panel'));
     // React Navigation deliberately keeps the prior editor mounted while its
     // transition completes. Measure the active controls, not the first hidden
@@ -289,7 +349,12 @@ for (const scenario of matrix) {
         .map(layer => ({ id: layer.id, paint: layer.paint, layout: layer.layout, filter: layer.filter })),
       repeatSourceData: (() => {
         const map = globalThis.__cairnMap;
-        const sourceId = Object.keys(map?.getStyle?.()?.sources ?? {}).find(id => id.includes('repeat-labels'));
+        const sourceId = Object.keys(map?.getStyle?.()?.sources ?? {}).find(id => id.includes('repeat-lanes'));
+        return sourceId ? map?.getSource?.(sourceId)?._data ?? null : null;
+      })(),
+      canonicalSourceData: (() => {
+        const map = globalThis.__cairnMap;
+        const sourceId = Object.keys(map?.getStyle?.()?.sources ?? {}).find(id => id.includes('route-detail-') && id.endsWith('-parts'));
         return sourceId ? map?.getSource?.(sourceId)?._data ?? null : null;
       })(),
       renderedRepeatFeatures: (() => {
@@ -315,7 +380,21 @@ for (const scenario of matrix) {
     const detailCopy = await page.getByTestId('route-detail-panel').innerText();
     const detailHeaderBackground = await page.getByTestId('route-detail-header')
       .evaluate(element => getComputedStyle(element).backgroundColor);
-    const panelCompact = Boolean(detailPanel && detailPanel.height <= Math.min(340, scenario.height * 0.49));
+    const destructiveBox = await box(page.getByTestId('route-delete-action'));
+    const repeatPixelEvidence = await repeatedRoutePixelEvidence(page, detailScreenshot);
+    const repeatFeatures = detailRuntime.repeatSourceData?.features ?? [];
+    const canonicalFeatures = detailRuntime.canonicalSourceData?.features ?? [];
+    const repeatOffsets = repeatFeatures.map(feature => Number(feature?.properties?.offsetPx));
+    const repeatOccurrenceIds = repeatFeatures.map(feature => String(feature?.properties?.occurrenceIds ?? ''));
+    const panelContentFits = Boolean(detailPanel && destructiveBox
+      && detailPanel.x >= 0 && detailPanel.x + detailPanel.width <= scenario.width + 0.5
+      && detailPanel.y >= Math.max(230, scenario.height * 0.50)
+      && detailPanel.y + detailPanel.height <= scenario.height + 0.5
+      && destructiveBox.y + destructiveBox.height <= detailPanel.y + detailPanel.height + 0.5);
+    const leaveConfirmationFits = Boolean(leaveConfirmationBox && keepEditingBox && discardChangesBox
+      && leaveConfirmationBox.x >= 12 && leaveConfirmationBox.x + leaveConfirmationBox.width <= scenario.width - 12
+      && leaveConfirmationBox.y >= 12 && leaveConfirmationBox.y + leaveConfirmationBox.height <= scenario.height - 12
+      && keepEditingBox.height >= 44 && discardChangesBox.height >= 44);
     const assertions = {
       browseHasNoReservedContext,
       basemapTilesReady,
@@ -338,29 +417,35 @@ for (const scenario of matrix) {
         || layersSelected.expanded === 'true'
         || layersSelected.background !== layersBackgroundBefore,
       fallbackAutoCommitsWithoutDecisionRow: fallbackChoiceAbsent && undoEnabledAfterManualFallback,
-      leaveConfirmationClear: leaveConfirmationClear
-        && Boolean(leaveConfirmationBox && leaveConfirmationBox.width <= 326
-          && leaveConfirmationBox.height < scenario.height * 0.60),
+      leaveConfirmationClear: leaveConfirmationClear && leaveConfirmationFits,
       editorHeaderTransparent: ['rgba(0, 0, 0, 0)', 'transparent'].includes(editorHeaderBackground),
       detailHeaderTransparent: ['rgba(0, 0, 0, 0)', 'transparent'].includes(detailHeaderBackground),
       editorOrnamentsAboveDock,
       detailOrnamentsAboveSheet,
       detailRouteFits,
-      continuousCanonicalRoutePainted: detailRuntime.layerIds.some(id => id.includes('route-detail-') && id.endsWith('-line')),
-      repeatedTraversalEvidencePresent: repeatLayerCount > 0,
+      continuousCanonicalRoutePainted: detailRuntime.layerIds.some(id => id.includes('route-detail-') && id.endsWith('-line'))
+        && canonicalFeatures.length > 0
+        && canonicalFeatures.every(feature => feature?.geometry?.type === 'LineString' && feature.geometry.coordinates.length >= 2),
+      repeatedTraversalDataDriven: repeatLayerCount >= 2 && repeatFeatures.length >= 2
+        && repeatOffsets.every(offset => Number.isFinite(offset) && offset > 0)
+        && new Set(repeatOccurrenceIds).size >= 2,
+      repeatedTraversalRendered: detailRuntime.renderedRepeatFeatures >= 2
+        && detailRuntime.renderedRepeatLabels > 0
+        && repeatPixelEvidence.pass,
       detailHeaderAndActions: await page.getByTestId('route-use-action').isVisible()
         && await page.getByTestId('route-use-run-action').isVisible()
         && await page.getByTestId('route-share-action').isVisible()
         && await page.getByTestId('route-delete-action').isVisible()
         && /Hike/.test(detailCopy) && /Run/.test(detailCopy) && /Edit/.test(detailCopy),
       detailNoRedundantReadyOrFakeElevation: !/Mine\s*·\s*Ready/.test(detailCopy) && !/\+0\s*m.*elevation/i.test(detailCopy),
-      detailPanelCompact: panelCompact,
+      detailPanelCompact: panelContentFits,
     };
     results.push({ scenario, assertions, measurements: {
       nameBox, saveBox, pointTextBox, pointActionBox, trimStrip, trimApply,
       editorPanelBox, editorLogo, editorAttribution, detailPanel, detailLogo, detailAttribution, repeatLayerCount,
-      editorHeaderBackground, detailHeaderBackground, leaveConfirmationBox,
+      editorHeaderBackground, detailHeaderBackground, leaveConfirmationBox, keepEditingBox, discardChangesBox,
       layersBackgroundBefore, layersSelected, detailRuntime,
+      destructiveBox, repeatPixelEvidence, repeatOffsets, repeatOccurrenceIds,
     }, runtimeErrors: caseErrors, pass: Object.values(assertions).every(Boolean) && caseErrors.length === 0 });
   } catch (error) {
     caseErrors.push(error?.stack || String(error));
