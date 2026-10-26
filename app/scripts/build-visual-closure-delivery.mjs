@@ -130,13 +130,13 @@ const issueText = `# Issue Register
 | V26-03 | P1 gate | Route | #25 thresholds weakened architectural checks | Old assertions measured presence/height rather than visible equivalence | QA FIXED: canonical source continuity, rendered features/label, screenshot pixel offset lane, real button bounds | PASS 3/3 matrices |
 | V26-04 | P2 | Memory City | City popover used several fixed Day surfaces in Sunset/Night | Hard-coded panel auxiliary colors bypassed theme semantics | FIXED in HierarchyPanel only; no data/camera/Fog change | PASS 8 scenarios / ${memoryCount} captures |
 | V26-05 | P2 gate | Hike/Run | Ready state falsely reported missing metrics in first new gate | Metrics are intentionally absent before recording | QA FIXED: absence required in Ready, clipping required for active states | PASS 56 layouts / 4 interactions |
-| V26-06 | P2 test debt | Legacy O88 continuation | Old Memory encounter continuation times out after Cairn coverage | Script targets superseded Memory contracts owned by parallel work | OPEN / integration pending; Cairn core isolated and passed | Not counted as Memory City failure |
+| V26-06 | P2 test debt | Legacy O88 continuation | Old Memory encounter continuation times out after Cairn coverage | Script targets superseded Memory contracts; the current Cairn core and Memory City gates cover their supported contracts independently | OPEN test debt; Cairn core isolated and passed | Not counted as Memory City failure |
 `;
 write('ISSUE_REGISTER_CN.md', issueText);
 
 write('START_HERE_CN.md', `# Cairn #26 Visual Closure
 
-**总体结论：PARTIAL（Web 产品与交互门禁通过；Native iOS 未执行，O94 Memory 并行集成待复核）。**
+**总体结论：PARTIAL（Web 产品与交互门禁通过；Native iOS 未执行）。**
 
 - 最终源码：\`${commit}\` / tree \`${tree}\`
 - 分支：\`${branch}\`
@@ -144,6 +144,7 @@ write('START_HERE_CN.md', `# Cairn #26 Visual Closure
 - Route Detail 两条原 #25 进入路径均已关闭 Logo/i 矛盾；严格检查真实像素、遮挡层、Tiles 与重新进入。
 - Settings 真实 ScrollView 36 次切换全部从子页顶部开始。
 - Memory City 完成 3 主题 × NZ 10:00/21:00，并覆盖关闭、打开、滚动、选城、返回、空态、重复关闭和离页返回。
+- main O94 已无冲突合入本分支，并重新执行 O94 Memory 单测与最终 Web 门禁。
 - 首先查看：\`CONTACT_SHEETS/\`、\`REVIEW_GALLERY.html\`、\`ISSUE_REGISTER_CN.md\`。
 - 未执行：Push / Merge / OTA / Native Build / TestFlight / Production / Backend / DB。
 `);
@@ -182,7 +183,7 @@ write('VALIDATION_REPORT_CN.md', `# 验证报告
 
 - Activity changed gate：PASS 646/646。
 - Route fast gate：PASS 75/75。
-- Jest focused：PASS 88/88（6 suites）。
+- Jest focused：PASS 88/88（6 suites）；O94 Memory focused：PASS 20/20（4 suites）。
 - Route Detail strict Web：PASS，19 captures，无 runtime error。
 - Settings scroll：PASS，36 transitions；root 最少真实滚动 305px，子页最大 scrollTop 0。
 - Memory City：PASS，8 scenarios / ${memoryCount} captures；hosted Mapbox Style/Tiles/Fog/source/rendered features。
@@ -196,18 +197,17 @@ write('VALIDATION_REPORT_CN.md', `# 验证报告
 write('OPEN_ISSUES_CN.md', `# 尚未解决 / 边界
 
 1. **NATIVE_PENDING**：Web PASS 不能替代 iOS Mapbox、safe area、haptic 或原生字体验收。
-2. **O94 Memory integration pending**：并行工作区修改 MemoryMap、entry presentation、camera target 等文件，本分支未覆盖；合并后需重跑 Memory 3×2。
-3. **Legacy O88 script debt**：其 encounter continuation 使用旧 Memory contract；本轮用新的 Memory City gate验证当前 snapshot，不篡改并行功能。
-4. **TypeScript baseline**：全仓既有错误仍存在，详见 TEST_RESULTS；本轮相关测试和运行时构建通过。
-5. **Public Encounter design HOLD**：Marker/Card/animation 按 Owner 指令没有扩大修改。
-6. npm audit：app 有 14 项、backend 有 1 项 high 报告；未自动升级依赖，需独立依赖治理。
+2. **Legacy O88 script debt**：其 encounter continuation 使用旧 Memory contract；本轮用新的 Memory City gate 验证当前 snapshot，不篡改并行功能。
+3. **TypeScript baseline**：全仓既有错误仍存在，详见 TEST_RESULTS；本轮相关测试和运行时构建通过。
+4. **Public Encounter design HOLD**：Marker/Card/animation 按 Owner 指令没有扩大修改。
+5. npm audit：app 有 14 项、backend 有 1 项 high 报告；未自动升级依赖，需独立依赖治理。
 `);
 write('INTEGRATION_NOTES_CN.md', `# 集成说明
 
-- #26 基于 main O93 \`${integrationBase}\`，再安全叠加 #23/#25；未重置 main。
-- 与并行 O94 的已知重叠风险：\`HierarchyPanel.tsx\` 与其 MemoryScreen/MemoryMap 工作同属 Memory 功能域，但当前观察到 O94 未修改 HierarchyPanel；合并前仍应逐文件复核。
+- #26 先叠加 #23/#25，随后将最新 main O94 \`${integrationBase}\` 无冲突合入；未重置或修改 main。
+- O94 的 MemoryScreen/MemoryMap/camera 改动与 #26 的 \`HierarchyPanel.tsx\` 主题样式修改没有文件冲突；合并后已重新执行 O94 focused tests、Memory City 3×2 和 Route Detail strict gates。
 - \`MapHistoryScreen.tsx\` 仅改首帧 attribution fallback，不改 Route 几何、保存或相机跟随。
-- 建议集成：**CONDITIONAL**。先完成 O94 文件级 reconciliation，再跑 Memory City 和 Route Detail strict gates；Native Owner review 后方可考虑 OTA。
+- 建议集成：**CONDITIONAL**。Web 候选可进入 Owner Pro Review；Native Owner review 完成前不建议进入 OTA。
 `);
 write('PRO_REVIEW_CHECKLIST.md', `# Pro Review Checklist
 
