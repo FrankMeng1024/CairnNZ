@@ -14,6 +14,7 @@ import { authenticatedFetch } from '../../../services/apiService';
 import { storage } from '../../../store/storage';
 import {
   classifyFriendMemoryFailure,
+  friendMemoryPresentationFailure,
   memoryOperationFailure,
   type FriendMemoryFailure,
   type MemoryOperationFailure,
@@ -418,15 +419,24 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         if (generationAtStart === subscriptionGeneration
           && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
           && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
-          set({
-            selectionError: 'offline',
-            selectionLastFailure: memoryOperationFailure({
-              error,
-              operation: 'memory-selection',
-              stage: 'persist-select',
-              targetRevision: `${friendId}:select:${mutationGeneration}`,
-            }),
+          const failure = memoryOperationFailure({
+            error,
+            operation: 'memory-selection',
+            stage: 'persist-select',
+            targetRevision: `${friendId}:select:${mutationGeneration}`,
           });
+          set(state => {
+            const selectionPending = { ...state.selectionPending };
+            if (failure.kind === 'cancelled') delete selectionPending[String(friendId)];
+            return {
+              selectionPending,
+              selectionError: failure.kind === 'cancelled'
+                ? null
+                : friendMemoryPresentationFailure(failure),
+              selectionLastFailure: failure,
+            };
+          });
+          persistSelectionIntents(viewerAtStart, get().selectionPending);
         }
         return 0;
       }
@@ -499,15 +509,24 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         if (generationAtStart === subscriptionGeneration
           && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
           && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
-          set({
-            selectionError: 'offline',
-            selectionLastFailure: memoryOperationFailure({
-              error,
-              operation: 'memory-selection',
-              stage: 'persist-deselect',
-              targetRevision: `${friendId}:deselect:${mutationGeneration}`,
-            }),
+          const failure = memoryOperationFailure({
+            error,
+            operation: 'memory-selection',
+            stage: 'persist-deselect',
+            targetRevision: `${friendId}:deselect:${mutationGeneration}`,
           });
+          set(state => {
+            const selectionPending = { ...state.selectionPending };
+            if (failure.kind === 'cancelled') delete selectionPending[String(friendId)];
+            return {
+              selectionPending,
+              selectionError: failure.kind === 'cancelled'
+                ? null
+                : friendMemoryPresentationFailure(failure),
+              selectionLastFailure: failure,
+            };
+          });
+          persistSelectionIntents(viewerAtStart, get().selectionPending);
         }
         return 0;
       }

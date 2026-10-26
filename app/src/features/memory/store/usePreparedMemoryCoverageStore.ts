@@ -67,6 +67,7 @@ interface PreparedMemoryCoverageState {
 
 let requestSequence = 0;
 let activeRequestController: AbortController | null = null;
+let activeRequestSessionId: string | null | undefined;
 let refreshAfterLoad = false;
 export const PREPARED_MEMORY_COVERAGE_TIMEOUT_MS = 30_000;
 const SNAPSHOT_PAGE_SIZE = 24;
@@ -88,6 +89,13 @@ function viewportIntersectsTile(
   const [west, south, east, north] = viewport.bbox;
   return bbox[2] >= west - pad && bbox[0] <= east + pad
     && bbox[3] >= south - pad && bbox[1] <= north + pad;
+}
+
+function navigationSessionMatches(ownerId: string, expectedSessionId: string | null): boolean {
+  const current = useMemoryNavigationSessionStore.getState();
+  return expectedSessionId == null
+    ? current.sessionId == null
+    : current.ownerId === ownerId && current.sessionId === expectedSessionId;
 }
 
 export function selectPreparedCoverageViewport(
@@ -154,7 +162,9 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       if (get().viewport?.key !== viewport.key) set({ viewport });
       return;
     }
-    if (!accountChanged && (get().status === 'loading' || get().status === 'refreshing')) {
+    if (!accountChanged
+      && (get().status === 'loading' || get().status === 'refreshing')
+      && activeRequestSessionId === sessionId) {
       if (get().viewport?.key !== viewport.key) set({ viewport });
       if (force) refreshAfterLoad = true;
       return;
@@ -163,6 +173,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
     activeRequestController?.abort();
     const controller = new AbortController();
     activeRequestController = controller;
+    activeRequestSessionId = sessionId;
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -188,6 +199,10 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       ...(require('./useMemoryStore').useMemoryStore.getState().pendingPreparedCoverageCids ?? []),
     ];
     const requestId = `mine-snapshot-${sequence}`;
+    const requestStillCurrent = () => sequence === requestSequence
+      && String(useAppStore.getState().user?.id ?? '') === userId
+      && get().userId === userId
+      && navigationSessionMatches(userId, sessionId);
     let stage = 'manifest';
     let targetRevision = `mine:pending:${sequence}`;
     try {
@@ -210,6 +225,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
           `/api/memory/coverage-snapshot?${query.toString()}`,
           { expectedUserId: userId, signal: controller.signal },
         );
+        if (!requestStillCurrent()) return;
         if (!response.ok) {
           const error = new Error(`HTTP ${response.status}`) as Error & { httpStatus?: number; code?: string };
           error.httpStatus = response.status;
@@ -224,6 +240,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
           Object.assign(error as object, { invalidPayload: true, operationStage: 'decode', httpStatus: response.status });
           throw error;
         }
+        if (!requestStillCurrent()) return;
         decodedBytes += JSON.stringify(body).length;
         manifest = body?.manifest;
         const page = body?.page;
@@ -299,9 +316,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         Object.assign(error, { invalidPayload: true, operationStage: 'completeness', code: 'INCOMPLETE_SNAPSHOT' });
         throw error;
       }
-      if (sequence !== requestSequence
-        || String(useAppStore.getState().user?.id ?? '') !== userId
-        || get().userId !== userId) return;
+      if (!requestStillCurrent()) return;
       const geometry: MultiPolygon = {
         type: 'MultiPolygon',
         coordinates: tiles.flatMap(tile => tile.geometry.coordinates),
@@ -351,11 +366,13 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         decoded_bytes: decodedBytes,
       });
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      useMemoryNavigationSessionStore.getState().pinMine(userId, publishedCoverage);
+      useMemoryNavigationSessionStore.getState().pinMine(userId, sessionId, publishedCoverage);
       require('./useMemoryStore').useMemoryStore.getState()
         .acknowledgePreparedCoverage(representedPendingCids);
     } catch (error: any) {
-      if (sequence !== requestSequence || get().userId !== userId) return;
+      if (sequence !== requestSequence
+        || get().userId !== userId
+        || !navigationSessionMatches(userId, sessionId)) return;
       const failure = memoryOperationFailure({
         error,
         httpStatus: Number.isFinite(Number(error?.httpStatus)) ? Number(error.httpStatus) : undefined,
@@ -386,7 +403,10 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       });
     } finally {
       clearTimeout(timeout);
-      if (activeRequestController === controller) activeRequestController = null;
+      if (activeRequestController === controller) {
+        activeRequestController = null;
+        activeRequestSessionId = undefined;
+      }
       if (sequence === requestSequence && refreshAfterLoad && get().userId === userId) {
         refreshAfterLoad = false;
         // A visible navigation session is deliberately frozen. New evidence
@@ -427,6 +447,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
     refreshAfterLoad = false;
     activeRequestController?.abort();
     activeRequestController = null;
+    activeRequestSessionId = undefined;
     set({
       userId: null,
       coverage: null,

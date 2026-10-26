@@ -14,26 +14,31 @@ jest.mock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => 
 jest.mock('../../../store/storage', () => ({ storage: { getAllKeysStrict: async () => [], removeItemsStrict: async () => undefined } }));
 jest.mock('../store/useMemorySubscriptionsStore', () => ({ useMemorySubscriptionsStore: { getState: () => mockSubscriptions } }));
 
-function snapshotResponse() {
+function snapshotResponse(
+  grantEpoch = 'grant-a',
+  snapshotId = 'snapshot-a',
+  friendId = '11',
+  friendshipEpisodeId = 'episode-a',
+) {
   const now = Date.now();
   return {
     ok: true, status: 200,
     json: async () => ({
       revoked_friend_ids: [],
       projections: [{
-        source_friend_id: '11', authorization_version: 1,
-        grant_epoch: 'grant-a', friendship_episode_id: 'episode-a',
+        source_friend_id: friendId, authorization_version: 1,
+        grant_epoch: grantEpoch, friendship_episode_id: friendshipEpisodeId,
         coverage_scope: 'full_history_delayed_v1',
         server_authorized_at: new Date(now).toISOString(),
         authorization_expires_at: new Date(now + 5 * 60_000).toISOString(),
         manifest: {
-          snapshot_id: 'snapshot-a', dataset_revision: 'dataset-a', coverage_rule_version: 4,
+          snapshot_id: snapshotId, dataset_revision: snapshotId, coverage_rule_version: 4,
           as_of: new Date(now).toISOString(), expected_pages: 1, expected_tiles: 1,
           expected_evidence_count: 1, regions: [], complete: false,
         },
         page: {
-          snapshot_id: 'snapshot-a', page_index: 0,
-          tiles: [{ id: 'tile-a', bbox: [174, -42, 176, -40], evidence_count: 1, geometry_sha256: 'sha', geometry: { type: 'MultiPolygon', coordinates: [[[[174, -42], [176, -42], [176, -40], [174, -42]]]] } }],
+          snapshot_id: snapshotId, page_index: 0,
+          tiles: [{ id: `tile-${snapshotId}`, bbox: [174, -42, 176, -40], evidence_count: 1, geometry_sha256: `sha-${snapshotId}`, geometry: { type: 'MultiPolygon', coordinates: [[[[174, -42], [176, -42], [176, -40], [174, -42]]]] } }],
           next_cursor: null, complete: true,
         },
       }],
@@ -41,7 +46,11 @@ function snapshotResponse() {
   };
 }
 
-function renewalResponse(requestId: string, status: 'authorized' | 'denied' = 'authorized') {
+function renewalResponse(
+  requestId: string,
+  status: 'authorized' | 'denied' = 'authorized',
+  grantEpoch = 'grant-a',
+) {
   const now = Date.now();
   return {
     ok: true, status: 200,
@@ -53,7 +62,7 @@ function renewalResponse(requestId: string, status: 'authorized' | 'denied' = 'a
         friend_id: '11', status,
         code: status === 'authorized' ? 'PROOF_RENEWED' : 'AUTHORIZATION_CHANGED',
         ...(status === 'authorized' ? {
-          grant_epoch: 'grant-a', friendship_episode_id: 'episode-a',
+          grant_epoch: grantEpoch, friendship_episode_id: 'episode-a',
           authorization_version: 1, coverage_scope: 'full_history_delayed_v1',
         } : {}),
       }],
@@ -61,13 +70,45 @@ function renewalResponse(requestId: string, status: 'authorized' | 'denied' = 'a
   };
 }
 
+function emptySnapshotResponse() {
+  const response = snapshotResponse();
+  return {
+    ...response,
+    json: async () => {
+      const body = await response.json();
+      const projection = body.projections[0];
+      return {
+        ...body,
+        projections: [{
+          ...projection,
+          manifest: {
+            ...projection.manifest,
+            expected_pages: 0,
+            expected_tiles: 0,
+            expected_evidence_count: 0,
+            complete: true,
+          },
+          page: { ...projection.page, tiles: [], complete: true },
+        }],
+      };
+    },
+  };
+}
+
 describe('Friend Memory server proof renewal', () => {
   beforeEach(() => {
     jest.useRealTimers();
     mockAppState.user.id = 'viewer-a';
+    mockSubscriptions.subscriptions = [{ friend_id: 11, friend_name: 'Mia' }];
+    mockSubscriptions.availableSources[0] = {
+      friend_id: '11', friend_name: 'Mia', selected: true,
+      authorization_version: 1, grant_epoch: 'grant-a', friendship_episode_id: 'episode-a',
+      coverage_scope: 'full_history_delayed_v1', sharing_status: 'shared', effective_at: '',
+    };
   });
 
   afterEach(() => {
+    try { require('../store/useFriendMemoryStore').useFriendMemoryStore.getState().reset(); } catch { /* module may not have loaded */ }
     jest.useRealTimers();
     jest.restoreAllMocks();
     jest.resetModules();
@@ -207,6 +248,264 @@ describe('Friend Memory server proof renewal', () => {
     expect(mockAuthenticatedFetch.mock.calls.filter(call => call[0] === '/api/friend-sharing/coverage-proof-renewal')).toHaveLength(2);
     expect(useFriendMemoryStore.getState().projections['11'].geometry).toBe(geometry);
     expect(useFriendMemoryStore.getState()).toMatchObject({ loading: false, error: null });
+  });
+
+  test('an expiry-boundary renewal restores the source terminal after a transient pre-renewal failure', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-26T00:00:00.000Z'));
+    let renewalCalls = 0;
+    mockAuthenticatedFetch.mockReset().mockImplementation(async (path, init) => {
+      if (path === '/api/friend-sharing/coverage-snapshot') return snapshotResponse();
+      renewalCalls += 1;
+      if (renewalCalls === 1) {
+        return { ok: false, status: 503, json: async () => ({ code: 'SERVICE_UNAVAILABLE' }) };
+      }
+      return renewalResponse(JSON.parse(init.body).request_id);
+    });
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+
+    await jest.advanceTimersByTimeAsync(4 * 60_000 + 30_000);
+    expect(useFriendMemoryStore.getState().sourceStates['11'].status).toBe('loaded');
+    await jest.advanceTimersByTimeAsync(30_000);
+
+    expect(renewalCalls).toBe(2);
+    expect(useFriendMemoryStore.getState()).toMatchObject({ loading: false, error: null });
+    expect(useFriendMemoryStore.getState().sourceStates['11']).toMatchObject({ status: 'loaded', cellCount: 1 });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
+  test('an expired proof retries transient renewal in a bounded recovery window without geometry reload', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-26T00:00:00.000Z'));
+    let renewalCalls = 0;
+    mockAuthenticatedFetch.mockReset().mockImplementation(async (path, init) => {
+      if (path === '/api/friend-sharing/coverage-snapshot') return snapshotResponse();
+      renewalCalls += 1;
+      if (renewalCalls <= 2) {
+        return { ok: false, status: 503, json: async () => ({ code: 'SERVICE_UNAVAILABLE' }) };
+      }
+      return renewalResponse(JSON.parse(init.body).request_id);
+    });
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(0);
+    await jest.advanceTimersByTimeAsync(15_000);
+
+    expect(mockAuthenticatedFetch.mock.calls.filter(call => call[0] === '/api/friend-sharing/coverage-snapshot')).toHaveLength(1);
+    expect(renewalCalls).toBe(3);
+    expect(useFriendMemoryStore.getState().sourceStates['11']).toMatchObject({ status: 'loaded', cellCount: 1 });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
+  test('a complete-empty Friend source returns to the empty terminal after expiry recovery', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-26T00:00:00.000Z'));
+    let renewalCalls = 0;
+    mockAuthenticatedFetch.mockReset().mockImplementation(async (path, init) => {
+      if (path === '/api/friend-sharing/coverage-snapshot') return emptySnapshotResponse();
+      renewalCalls += 1;
+      if (renewalCalls === 1) {
+        return { ok: false, status: 503, json: async () => ({ code: 'SERVICE_UNAVAILABLE' }) };
+      }
+      return renewalResponse(JSON.parse(init.body).request_id);
+    });
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    expect(useFriendMemoryStore.getState().sourceStates['11']).toMatchObject({ status: 'empty', cellCount: 0 });
+
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(useFriendMemoryStore.getState().sourceStates['11']).toMatchObject({ status: 'empty', cellCount: 0 });
+    expect(useFriendMemoryStore.getState()).toMatchObject({ loading: false, error: null });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
+  test.each(['authorized', 'denied'] as const)('a delayed old-grant %s renewal cannot delete a newly acquired grant with the same version', async (oldStatus) => {
+    let releaseOldRenewal!: () => void;
+    let oldRequestId = '';
+    mockAuthenticatedFetch.mockReset()
+      .mockResolvedValueOnce(snapshotResponse('grant-a', 'snapshot-a'))
+      .mockImplementationOnce(async (_path, init) => {
+        oldRequestId = JSON.parse(init.body).request_id;
+        return new Promise(resolve => {
+          releaseOldRenewal = () => resolve(renewalResponse(oldRequestId, oldStatus, 'grant-a'));
+        });
+      })
+      .mockResolvedValueOnce(snapshotResponse('grant-b', 'snapshot-b'));
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    const oldRenewal = useFriendMemoryStore.getState().renewAuthorizationProofs(['11']);
+    while (!releaseOldRenewal) await Promise.resolve();
+
+    await useFriendMemoryStore.getState().purgeFriend(11);
+    mockSubscriptions.availableSources[0].grant_epoch = 'grant-b';
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    expect(useFriendMemoryStore.getState().projections['11']).toMatchObject({ grantEpoch: 'grant-b', snapshotId: 'snapshot-b' });
+
+    releaseOldRenewal();
+    await oldRenewal;
+
+    expect(useFriendMemoryStore.getState().projections['11']).toMatchObject({ grantEpoch: 'grant-b', snapshotId: 'snapshot-b' });
+    expect(useFriendMemoryStore.getState().sourceStates['11'].status).toBe('loaded');
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
+  test('one stale source in a batch cannot corrupt its replacement or the independently current source', async () => {
+    mockSubscriptions.subscriptions = [
+      { friend_id: 11, friend_name: 'Mia' },
+      { friend_id: 12, friend_name: 'Noah' },
+    ];
+    mockSubscriptions.availableSources = [
+      mockSubscriptions.availableSources[0],
+      {
+        friend_id: '12', friend_name: 'Noah', selected: true,
+        authorization_version: 1, grant_epoch: 'grant-12', friendship_episode_id: 'episode-12',
+        coverage_scope: 'full_history_delayed_v1', sharing_status: 'shared', effective_at: '',
+      },
+    ];
+    let releaseBatch!: () => void;
+    mockAuthenticatedFetch.mockReset().mockImplementation(async (path, init) => {
+      if (path === '/api/friend-sharing/coverage-snapshot') {
+        const id = String(JSON.parse(init.body).friend_id);
+        const source = mockSubscriptions.availableSources.find(item => String(item.friend_id) === id)!;
+        return snapshotResponse(
+          source.grant_epoch,
+          `snapshot-${id}-${source.grant_epoch}`,
+          id,
+          source.friendship_episode_id,
+        );
+      }
+      const request = JSON.parse(init.body);
+      return new Promise(resolve => {
+        releaseBatch = () => {
+          const now = Date.now();
+          resolve({
+            ok: true, status: 200,
+            json: async () => ({
+              request_id: request.request_id,
+              complete: true,
+              server_authorized_at: new Date(now).toISOString(),
+              authorization_expires_at: new Date(now + 5 * 60_000).toISOString(),
+              outcomes: request.sources.map((source: any) => ({
+                friend_id: String(source.friend_id), status: 'authorized', code: 'PROOF_RENEWED',
+                grant_epoch: source.grant_epoch,
+                friendship_episode_id: source.friendship_episode_id,
+                authorization_version: source.authorization_version,
+                coverage_scope: source.coverage_scope,
+              })),
+            }),
+          });
+        };
+      });
+    });
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    const friend12AuthorizedAt = useFriendMemoryStore.getState().projections['12'].serverAuthorizedAtMs;
+    const oldBatch = useFriendMemoryStore.getState().renewAuthorizationProofs(['11', '12']);
+    while (!releaseBatch) await Promise.resolve();
+
+    await useFriendMemoryStore.getState().purgeFriend(11);
+    mockSubscriptions.availableSources[0].grant_epoch = 'grant-b';
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    releaseBatch();
+    await oldBatch;
+
+    expect(useFriendMemoryStore.getState().projections['11']).toMatchObject({
+      grantEpoch: 'grant-b', snapshotId: 'snapshot-11-grant-b',
+    });
+    expect(useFriendMemoryStore.getState().sourceStates['11'].status).toBe('loaded');
+    expect(useFriendMemoryStore.getState().projections['12']).toMatchObject({ grantEpoch: 'grant-12' });
+    expect(useFriendMemoryStore.getState().projections['12'].serverAuthorizedAtMs)
+      .toBeGreaterThanOrEqual(friend12AuthorizedAt);
+    expect(useFriendMemoryStore.getState().sourceStates['12'].status).toBe('loaded');
+  });
+
+  test('expired transient renewal stops after the documented bounded retry sequence', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-26T00:00:00.000Z'));
+    let renewalCalls = 0;
+    mockAuthenticatedFetch.mockReset().mockImplementation(async (path) => {
+      if (path === '/api/friend-sharing/coverage-snapshot') return snapshotResponse();
+      renewalCalls += 1;
+      return { ok: false, status: 503, json: async () => ({ code: 'SERVICE_UNAVAILABLE' }) };
+    });
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+
+    await jest.advanceTimersByTimeAsync(15 * 60_000);
+
+    // One lead renewal, one hard-expiry renewal, then 15/30/60-second retries.
+    expect(renewalCalls).toBe(5);
+    expect(useFriendMemoryStore.getState()).toMatchObject({
+      loading: false,
+      error: 'unavailable',
+      sourceStates: { '11': { status: 'idle', cellCount: 0 } },
+    });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(0);
+  });
+
+  test('a complete sources refresh retains same-grant hidden geometry across deselect and reselect', async () => {
+    mockAuthenticatedFetch.mockReset().mockResolvedValueOnce(snapshotResponse());
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    const geometry = useFriendMemoryStore.getState().projections['11'].geometry;
+
+    mockSubscriptions.subscriptions = [];
+    mockSubscriptions.availableSources[0].selected = false;
+    useFriendMemoryStore.getState().hideFriend(11);
+    await useFriendMemoryStore.getState().reconcileAuthorizedSources(mockSubscriptions.availableSources, true);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(0);
+    expect(useFriendMemoryStore.getState().projections['11']?.geometry).toBe(geometry);
+
+    mockSubscriptions.subscriptions = [{ friend_id: 11, friend_name: 'Mia' }];
+    mockSubscriptions.availableSources[0].selected = true;
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+
+    expect(mockAuthenticatedFetch.mock.calls.filter(call => call[0] === '/api/friend-sharing/coverage-snapshot')).toHaveLength(1);
+    expect(useFriendMemoryStore.getState().projections['11']?.geometry).toBe(geometry);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
+  test('an old denial after deselect and same-grant reselect cannot purge the current source generation', async () => {
+    let releaseOldRenewal!: () => void;
+    let oldRequestId = '';
+    mockAuthenticatedFetch.mockReset()
+      .mockResolvedValueOnce(snapshotResponse())
+      .mockImplementationOnce(async (_path, init) => {
+        oldRequestId = JSON.parse(init.body).request_id;
+        return new Promise(resolve => {
+          releaseOldRenewal = () => resolve(renewalResponse(oldRequestId, 'denied'));
+        });
+      });
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    const geometry = useFriendMemoryStore.getState().projections['11'].geometry;
+    const oldRenewal = useFriendMemoryStore.getState().renewAuthorizationProofs(['11']);
+    while (!releaseOldRenewal) await Promise.resolve();
+
+    mockSubscriptions.subscriptions = [];
+    mockSubscriptions.availableSources[0].selected = false;
+    useFriendMemoryStore.getState().hideFriend(11);
+    mockSubscriptions.subscriptions = [{ friend_id: 11, friend_name: 'Mia' }];
+    mockSubscriptions.availableSources[0].selected = true;
+
+    releaseOldRenewal();
+    await oldRenewal;
+
+    expect(useFriendMemoryStore.getState().projections['11']?.geometry).toBe(geometry);
+    expect(useFriendMemoryStore.getState().sourceStates['11'].status).toBe('loaded');
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
   });
 
   test.each([

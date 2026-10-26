@@ -22,7 +22,7 @@ type MemoryNavigationSessionState = {
   selectedFriendIds: string[];
   begin: (ownerId: string, localOverlayPoints: VisitedPoint[], localOverlayReady?: boolean) => string;
   pinLocalOverlay: (ownerId: string, localOverlayPoints: VisitedPoint[]) => void;
-  pinMine: (ownerId: string, coverage: PreparedMemoryCoverage) => void;
+  pinMine: (ownerId: string, expectedSessionId: string | null, coverage: PreparedMemoryCoverage) => void;
   setCamera: (ownerId: string, camera: FrozenMemoryCamera) => void;
   setPresentation: (ownerId: string, input: {
     selectedCityId: string | null;
@@ -76,9 +76,12 @@ export const useMemoryNavigationSessionStore = create<MemoryNavigationSessionSta
     set({ localOverlayPoints: localOverlayPoints.slice(), localOverlayPinned: true });
   },
 
-  pinMine: (ownerId, coverage) => {
+  pinMine: (ownerId, expectedSessionId, coverage) => {
     const current = get();
-    if (!current.sessionId || current.ownerId !== ownerId || current.mineCoverage) return;
+    if (!current.sessionId
+      || current.sessionId !== expectedSessionId
+      || current.ownerId !== ownerId
+      || current.mineCoverage) return;
     set({ mineCoverage: coverage });
   },
 

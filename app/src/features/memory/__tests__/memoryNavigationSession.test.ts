@@ -141,4 +141,54 @@ describe('Memory navigation session ownership', () => {
       ownerId: 'viewer-b', camera: null, mineCoverage: { snapshotId: 'viewer-b' },
     });
   });
+
+  test('a held Mine response from an ended session cannot pin into its successor session', async () => {
+    let releaseSessionA!: (value: ReturnType<typeof snapshot>) => void;
+    mockAuthenticatedFetch
+      .mockImplementationOnce(() => new Promise(resolve => { releaseSessionA = resolve; }))
+      .mockResolvedValueOnce(snapshot('session-b'));
+    const sessionA = useMemoryNavigationSessionStore.getState().begin('viewer-a', []);
+    const requestA = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'session-a' });
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+
+    useMemoryNavigationSessionStore.getState().end(sessionA);
+    const sessionB = useMemoryNavigationSessionStore.getState().begin('viewer-a', []);
+    const requestB = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'session-b' });
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+
+    releaseSessionA(snapshot('session-a-late'));
+    await Promise.all([requestA, requestB]);
+
+    expect(useMemoryNavigationSessionStore.getState()).toMatchObject({
+      sessionId: sessionB,
+      ownerId: 'viewer-a',
+      mineCoverage: { snapshotId: 'session-b' },
+    });
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready', loadedSessionId: sessionB, coverage: { snapshotId: 'session-b' },
+    });
+  });
+
+  test('a late Mine error from an ended session cannot replace the successor ready state', async () => {
+    let rejectSessionA!: (error: Error) => void;
+    mockAuthenticatedFetch
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSessionA = reject; }))
+      .mockResolvedValueOnce(snapshot('session-b-ready'));
+    const sessionA = useMemoryNavigationSessionStore.getState().begin('viewer-a', []);
+    const requestA = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'session-a-error' });
+
+    useMemoryNavigationSessionStore.getState().end(sessionA);
+    const sessionB = useMemoryNavigationSessionStore.getState().begin('viewer-a', []);
+    await usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'session-b-ready' });
+    rejectSessionA(Object.assign(new Error('late session A transport'), { code: 'ECONNRESET' }));
+    await requestA;
+
+    expect(useMemoryNavigationSessionStore.getState()).toMatchObject({
+      sessionId: sessionB, mineCoverage: { snapshotId: 'session-b-ready' },
+    });
+    expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({
+      status: 'ready', error: null, loadedSessionId: sessionB,
+      coverage: { snapshotId: 'session-b-ready' },
+    });
+  });
 });

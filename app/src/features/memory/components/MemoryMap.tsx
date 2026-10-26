@@ -49,6 +49,7 @@ import {
   CURRENT_LOCATION_RING_STYLE,
 } from '../../../components/map/currentLocationMarkerStyle';
 import { useMemoryNavigationSessionStore } from '../store/useMemoryNavigationSessionStore';
+import { memoryCameraDefaultSettings } from '../services/memoryCameraSettings';
 
 let memoryMapHasRendered = false;
 
@@ -754,12 +755,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // so a centerLat/Lng prop change (e.g. watcher push) does NOT
           // auto-fly back to the user's current position. The user
           // explicitly drives recenter via the pill button.
-          defaultSettings={{
-            centerCoordinate: sessionCamera?.center ?? [centerLng, centerLat],
-            zoomLevel: sessionCamera?.zoom ?? INITIAL_ZOOM,
-            bearing: sessionCamera?.bearing ?? 0,
-            pitch: sessionCamera?.pitch ?? 0,
-          }}
+          defaultSettings={memoryCameraDefaultSettings(
+            sessionCamera,
+            [centerLng, centerLat],
+            INITIAL_ZOOM,
+          )}
           animationMode={'flyTo'}
           animationDuration={280}
         />
