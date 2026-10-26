@@ -133,11 +133,29 @@ await page.route('**/api/**', async route => {
 });
 
 const settle = (ms = 500) => page.waitForTimeout(ms);
-const currentRoute = name => page.waitForFunction(
-  expected => globalThis.__cairnStores?.getCurrentRoute?.() === expected,
-  name,
-  { timeout: 20_000 },
-);
+async function currentRoute(name) {
+  try {
+    await page.waitForFunction(
+      expected => globalThis.__cairnStores?.getCurrentRoute?.() === expected,
+      name,
+      { timeout: 20_000 },
+    );
+  } catch (error) {
+    // A failed behaviour gate must preserve enough state to distinguish an
+    // actual navigation/delete regression from an exhausted local QA runtime.
+    // This is diagnostic-only and deliberately does not relax the assertion.
+    const diagnostic = await page.evaluate(() => ({
+      expectedRoute: null,
+      helperRoute: globalThis.__cairnStores?.getCurrentRoute?.() ?? null,
+      navigationRoute: globalThis.__cairnStores?.navigationRef?.getCurrentRoute?.()?.name ?? null,
+      routeIds: globalThis.__cairnStores?.useRouteStore?.getState?.().routes?.map(route => route.id) ?? [],
+      actionError: document.querySelector('[data-testid="route-action-error"]')?.textContent ?? null,
+      confirmationVisible: Boolean(document.querySelector('[data-testid="route-delete-confirmation"]')),
+    }));
+    diagnostic.expectedRoute = name;
+    throw new Error(`Route gate timed out: ${JSON.stringify(diagnostic)}`, { cause: error });
+  }
+}
 async function setTheme(theme) {
   await page.evaluate(nextTheme => {
     const stores = globalThis.__cairnStores;
