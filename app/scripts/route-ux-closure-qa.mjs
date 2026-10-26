@@ -42,6 +42,24 @@ async function box(locator) {
   catch { return null; }
 }
 
+async function exposedBox(page, selector) {
+  return page.evaluate((candidateSelector) => {
+    const candidates = [...document.querySelectorAll(candidateSelector)];
+    const exposed = candidates.filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      if (rect.width <= 0 || rect.height <= 0 || style.display === 'none' || style.visibility === 'hidden') return false;
+      const stack = document.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      const ownIndex = stack.findIndex(item => item === element || element.contains(item));
+      return ownIndex >= 0 && !stack.slice(0, ownIndex).some(item => !element.contains(item));
+    });
+    const element = exposed.at(-1);
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }, selector);
+}
+
 function parseHexColor(value) {
   const match = typeof value === 'string' && value.match(/^#([0-9a-f]{6})$/i);
   if (match) return [0, 2, 4].map(offset => Number.parseInt(match[1].slice(offset, offset + 2), 16));
@@ -216,8 +234,11 @@ for (const scenario of matrix) {
     const editorHeaderBackground = await page.getByTestId('route-editor-header')
       .evaluate(element => getComputedStyle(element).backgroundColor);
     const browseHasNoReservedContext = await page.getByTestId('route-context-slot').count() === 0;
-    const nameBox = await box(page.getByLabel('Route name'));
-    const saveBox = await box(page.getByTestId('ordered-route-save'));
+    const visibleRouteName = page.locator('[aria-label="Route name"]:visible').last();
+    const visibleSave = page.locator('[data-testid="ordered-route-save"]:visible').last();
+    await visibleSave.waitFor({ state: 'visible', timeout: 5_000 });
+    const nameBox = await box(visibleRouteName);
+    const saveBox = await box(visibleSave);
 
     await page.getByTestId('route-tool-draw').click();
     await page.screenshot({ path: path.join(outputDir, `${prefix}-draw.png`) });
@@ -265,8 +286,11 @@ for (const scenario of matrix) {
     const undoEnabledAfterManualFallback = await page.getByTestId('route-undo').isEnabled();
 
     const editorPanelBox = await box(page.getByTestId('route-context-slot'));
-    const editorLogo = await box(page.locator('.mapboxgl-ctrl-logo:visible').last());
-    const editorAttribution = await box(page.locator('.mapboxgl-ctrl-attrib:visible').last());
+    // Navigation keeps prior map nodes mounted on Web. Measure the control
+    // whose centre is actually exposed in the viewport, not merely a DOM node
+    // matching `:visible` underneath the active Dock.
+    const editorLogo = await exposedBox(page, '.mapboxgl-ctrl-logo');
+    const editorAttribution = await exposedBox(page, '.mapboxgl-ctrl-attrib');
     const editorOrnamentsAboveDock = Boolean(editorPanelBox && editorLogo && editorAttribution
       && editorLogo.y + editorLogo.height <= editorPanelBox.y
       && editorAttribution.y + editorAttribution.height <= editorPanelBox.y
