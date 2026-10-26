@@ -10210,10 +10210,10 @@ export const CAIRN_TEXT = {
     layout: 'Body/status copy; allow wrapping and large accessibility text.',
     translationStatus: { 'en-NZ': 'source', 'ja-JP': 'pending' },
   },
-  'memory.memory-screen.library': {
-    'en-NZ': 'Library',
+  'memory.memory-screen.cairns': {
+    'en-NZ': 'Cairns',
     'ja-JP': null,
-    context: 'App-owned copy extracted from features/memory/screens/MemoryScreen:1107 (jsx-text). Preserve the stated UI meaning; do not translate user data or protocol values.',
+    context: 'Compact Memory-map entry to the existing saved and discovered Cairn content. This does not rename unrelated Library surfaces.',
     surfaces: ['features/memory/screens/MemoryScreen'],
     params: {},
     layout: 'Compact UI copy; allow normal font scaling and wrapping where needed.',
@@ -10291,19 +10291,28 @@ export const CAIRN_TEXT = {
     layout: 'Body/status copy; allow wrapping and large accessibility text.',
     translationStatus: { 'en-NZ': 'source', 'ja-JP': 'pending' },
   },
-  'memory.memory-screen.open-cairn-library': {
-    'en-NZ': 'Open Cairn Library',
+  'memory.memory-screen.no-authorised-coverage-in-this-city': {
+    'en-NZ': 'No authorised Memory coverage is available in this city.',
     'ja-JP': null,
-    context: 'App-owned copy extracted from features/memory/screens/MemoryScreen:1104 (attribute:accessibilityLabel). Preserve the stated UI meaning; do not translate user data or protocol values.',
+    context: 'Shown only when a city row becomes stale after a coverage or sharing change and no currently authorised Mine/Friends geometry can be targeted.',
+    surfaces: ['features/memory/screens/MemoryScreen'],
+    params: {},
+    layout: 'Short map status; allow two lines at large text sizes.',
+    translationStatus: { 'en-NZ': 'source', 'ja-JP': 'pending' },
+  },
+  'memory.memory-screen.open-cairns': {
+    'en-NZ': 'Open Cairns',
+    'ja-JP': null,
+    context: 'Accessible label for the Memory-map Cairns entry; it opens the existing Cairn content library.',
     surfaces: ['features/memory/screens/MemoryScreen'],
     params: {},
     layout: 'Accessibility copy; must remain meaningful without visual context.',
     translationStatus: { 'en-NZ': 'source', 'ja-JP': 'pending' },
   },
-  'memory.memory-screen.open-cairn-library-value-unread-cairn-groups': {
-    'en-NZ': 'Open Cairn Library, {acquiredUnreadCount} unread Cairn groups',
+  'memory.memory-screen.open-cairns-value-unread-cairn-groups': {
+    'en-NZ': 'Open Cairns, {acquiredUnreadCount} unread Cairn groups',
     'ja-JP': null,
-    context: 'App-owned copy extracted from features/memory/screens/MemoryScreen:1103 (attribute:accessibilityLabel). Preserve the stated UI meaning; do not translate user data or protocol values.',
+    context: 'Accessible Memory-map Cairns entry label with its unread acquired-Cairn group count.',
     surfaces: ['features/memory/screens/MemoryScreen'],
     params: { acquiredUnreadCount: 'number' },
     layout: 'Accessibility copy; must remain meaningful without visual context.',

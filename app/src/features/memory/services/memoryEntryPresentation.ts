@@ -4,6 +4,28 @@ export const MEMORY_ENTRY_SETTLE_MS = 150;
 
 export type MemoryEntryVisibleState = 'stable-placeholder' | 'authorized-preview' | 'preparing' | 'usable-map' | 'error';
 
+/**
+ * A warm Fog rebuild can retain the last complete, authorized scene while a
+ * newly culled viewport is prepared locally. That is render work, not a new
+ * user-visible loading target. A scope/source/revision transition remains a
+ * real content target and keeps its scoped status until the atomic scene swap.
+ */
+export function memoryFogReadinessDatasetIdentity(readinessKey: string): string {
+  return readinessKey.replace(/\|viewport:[^|]*/g, '|viewport:<camera-independent>');
+}
+
+export function memoryFogTransitionIsVisiblyPending(input: {
+  readinessKey: string;
+  readyReadinessKey: string;
+  retainsDisplayedScene: boolean;
+}): boolean {
+  if (input.readyReadinessKey === input.readinessKey) return false;
+  if (!input.retainsDisplayedScene) return true;
+  if (!input.readyReadinessKey) return false;
+  return memoryFogReadinessDatasetIdentity(input.readyReadinessKey)
+    !== memoryFogReadinessDatasetIdentity(input.readinessKey);
+}
+
 /** A full Mapbox frame can contain borrowed Fog, markers, and region context.
  * Warm previews are therefore captured only from an exact painted Mine scene,
  * never from combined content or a self scene that is still preparing. */

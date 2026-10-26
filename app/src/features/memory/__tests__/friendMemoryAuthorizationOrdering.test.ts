@@ -607,6 +607,12 @@ describe('friend Memory authorization cache ordering', () => {
     expect(useFriendMemoryStore.getState().getVisibleGeometries(null, distantViewport)[0].geometry.coordinates).toHaveLength(1);
 
     await useFriendMemoryStore.getState().loadSelectedProjections(undefined, distantViewport);
+    for (let index = 0; index < 15; index += 1) {
+      await useFriendMemoryStore.getState().loadSelectedProjections(undefined, {
+        key: `pinch-${index}`,
+        bbox: [174.6 + index * 0.001, -41.4, 174.9 + index * 0.001, -41.1],
+      });
+    }
     expect(authenticatedFetch).toHaveBeenCalledTimes(2);
   });
 

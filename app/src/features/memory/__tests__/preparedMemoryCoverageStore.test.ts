@@ -100,6 +100,12 @@ describe('prepared Memory viewport handoff', () => {
       bbox: [168.5, -46.0, 168.8, -45.7],
     });
     await usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport, key: 'recenter' });
+    for (let index = 0; index < 15; index += 1) {
+      await usePreparedMemoryCoverageStore.getState().loadViewport({
+        key: `pinch-${index}`,
+        bbox: [174.7 + index * 0.001, -41.4, 174.9 + index * 0.001, -41.1],
+      });
+    }
 
     expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
     expect(usePreparedMemoryCoverageStore.getState()).toMatchObject({

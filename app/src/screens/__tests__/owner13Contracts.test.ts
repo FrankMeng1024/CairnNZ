@@ -4,15 +4,15 @@ import path from 'node:path';
 const read = (relative: string) => fs.readFileSync(path.resolve(__dirname, '..', '..', relative), 'utf8');
 
 describe('Owner 13 root-cause source contracts', () => {
-  test('Memory entry exposes Cairn Library without renaming the technical route', () => {
+  test('Memory entry uses the Owner-approved Cairns label without renaming the technical route', () => {
     const memory = read('features/memory/screens/MemoryScreen.tsx');
     const catalog = read('i18n/cairnText.ts');
     // REVISE_WITH_REASON: assert runtime key wiring plus source copy instead
     // of requiring a component-owned duplicate literal.
-    expect(memory).toContain("cairnText('memory.memory-screen.open-cairn-library')");
-    expect(catalog).toContain("'en-NZ': 'Open Cairn Library'");
+    expect(memory).toContain("cairnText('memory.memory-screen.open-cairns')");
+    expect(catalog).toContain("'en-NZ': 'Open Cairns'");
     expect(memory).toContain('libraryActionLabel');
-    expect(memory).toContain("cairnText('memory.memory-screen.library')");
+    expect(memory).toContain("cairnText('memory.memory-screen.cairns')");
     expect(memory).not.toContain('Open All Cairns');
     expect(memory).toContain("nav.navigate('AllCairns')");
   });
