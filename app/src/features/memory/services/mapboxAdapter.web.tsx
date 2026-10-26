@@ -605,7 +605,15 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
             // Synthesize a feature payload matching the @rnmapbox/maps
             // onCameraChanged / onMapIdle shape so component code reads
             // properties.center + properties.zoom identically.
-            onMapIdle?.({ properties: { center: [c.lng, c.lat], zoom: z } });
+            onMapIdle?.({
+              properties: {
+                center: [c.lng, c.lat],
+                zoom: z,
+                heading: e.target.getBearing?.() ?? 0,
+                pitch: e.target.getPitch?.() ?? 0,
+              },
+              gestures: { isGestureActive: false },
+            });
             onDidFinishRenderingMapFully?.();
             onDidFinishRenderingFrameFully?.();
           }}

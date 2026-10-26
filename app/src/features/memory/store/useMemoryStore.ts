@@ -188,7 +188,7 @@ interface MemoryState {
   applyServerEchoForPushAligned: (batch: VisitedPoint[], echo: Array<{ batch_index?: number; ts?: number; cid?: string } | null>) => void;
 
   markPresenceWitnessesSynced: (batch: MemoryPresenceWitness[], acceptedCids: string[]) => void;
-  acknowledgePreparedCoverage: () => void;
+  acknowledgePreparedCoverage: (representedCids?: string[]) => void;
 
   /** Replace all points (called by persistence on hydrate / by sync on download). */
   replacePoints: (points: VisitedPoint[], initialRevealDone: boolean) => void;
@@ -651,10 +651,17 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     });
   },
 
-  acknowledgePreparedCoverage: () => {
-    if (get().pendingPreparedCoverageCids.length > 0) {
+  acknowledgePreparedCoverage: (representedCids) => {
+    if (get().pendingPreparedCoverageCids.length === 0) return;
+    if (!representedCids) {
       set({ pendingPreparedCoverageCids: [] });
+      return;
     }
+    const represented = new Set(representedCids);
+    set({
+      pendingPreparedCoverageCids: get().pendingPreparedCoverageCids
+        .filter(cid => !represented.has(cid)),
+    });
   },
 
   // O1: applyServerEchoForPush (M11 legacy) removed — memorySync uses

@@ -9,6 +9,7 @@ import {
   type MemoryOperationFailure,
 } from '../services/friendMemoryFailure';
 import { cairnText } from '../../../i18n/runtime';
+import { useMemoryNavigationSessionStore } from './useMemoryNavigationSessionStore';
 
 export interface PreparedMemoryCoverageTile {
   id: string;
@@ -51,6 +52,7 @@ interface PreparedMemoryCoverageState {
   error: string | null;
   lastFailure: MemoryOperationFailure | null;
   version: number;
+  loadedSessionId: string | null;
   /** Successful server writes that are not yet represented by a newer snapshot. */
   serverCoverageDirty: boolean;
   serverCoverageDirtyBaseline: string | null;
@@ -127,6 +129,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
   error: null,
   lastFailure: null,
   version: 0,
+  loadedSessionId: null,
   serverCoverageDirty: false,
   serverCoverageDirtyBaseline: null,
   serverCoverageDirtyGeneration: 0,
@@ -135,9 +138,19 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
   loadViewport: async (viewport, force = false) => {
     const userId = String(useAppStore.getState().user?.id ?? '');
     if (!userId) return;
+    const navigationSession = useMemoryNavigationSessionStore.getState();
+    const sessionId = navigationSession.ownerId === userId
+      ? navigationSession.sessionId
+      : null;
     const accountChanged = get().userId !== userId;
+    if (!force && sessionId && navigationSession.mineCoverage?.complete) {
+      if (get().viewport?.key !== viewport.key) set({ viewport });
+      return;
+    }
     if (!accountChanged && get().coverage?.complete && get().status === 'ready'
-      && !get().serverCoverageDirty && !force) {
+      && get().loadedSessionId === sessionId
+      && (sessionId != null || !get().serverCoverageDirty)
+      && !force) {
       if (get().viewport?.key !== viewport.key) set({ viewport });
       return;
     }
@@ -160,7 +173,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       userId,
       viewport,
       coverage: retained,
-      status: retained?.complete ? 'refreshing' : 'loading',
+      status: retained?.complete && get().loadedSessionId === sessionId ? 'refreshing' : 'loading',
       error: null,
       lastFailure: null,
       version: accountChanged ? get().version + 1 : get().version,
@@ -168,6 +181,12 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
     const requestStartedAtMs = Date.now();
     const dirtyGenerationAtStart = get().serverCoverageDirtyGeneration;
     const dirtyBaselineAtStart = get().serverCoverageDirtyBaseline;
+    // Only acknowledgements already pending when this acquisition began can
+    // be represented by it. A later ACK must survive for the next session.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const representedPendingCids: string[] = [
+      ...(require('./useMemoryStore').useMemoryStore.getState().pendingPreparedCoverageCids ?? []),
+    ];
     const requestId = `mine-snapshot-${sequence}`;
     let stage = 'manifest';
     let targetRevision = `mine:pending:${sequence}`;
@@ -293,8 +312,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         && (dirtyBaselineAtStart == null
           || snapshotId !== dirtyBaselineAtStart
           || expectedEvidenceCount !== retained?.evidenceCount);
-      set({
-        coverage: {
+      const publishedCoverage: PreparedMemoryCoverage = {
           viewportKey: 'all-authorized',
           coverageVersion: snapshotId!,
           coverageRuleVersion: 4,
@@ -308,11 +326,14 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
           expectedPages,
           expectedTiles,
           loadedAtMs: Date.now(),
-        },
+      };
+      set({
+        coverage: publishedCoverage,
         status: 'ready',
         error: null,
         lastFailure: null,
         version: get().version + 1,
+        loadedSessionId: sessionId,
         serverCoverageDirty: refreshedPastDirtyBaseline
           ? false
           : stateBeforePublish.serverCoverageDirty,
@@ -330,7 +351,9 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         decoded_bytes: decodedBytes,
       });
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('./useMemoryStore').useMemoryStore.getState().acknowledgePreparedCoverage();
+      useMemoryNavigationSessionStore.getState().pinMine(userId, publishedCoverage);
+      require('./useMemoryStore').useMemoryStore.getState()
+        .acknowledgePreparedCoverage(representedPendingCids);
     } catch (error: any) {
       if (sequence !== requestSequence || get().userId !== userId) return;
       const failure = memoryOperationFailure({
@@ -366,7 +389,11 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       if (activeRequestController === controller) activeRequestController = null;
       if (sequence === requestSequence && refreshAfterLoad && get().userId === userId) {
         refreshAfterLoad = false;
-        void get().loadViewport(get().viewport ?? viewport, true);
+        // A visible navigation session is deliberately frozen. New evidence
+        // remains dirty for the next true entry rather than changing pixels.
+        if (!useMemoryNavigationSessionStore.getState().sessionId) {
+          void get().loadViewport(get().viewport ?? viewport, true);
+        }
       }
     }
   },
@@ -385,11 +412,14 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         : state.coverage?.snapshotId ?? null,
       serverCoverageDirtyGeneration: state.serverCoverageDirtyGeneration + 1,
     });
-    if (state.status === 'loading' || state.status === 'refreshing') {
-      refreshAfterLoad = true;
+    if (useMemoryNavigationSessionStore.getState().sessionId) {
       return;
     }
-    if (state.viewport) void get().loadViewport(state.viewport, true);
+    if (state.status === 'loading' || state.status === 'refreshing') {
+      refreshAfterLoad = true;
+    }
+    // No hidden/background download: the next Memory navigation session owns
+    // the one logical acquisition and its loading state.
   },
 
   reset: () => {
@@ -403,6 +433,7 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       status: 'idle',
       error: null,
       lastFailure: null,
+      loadedSessionId: null,
       serverCoverageDirty: false,
       serverCoverageDirtyBaseline: null,
       serverCoverageDirtyGeneration: 0,

@@ -16,7 +16,7 @@
  *       per 5 seconds.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, View, StyleSheet, SafeAreaView, Text, ActivityIndicator, TouchableOpacity, Linking, InteractionManager, FlatList, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +31,7 @@ import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStor
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
 import { usePreparedMemoryCoverageStore } from '../store/usePreparedMemoryCoverageStore';
 import { useMemoryCameraStore } from '../store/useMemoryCameraStore';
+import { useMemoryNavigationSessionStore } from '../store/useMemoryNavigationSessionStore';
 import { useFriendStore } from '../../../store/useFriendStore';
 import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
@@ -207,7 +208,7 @@ export function MemoryScreen() {
     const byId = new Map(acquiredMarkers.map(marker => [marker.markerId, marker]));
     return acquiredGroupIds.flatMap(markerId => byId.get(markerId) ?? []);
   }, [acquiredGroupIds, acquiredMarkers]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (acquiredGroupIds && acquiredGroupRows.length === 0) setAcquiredGroupIds(null);
   }, [acquiredGroupIds, acquiredGroupRows.length]);
 
@@ -293,13 +294,59 @@ export function MemoryScreen() {
   const friendsLoadedRef = useRef(false);
   const restoredManualCityRef = useRef<string | null>(null);
   const manualBrowseThisMountRef = useRef(false);
+  const hasFocusedNavigationSessionRef = useRef(false);
   const currentCityAppliedRef = useRef<string | null>(null);
   const currentLocationViewportRef = useRef<MemoryCityViewport | null>(null);
+  const captureLocalOverlay = useCallback(() => {
+    const memoryState = useMemoryStore.getState();
+    const pending = new Set(memoryState.pendingPreparedCoverageCids);
+    return memoryState.points.filter(point => (
+      !point.synced || Boolean(point.cid && pending.has(point.cid))
+    ));
+  }, []);
+  useEffect(() => {
+    if (!activeOwnerId) return undefined;
+    const localOverlayReady = localHydration.ownerUserId === activeOwnerId
+      && localHydration.status === 'ready';
+    const frozenLocalOverlay = localOverlayReady ? captureLocalOverlay() : [];
+    const sessionId = useMemoryNavigationSessionStore.getState()
+      .begin(activeOwnerId, frozenLocalOverlay, localOverlayReady);
+    log('memory.navigation_session_begin', {
+      session_id: sessionId,
+      owner_id: activeOwnerId,
+      local_overlay_n: frozenLocalOverlay.length,
+      local_overlay_ready: localOverlayReady,
+    });
+    return () => {
+      useMemoryNavigationSessionStore.getState().end(sessionId);
+      // Friend geometry is process-only and belongs to this navigation flow.
+      // A real route exit releases its proof timers/controllers and borrowed
+      // coordinates; Cairns/detail pushes do not unmount this screen.
+      useFriendMemoryStore.getState().reset();
+      log('memory.navigation_session_end', { session_id: sessionId, owner_id: activeOwnerId });
+    };
+  // Hydration completion is captured below without redefining session lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOwnerId, captureLocalOverlay]);
+  useEffect(() => {
+    if (!activeOwnerId || localHydration.ownerUserId !== activeOwnerId
+      || localHydration.status !== 'ready') return;
+    useMemoryNavigationSessionStore.getState()
+      .pinLocalOverlay(activeOwnerId, captureLocalOverlay());
+  }, [activeOwnerId, captureLocalOverlay, localHydration.ownerUserId, localHydration.status]);
   useEffect(() => {
     // Remember the user's Mine/Friends choice while navigating in the same
     // signed-in session, but never carry it across an account boundary.
     activateMemoryScopeOwner(activeOwnerId);
   }, [activateMemoryScopeOwner, activeOwnerId]);
+  useEffect(() => {
+    if (!activeOwnerId) return;
+    useMemoryNavigationSessionStore.getState().setPresentation(activeOwnerId, {
+      selectedCityId: manualCity?.cityId ?? hierarchyCurrentCityId,
+      scope: memoryScope,
+      selectedFriendIds: subscriptions.map(source => String(source.friend_id)),
+    });
+  }, [activeOwnerId, hierarchyCurrentCityId, manualCity?.cityId, memoryScope, subscriptions]);
   useEffect(() => {
     if (!activeOwnerId || cameraOwnerId === activeOwnerId) return;
     void hydrateMemoryCamera(activeOwnerId);
@@ -598,6 +645,23 @@ export function MemoryScreen() {
   useFocusEffect(
     React.useCallback(() => {
       let focusActive = true;
+      const activeSession = useMemoryNavigationSessionStore.getState();
+      const returningToRetainedSession = hasFocusedNavigationSessionRef.current
+        && activeSession.ownerId === String(useAppStore.getState().user?.id ?? '')
+        && Boolean(activeSession.sessionId)
+        && Boolean(activeSession.camera);
+      hasFocusedNavigationSessionRef.current = true;
+      if (returningToRetainedSession) {
+        // Cairns/detail and a short background transition retain the Memory
+        // navigation session. Its last settled camera is authoritative: a
+        // focus-owned location refresh must not re-run Current City and steal
+        // centre/zoom/bearing/pitch after Back.
+        manualBrowseThisMountRef.current = true;
+        log('memory.navigation_session_camera_retained', {
+          session_id: activeSession.sessionId,
+          camera_action_id: activeSession.camera?.actionId ?? null,
+        });
+      }
       // O1 (2026-07-26) stale closure fix: 从 ref/store getState 拿 latest
       // 值。原代码 mountKey / settingsHydrated 在 React.useCallback(fn, [])
       // 空 deps 里读 = 永远拿首次 mount 时的 0 / false, log 数据完全失真
@@ -633,8 +697,9 @@ export function MemoryScreen() {
         settingsHydrated: settingsHydratedLatest,
         mountKey: mountKeyLatest,
       });
-      manualBrowseThisMountRef.current = false;
-      currentCityAppliedRef.current = null;
+      // Child screens (Cairns/detail) blur and refocus this retained route.
+      // The Memory navigation session owns these guards, not focus events;
+      // clearing them here re-ran Current City and stole the saved camera.
       const now = Date.now();
       // Focus is a presentation transition, not an authorization mutation.
       // Keep an unexpired server-issued projection visible while the bounded

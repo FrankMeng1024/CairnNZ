@@ -2469,7 +2469,7 @@ export function OrderedRouteEditorScreen() {
               <CircleLayer
                 id="ordered-route-user-location-dot"
                 slot="top"
-                aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
+                aboveLayerID="ordered-route-user-location-ring"
                 style={CURRENT_LOCATION_DOT_STYLE}
               />
             </UserLocation>

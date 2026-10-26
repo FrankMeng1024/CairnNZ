@@ -11,6 +11,7 @@ import {
 import {
   reconcileAvailableMemorySources,
   type AvailableMemorySource,
+  useMemorySubscriptionsStore,
 } from '../store/useMemorySubscriptionsStore';
 
 const resolvedSource: AvailableMemorySource = {
@@ -27,6 +28,7 @@ describe('O87 Memory presentation state contracts', () => {
   afterEach(() => {
     jest.useRealTimers();
     useFriendMemoryStore.getState().reset();
+    useMemorySubscriptionsStore.getState().reset();
     useMemoryScopeStore.setState({ ownerUserId: null, scope: 'self' });
   });
 
@@ -61,6 +63,9 @@ describe('O87 Memory presentation state contracts', () => {
     const projection = {
       friendId: '31',
       authorizationVersion: 7,
+      grantEpoch: 'grant-31',
+      friendshipEpisodeId: 'episode-31',
+      coverageScope: 'full_history_delayed_v1' as const,
       projectionVersion: 'projection-31-v7',
       cellSizeM: 30,
       cells: [],
@@ -81,6 +86,7 @@ describe('O87 Memory presentation state contracts', () => {
       authorizedSourceVersions: { '31': 7 },
       lastObservedWallClockMs: now,
     });
+    useMemorySubscriptionsStore.setState({ subscriptions: [{ friend_id: 31, friend_name: 'Frank' }] });
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toEqual([
       expect.objectContaining({
         id: 'pudong',
@@ -96,6 +102,36 @@ describe('O87 Memory presentation state contracts', () => {
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toEqual([]);
   });
 
+  test('optimistic reselect does not reveal cached geometry before requireSelected is confirmed', () => {
+    const now = Date.now();
+    useFriendMemoryStore.setState({
+      userId: 'viewer-a',
+      projections: {
+        '31': {
+          friendId: '31', authorizationVersion: 7, grantEpoch: 'grant-31',
+          friendshipEpisodeId: 'episode-31', coverageScope: 'full_history_delayed_v1',
+          projectionVersion: 'projection-31-v7', cellSizeM: 30, cells: [],
+          regions: [{
+            id: 'pudong', parentId: 'shanghai', level: 3 as const, name: 'Pudong',
+            bbox: [121.4, 31.1, 121.8, 31.4] as [number, number, number, number],
+            anchor: [121.6, 31.2] as [number, number],
+          }],
+          serverAuthorizedAtMs: now - 1_000, authorizationExpiresAtMs: now + 60_000,
+        },
+      },
+      authorizedSourceVersions: { '31': 7 },
+      lastObservedWallClockMs: now,
+    });
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 31, friend_name: 'Frank' }],
+      selectionPending: { '31': 'select' },
+    });
+    expect(useFriendMemoryStore.getState().getVisibleRegions()).toEqual([]);
+
+    useMemorySubscriptionsStore.setState({ selectionPending: {} });
+    expect(useFriendMemoryStore.getState().getVisibleRegions()).toHaveLength(1);
+  });
+
   test('fresh sources restore matching proof and expiry fails closed without map movement', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-10-19T00:00:00.000Z'));
@@ -103,6 +139,9 @@ describe('O87 Memory presentation state contracts', () => {
     const projection = {
       friendId: '31',
       authorizationVersion: 7,
+      grantEpoch: 'grant-31',
+      friendshipEpisodeId: 'episode-31',
+      coverageScope: 'full_history_delayed_v1' as const,
       projectionVersion: 'projection-31-v7',
       cellSizeM: 30,
       cells: [],
@@ -120,9 +159,12 @@ describe('O87 Memory presentation state contracts', () => {
       authorizedSourceVersions: {},
       lastObservedWallClockMs: now,
     });
+    useMemorySubscriptionsStore.setState({ subscriptions: [{ friend_id: 31, friend_name: 'Frank' }] });
 
     await useFriendMemoryStore.getState().reconcileAuthorizedSources([{
       friend_id: 31, authorization_version: 7, selected: true,
+      grant_epoch: 'grant-31', friendship_episode_id: 'episode-31',
+      coverage_scope: 'full_history_delayed_v1',
     }]);
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toHaveLength(1);
 
@@ -130,13 +172,15 @@ describe('O87 Memory presentation state contracts', () => {
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toEqual([]);
     await useFriendMemoryStore.getState().reconcileAuthorizedSources([{
       friend_id: 31, authorization_version: 7, selected: true,
+      grant_epoch: 'grant-31', friendship_episode_id: 'episode-31',
+      coverage_scope: 'full_history_delayed_v1',
     }]);
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toHaveLength(1);
 
     await jest.advanceTimersByTimeAsync(1_001);
     expect(useFriendMemoryStore.getState().authorizedSourceVersions).toEqual({});
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toEqual([]);
-    expect(useFriendMemoryStore.getState().projections).toEqual({});
+    expect(useFriendMemoryStore.getState().projections['31']).toBeDefined();
   });
 
   test('the originally scheduled expiry fails closed after a wall-clock rollback', async () => {
@@ -145,6 +189,7 @@ describe('O87 Memory presentation state contracts', () => {
     jest.setSystemTime(authorizedAt);
     const projection = {
       friendId: '31', authorizationVersion: 7, projectionVersion: 'projection-31-v7',
+      grantEpoch: 'grant-31', friendshipEpisodeId: 'episode-31', coverageScope: 'full_history_delayed_v1' as const,
       cellSizeM: 30, cells: [], regions: [], serverAuthorizedAtMs: authorizedAt,
       authorizationExpiresAtMs: authorizedAt + 1_000,
     };
@@ -152,8 +197,11 @@ describe('O87 Memory presentation state contracts', () => {
       userId: 'viewer-a', projections: { '31': projection },
       authorizedSourceVersions: {}, lastObservedWallClockMs: authorizedAt,
     });
+    useMemorySubscriptionsStore.setState({ subscriptions: [{ friend_id: 31, friend_name: 'Frank' }] });
     await useFriendMemoryStore.getState().reconcileAuthorizedSources([{
       friend_id: 31, authorization_version: 7, selected: true,
+      grant_epoch: 'grant-31', friendship_episode_id: 'episode-31',
+      coverage_scope: 'full_history_delayed_v1',
     }]);
     expect(useFriendMemoryStore.getState().authorizedSourceVersions).toEqual({ '31': 7 });
 
@@ -161,7 +209,7 @@ describe('O87 Memory presentation state contracts', () => {
     await jest.advanceTimersByTimeAsync(1_001);
 
     expect(useFriendMemoryStore.getState().authorizedSourceVersions).toEqual({});
-    expect(useFriendMemoryStore.getState().projections).toEqual({});
+    expect(useFriendMemoryStore.getState().projections['31']).toBeDefined();
   });
 
   test.each([DAY_VISUAL_THEME, SUNSET_VISUAL_THEME, NIGHT_VISUAL_THEME])(
