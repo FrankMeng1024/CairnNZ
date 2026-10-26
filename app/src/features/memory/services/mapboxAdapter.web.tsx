@@ -183,6 +183,21 @@ function applyLogoOffset(map: any, position: MapViewProps['logoPosition']) {
   logo.style.right = position.right != null ? `${position.right}px` : '';
 }
 
+function applyAttributionOffset(map: any, position: MapViewProps['attributionPosition']) {
+  const container = map?.getContainer?.() as HTMLElement | undefined;
+  const attribution = container?.querySelector?.('.mapboxgl-ctrl-attrib') as HTMLElement | null;
+  if (!attribution || !position) return;
+  // react-map-gl normally applies this style through the control component,
+  // but a live bottom-workspace resize can leave the Mapbox control at its
+  // first-frame inset. Reapply the measured position to the genuine control
+  // so the interactive `i` and the logo move together above sheets/docks.
+  attribution.style.position = 'relative';
+  attribution.style.top = position.top != null ? `${position.top}px` : '';
+  attribution.style.bottom = position.bottom != null ? `${position.bottom}px` : '';
+  attribution.style.left = position.left != null ? `${position.left}px` : '';
+  attribution.style.right = position.right != null ? `${position.right}px` : '';
+}
+
 export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   style,
   styleURL,
@@ -413,6 +428,11 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   }, [logoEnabled, logoPosition?.top, logoPosition?.bottom, logoPosition?.left, logoPosition?.right]);
 
   useEffect(() => {
+    const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (inner && attributionEnabled) applyAttributionOffset(inner, attributionPosition);
+  }, [attributionEnabled, attributionPosition?.top, attributionPosition?.bottom, attributionPosition?.left, attributionPosition?.right]);
+
+  useEffect(() => {
     if (loadingStartedRef.current) return;
     loadingStartedRef.current = true;
     onWillStartLoadingMap?.();
@@ -593,6 +613,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
               });
             }
             if (logoEnabled) applyLogoOffset(event.target, logoPosition);
+            if (attributionEnabled) applyAttributionOffset(event.target, attributionPosition);
             emitWebMapReadiness(event.target, false);
           }}
           initialViewState={

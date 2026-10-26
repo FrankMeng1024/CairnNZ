@@ -132,6 +132,7 @@ const issueText = `# Issue Register
 | V26-05 | P2 gate | Hike/Run | Ready state falsely reported missing metrics in first new gate | Metrics are intentionally absent before recording | QA FIXED: absence required in Ready, clipping required for active states | PASS 56 layouts / 4 interactions |
 | V26-06 | P2 test debt | Legacy O88 continuation | Old Memory encounter continuation times out after Cairn coverage | Script targets superseded Memory contracts; the current Cairn core and Memory City gates cover their supported contracts independently | OPEN test debt; Cairn core isolated and passed | Not counted as Memory City failure |
 | V26-07 | P1 gate | Memory City | Post-O94 city-selection gate timed out in all scenarios | Fixture labelled Dunedin walked but supplied only Auckland geometry; O94 correctly refuses arbitrary city-centre navigation without authorized coverage | QA FIXED: distinct Dunedin Mine and Wellington Friends polygons; both privacy paths asserted | PASS 8/8 scenarios; no product camera change |
+| V26-08 | P1 | Route Editor | Right-bottom attribution i could remain at its first-frame inset and overlap the editor dock | Web adapter updated Logo imperatively after live clearance changes but relied only on react-map-gl style propagation for AttributionControl | FIXED: reapply measured attribution offset to the genuine control on load and clearance changes | PASS 320/390/430, Day/Sunset/Night; minimum 21px visual gap |
 `;
 write('ISSUE_REGISTER_CN.md', issueText);
 
@@ -155,6 +156,7 @@ write('CHANGE_MANIFEST_CN.md', `# 修改清单
 
 1. \`MapHistoryScreen.tsx\`：Route Detail 初始 Mapbox ornament clearance 提升为安全首帧值；面板 onLayout 后仍由实际高度替代。
 2. \`HierarchyPanel.tsx\`：Memory City 的辅助 surface/border/text/icon/legend 使用现有主题 token；列表高度按视口收敛并保留数据/相机/Fog 行为。
+3. \`mapboxAdapter.web.tsx\`：实测底部工作区变化时，将同一 clearance 同步施加到 genuine attribution control；不隐藏 Logo/i。
 
 ## QA 工具
 
@@ -184,7 +186,7 @@ write('VALIDATION_REPORT_CN.md', `# 验证报告
 
 - Activity changed gate：PASS；本轮 diff 未命中 Activity-impact rule，因此没有虚报未运行的 Activity suite。
 - Route fast gate：PASS 75/75。
-- Jest focused：PASS 98/98（7 suites，包含 O94 Memory、Route rendering、Mapbox ornaments、Friends handlers）。
+- Jest focused：PASS 100/100（8 suites，包含 O94 Memory、Route rendering、Mapbox adapter/ornaments、Friends handlers）。
 - Route Detail strict Web：PASS，19 captures，无 runtime error。
 - Settings scroll：PASS，36 transitions；root 最少真实滚动 305px，子页最大 scrollTop 0。
 - Memory City：PASS，8 scenarios / ${memoryCount} captures；hosted Mapbox Style/Tiles/Fog/source/rendered features。
