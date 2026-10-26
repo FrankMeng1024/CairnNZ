@@ -104,12 +104,15 @@ await page.evaluate(() => {
     { lat: -44.6692, lng: 167.9260, alt: 68 },
     { lat: -44.6677, lng: 167.9300, alt: 91 },
   ];
-  stores.useRouteStore.setState({ routes: [{
-    id: 'qa-route', name: 'Milford Foreshore Track', description: 'A quiet route between beech forest and the sound.',
+  const routeFixture = {
+    id: 'qa-route', clientRouteId: 'qa-route', name: 'Milford Foreshore Track', description: 'A quiet route between beech forest and the sound.',
     createdAt: Date.now() - 604800000, updatedAt: Date.now() - 86400000,
     points, originalPoints: points, waypoints: [], distanceM: 6400, elevationGainM: 214,
     runCount: 3, lastRunAt: Date.now() - 86400000, isActive: false, activityMode: 'hiking', permission: 'personal',
-  }] });
+    resolutionState: 'continuous', creationOrigin: 'planned', originPersistence: 'pending', syncState: 'synced',
+  };
+  globalThis.__visualQaRouteFixture = routeFixture;
+  stores.useRouteStore.setState({ routes: [routeFixture], routesLoading: false, routesLoadError: false, routeDetailState: { 'qa-route': 'ready' } });
   stores.useSessionStore.setState({ currentUserId: 'system-ui-qa', sessions: [{
     id: 'qa-session', activityMode: 'hiking', regionCode: 'nz',
     startedAt: Date.now() - 10800000, endedAt: Date.now() - 7200000,
@@ -132,6 +135,16 @@ for (const time of times) {
   await setTime(time);
   for (const screen of screens) {
     await navigate(screen.route, screen.params);
+    if (screen.key === 'trails' || screen.key === 'route-detail') {
+      await page.evaluate(() => {
+        const routeFixture = globalThis.__visualQaRouteFixture;
+        globalThis.__cairnStores.useRouteStore.setState({
+          routes: [routeFixture], routesLoading: false, routesLoadError: false,
+          routeDetailState: { 'qa-route': 'ready' },
+        });
+      });
+      await settle(350);
+    }
     if (screen.key === 'memory') {
       const gotIt = page.getByText('Got it', { exact: true }).last();
       if (await gotIt.isVisible().catch(() => false)) {

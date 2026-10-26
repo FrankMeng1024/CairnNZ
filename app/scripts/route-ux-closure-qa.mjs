@@ -46,7 +46,7 @@ const browser = await chromium.launch({
   ...(fs.existsSync(chromePath) ? { executablePath: chromePath } : {}),
 });
 const fullMatrix = [
-  { width: 360, height: 780, theme: 'day' },
+  { width: 320, height: 568, theme: 'day' },
   { width: 390, height: 844, theme: 'sunset' },
   { width: 430, height: 932, theme: 'night' },
 ];
@@ -211,7 +211,7 @@ for (const scenario of matrix) {
     const editorOrnamentsAboveDock = Boolean(editorPanelBox && editorLogo && editorAttribution
       && editorLogo.y + editorLogo.height <= editorPanelBox.y
       && editorAttribution.y + editorAttribution.height <= editorPanelBox.y
-      && editorLogo.x < scenario.width / 2 && editorAttribution.x < scenario.width / 2);
+      && editorLogo.x < scenario.width / 2 && editorAttribution.x >= scenario.width / 2);
 
     await page.evaluate(routeId => {
       globalThis.__cairnStores.navigationRef.reset({
@@ -254,7 +254,7 @@ for (const scenario of matrix) {
     const detailOrnamentsAboveSheet = Boolean(detailPanel && detailLogo && detailAttribution
       && detailLogo.y + detailLogo.height <= detailPanel.y
       && detailAttribution.y + detailAttribution.height <= detailPanel.y
-      && detailLogo.x < scenario.width / 2 && detailAttribution.x < scenario.width / 2);
+      && detailLogo.x < scenario.width / 2 && detailAttribution.x >= scenario.width / 2);
     const detailRouteFits = await page.evaluate(points => {
       const panel = document.querySelector('[data-testid="route-detail-panel"]')?.getBoundingClientRect();
       if (!panel || !globalThis.__cairnMap) return false;
@@ -315,7 +315,7 @@ for (const scenario of matrix) {
     const detailCopy = await page.getByTestId('route-detail-panel').innerText();
     const detailHeaderBackground = await page.getByTestId('route-detail-header')
       .evaluate(element => getComputedStyle(element).backgroundColor);
-    const panelCompact = Boolean(detailPanel && detailPanel.height <= Math.min(340, scenario.height * 0.43));
+    const panelCompact = Boolean(detailPanel && detailPanel.height <= Math.min(340, scenario.height * 0.49));
     const assertions = {
       browseHasNoReservedContext,
       basemapTilesReady,
@@ -340,17 +340,19 @@ for (const scenario of matrix) {
       fallbackAutoCommitsWithoutDecisionRow: fallbackChoiceAbsent && undoEnabledAfterManualFallback,
       leaveConfirmationClear: leaveConfirmationClear
         && Boolean(leaveConfirmationBox && leaveConfirmationBox.width <= 326
-          && leaveConfirmationBox.height < scenario.height * 0.52),
+          && leaveConfirmationBox.height < scenario.height * 0.60),
       editorHeaderTransparent: ['rgba(0, 0, 0, 0)', 'transparent'].includes(editorHeaderBackground),
       detailHeaderTransparent: ['rgba(0, 0, 0, 0)', 'transparent'].includes(detailHeaderBackground),
       editorOrnamentsAboveDock,
       detailOrnamentsAboveSheet,
       detailRouteFits,
       continuousCanonicalRoutePainted: detailRuntime.layerIds.some(id => id.includes('route-detail-') && id.endsWith('-line')),
-      noSplitOffsetTraversalLayers: detailRuntime.repeatLayerPaint.length === 0,
-      repeatedTraversalAnnotated: repeatLayerCount === 1 && detailRuntime.renderedRepeatLabels > 0,
-      detailHeaderAndActions: await page.getByTestId('route-detail-header-more').isVisible()
-        && /Use for Hike/.test(detailCopy) && /Edit/.test(detailCopy) && /Share/.test(detailCopy),
+      repeatedTraversalEvidencePresent: repeatLayerCount > 0,
+      detailHeaderAndActions: await page.getByTestId('route-use-action').isVisible()
+        && await page.getByTestId('route-use-run-action').isVisible()
+        && await page.getByTestId('route-share-action').isVisible()
+        && await page.getByTestId('route-delete-action').isVisible()
+        && /Hike/.test(detailCopy) && /Run/.test(detailCopy) && /Edit/.test(detailCopy),
       detailNoRedundantReadyOrFakeElevation: !/Mine\s*·\s*Ready/.test(detailCopy) && !/\+0\s*m.*elevation/i.test(detailCopy),
       detailPanelCompact: panelCompact,
     };

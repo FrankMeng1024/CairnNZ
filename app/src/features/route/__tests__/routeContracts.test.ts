@@ -93,6 +93,9 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(detail).toContain('await useRouteStore.getState().deleteRoute');
     expect(detail).toContain('routeSourceLabel(selectedRoute)');
     expect(detail).toContain('testID="route-use-action"');
+    expect(detail).toContain('testID="route-use-run-action"');
+    expect(detail).toContain('testID="route-share-action"');
+    expect(detail).toContain('testID="route-delete-action"');
     expect(detail).toContain("void useSelectedRoute('hiking')");
     expect(detail).toContain("void useSelectedRoute('running')");
     expect(detail).toContain("tracking.status !== 'idle'");
@@ -137,12 +140,13 @@ describe('Route Detail / editor / use source contracts', () => {
     expect(editor).not.toContain('startTracking(');
   });
 
-  test('Detail uses ordinary metrics and direct compact Hike/Run actions without a mode confirmation modal', () => {
-    expect(detail).toContain("cairnText('map-history-screen.use-for-hike')");
-    expect(detail).toContain("cairnText('map-history-screen.use-for-run')");
+  test('Detail uses ordinary metrics and direct compact Hike/Run/Edit actions without a mode confirmation modal', () => {
+    expect(detail).toContain("cairnText('activity.activity-recording-chrome.hike')");
+    expect(detail).toContain("cairnText('activity.activity-recording-chrome.run')");
+    expect(detail).toContain("cairnText('map-history-screen.edit')");
     expect(detail).not.toContain('title="Use this Route"');
-    expect(detail).not.toContain('route-use-hike');
-    expect(detail).not.toContain('route-use-run');
+    expect(detail).not.toContain('route-detail-header-more');
+    expect(detail).not.toContain('route-detail-more-menu');
     expect(detail).not.toContain('selectedRoute.points.length ||');
     expect(detail).not.toContain('>points</Text>');
   });

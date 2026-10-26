@@ -139,10 +139,30 @@ const capture = async ({ theme, mode, scenario, viewport = { width: 390, height:
   await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.setState({ status: 'idle', isFinishing: false }));
   await navigate(mode === 'hike' ? 'Hiking' : 'Running');
   await setScenario(mode, scenario);
+  await page.getByTestId('activity-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+  await page.locator('.mapboxgl-map:visible canvas').last().waitFor({ state: 'visible', timeout: 30_000 });
+  await page.waitForFunction(() => {
+    try {
+      const map = globalThis.__cairnMap;
+      return Boolean(map?.isStyleLoaded?.()) && (map?.queryRenderedFeatures?.() ?? []).length > 0;
+    } catch { return false; }
+  }, null, { timeout: 30_000 });
   const layout = await checkLayout(mode, scenario, viewport);
+  const mapEvidence = await page.evaluate(() => {
+    const map = globalThis.__cairnMap;
+    return {
+      styleLoaded: Boolean(map?.isStyleLoaded?.()),
+      renderedFeatureCount: (map?.queryRenderedFeatures?.() ?? []).length,
+    };
+  });
+  const logo = await page.locator('.mapboxgl-ctrl-logo:visible').last().boundingBox();
+  const attribution = await page.locator('.mapboxgl-ctrl-attrib:visible').last().boundingBox();
+  if (!logo || !attribution || logo.x + logo.width > viewport.width / 2 || attribution.x < viewport.width / 2) {
+    throw new Error(`Mapbox legal controls misplaced ${mode}/${scenario}/${theme} ${JSON.stringify({ logo, attribution, viewport })}`);
+  }
   const filename = `${mode}-${scenario}-${theme}-${viewport.width}x${viewport.height}.png`;
   await page.screenshot({ path: path.join(outputDir, filename), fullPage: false });
-  return { filename, ...layout };
+  return { filename, ...layout, mapEvidence, legalControls: { logo, attribution } };
 };
 
 const exerciseRecordingControls = async () => {
@@ -262,10 +282,12 @@ for (const theme of ['day', 'sunset', 'night']) {
     results.push(await capture({ theme, mode, scenario }));
   }
 }
-results.push(await capture({ theme: 'day', mode: 'hike', scenario: 'tracking', viewport: { width: 320, height: 568 } }));
-results.push(await capture({ theme: 'day', mode: 'run', scenario: 'paused', viewport: { width: 320, height: 568 } }));
-results.push(await capture({ theme: 'night', mode: 'hike', scenario: 'prestart', viewport: { width: 430, height: 932 } }));
-results.push(await capture({ theme: 'night', mode: 'run', scenario: 'tracking', viewport: { width: 430, height: 932 } }));
+for (const [mode, scenario] of matrix) {
+  results.push(await capture({ theme: 'day', mode, scenario, viewport: { width: 320, height: 568 } }));
+}
+for (const [mode, scenario] of matrix) {
+  results.push(await capture({ theme: 'night', mode, scenario, viewport: { width: 430, height: 932 } }));
+}
 
 const interactions = await exerciseRecordingControls();
 

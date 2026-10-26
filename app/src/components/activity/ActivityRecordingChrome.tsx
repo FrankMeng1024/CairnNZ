@@ -3,6 +3,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Icon, type IconName } from '../Icon';
@@ -94,6 +95,8 @@ export function ActivityTopChrome({
   notices?: ActivityNoticePresentation[];
 }) {
   const theme = useVisualTheme();
+  const { width: viewportWidth } = useWindowDimensions();
+  const compactMetrics = viewportWidth <= 340;
   const modeMeta = modePresentation(mode, theme.primaryAction);
   const signalColor = toneColor(gpsTone, theme);
 
@@ -151,6 +154,7 @@ export function ActivityTopChrome({
         <View
           style={[
             styles.metrics,
+            compactMetrics && styles.metricsCompact,
             {
               backgroundColor: theme.mapOverlay,
               borderColor: phase === 'paused' ? Colors.severityWarning : theme.border,
@@ -160,30 +164,30 @@ export function ActivityTopChrome({
           pointerEvents="none"
           testID={`activity-${mode}-metrics`}
         >
-          <View style={styles.primaryMetric}>
-            <Text style={[styles.metricEyebrow, { color: theme.muted }]}>{primaryMetric.label}</Text>
-            <View style={styles.metricValueRow}>
-              <Text style={[styles.primaryMetricValue, { color: theme.foreground }]} numberOfLines={1}>
+          <View style={[styles.primaryMetric, compactMetrics && styles.primaryMetricCompact]}>
+            <Text style={[styles.metricEyebrow, compactMetrics && styles.metricEyebrowCompact, { color: theme.muted }]} numberOfLines={1}>{primaryMetric.label}</Text>
+            <View style={[styles.metricValueRow, compactMetrics && styles.metricValueRowCompact]}>
+              <Text style={[styles.primaryMetricValue, compactMetrics && styles.primaryMetricValueCompact, { color: theme.foreground }]} numberOfLines={1}>
                 {primaryMetric.value}
               </Text>
               {primaryMetric.unit ? (
-                <Text style={[styles.primaryMetricUnit, { color: theme.foregroundSecondary }]}>
+                <Text style={[styles.primaryMetricUnit, compactMetrics && styles.primaryMetricUnitCompact, { color: theme.foregroundSecondary }]} numberOfLines={1}>
                   {primaryMetric.unit}
                 </Text>
               ) : null}
             </View>
           </View>
-          <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.secondaryMetricRow}>
+          <View style={[styles.metricDivider, compactMetrics && styles.metricDividerCompact, { backgroundColor: theme.border }]} />
+          <View style={[styles.secondaryMetricRow, compactMetrics && styles.secondaryMetricRowCompact]}>
             {secondaryMetrics.slice(0, 2).map((metric) => (
               <View key={metric.label} style={styles.secondaryMetric}>
-                <Text style={[styles.metricEyebrow, { color: theme.muted }]}>{metric.label}</Text>
-                <View style={styles.metricValueRow}>
-                  <Text style={[styles.secondaryMetricValue, { color: theme.foreground }]} numberOfLines={1}>
+                <Text style={[styles.metricEyebrow, compactMetrics && styles.metricEyebrowCompact, { color: theme.muted }]} numberOfLines={1}>{metric.label}</Text>
+                <View style={[styles.metricValueRow, compactMetrics && styles.metricValueRowCompact]}>
+                  <Text style={[styles.secondaryMetricValue, compactMetrics && styles.secondaryMetricValueCompact, { color: theme.foreground }]} numberOfLines={1}>
                     {metric.value}
                   </Text>
                   {metric.unit ? (
-                    <Text style={[styles.secondaryMetricUnit, { color: theme.foregroundSecondary }]}>
+                    <Text style={[styles.secondaryMetricUnit, compactMetrics && styles.secondaryMetricUnitCompact, { color: theme.foregroundSecondary }]} numberOfLines={1}>
                       {metric.unit}
                     </Text>
                   ) : null}
@@ -579,16 +583,26 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     ...Shadow.card,
   },
+  metricsCompact: { paddingHorizontal: Spacing.md },
   primaryMetric: { flex: 1.16, justifyContent: 'center', minWidth: 0 },
+  primaryMetricCompact: { flex: 0.92 },
   metricEyebrow: { fontSize: 9, lineHeight: 13, fontWeight: '800', letterSpacing: 1.05 },
+  metricEyebrowCompact: { fontSize: 8, letterSpacing: 0.5 },
   metricValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, minWidth: 0 },
+  metricValueRowCompact: { gap: 2 },
   primaryMetricValue: { fontSize: 30, lineHeight: 35, fontWeight: '800', letterSpacing: -1.1, fontVariant: ['tabular-nums'], flexShrink: 1 },
+  primaryMetricValueCompact: { fontSize: 27, lineHeight: 33 },
   primaryMetricUnit: { fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  primaryMetricUnitCompact: { fontSize: 10 },
   metricDivider: { width: StyleSheet.hairlineWidth, marginHorizontal: Spacing.base },
+  metricDividerCompact: { marginHorizontal: Spacing.sm },
   secondaryMetricRow: { flex: 1.45, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  secondaryMetricRowCompact: { flex: 1.62, gap: Spacing.xs },
   secondaryMetric: { flex: 1, minWidth: 0, justifyContent: 'center' },
   secondaryMetricValue: { fontSize: 17, lineHeight: 24, fontWeight: '800', letterSpacing: -0.35, fontVariant: ['tabular-nums'], flexShrink: 1 },
+  secondaryMetricValueCompact: { fontSize: 15, lineHeight: 22, letterSpacing: -0.5 },
   secondaryMetricUnit: { fontSize: 10, lineHeight: 15, fontWeight: '600' },
+  secondaryMetricUnitCompact: { fontSize: 9 },
   noticeStack: { marginTop: Spacing.sm, gap: 5, alignItems: 'flex-start' },
   notice: {
     maxWidth: '100%',

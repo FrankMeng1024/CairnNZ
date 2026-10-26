@@ -753,7 +753,7 @@ export function SettingsScreen() {
   const renderRoot = () => (
     <>
       {renderHeader(cairnText('settings-screen.settings'))}
-      <ScrollView style={styles.pageScroll} testID="settings-root" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
+      <ScrollView key="settings-root-scroll" style={styles.pageScroll} testID="settings-root" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
         <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.account')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
@@ -897,7 +897,7 @@ export function SettingsScreen() {
   const renderAccount = () => (
     <>
       {renderHeader(cairnText('settings-screen.account'))}
-      <ScrollView style={styles.pageScroll} testID="settings-account" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
+      <ScrollView key="settings-account-scroll" style={styles.pageScroll} testID="settings-account" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
         <Text style={[styles.intro, { color: theme.foreground, textShadowColor: theme.surfaceElevated }]}>{cairnText('settings-screen.your-identity-and-account-actions')}</Text>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="User" title={user?.name || cairnText('settings-screen.cairn-user')} detail={cairnText('settings-screen.name-a93fc9a')} />
@@ -1019,7 +1019,7 @@ export function SettingsScreen() {
   const renderPrivacy = () => (
     <>
       {renderHeader(cairnText('settings-screen.privacy-data'))}
-      <ScrollView style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
+      <ScrollView key="settings-privacy-scroll" style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -1168,7 +1168,7 @@ export function SettingsScreen() {
   const renderHelp = () => (
     <>
       {renderHeader(cairnText('settings-screen.help-about'))}
-      <ScrollView style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle} keyboardShouldPersistTaps="handled">
+      <ScrollView key="settings-help-scroll" style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle} keyboardShouldPersistTaps="handled">
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="MessageSquare" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -1309,7 +1309,7 @@ export function SettingsScreen() {
   const renderContentReview = () => (
     <>
       {renderHeader(cairnText('settings-screen.content-issue-appeal'))}
-      <ScrollView style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
+      <ScrollView key="settings-content-review-scroll" style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>

@@ -1016,8 +1016,8 @@ function MapHistoryObjectScreen() {
   const [sharedRouteDetailState, setSharedRouteDetailState] = useState<import('../store/useRouteStore').RouteDetailState>('idle');
   const routeDetailState = targetSharedDeliveryId ? sharedRouteDetailState : ownRouteDetailState;
   const [routeUseLoading, setRouteUseLoading] = useState(false);
+  const [routeUseLoadingMode, setRouteUseLoadingMode] = useState<'hiking' | 'running' | null>(null);
   const [routeDeleteConfirm, setRouteDeleteConfirm] = useState(false);
-  const [routeMoreOpen, setRouteMoreOpen] = useState(false);
   const [routeDetailPanelHeight, setRouteDetailPanelHeight] = useState(0);
   const routeFriends = useFriendStore(s => s.friends);
   const loadFriendsFromBackend = useFriendStore(s => s.loadFriendsFromBackend);
@@ -1073,6 +1073,7 @@ function MapHistoryObjectScreen() {
     if (!selectedRoute || routeUseLoading || routeUseInFlightRef.current) return;
     routeUseInFlightRef.current = true;
     setRouteUseLoading(true);
+    setRouteUseLoadingMode(mode);
     try {
       if (selectedRoute.points.length < 2) {
         if (targetSharedDeliveryId) await loadSharedRouteDetail(targetSharedDeliveryId);
@@ -1118,6 +1119,7 @@ function MapHistoryObjectScreen() {
     } finally {
       routeUseInFlightRef.current = false;
       setRouteUseLoading(false);
+      setRouteUseLoadingMode(null);
     }
   }, [captureActivityRouteReference, loadRouteDetail, loadSharedRouteDetail, nav, routeUseLoading, selectedRoute, targetSharedDeliveryId]);
 
@@ -1897,16 +1899,7 @@ function MapHistoryObjectScreen() {
           )}
           {/* User decision 2026-08-16: Plan button removed from Trails top row.
               Also drop the right-side spacer — nothing to balance now. */}
-          {isRouteDetail && selectedRoute ? (
-            <TouchableOpacity
-              style={[styles.routeHeaderMore, { backgroundColor: visualTheme.mapOverlay, borderColor: visualTheme.border }]}
-              onPress={() => setRouteMoreOpen(value => !value)}
-              accessibilityRole="button"
-              accessibilityLabel={cairnText('map-history-screen.more-route-actions')}
-              accessibilityState={{ expanded: routeMoreOpen }}
-              testID="route-detail-header-more"
-            ><Icon name="MoreHorizontal" size={20} color={visualTheme.iconActive} /></TouchableOpacity>
-          ) : <View style={{ width: 44 }} />}
+          {!isRouteDetail ? <View style={{ width: 44 }} /> : null}
         </View>
 
         {/* Tab bar — only show when viewing all sessions (Trails index). Hide
@@ -1940,9 +1933,9 @@ function MapHistoryObjectScreen() {
             setRouteDetailPanelHeight(current => current === height ? current : height);
           }}
         >
-          <View style={{ marginBottom: Spacing.xs }}>
+          <View style={styles.routeTitleRow}>
             {renameEditing ? (
-              <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
+              <View style={styles.routeRenameRow}>
                 <TextInput
                   ref={renameInputRef}
                   style={[styles.renameInput, { color: visualTheme.foreground, borderBottomColor: visualTheme.primary }]}
@@ -1975,21 +1968,37 @@ function MapHistoryObjectScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                disabled={isQaReviewClone || Boolean(targetSharedDeliveryId)}
-                onPress={() => {
-                  setRenameText(selectedRoute.name || cairnText('map-history-screen.route'));
-                  setRenameEditing(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={cairnText('map-history-screen.rename-route')}
-                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.routeDetailTitle, { color: visualTheme.foreground }]} numberOfLines={1}>{selectedRoute.name || cairnText('map-history-screen.route')}</Text>
-                  {!targetSharedDeliveryId ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
-                </View>
-              </TouchableOpacity>
+              <View style={styles.routeTitleDisplayRow}>
+                <TouchableOpacity
+                  style={styles.routeTitleAction}
+                  disabled={isQaReviewClone || Boolean(targetSharedDeliveryId)}
+                  onPress={() => {
+                    setRenameText(selectedRoute.name || cairnText('map-history-screen.route'));
+                    setRenameEditing(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={cairnText('map-history-screen.rename-route')}
+                  hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                >
+                  <View style={styles.routeTitleCopy}>
+                    <Text style={[styles.routeDetailTitle, { color: visualTheme.foreground }]} numberOfLines={2}>{selectedRoute.name || cairnText('map-history-screen.route')}</Text>
+                    {!targetSharedDeliveryId ? <Icon name="Pencil" size={14} color={visualTheme.iconInactive} strokeWidth={2} /> : null}
+                  </View>
+                </TouchableOpacity>
+                {!targetSharedDeliveryId ? (
+                  <TouchableOpacity
+                    style={styles.routeShareIconAction}
+                    onPress={openRouteShare}
+                    disabled={!routeCanBeUsed(selectedRoute)}
+                    accessibilityRole="button"
+                    accessibilityLabel={cairnText('map-history-screen.share-route-with-friends')}
+                    accessibilityState={{ disabled: !routeCanBeUsed(selectedRoute) }}
+                    testID="route-share-action"
+                  >
+                    <Icon name="Share2" size={IconSize.sm} color={routeCanBeUsed(selectedRoute) ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             )}
           </View>
           {!targetSharedDeliveryId && selectedRoute.syncState && selectedRoute.syncState !== 'synced' ? (
@@ -2044,15 +2053,28 @@ function MapHistoryObjectScreen() {
           <View style={styles.routeActions}>
             <View style={styles.routeMaintenanceRow}>
               <TouchableOpacity
-                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.primaryAction, borderColor: visualTheme.primaryAction }, !routeCanBeUsed(selectedRoute) && styles.routeActionDisabled]}
+                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }, !routeCanBeUsed(selectedRoute) && styles.routeActionDisabled]}
                 onPress={() => { void useSelectedRoute('hiking'); }}
                 disabled={routeUseLoading || !routeCanBeUsed(selectedRoute)}
                 accessibilityRole="button"
                 accessibilityLabel={cairnText('map-history-screen.use-route-for-hike')}
+                accessibilityState={{ disabled: routeUseLoading || !routeCanBeUsed(selectedRoute) }}
                 testID="route-use-action"
               >
-                {routeUseLoading ? <ActivityIndicator size="small" color={visualTheme.onPrimary} /> : <Icon name="Navigation" size={IconSize.sm} color={visualTheme.onPrimary} strokeWidth={2} />}
-                <Text style={[styles.routeMaintenanceText, { color: visualTheme.onPrimary }]}>{cairnText('map-history-screen.use-for-hike')}</Text>
+                {routeUseLoadingMode === 'hiking' ? <ActivityIndicator size="small" color={visualTheme.primary} /> : <Icon name="Navigation" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} />}
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>{cairnText('activity.activity-recording-chrome.hike')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
+                onPress={() => { void useSelectedRoute('running'); }}
+                disabled={routeUseLoading || !routeCanBeUsed(selectedRoute)}
+                accessibilityRole="button"
+                accessibilityLabel={cairnText('map-history-screen.use-route-for-run')}
+                accessibilityState={{ disabled: routeUseLoading || !routeCanBeUsed(selectedRoute) }}
+                testID="route-use-run-action"
+              >
+                {routeUseLoadingMode === 'running' ? <ActivityIndicator size="small" color={visualTheme.primary} /> : <Icon name="Footprints" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} />}
+                <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>{cairnText('activity.activity-recording-chrome.run')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
@@ -2063,29 +2085,24 @@ function MapHistoryObjectScreen() {
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={cairnText('map-history-screen.edit-route')}
+                testID="route-edit-action"
               >
                 <Icon name="Edit3" size={IconSize.sm} color={visualTheme.iconActive} strokeWidth={2} />
                 <Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>{cairnText('map-history-screen.edit')}</Text>
               </TouchableOpacity>
-              {!targetSharedDeliveryId ? (
-                <TouchableOpacity
-                  style={[styles.routeMaintenanceAction, { backgroundColor: visualTheme.secondaryAction, borderColor: visualTheme.borderStrong }]}
-                  onPress={openRouteShare}
-                  disabled={!routeCanBeUsed(selectedRoute)}
-                  accessibilityRole="button"
-                  accessibilityLabel={cairnText('map-history-screen.share-route-with-friends')}
-                >
-                  <Icon name="Share2" size={IconSize.sm} color={routeCanBeUsed(selectedRoute) ? visualTheme.iconActive : visualTheme.iconInactive} strokeWidth={2} />
-                  <Text style={[styles.routeMaintenanceText, { color: routeCanBeUsed(selectedRoute) ? visualTheme.foreground : visualTheme.foregroundSecondary }]}>{cairnText('map-history-screen.share')}</Text>
-                </TouchableOpacity>
-              ) : null}
             </View>
-            {routeMoreOpen ? (
-              <View style={[styles.routeCompactMenu, { backgroundColor: visualTheme.surface, borderColor: visualTheme.borderSubtle }]} testID="route-detail-more-menu">
-                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); void useSelectedRoute('running'); }} disabled={!routeCanBeUsed(selectedRoute)} accessibilityRole="button" accessibilityLabel={cairnText('map-history-screen.use-route-for-run')} accessibilityState={{ disabled: !routeCanBeUsed(selectedRoute) }}><Icon name="Footprints" size={16} color={visualTheme.iconActive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.foreground }]}>{cairnText('map-history-screen.use-for-run')}</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.routeCompactMenuAction} onPress={() => { setRouteMoreOpen(false); setRouteDeleteConfirm(true); }} disabled={deleteSaving} accessibilityRole="button" accessibilityLabel={targetSharedDeliveryId ? cairnText('map-history-screen.remove-received-route') : cairnText('map-history-screen.delete-route')} accessibilityState={{ disabled: deleteSaving }}><Icon name="Trash2" size={16} color={visualTheme.destructive} /><Text style={[styles.routeMaintenanceText, { color: visualTheme.destructive }]}>{targetSharedDeliveryId ? cairnText('map-history-screen.remove-received-route') : cairnText('map-history-screen.delete-route')}</Text></TouchableOpacity>
-              </View>
-            ) : null}
+            <TouchableOpacity
+              style={styles.routeDeleteAction}
+              onPress={() => setRouteDeleteConfirm(true)}
+              disabled={deleteSaving}
+              accessibilityRole="button"
+              accessibilityLabel={targetSharedDeliveryId ? cairnText('map-history-screen.remove-received-route') : cairnText('map-history-screen.delete-route')}
+              accessibilityState={{ disabled: deleteSaving }}
+              testID="route-delete-action"
+            >
+              <Icon name="Trash2" size={14} color={visualTheme.destructive} />
+              <Text style={[styles.routeDeleteText, { color: visualTheme.destructive }]}>{targetSharedDeliveryId ? cairnText('common.action.remove') : cairnText('map-history-screen.delete-route')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
         <ModalCard
@@ -2833,14 +2850,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg, paddingBottom: Spacing.xs,
     gap: Spacing.sm,
   },
-  routeHeaderMore: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: Radius.button,
-  },
   routeHeaderTitleWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   routeHeaderTitleChip: {
     minHeight: 38,
@@ -3020,6 +3029,18 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     fontWeight: '700',
   },
+  routeTitleRow: { marginBottom: Spacing.xs },
+  routeRenameRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
+  routeTitleDisplayRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  routeTitleAction: { flex: 1, minWidth: 0 },
+  routeTitleCopy: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
+  routeShareIconAction: {
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Meta row under the stats: activity icon + "Hiking · 7/8/2036 · 08:21".
   // 13pt/600 Label style per project font rule.
   detailMetaRow: {
@@ -3073,7 +3094,7 @@ const styles = StyleSheet.create({
   },
   activityDeleteText: { fontSize: FontSize.caption, fontWeight: '600' },
   deleteModalActions: { gap: Spacing.sm },
-  routeActions: { gap: Spacing.sm, marginTop: Spacing.sm },
+  routeActions: { gap: Spacing.xs, marginTop: Spacing.sm },
   routeOriginBlock: { gap: 3, marginBottom: Spacing.sm },
   routeSyncBlock: { gap: Spacing.xs, marginBottom: Spacing.sm, alignItems: 'flex-start' },
   routeOriginText: { fontSize: FontSize.caption, lineHeight: 19, fontWeight: '600' },
@@ -3087,33 +3108,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     borderWidth: 1,
     borderRadius: Radius.button,
   },
-  routeMoreAction: {
+  routeActionDisabled: { opacity: 0.42 },
+  routeMaintenanceText: { fontSize: FontSize.caption, fontWeight: '700' },
+  routeDeleteAction: {
+    alignSelf: 'center',
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xs,
     paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    borderRadius: Radius.button,
   },
-  routeActionDisabled: { opacity: 0.42 },
-  routeCompactMenu: { alignSelf: 'flex-end', minWidth: 210, borderWidth: 1, borderRadius: Radius.card, paddingHorizontal: Spacing.md },
-  routeCompactMenuAction: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  routeMaintenanceText: { fontSize: FontSize.caption, fontWeight: '700' },
-  routeDeleteAction: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    borderRadius: Radius.button,
-  },
-  routeDeleteText: { fontSize: FontSize.caption, fontWeight: '700' },
+  routeDeleteText: { fontSize: FontSize.small, fontWeight: '600' },
   routeShareFriend: {
     minHeight: 48,
     marginBottom: Spacing.sm,
