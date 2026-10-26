@@ -622,6 +622,12 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
               : { longitude: 0, latitude: 0, zoom: initialZoom }
           }
           onIdle={(e) => {
+            // Mapbox can install/re-parent its built-in logo after React's
+            // first effect/onLoad pass when an existing map surface is reused
+            // for a new screen. Keep both required legal controls aligned to
+            // the latest measured bottom workspace at the first stable frame.
+            if (logoEnabled) applyLogoOffset(e.target, logoPosition);
+            if (attributionEnabled) applyAttributionOffset(e.target, attributionPosition);
             const c = e.target.getCenter();
             const z = e.target.getZoom();
             // Synthesize a feature payload matching the @rnmapbox/maps
@@ -632,6 +638,12 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
             onDidFinishRenderingFrameFully?.();
           }}
           onRender={(event) => {
+            // The writes are idempotent and deliberately target the genuine
+            // Mapbox controls. This closes the brief first-entry window where
+            // the logo may otherwise retain Mapbox's default bottom inset and
+            // be covered by a detail sheet before a later theme render.
+            if (logoEnabled) applyLogoOffset(event.target, logoPosition);
+            if (attributionEnabled) applyAttributionOffset(event.target, attributionPosition);
             // GL JS v2 can keep already-rendered tiles in `expired` while it
             // refreshes them, preventing its strict load/idle events forever.
             // Release Cairn's loading cover only after a feature from a
