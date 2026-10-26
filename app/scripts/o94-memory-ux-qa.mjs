@@ -183,6 +183,9 @@ await page.route('**/api/**', async route => {
       items: [], locked_count: 340,
     });
   }
+  if (url.pathname === '/api/memory/points' && request.method() === 'GET') {
+    return json({ points: [] });
+  }
   if (url.pathname === '/api/memory/coverage') return json({
     coverage_rule_version: 4, coverage_version: 'legacy-unused', evidence_count: 0,
     geometry: { type: 'MultiPolygon', coordinates: [] },
@@ -294,6 +297,16 @@ try {
   await waitForMapIdle();
   await page.waitForTimeout(300);
 
+  // Account activation deliberately defaults to Mine. Enter the real
+  // combined presentation through the production control before judging the
+  // Mine/Friends/Both palette.
+  await page.getByTestId('memory-scope-combined').click();
+  await page.waitForFunction(() => (
+    globalThis.__cairnStores.useMemoryScopeStore.getState().scope === 'combined'
+    && (globalThis.__cairnMap?.queryRenderedFeatures?.({ layers: ['memory-friend-union', 'memory-overlap'] })?.length ?? 0) > 0
+  ), null, { timeout: 30_000 });
+  await waitForMapIdle();
+
   const cairns = page.getByTestId('memory-all-cairns-entry');
   const scope = page.getByTestId('memory-scope-toggle');
   const [cairnsBox, scopeBox, cairnsText] = await Promise.all([
@@ -382,19 +395,32 @@ try {
   }), routeFixture.id);
   await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'RouteEditor', null, { timeout: 30_000 });
   await page.getByTestId('ordered-route-map-load-overlay').waitFor({ state: 'hidden', timeout: 45_000 });
-  await page.getByTestId('web-user-location-puck').waitFor({ state: 'visible', timeout: 15_000 });
+  const browserLocationPermission = await page.evaluate(async () => {
+    try { return (await navigator.permissions.query({ name: 'geolocation' })).state; }
+    catch { return 'unsupported'; }
+  });
+  if (await page.getByTestId('web-user-location-puck').count() === 0) {
+    // Exercise the production permission/location path once. Absence after
+    // this remains a truthful QA failure; the harness never inserts a puck.
+    await page.getByTestId('route-current-location').click();
+    await page.waitForTimeout(1_000);
+  }
   await waitForMapIdle();
-  const routeMarkerStyle = await page.getByTestId('web-user-location-puck').evaluate(node => ({
-    backgroundColor: getComputedStyle(node).backgroundColor,
-    border: getComputedStyle(node).border,
-    width: getComputedStyle(node).width,
-    height: getComputedStyle(node).height,
-    boxShadow: getComputedStyle(node).boxShadow,
-  }));
+  const routePuck = page.getByTestId('web-user-location-puck');
+  const routeMarkerStyle = await routePuck.count() > 0
+    ? await routePuck.evaluate(node => ({
+        backgroundColor: getComputedStyle(node).backgroundColor,
+        border: getComputedStyle(node).border,
+        width: getComputedStyle(node).width,
+        height: getComputedStyle(node).height,
+        boxShadow: getComputedStyle(node).boxShadow,
+      }))
+    : null;
   await page.screenshot({ path: path.join(outputDir, 'route-current-location-390x844.png') });
   report.locationMarkers = {
     memory: memoryMarkerStyle, route: routeMarkerStyle,
-    equal: JSON.stringify(memoryMarkerStyle) === JSON.stringify(routeMarkerStyle),
+    browserLocationPermission,
+    equal: routeMarkerStyle !== null && JSON.stringify(memoryMarkerStyle) === JSON.stringify(routeMarkerStyle),
   };
 } finally {
   report.requestLog = requestLog;
