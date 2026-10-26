@@ -44,6 +44,10 @@ import { memoryFogPaintEvidenceReady } from '../services/memoryFogReadiness';
 import { memoryMinePreviewCanCapture } from '../services/memoryEntryPresentation';
 import { memoryCameraAtTarget, memoryCameraCenterFromEvent } from '../services/memoryCameraTransition';
 import { cairnText } from '../../../i18n/runtime';
+import {
+  CURRENT_LOCATION_DOT_STYLE,
+  CURRENT_LOCATION_RING_STYLE,
+} from '../../../components/map/currentLocationMarkerStyle';
 
 let memoryMapHasRendered = false;
 
@@ -763,32 +767,12 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
               zoom). */}
           <CircleLayer
             id="memory-user-location-ring"
-            style={{
-              circleRadius: [
-                'interpolate', ['linear'], ['zoom'],
-                4, 2.5,    // world zoom — tiny
-                10, 4.5,   // city zoom — small
-                14, 7,     // hiking zoom — normal
-                18, 9,     // street zoom — slightly larger
-              ],
-              circleColor: '#FFFFFF',
-              circlePitchAlignment: 'map',
-            }}
+            style={CURRENT_LOCATION_RING_STYLE}
           />
           <CircleLayer
             id="memory-user-location-dot"
             aboveLayerID="memory-user-location-ring"
-            style={{
-              circleRadius: [
-                'interpolate', ['linear'], ['zoom'],
-                4, 1.6,    // tiny inner dot at world zoom
-                10, 3,
-                14, 5,
-                18, 6.5,
-              ],
-              circleColor: 'rgba(51, 181, 229, 1)',
-              circlePitchAlignment: 'map',
-            }}
+            style={CURRENT_LOCATION_DOT_STYLE}
           />
         </UserLocation> : null}
         <FogLayer

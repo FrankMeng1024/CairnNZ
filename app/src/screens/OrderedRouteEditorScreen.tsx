@@ -116,6 +116,10 @@ import {
   type RouteEditorLeaveDecision,
 } from '../features/route/routeEditorSaveCoordinator';
 import { cairnText } from '../i18n/runtime';
+import {
+  CURRENT_LOCATION_DOT_STYLE,
+  CURRENT_LOCATION_RING_STYLE,
+} from '../components/map/currentLocationMarkerStyle';
 
 let MapView: any = null;
 let Camera: any = null;
@@ -2460,21 +2464,13 @@ export function OrderedRouteEditorScreen() {
                 id="ordered-route-user-location-ring"
                 slot="top"
                 aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
-                style={{
-                  circleRadius: ['interpolate', ['linear'], ['zoom'], 4, 2.5, 10, 4.5, 14, 7, 18, 9],
-                  circleColor: '#FFFFFF',
-                  circlePitchAlignment: 'map',
-                }}
+                style={CURRENT_LOCATION_RING_STYLE}
               />
               <CircleLayer
                 id="ordered-route-user-location-dot"
                 slot="top"
                 aboveLayerID={ORDERED_ROUTE_FOG_BOUNDARY_LAYER_ID}
-                style={{
-                  circleRadius: ['interpolate', ['linear'], ['zoom'], 4, 1.6, 10, 3, 14, 5, 18, 6.5],
-                  circleColor: 'rgba(51, 181, 229, 1)',
-                  circlePitchAlignment: 'map',
-                }}
+                style={CURRENT_LOCATION_DOT_STYLE}
               />
             </UserLocation>
           ) : null}

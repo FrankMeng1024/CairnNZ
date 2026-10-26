@@ -36,12 +36,12 @@ import { readLastFix } from '../services/lastFixCache';
 import { MemoryColors } from '../config/memoryConfig';
 import { MemoryMap, type MemoryMapHandle } from '../components/MemoryMap';
 import { MapLoadOverlay, type MapLoadState } from '../../../components/MapLoadOverlay';
-import { MemoryScopeToggle } from '../components/MemoryScopeToggle';
+import { MEMORY_TOP_CONTROL_HEIGHT, MemoryScopeToggle } from '../components/MemoryScopeToggle';
 import { MemoryFriendPickModal } from '../components/MemoryFriendPickModal';
 import { BackButton } from '../../../components/BackButton';
 import { Icon } from '../../../components/Icon';
 import { CairnIcon } from '../../../components/CairnIcon';
-import { Colors, FontSize, Spacing } from '../../../components/tokens';
+import { Colors, FontSize, Radius, Shadow, Spacing } from '../../../components/tokens';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
 import { useAppIsActive } from '../../../hooks/useAppIsActive';
 import { log, flushNow as flushLogsNow } from '../../../services/appLog';
@@ -73,6 +73,7 @@ import {
 import {
   MEMORY_ENTRY_MESSAGE_DELAY_MS,
   MEMORY_WARM_ENTRY_MESSAGE_DELAY_MS,
+  memoryFogTransitionIsVisiblyPending,
   memoryMinePreviewCanRender,
 } from '../services/memoryEntryPresentation';
 import { memoryUserLocationShouldMount } from '../services/memoryLocationOwnership';
@@ -81,6 +82,10 @@ import {
   memoryFogTargetFailureVisible,
 } from '../services/memoryFogReadiness';
 import { claimMemoryGuidance } from '../services/memoryGuidance';
+import {
+  resolveMemoryCityCameraTarget,
+  type MemoryCityCoverageSource,
+} from '../services/memoryCityCameraTarget';
 // v424 hierarchy panel
 import { HierarchyPanel } from '../components/HierarchyPanel';
 import { cairnText, formatCairnDate } from '../../../i18n/runtime';
@@ -246,6 +251,7 @@ export function MemoryScreen() {
   // Outgoing sharing is managed in Friends; this is display selection only.
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const memoryScope = useMemoryScopeStore((s) => s.scope);
+  const setMemoryScope = useMemoryScopeStore((s) => s.setScope);
   const activateMemoryScopeOwner = useMemoryScopeStore((s) => s.activateOwner);
   const [fogReady, setFogReady] = useState(false);
   const [fogPresentationVersion, setFogPresentationVersion] = useState(0);
@@ -259,6 +265,7 @@ export function MemoryScreen() {
   const entryVeilOpacity = useRef(new Animated.Value(1)).current;
   const [entryMapLoadState, setEntryMapLoadState] = useState<MapLoadState>('loading');
   const [cameraTransitionState, setCameraTransitionState] = useState<MapLoadState | null>(null);
+  const [cityNavigationNotice, setCityNavigationNotice] = useState<string | null>(null);
   // v413: friend memory 加载 — Memory 页 mount + subscribed friends 变化时拉 /api/circle/fog
   const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
   const loadSubs = useMemorySubscriptionsStore((s) => s.load);
@@ -319,7 +326,6 @@ export function MemoryScreen() {
         anchor: [number, number];
       };
     }> = {};
-    if (memoryScope === 'self') return result;
     const namesById = new Map(subscriptions.map(source => [String(source.friend_id), source.friend_name]));
     for (const region of useFriendMemoryStore.getState().getVisibleRegions()) {
       const friendName = namesById.get(region.sourceFriendId);
@@ -332,7 +338,7 @@ export function MemoryScreen() {
     return result;
   // The version is the render signal; getVisibleRegions applies current
   // source/version authorization and never reads persisted Friend geometry.
-  }, [friendMemoryVersion, memoryScope, subscriptions]);
+  }, [friendMemoryVersion, subscriptions]);
 
   const handlePickModalClose = useCallback(() => {
     setPickModalOpen(false);
@@ -1033,6 +1039,7 @@ export function MemoryScreen() {
 
   const onRecenter = () => {
     log('memory.recenter_tap');
+    setCityNavigationNotice(null);
     // A panel lookup started before this explicit camera command may update
     // labels, but it must not reopen stale city UI after Recenter wins.
     panelOpenRequestIdRef.current += 1;
@@ -1096,16 +1103,17 @@ export function MemoryScreen() {
         <View style={styles.topActions}>
           <TouchableOpacity
             testID="memory-all-cairns-entry"
-            style={[styles.libraryAction, { backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }]}
+            style={[styles.libraryAction, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
             onPress={() => nav.navigate('AllCairns')}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={acquiredUnreadCount > 0
-              ? cairnText('memory.memory-screen.open-cairn-library-value-unread-cairn-groups', { acquiredUnreadCount: acquiredUnreadCount })
-              : cairnText('memory.memory-screen.open-cairn-library')}
+              ? cairnText('memory.memory-screen.open-cairns-value-unread-cairn-groups', { acquiredUnreadCount: acquiredUnreadCount })
+              : cairnText('memory.memory-screen.open-cairns')}
+            hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
           >
             <Icon name="MapPin" size={17} color={theme.iconActive} strokeWidth={2.1} />
-            <Text style={[styles.libraryActionLabel, { color: theme.foreground }]}>{cairnText('memory.memory-screen.library')}</Text>
+            <Text style={[styles.libraryActionLabel, { color: theme.foreground }]}>{cairnText('memory.memory-screen.cairns')}</Text>
             {acquiredUnreadCount > 0 ? (
               <View style={[styles.libraryUnread, { backgroundColor: theme.primary }]}>
                 <Text style={[styles.libraryUnreadText, { color: theme.onPrimary }]}>
@@ -1175,7 +1183,7 @@ export function MemoryScreen() {
             deliverReadiness('map', mountKey, () => setMapReady(true));
           }}
           onMapUnavailable={() => handleMapUnavailable(mountKey)}
-          onFogPreparing={(readinessKey, _retainsDisplayedScene) => {
+          onFogPreparing={(readinessKey, retainsDisplayedScene) => {
             if (mountKeyRef.current !== mountKey) return;
             fogTargetReadinessKeyRef.current = readinessKey;
             // FogLayer may classify a cold request failure in an earlier
@@ -1188,7 +1196,17 @@ export function MemoryScreen() {
             )) {
               setFogUnavailable(false);
             }
-            setFogScenePending(fogReadyReadinessKeyRef.current !== readinessKey);
+            const visiblyPending = memoryFogTransitionIsVisiblyPending({
+              readinessKey,
+              readyReadinessKey: fogReadyReadinessKeyRef.current,
+              retainsDisplayedScene,
+            });
+            log('o94.memory.fog_transition', {
+              readiness_key: readinessKey,
+              retained_scene: retainsDisplayedScene,
+              visible_loading: visiblyPending,
+            });
+            setFogScenePending(visiblyPending);
             if (!entryUsableRef.current) setFogReady(false);
           }}
           onFogReady={(readinessKey) => {
@@ -1414,6 +1432,19 @@ export function MemoryScreen() {
         </TouchableOpacity>
       ) : null}
 
+      {mapMayBeShown && persistentCoord && cityNavigationNotice ? (
+        <TouchableOpacity
+          style={[styles.cityNavigationNotice, { backgroundColor: theme.mapOverlay, borderColor: theme.border }]}
+          onPress={() => setCityNavigationNotice(null)}
+          accessibilityRole="button"
+          accessibilityLabel={cityNavigationNotice}
+          testID="memory-city-coverage-unavailable"
+        >
+          <Icon name="MapPin" size={14} color={theme.iconInactive} strokeWidth={2} />
+          <Text style={[styles.cityNavigationNoticeText, { color: theme.foregroundSecondary }]}>{cityNavigationNotice}</Text>
+        </TouchableOpacity>
+      ) : null}
+
       {memoryEntryUsable && (cameraTransitionState
         || (memoryScope !== 'self' && (fogUnavailable || targetFriendFailureVisible || fogScenePending))) ? (
         <View
@@ -1591,63 +1622,65 @@ export function MemoryScreen() {
             }
             // Country layer → tap city: fly + refetch panel with new here_city_id.
             manualBrowseThisMountRef.current = true;
-            const [minLng, minLat, maxLng, maxLat] = bbox;
-            const bboxCenterLng = (minLng + maxLng) / 2;
-            const bboxCenterLat = (minLat + maxLat) / 2;
-            const inBbox = (lat: number, lng: number) =>
-              lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
-            const memoryState = useMemoryStore.getState();
-            const points = syntheticQaAuthority ? memoryState.testPoints : memoryState.points;
-            const markers = useMarkerStore.getState().markers.filter(marker => (
-              marker.qaProvenance !== 'simulator_test' || syntheticQaAuthority
-            ));
-            let flyLng = bboxCenterLng;
-            let flyLat = bboxCenterLat;
-            let foundExplored = false;
-            let usedFriendAnchor = false;
-            let newestOwnTimestamp = -Infinity;
-            for (const p of points) {
-              if (!inBbox(p.lat, p.lng)) continue;
-              const timestamp = Number(p.ts) || 0;
-              if (timestamp >= newestOwnTimestamp) {
-                newestOwnTimestamp = timestamp;
-                flyLat = p.lat;
-                flyLng = p.lng;
-                foundExplored = true;
-              }
+            const citySources: MemoryCityCoverageSource[] = [];
+            const prepared = usePreparedMemoryCoverageStore.getState().coverage;
+            const mineRegion = prepared?.complete
+              ? prepared.regions.find(region => region.level === 3 && region.id === itemId)
+              : null;
+            if (prepared?.complete && mineRegion) {
+              citySources.push({
+                source: 'mine',
+                sourceId: prepared.snapshotId,
+                regionId: mineRegion.id,
+                regionAnchor: mineRegion.anchor,
+                geometry: prepared.geometry,
+              });
             }
-            if (!foundExplored) {
-              for (const m of markers) {
-                if (!inBbox(m.lat, m.lng)) continue;
-                const timestamp = Number(m.updatedAt ?? m.createdAt) || 0;
-                if (timestamp >= newestOwnTimestamp) {
-                  newestOwnTimestamp = timestamp;
-                  flyLat = m.lat;
-                  flyLng = m.lng;
-                  foundExplored = true;
-                }
-              }
+            const friendStore = useFriendMemoryStore.getState();
+            for (const region of friendStore.getVisibleRegions()) {
+              if (region.level !== 3 || region.id !== itemId) continue;
+              const visibleSource = friendStore.getVisibleGeometries(region.sourceFriendId)
+                .find(source => source.sourceFriendId === region.sourceFriendId);
+              if (!visibleSource) continue;
+              citySources.push({
+                source: 'friends',
+                sourceId: visibleSource.sourceFriendId,
+                regionId: region.id,
+                // Shared region anchors are intentionally coarse. The target
+                // is derived below from authorized Fog geometry instead.
+                regionAnchor: null,
+                geometry: visibleSource.geometry,
+              });
             }
-            if (!foundExplored && memoryScope !== 'self') {
-              const friendAnchor = friendRegionSources[itemId]?.region.anchor;
-              if (friendAnchor) {
-                [flyLng, flyLat] = friendAnchor;
-                foundExplored = true;
-                usedFriendAnchor = true;
-              }
+            const cityTarget = resolveMemoryCityCameraTarget({
+              cityId: itemId,
+              bbox,
+              sources: citySources,
+            });
+            if (!cityTarget) {
+              setCityNavigationNotice(cairnText('memory.memory-screen.no-authorised-coverage-in-this-city'));
+              log('o94.memory.city_target_unavailable', { city_id: itemId });
+              return;
             }
-            const spanLng = maxLng - minLng;
-            const spanLat = maxLat - minLat;
-            const span = Math.max(spanLng, spanLat);
-            let zoom = 12;
-            if (span > 40) zoom = 3;
-            else if (span > 8) zoom = 5;
-            else if (span > 2) zoom = 8;
-            else if (span > 0.3) zoom = 11;
-            else zoom = 13;
-            if (foundExplored) zoom = 14;
+            setCityNavigationNotice(null);
+            const [flyLng, flyLat] = cityTarget.center;
+            const zoom = cityTarget.zoom;
+            if (cityTarget.source === 'friends' && memoryScope === 'self') {
+              // The destination must be visible. This changes only the local
+              // presentation scope; selected Friends and grants are untouched.
+              setMemoryScope('combined');
+            }
 
             flyTokenRef.current += 1;
+            log('memory.camera_command', {
+              intent: 'explored-city',
+              token: flyTokenRef.current,
+              city_id: itemId,
+              source: cityTarget.source,
+              center_lat: flyLat,
+              center_lng: flyLng,
+              zoom,
+            });
             setFlyToTarget({ center: [flyLng, flyLat], zoom, token: flyTokenRef.current });
             // v441.1: eagerly update cameraCenterRef to the fly target so
             // that if user closes the panel and reopens immediately (before
@@ -1660,14 +1693,14 @@ export function MemoryScreen() {
             // recenter icon should appear on the right so user can jump
             // back to their real GPS. Same pattern as user pan/zoom.
             setMapMoved(true);
-            log('v441.hierarchy_fly', { itemId, flyLat, flyLng });
+            log('v441.hierarchy_fly', { itemId, flyLat, flyLng, source: cityTarget.source });
             // v436: city tap moves the map → update currentCityId AND
             // currentCountryId. In country-layer, title IS the country, so
             // any city tapped is a child of it. This makes ↑ back to World
             // correctly highlight the country the user just flew to.
             setHierarchyCurrentCityId(itemId);
             setHierarchyCurrentCountryId(hierarchyTitleId === 'world' ? null : hierarchyTitleId);
-            if (usedFriendAnchor) {
+            if (cityTarget.source === 'friends') {
               // Exact Friend-derived geography is authorized session data,
               // not durable camera metadata. Keep the deliberate fly-to now,
               // while ensuring revoke/relaunch cannot restore this anchor.
@@ -1677,7 +1710,7 @@ export function MemoryScreen() {
                 source: 'mine',
                 cityId: itemId,
                 countryId: hierarchyTitleId === 'world' ? null : hierarchyTitleId,
-                bbox: [minLng, minLat, maxLng, maxLat],
+                bbox,
                 center: [flyLng, flyLat],
                 zoom,
               });
@@ -1715,22 +1748,36 @@ const styles = StyleSheet.create({
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   libraryAction: {
     minWidth: 76,
-    height: 44,
-    paddingHorizontal: 10,
-    borderRadius: 16,
+    height: MEMORY_TOP_CONTROL_HEIGHT,
+    paddingHorizontal: 12,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
     gap: 5,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    ...Shadow.card,
   },
   libraryActionLabel: { fontSize: 12, fontWeight: '700' },
   libraryUnread: { position: 'absolute', right: -3, top: -3, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   libraryUnreadText: { fontSize: 9, lineHeight: 12, fontWeight: '800' },
+  cityNavigationNotice: {
+    position: 'absolute',
+    left: 72,
+    right: 72,
+    bottom: 112,
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    zIndex: 26,
+  },
+  cityNavigationNoticeText: { flexShrink: 1, fontSize: 12, lineHeight: 16, fontWeight: '600', textAlign: 'center' },
   evidenceContext: {
     position: 'absolute',
     left: 12,

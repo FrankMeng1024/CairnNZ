@@ -37,6 +37,9 @@ interface Props {
   onPickPress?: () => void;
 }
 
+/** Shared visible height for the Cairns entry and its adjacent scope control. */
+export const MEMORY_TOP_CONTROL_HEIGHT = 40;
+
 export function MemoryScopeToggle({ onPickPress }: Props) {
   const theme = useVisualTheme();
   const scope = useMemoryScopeStore((s) => s.scope);
@@ -85,6 +88,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
             testID={`memory-scope-${o.id}`}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
+            hitSlop={{ top: 2, bottom: 2 }}
           >
             <View style={styles.labelRow}>
               <Text style={[styles.label, active && styles.labelActive, { color: active ? theme.primary : theme.foregroundSecondary }]}>{o.label}</Text>
@@ -124,6 +128,7 @@ export function MemoryScopeToggle({ onPickPress }: Props) {
 
 const styles = StyleSheet.create({
   container: {
+    height: MEMORY_TOP_CONTROL_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
@@ -134,8 +139,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   segment: {
+    height: MEMORY_TOP_CONTROL_HEIGHT - 8,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: Radius.pill,
     backgroundColor: 'transparent',
   },
@@ -159,7 +166,7 @@ const styles = StyleSheet.create({
   // 44pt target, keeping the action close to its Friends label.
   pickSegment: {
     width: 40,
-    paddingVertical: 6,
+    height: MEMORY_TOP_CONTROL_HEIGHT - 8,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -24,7 +24,7 @@
  *     (Camera key remount triggers state update via internal map ref)
  *   - <ShapeSource id shape={geoJson}> + <FillLayer/LineLayer
  *     style={{...}}/> → react-map-gl <Source> + <Layer>
- *   - <UserLocation visible> → small <Marker> with a blue dot
+ *   - <UserLocation visible> → small <Marker> using the shared device-location style
  *   - onMapIdle(feature) → react-map-gl onIdle (we synth a feature
  *     payload with properties.center + properties.zoom to match the
  *     native event shape that PinAdjustStep onMapSettle reads)
@@ -47,6 +47,10 @@ import { guardMapboxGl2RetiredDispatcher } from './mapboxGl2LifecycleGuard';
 import { queryWebShapeSourcePressFeatures } from './mapboxAdapterWebPress';
 import { hasRenderedHostedMapboxBasemap } from './mapboxWebReadiness';
 import { reconcileWebLayerPosition } from './mapboxLayerPosition';
+import {
+  CURRENT_LOCATION_DOT_STYLE,
+  CURRENT_LOCATION_RING_STYLE,
+} from '../../../components/map/currentLocationMarkerStyle';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
@@ -1205,7 +1209,7 @@ export function SymbolLayer({ id, style, __sourceId, filter, aboveLayerID, below
   );
 }
 
-// ── UserLocation — small blue dot at the browser's geolocate position ─
+// ── UserLocation — shared device-location puck at browser geolocation ─
 // This must remain independent of the camera. The former QA shim rendered
 // the dot at map.getCenter(), so it followed every manual pan and could
 // falsely make a broken Recenter journey look correct in screenshots.
@@ -1239,9 +1243,8 @@ export function UserLocation({ visible = true }: UserLocationProps) {
     <Marker longitude={coordinate[0]} latitude={coordinate[1]}>
       <div style={{
         width: 14, height: 14, borderRadius: 7,
-        backgroundColor: '#1f7be0',
-        border: '2px solid #fff',
-        boxShadow: '0 0 4px rgba(0,0,0,0.4)',
+        backgroundColor: CURRENT_LOCATION_DOT_STYLE.circleColor,
+        border: `2px solid ${CURRENT_LOCATION_RING_STYLE.circleColor}`,
       }} data-testid="web-user-location-puck" />
     </Marker>
   );
