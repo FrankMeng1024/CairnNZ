@@ -41,15 +41,16 @@ docker run -d --name "$CONTAINER" --security-opt seccomp=unconfined \
   -p 127.0.0.1::3306 "$MYSQL_IMAGE" >/dev/null
 
 stable_mysql_checks=0
-for attempt in $(seq 1 60); do
+mysql_ready_attempts="${HARNESS_MYSQL_READY_ATTEMPTS:-180}"
+for attempt in $(seq 1 "$mysql_ready_attempts"); do
   if docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 'SELECT 1' >/dev/null 2>&1; then
     stable_mysql_checks=$((stable_mysql_checks + 1))
     if [ "$stable_mysql_checks" -ge 2 ]; then break; fi
   else
     stable_mysql_checks=0
   fi
-  if [ "$attempt" = 60 ]; then
-    echo "MySQL did not become ready from image $MYSQL_IMAGE" >&2
+  if [ "$attempt" = "$mysql_ready_attempts" ]; then
+    echo "MySQL did not become ready from image $MYSQL_IMAGE after ${mysql_ready_attempts}s" >&2
     docker logs "$CONTAINER" >&2 || true
     exit 1
   fi

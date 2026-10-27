@@ -159,11 +159,6 @@ export function MarkDetailSheet(props: Props) {
       testID={`mark-detail-sheet-form-${form}`}
     >
         <View style={styles.sheetContent}>
-          {/* Close */}
-          <TouchableOpacity style={styles.close} onPress={onClose} testID="mark-detail-close">
-            <Icon name="X" size={20} color={theme.iconInactive} strokeWidth={2.2} />
-          </TouchableOpacity>
-
           {/* Title + body */}
           <Text style={[styles.title, { color: theme.foreground }]} testID="mark-detail-title">{displayTitle}</Text>
           {body ? (
@@ -264,11 +259,6 @@ export function MarkDetailSheet(props: Props) {
 
 const styles = StyleSheet.create({
   sheetContent: { minHeight: 250, paddingBottom: Spacing.sm },
-  close: {
-    alignSelf: 'flex-end',
-    padding: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
   title: {
     fontSize: FontSize.h2,
     fontWeight: '700',

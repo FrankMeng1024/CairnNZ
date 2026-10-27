@@ -109,11 +109,21 @@ describe('shared Hike and Run recording UI contracts', () => {
     expect(hikeFinish).toContain("{committed ? cairnText('stop-summary-sheet.view-activity') : cairnText('stop-summary-sheet.finish-value'");
     expect(hikeFinish).toContain('if (committed) onViewActivity?.()');
     expect(hikeFinish).not.toContain('complete-hero.png');
+    expect(hikeFinish).not.toContain('closeX');
+    expect(hikeFinish).toContain('onPress={() => { if (!saving) dismiss(onCancel); }}');
     expect(run).toContain('<StopSummarySheet');
     expect(run).toContain('summary={runStopSummaryPresentation}');
     expect(run).toContain('committed={Boolean(committedRunActivityId)}');
     expect(run).toContain('finishProgress={finishProgress}');
     expect(run).toContain('onViewActivity={() =>');
+  });
+
+  test('Mapbox legal controls follow the measured recording dock', () => {
+    const map = read('src/screens/HikingMap.tsx');
+    expect(shared).toContain('onHeightChange?.(Math.ceil(event.nativeEvent.layout.height))');
+    expect(hike).toContain('ornamentBottomClearance={activityDockHeight + Spacing.sm}');
+    expect(run).toContain('ornamentBottomClearance={activityDockHeight + Spacing.sm}');
+    expect(map).toContain('activityMapOrnamentsAbove(ornamentBottomClearance)');
   });
 
   test('shows the walked route before Save and the selected Route afterward', () => {

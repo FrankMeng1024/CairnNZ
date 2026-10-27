@@ -84,11 +84,15 @@ describe('prepared Memory viewport handoff', () => {
 
     const first = usePreparedMemoryCoverageStore.getState().loadViewport(viewport);
     const duplicate = usePreparedMemoryCoverageStore.getState().loadViewport({ ...viewport });
-    await duplicate;
+    let duplicateSettled = false;
+    void duplicate.then(() => { duplicateSettled = true; });
+    await Promise.resolve();
     expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(duplicateSettled).toBe(false);
 
     resolveRequest(response('coalesced'));
-    await first;
+    await Promise.all([first, duplicate]);
+    expect(duplicateSettled).toBe(true);
     expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('coalesced');
   });
 

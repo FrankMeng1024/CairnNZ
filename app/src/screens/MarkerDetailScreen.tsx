@@ -422,7 +422,7 @@ export function MarkerDetailScreen() {
           />
         ) : null}
         <View style={styles.backRowOverlay} pointerEvents="box-none">
-          <BackButton variant="inline" />
+          <BackButton variant="mapInline" />
         </View>
       </View>
 
@@ -613,10 +613,17 @@ export function MarkerDetailScreen() {
         dismissible={!saving}
         testID="cairn-edit-sheet"
       >
+        <View style={styles.editBackRow}>
+          <BackButton
+            variant="inline"
+            label={cairnText('navigation.back')}
+            onPress={requestCloseEdit}
+            testID="cairn-edit-back"
+          />
+        </View>
         <BottomSheetHeader
           title={privateTitle || privateBody ? cairnText('marker-detail-screen.edit-cairn') : cairnText('marker-detail-screen.add-words-to-this-cairn')}
           subtitle={cairnText('marker-detail-screen.its-original-place-time-and-activity-stay')}
-          onClose={requestCloseEdit}
         />
         <BottomSheetContent
           scrollable
@@ -958,6 +965,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.lg,
   },
+  editBackRow: { marginBottom: Spacing.xs },
   editBoundaryCopy: {
     fontSize: FontSize.small,
     lineHeight: 18,

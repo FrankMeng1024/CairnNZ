@@ -197,6 +197,9 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
         json: async () => ({
           projections: [{
             source_friend_id: requestedId,
+            grant_epoch: `grant-${requestedId}`,
+            friendship_episode_id: `episode-${requestedId}`,
+            coverage_scope: 'full_history_delayed_v1',
             authorization_version: 4,
             server_authorized_at: new Date(now - 60_000).toISOString(),
             authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
@@ -248,6 +251,19 @@ describe('O86 exact prepared coverage Mapbox render boundary', () => {
     expect(intersectTurf(featureCollection([friendShape, overlapShape]))).toBeNull();
     expect(fogShape.properties.cairnEvidencePointCount).toBe(0);
     expect(usePreparedMemoryCoverageStore.getState().coverage?.coverageVersion).toBe('mine-exact-v1');
+
+    // Scope is presentation authority. Switching to Mine removes every
+    // borrowed class synchronously; switching back may reuse the exact cached
+    // selected-source scene without another geometry download.
+    await act(async () => { useMemoryScopeStore.setState({ scope: 'self' }); });
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeFalsy());
+    expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'overlap')).toBeFalsy();
+    expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'mine')).toBeTruthy();
+    const fetchCountBeforeCombinedReuse = mockAuthenticatedFetch.mock.calls.length;
+    await act(async () => { useMemoryScopeStore.setState({ scope: 'combined' }); });
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'friend')).toBeTruthy());
+    await waitFor(() => expect(sceneFeature(mockRenderedSources.get('memory-fog-src'), 'overlap')).toBeTruthy());
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(fetchCountBeforeCombinedReuse);
 
     // A refresh failure reports truthful pending/error state without clearing
     // a still-authorized warm scene or pretending the partial selection is a
@@ -482,7 +498,9 @@ describe('O86 prepared viewport render lifecycle', () => {
       });
     });
 
-    await waitFor(() => expect(loadSelectedProjections).toHaveBeenCalledWith(undefined, viewport));
+    // Complete Friend snapshots are session data, not viewport data. The
+    // camera viewport must not become part of the acquisition identity.
+    await waitFor(() => expect(loadSelectedProjections).toHaveBeenCalledWith());
     view.unmount();
     useFriendMemoryStore.getState().reset();
     usePreparedMemoryCoverageStore.getState().reset();

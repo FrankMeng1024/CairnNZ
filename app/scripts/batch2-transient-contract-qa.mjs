@@ -4,7 +4,9 @@ import { chromium } from 'playwright';
 import sharp from 'sharp';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8081';
-const outputDir = path.resolve('..', 'docs', 'review', 'batch2-sheet-modal-transient-gate');
+const outputDir = process.env.CAIRN_QA_ARTIFACT_DIR
+  ? path.resolve(process.env.CAIRN_QA_ARTIFACT_DIR)
+  : path.resolve('..', 'docs', 'review', 'batch2-sheet-modal-transient-gate');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const times = ['day', 'sunset', 'night'];
 fs.mkdirSync(outputDir, { recursive: true });
@@ -43,6 +45,12 @@ const navigate = async route => {
   await page.evaluate(name => globalThis.__cairnStores?.navigationRef?.navigate(name), route);
   await settle(900);
 };
+const waitForScenicBackdrop = () => page.waitForFunction(() => [...document.images].some(image => {
+  const rect = image.getBoundingClientRect();
+  return image.complete && image.naturalWidth > 0
+    && rect.width >= window.innerWidth * 0.9
+    && rect.height >= window.innerHeight * 0.75;
+}), null, { timeout: 15_000, polling: 'raf' });
 const setTime = async time => {
   await page.evaluate(nextTime => {
     const stores = globalThis.__cairnStores;
@@ -94,8 +102,10 @@ await page.waitForFunction(() => globalThis.__cairnStores?.getCurrentRoute?.() =
 for (const time of times) {
   await setTime(time);
   await navigate('Home');
+  await waitForScenicBackdrop();
   await shot(`home-${time}`);
   await navigate('Friends');
+  await waitForScenicBackdrop();
   await shot(`friends-${time}`);
 
   await navigate('TransientContractPreview');
@@ -117,7 +127,8 @@ for (const time of times) {
   await clickText('A. My Personal mark');
   await checkBounds(`${time} production MarkDetailSheet`, page.getByTestId('mark-detail-sheet-form-A').last());
   await shot(`mark-detail-sheet-${time}`);
-  await page.getByTestId('mark-detail-close').last().click();
+  await page.mouse.click(20, 120);
+  await page.getByTestId('mark-detail-sheet-form-A').waitFor({ state: 'hidden' });
 }
 
 const makeBoard = async (name, rows) => {

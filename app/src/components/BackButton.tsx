@@ -31,7 +31,7 @@ if (Platform.OS !== 'web') {
 }
 
 interface BackButtonProps {
-  variant?: 'pill' | 'inline' | 'ghostRound';
+  variant?: 'pill' | 'inline' | 'mapInline' | 'ghostRound';
   label?: string;
   onPress?: () => void;
   testID?: string;
@@ -62,13 +62,22 @@ export function BackButton({
     else nav.goBack();
   };
 
-  // Inline: no frosted treatment, just an inline back action.
-  if (variant === 'inline') {
+  // Inline is the Activity Detail reference. mapInline preserves that same
+  // icon/type/hit-target language on a changing basemap, adding only the
+  // compact semantic map surface needed for reliable contrast.
+  if (variant === 'inline' || variant === 'mapInline') {
+    const overMap = variant === 'mapInline';
     return (
-      <Animated.View style={{ transform: [{ scale }] }}>
+      <Animated.View style={[
+        { transform: [{ scale }] },
+        overMap && [styles.mapInlineShadow, { shadowColor: theme.shadow }],
+      ]}>
         <TouchableOpacity
           testID={testID}
-          style={styles.inline}
+          style={[
+            styles.inline,
+            overMap && [styles.mapInline, { backgroundColor: theme.mapOverlay, borderColor: theme.borderStrong }],
+          ]}
           onPress={handlePress}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
@@ -165,6 +174,15 @@ const styles = StyleSheet.create({
   },
   inlineText: {
     fontSize: FontSize.caption, fontWeight: '600',
+  },
+  mapInlineShadow: {
+    borderRadius: Radius.button,
+    ...Shadow.card,
+  },
+  mapInline: {
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.button,
+    borderWidth: 1,
   },
   // R114 (2026-08-07): ghostRound variant styles.
   ghostRoundShadow: {

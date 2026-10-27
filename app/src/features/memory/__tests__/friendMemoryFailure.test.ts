@@ -39,5 +39,10 @@ describe('Friend Memory failure presentation', () => {
       stage: 'transport',
       timedOut: true,
     }).kind).toBe('timeout');
+    expect(memoryOperationFailure({
+      error: Object.assign(new Error('owner retired'), { code: 'ACCOUNT_CHANGED' }),
+      operation: 'friend-coverage',
+      stage: 'account-fence',
+    }).kind).toBe('cancelled');
   });
 });

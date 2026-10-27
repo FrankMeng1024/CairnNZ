@@ -29,6 +29,19 @@ describe('shared Memory authority initialization', () => {
     expect(manager).not.toContain('detachMemorySync');
   });
 
+  test('last known fix is restored only after the account-bound hydration reset settles', () => {
+    const screen = read('src/features/memory/screens/MemoryScreen.tsx');
+    const cacheEffect = screen.slice(
+      screen.indexOf('// v326: hydrate persisted last-fix'),
+      screen.indexOf('useFocusEffect(', screen.indexOf('// v326: hydrate persisted last-fix')),
+    );
+    expect(cacheEffect).toContain('localHydration.ownerUserId !== activeOwnerId');
+    expect(cacheEffect).toContain("localHydration.status !== 'ready'");
+    expect(cacheEffect).toContain('readLastFix(activeOwnerId)');
+    expect(cacheEffect).toContain('latestHydration.ownerUserId !== activeOwnerId');
+    expect(cacheEffect).toContain('[activeOwnerId, localHydration.ownerUserId, localHydration.status]');
+  });
+
   test('returning focus reuses complete coverage without fencing valid authorization', () => {
     const screen = read('src/features/memory/screens/MemoryScreen.tsx');
     expect(screen).toContain('let focusActive = true;');

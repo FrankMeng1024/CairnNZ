@@ -6,7 +6,9 @@ import { chromium } from 'playwright';
 import sharp from 'sharp';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8095';
-const output = path.resolve('_review/trails-personal-library');
+const output = process.env.CAIRN_QA_ARTIFACT_DIR
+  ? path.resolve(process.env.CAIRN_QA_ARTIFACT_DIR)
+  : path.resolve('_review/trails-personal-library');
 const beforeOutput = path.resolve('_review/overnight-trails-product-audit');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(output, { recursive: true });
@@ -179,7 +181,7 @@ await mountTrails('activities');
 await seed({ sessions: Array.from({ length: 300 }, (_, index) => session(`activity-${index}`, index)) });
 await shot('06-activities-300-day-390x844');
 const renderedForThreeHundred = await page.locator('[data-testid^="activity-record-"]').count();
-await shot('07-activities-300-day-360x640', { width: 360, height: 640 });
+await shot('07-activities-300-day-320x568', { width: 320, height: 568 });
 await shot('08-activities-300-day-430x932', { width: 430, height: 932 });
 await page.setViewportSize({ width: 390, height: 844 });
 
@@ -203,29 +205,44 @@ await mountTrails('routes');
 await seed({ routes: fewRoutes });
 await page.getByText('Milford Foreshore Track', { exact: true }).click();
 await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'MapHistory', null, { timeout: 15_000 });
-await page.getByText('Use for a Hike', { exact: true }).waitFor({ timeout: 15_000 });
+await page.getByTestId('route-use-action').waitFor({ timeout: 15_000 });
+await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()) && globalThis.__cairnMap?.areTilesLoaded?.(), null, { timeout: 30_000 });
+await page.waitForTimeout(400);
 await shot('13-route-detail-use-first-day-390x844');
-await page.getByText('Use for a Hike', { exact: true }).click();
+await page.getByTestId('route-use-action').click();
 await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Hiking', null, { timeout: 15_000 });
-await page.getByText('Route selected · shown on the map for guidance', { exact: true }).waitFor({ timeout: 15_000 });
+await page.getByText('This Route is shown on the map for reference.', { exact: true }).waitFor({ timeout: 15_000 });
 await shot('14-route-guidance-hike-day-390x844');
+
+await setTheme('sunset');
+await mountTrails('routes');
+await seed({ routes: fewRoutes });
+await page.getByText('Milford Foreshore Track', { exact: true }).click();
+await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'MapHistory', null, { timeout: 15_000 });
+await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()) && globalThis.__cairnMap?.areTilesLoaded?.(), null, { timeout: 30_000 });
+await page.waitForTimeout(400);
+await shot('15-route-detail-use-first-sunset-390x844');
 
 await setTheme('night');
 await mountTrails('routes');
 await seed({ routes: fewRoutes });
 await page.getByText('Milford Foreshore Track', { exact: true }).click();
 await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'MapHistory', null, { timeout: 15_000 });
+await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.loaded?.()) && globalThis.__cairnMap?.areTilesLoaded?.(), null, { timeout: 30_000 });
 await page.waitForTimeout(400);
-await shot('15-route-detail-use-first-night-390x844');
+await shot('16-route-detail-use-first-night-390x844');
 
 await setTheme('day');
 await seed({ sessions: fewSessions, routes: fewRoutes });
 await resetTo('Home');
-await shot('16-family-home-day-390x844');
+await shot('17-family-home-day-390x844');
 await resetTo('Friends');
-await shot('17-family-friends-day-390x844');
+await shot('18-family-friends-day-390x844');
 await resetTo('Hiking');
-await shot('18-family-hike-day-390x844');
+await shot('19-family-hike-day-390x844');
 
 async function makeBoard(fileName, names, columns = 3) {
   const items = names.map(name => captures.find(item => item.name === name)).filter(Boolean);
@@ -261,7 +278,7 @@ await makeBoard('trails-after-themes-and-states.jpg', [
   '05-routes-local-with-server-error-day-390x844',
   '02-activities-few-night-390x844',
   '03-routes-few-night-390x844',
-  '15-route-detail-use-first-night-390x844',
+  '16-route-detail-use-first-night-390x844',
 ]);
 await makeBoard('trails-after-scale-search-and-use.jpg', [
   '06-activities-300-day-390x844',
@@ -272,9 +289,9 @@ await makeBoard('trails-after-scale-search-and-use.jpg', [
   '14-route-guidance-hike-day-390x844',
 ]);
 await makeBoard('trails-product-family.jpg', [
-  '16-family-home-day-390x844',
-  '17-family-friends-day-390x844',
-  '18-family-hike-day-390x844',
+  '17-family-home-day-390x844',
+  '18-family-friends-day-390x844',
+  '19-family-hike-day-390x844',
   '02-activities-few-day-390x844',
   '03-routes-few-day-390x844',
   '14-route-guidance-hike-day-390x844',

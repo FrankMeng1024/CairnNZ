@@ -51,6 +51,7 @@ import {
   CURRENT_LOCATION_DOT_STYLE,
   CURRENT_LOCATION_RING_STYLE,
 } from '../../../components/map/currentLocationMarkerStyle';
+import { memoryWebInitialViewState } from './memoryCameraSettings';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
@@ -60,6 +61,7 @@ const POINT_MOTION_RASTER_LAYER_ID = 'cairn-point-motion-basemap-layer';
 // to access Mapbox tiles or emitted by production builds.
 const LOCAL_QA_MAPBOX_TOKEN = 'pk.cairn-local-qa-no-network';
 const WEB_SUNSET_STYLE = require('../../../../assets/map-styles/sunset-2d.json');
+const WEB_NIGHT_STYLE = require('../../../../assets/map-styles/night-2d.json');
 const WEB_MAPBOX_AVAILABLE = MAPBOX_ACCESS_TOKEN.trim().startsWith('pk.')
   && MAPBOX_ACCESS_TOKEN.trim().length >= 40;
 
@@ -180,6 +182,21 @@ function applyLogoOffset(map: any, position: MapViewProps['logoPosition']) {
   logo.style.bottom = position.bottom != null ? `${position.bottom}px` : '';
   logo.style.left = position.left != null ? `${position.left}px` : '';
   logo.style.right = position.right != null ? `${position.right}px` : '';
+}
+
+function applyAttributionOffset(map: any, position: MapViewProps['attributionPosition']) {
+  const container = map?.getContainer?.() as HTMLElement | undefined;
+  const attribution = container?.querySelector?.('.mapboxgl-ctrl-attrib') as HTMLElement | null;
+  if (!attribution || !position) return;
+  // react-map-gl normally applies this style through the control component,
+  // but a live bottom-workspace resize can leave the Mapbox control at its
+  // first-frame inset. Reapply the measured position to the genuine control
+  // so the interactive `i` and the logo move together above sheets/docks.
+  attribution.style.position = 'relative';
+  attribution.style.top = position.top != null ? `${position.top}px` : '';
+  attribution.style.bottom = position.bottom != null ? `${position.bottom}px` : '';
+  attribution.style.left = position.left != null ? `${position.left}px` : '';
+  attribution.style.right = position.right != null ? `${position.right}px` : '';
 }
 
 export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
@@ -412,6 +429,11 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   }, [logoEnabled, logoPosition?.top, logoPosition?.bottom, logoPosition?.left, logoPosition?.right]);
 
   useEffect(() => {
+    const inner = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (inner && attributionEnabled) applyAttributionOffset(inner, attributionPosition);
+  }, [attributionEnabled, attributionPosition?.top, attributionPosition?.bottom, attributionPosition?.left, attributionPosition?.right]);
+
+  useEffect(() => {
     if (loadingStartedRef.current) return;
     loadingStartedRef.current = true;
     onWillStartLoadingMap?.();
@@ -430,18 +452,18 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   const standardLightPreset = React.Children.toArray(children).reduce<string | null>((preset, child) => {
     if (preset || !React.isValidElement(child)) return preset;
     const candidate = (child.props as any)?.config?.lightPreset;
-    return candidate === 'day' || candidate === 'dusk' || candidate === 'night'
+    return candidate === 'dawn' || candidate === 'day' || candidate === 'dusk' || candidate === 'night'
       ? candidate
       : null;
   }, null);
   // GL JS v2 cannot consume Standard imports. Keep Web on genuine supported
   // Mapbox/vector styles while preserving the app's actual three-state
-  // contract: outdoors for Day, the packaged Mapbox-vector Sunset style for
-  // Dusk, and Mapbox Navigation Night for Night. Native continues to receive
-  // Standard plus its real lightPreset unchanged.
+  // contract: outdoors for Day and Cairn's packaged Mapbox-vector styles for
+  // warm Sunset and comfortable Night. Native continues to receive Standard
+  // plus its real lightPreset and semantic colour configuration unchanged.
   const webStandardFallback = standardLightPreset === 'night'
-    ? 'mapbox://styles/mapbox/navigation-night-v1'
-    : standardLightPreset === 'dusk'
+    ? WEB_NIGHT_STYLE
+    : standardLightPreset === 'dawn' || standardLightPreset === 'dusk'
       ? WEB_SUNSET_STYLE
       : 'mapbox://styles/mapbox/outdoors-v12';
   const rewrittenStyleURL = (styleURL === 'mapbox://styles/mapbox/standard')
@@ -487,6 +509,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   const defaults = firstCamera?.props.defaultSettings;
   const initialCenter = defaults?.centerCoordinate ?? firstCamera?.props.centerCoordinate;
   const initialZoom = defaults?.zoomLevel ?? firstCamera?.props.zoomLevel ?? 12;
+  const initialViewState = memoryWebInitialViewState(defaults, initialCenter, initialZoom);
 
   return (
     <MapInstanceContext.Provider value={mapRef}>
@@ -592,24 +615,41 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
               });
             }
             if (logoEnabled) applyLogoOffset(event.target, logoPosition);
+            if (attributionEnabled) applyAttributionOffset(event.target, attributionPosition);
             emitWebMapReadiness(event.target, false);
           }}
-          initialViewState={
-            initialCenter && Array.isArray(initialCenter)
-              ? { longitude: initialCenter[0], latitude: initialCenter[1], zoom: initialZoom }
-              : { longitude: 0, latitude: 0, zoom: initialZoom }
-          }
+          initialViewState={initialViewState}
           onIdle={(e) => {
+            // Mapbox can install/re-parent its built-in logo after React's
+            // first effect/onLoad pass when an existing map surface is reused
+            // for a new screen. Keep both required legal controls aligned to
+            // the latest measured bottom workspace at the first stable frame.
+            if (logoEnabled) applyLogoOffset(e.target, logoPosition);
+            if (attributionEnabled) applyAttributionOffset(e.target, attributionPosition);
             const c = e.target.getCenter();
             const z = e.target.getZoom();
             // Synthesize a feature payload matching the @rnmapbox/maps
             // onCameraChanged / onMapIdle shape so component code reads
             // properties.center + properties.zoom identically.
-            onMapIdle?.({ properties: { center: [c.lng, c.lat], zoom: z } });
+            onMapIdle?.({
+              properties: {
+                center: [c.lng, c.lat],
+                zoom: z,
+                heading: e.target.getBearing?.() ?? 0,
+                pitch: e.target.getPitch?.() ?? 0,
+              },
+              gestures: { isGestureActive: false },
+            });
             onDidFinishRenderingMapFully?.();
             onDidFinishRenderingFrameFully?.();
           }}
           onRender={(event) => {
+            // The writes are idempotent and deliberately target the genuine
+            // Mapbox controls. This closes the brief first-entry window where
+            // the logo may otherwise retain Mapbox's default bottom inset and
+            // be covered by a detail sheet before a later theme render.
+            if (logoEnabled) applyLogoOffset(event.target, logoPosition);
+            if (attributionEnabled) applyAttributionOffset(event.target, attributionPosition);
             // GL JS v2 can keep already-rendered tiles in `expired` while it
             // refreshes them, preventing its strict load/idle events forever.
             // Release Cairn's loading cover only after a feature from a
@@ -718,7 +758,14 @@ interface WebCameraBounds {
 interface CameraProps {
   centerCoordinate?: [number, number];
   zoomLevel?: number;
-  defaultSettings?: { centerCoordinate?: [number, number]; zoomLevel?: number; bounds?: WebCameraBounds; animationDuration?: number };
+  defaultSettings?: {
+    centerCoordinate?: [number, number];
+    zoomLevel?: number;
+    heading?: number;
+    pitch?: number;
+    bounds?: WebCameraBounds;
+    animationDuration?: number;
+  };
   bounds?: WebCameraBounds;
   animationMode?: string;
   animationDuration?: number;

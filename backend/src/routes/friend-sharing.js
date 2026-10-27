@@ -60,6 +60,8 @@ router.get('/sources', async (req, res) => {
     const [rows] = await conn.execute(
       `SELECT f.friend_id, u.name AS friend_name,
               COALESCE(g.authorization_version, 0) AS authorization_version,
+              g.grant_epoch, g.friendship_episode_id,
+              e.episode_id AS friendship_episode_uuid,
               g.effective_at, g.coverage_scope,
               CASE WHEN ms.friend_id IS NULL THEN 0 ELSE 1 END AS selected
               ,CASE WHEN g.id IS NULL THEN 'not_shared'
@@ -91,18 +93,25 @@ router.get('/sources', async (req, res) => {
                 OR (b.blocker_id = f.user_id AND b.blocked_id = f.friend_id)
           )
         ORDER BY u.name ASC, f.friend_id ASC
-        LIMIT 1000`,
+        LIMIT 1001`,
       [viewerId],
     );
     await conn.commit();
+    const complete = rows.length <= 1000;
     return res.json({
-      sources: rows.map(row => ({
+      complete,
+      sources: rows.slice(0, 1000).map(row => ({
         friend_id: String(row.friend_id),
         friend_name: row.friend_name,
         selected: row.sharing_status !== 'not_shared' && Boolean(row.selected),
         sharing_status: row.sharing_status,
         coverage_scope: row.coverage_scope ?? null,
         authorization_version: Number(row.authorization_version),
+        grant_epoch: row.grant_epoch ?? null,
+        friendship_episode_id: row.friendship_episode_id == null
+          ? null
+          : String(row.friendship_episode_id),
+        friendship_episode_uuid: row.friendship_episode_uuid ?? null,
         effective_at: row.effective_at,
       })),
     });
@@ -385,7 +394,9 @@ router.post('/coverage-snapshot', async (req, res) => {
       projections: [{
         source_friend_id: String(ownerId),
         authorization_version: Number(grant.authorization_version),
-        coverage_scope: 'full_history_delayed_v1',
+        grant_epoch: grant.grant_epoch,
+        friendship_episode_id: String(grant.friendship_episode_id),
+        coverage_scope: grant.coverage_scope,
         server_authorized_at: authorizedAt.toISOString(),
         authorization_expires_at: expiresAt.toISOString(),
         ...result,
@@ -401,6 +412,76 @@ router.post('/coverage-snapshot', async (req, res) => {
       error: status >= 500 ? 'Server error' : error.message,
       code: error?.code ?? 'COVERAGE_SNAPSHOT_FAILED',
     });
+  } finally {
+    conn.release();
+  }
+});
+
+// Additive authorization-only renewal for frozen in-memory Friend geometry.
+// It never materializes coverage, scans /sources, or mutates selection.
+router.post('/coverage-proof-renewal', async (req, res) => {
+  const requested = Array.isArray(req.body?.sources) ? req.body.sources : [];
+  const requestId = typeof req.body?.request_id === 'string'
+    ? req.body.request_id.slice(0, 120)
+    : null;
+  if (!requestId || requested.length < 1 || requested.length > 100) {
+    return res.status(400).json({ error: 'Between 1 and 100 sources are required', code: 'INVALID_SOURCES' });
+  }
+  const normalized = requested.map(source => ({
+    friendId: Number(source?.friend_id),
+    grantEpoch: String(source?.grant_epoch ?? ''),
+    friendshipEpisodeId: String(source?.friendship_episode_id ?? ''),
+    authorizationVersion: Number(source?.authorization_version),
+    coverageScope: String(source?.coverage_scope ?? ''),
+  }));
+  if (new Set(normalized.map(source => source.friendId)).size !== normalized.length
+    || normalized.some(source => !Number.isInteger(source.friendId) || source.friendId <= 0
+    || !source.grantEpoch || !source.friendshipEpisodeId
+    || !Number.isInteger(source.authorizationVersion) || source.authorizationVersion < 1
+    || source.coverageScope !== 'full_history_delayed_v1')) {
+    return res.status(400).json({ error: 'Invalid source proof identity', code: 'INVALID_SOURCE_PROOF' });
+  }
+  const viewerId = req.user.userId;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const lockIds = [...new Set([Number(viewerId), ...normalized.map(source => source.friendId)])]
+      .sort((a, b) => a - b);
+    await conn.query('SELECT id FROM users WHERE id IN (?) ORDER BY id FOR UPDATE', [lockIds]);
+    const outcomes = [];
+    for (const source of normalized) {
+      const grant = await currentMemoryGrant(conn, source.friendId, viewerId, { requireSelected: true });
+      const authorized = Boolean(grant
+        && grant.grant_epoch === source.grantEpoch
+        && String(grant.friendship_episode_id) === source.friendshipEpisodeId
+        && Number(grant.authorization_version) === source.authorizationVersion
+        && grant.coverage_scope === source.coverageScope);
+      outcomes.push({
+        friend_id: String(source.friendId),
+        status: authorized ? 'authorized' : 'denied',
+        code: authorized ? 'PROOF_RENEWED' : 'AUTHORIZATION_CHANGED',
+        ...(authorized ? {
+          grant_epoch: grant.grant_epoch,
+          friendship_episode_id: String(grant.friendship_episode_id),
+          authorization_version: Number(grant.authorization_version),
+          coverage_scope: grant.coverage_scope,
+        } : {}),
+      });
+    }
+    await conn.commit();
+    const authorizedAt = new Date();
+    const expiresAt = new Date(authorizedAt.getTime() + 5 * 60 * 1000);
+    return res.json({
+      request_id: requestId,
+      complete: outcomes.length === normalized.length,
+      server_authorized_at: authorizedAt.toISOString(),
+      authorization_expires_at: expiresAt.toISOString(),
+      outcomes,
+    });
+  } catch (error) {
+    try { await conn.rollback(); } catch { /* noop */ }
+    console.error('[friend-sharing/coverage-proof-renewal]', error.message);
+    return res.status(500).json({ error: 'Server error', code: 'PROOF_RENEWAL_FAILED' });
   } finally {
     conn.release();
   }

@@ -737,6 +737,7 @@ export function RunningScreen() {
   const plannedRoutePoints = isActivitySessionVisible(operationalState) && activityRouteReference
     ? activityRouteReference.points
     : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
+  const [activityDockHeight, setActivityDockHeight] = useState(132);
   const runMapSurface = (
     <View key="run-map-surface" style={StyleSheet.absoluteFillObject}>
       <HikingMap
@@ -757,6 +758,7 @@ export function RunningScreen() {
         simulatorEnabled={simulatorLocationAuthoritative}
         simulatorControlsEnabled={showSimulator}
         simulatorCenterPickerVisible={showSimulator && (status === 'idle' || simulatorPickerMode !== null)}
+        ornamentBottomClearance={activityDockHeight + Spacing.sm}
       />
     </View>
   );
@@ -821,6 +823,7 @@ export function RunningScreen() {
             : undefined}
           starting={operationalState === 'starting'}
           startError={activityStartErrorMessage(startError)}
+          onHeightChange={setActivityDockHeight}
         />
 
         {/* Route picker sheet */}
@@ -1020,6 +1023,7 @@ export function RunningScreen() {
             haptic.impact('medium');
             openSaveSheet();
           }}
+          onHeightChange={setActivityDockHeight}
         />
       ) : null}
 

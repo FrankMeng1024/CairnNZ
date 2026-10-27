@@ -1,0 +1,248 @@
+{
+  "version": 8,
+  "name": "Cairn Night 2D",
+  "sources": {
+    "streets": {
+      "url": "mapbox://mapbox.mapbox-streets-v8",
+      "type": "vector"
+    },
+    "terrain": {
+      "url": "mapbox://mapbox.mapbox-terrain-v2",
+      "type": "vector"
+    }
+  },
+  "glyphs": "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#263440" }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "terrain",
+      "source-layer": "landcover",
+      "paint": {
+        "fill-color": [
+          "match", ["get", "class"],
+          "wood", "#31483F",
+          "scrub", "#384C43",
+          "grass", "#3E5046",
+          "crop", "#4A5147",
+          "snow", "#9BA6A5",
+          "#31413E"
+        ],
+        "fill-opacity": 0.82
+      }
+    },
+    {
+      "id": "national-park",
+      "type": "fill",
+      "source": "streets",
+      "source-layer": "landuse_overlay",
+      "filter": ["==", ["get", "class"], "national_park"],
+      "paint": { "fill-color": "#365044", "fill-opacity": 0.48 }
+    },
+    {
+      "id": "landuse",
+      "type": "fill",
+      "source": "streets",
+      "source-layer": "landuse",
+      "paint": {
+        "fill-color": [
+          "match", ["get", "class"],
+          "park", "#354A41",
+          "cemetery", "#34443F",
+          "hospital", "#4B4145",
+          "school", "#48483F",
+          "residential", "#2D3A45",
+          "#2B3944"
+        ],
+        "fill-opacity": 0.72
+      }
+    },
+    {
+      "id": "hillshade",
+      "type": "fill",
+      "source": "terrain",
+      "source-layer": "hillshade",
+      "paint": {
+        "fill-color": [
+          "match", ["get", "class"],
+          "shadow", "#14212C",
+          "highlight", "#6A756A",
+          "#263440"
+        ],
+        "fill-opacity": 0.20
+      }
+    },
+    {
+      "id": "contour-line",
+      "type": "line",
+      "source": "terrain",
+      "source-layer": "contour",
+      "minzoom": 11,
+      "paint": { "line-color": "#66746D", "line-opacity": 0.28, "line-width": 0.6 }
+    },
+    {
+      "id": "contour-line-major",
+      "type": "line",
+      "source": "terrain",
+      "source-layer": "contour",
+      "minzoom": 11,
+      "filter": ["==", ["to-string", ["get", "index"]], "5"],
+      "paint": { "line-color": "#879187", "line-opacity": 0.42, "line-width": 1.0 }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "streets",
+      "source-layer": "water",
+      "paint": { "fill-color": "#17364A", "fill-opacity": 0.98 }
+    },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "streets",
+      "source-layer": "waterway",
+      "minzoom": 10,
+      "paint": {
+        "line-color": "#31566B",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.5, 16, 2]
+      }
+    },
+    {
+      "id": "road-minor",
+      "type": "line",
+      "source": "streets",
+      "source-layer": "road",
+      "minzoom": 12,
+      "filter": [
+        "match", ["get", "class"],
+        ["street", "street_limited", "service", "track", "path", "pedestrian"],
+        true, false
+      ],
+      "paint": {
+        "line-color": "#68766F",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.5, 18, 3],
+        "line-opacity": 0.78
+      }
+    },
+    {
+      "id": "road-primary",
+      "type": "line",
+      "source": "streets",
+      "source-layer": "road",
+      "minzoom": 8,
+      "filter": [
+        "match", ["get", "class"],
+        ["primary", "secondary", "tertiary"],
+        true, false
+      ],
+      "paint": {
+        "line-color": "#958B73",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.6, 16, 4],
+        "line-opacity": 0.90
+      }
+    },
+    {
+      "id": "road-motorway",
+      "type": "line",
+      "source": "streets",
+      "source-layer": "road",
+      "minzoom": 6,
+      "filter": ["==", ["get", "class"], "motorway"],
+      "paint": {
+        "line-color": "#B9A36F",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.8, 16, 5],
+        "line-opacity": 0.94
+      }
+    },
+    {
+      "id": "admin-boundary",
+      "type": "line",
+      "source": "streets",
+      "source-layer": "admin",
+      "filter": [
+        "all",
+        ["<=", ["get", "admin_level"], 2],
+        ["!=", ["get", "maritime"], "true"]
+      ],
+      "paint": {
+        "line-color": "#75858C",
+        "line-width": ["match", ["get", "admin_level"], 1, 1.4, 2, 0.9, 0.9],
+        "line-dasharray": [2, 2],
+        "line-opacity": 0.78
+      }
+    },
+    {
+      "id": "road-label",
+      "type": "symbol",
+      "source": "streets",
+      "source-layer": "road",
+      "minzoom": 13,
+      "filter": [
+        "match", ["get", "class"],
+        ["motorway", "primary", "secondary", "tertiary", "street"],
+        true, false
+      ],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+        "text-size": 11,
+        "symbol-placement": "line"
+      },
+      "paint": { "text-color": "#C7D1CD", "text-halo-color": "#1A2631", "text-halo-width": 1.2 }
+    },
+    {
+      "id": "place-label-locality",
+      "type": "symbol",
+      "source": "streets",
+      "source-layer": "place_label",
+      "minzoom": 4,
+      "maxzoom": 16,
+      "filter": [
+        "match", ["get", "type"],
+        ["settlement", "settlement_subdivision"],
+        true, false
+      ],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 12, 14],
+        "text-max-width": 8
+      },
+      "paint": { "text-color": "#E2E8E5", "text-halo-color": "#1A2631", "text-halo-width": 1.4 }
+    },
+    {
+      "id": "natural-label",
+      "type": "symbol",
+      "source": "streets",
+      "source-layer": "natural_label",
+      "minzoom": 6,
+      "filter": ["==", ["get", "class"], "landform"],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Open Sans Italic", "Arial Unicode MS Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 6, 10, 14, 13],
+        "text-max-width": 7
+      },
+      "paint": { "text-color": "#BAC5C0", "text-halo-color": "#1A2631", "text-halo-width": 1.1 }
+    },
+    {
+      "id": "water-label",
+      "type": "symbol",
+      "source": "streets",
+      "source-layer": "natural_label",
+      "minzoom": 8,
+      "filter": ["==", ["get", "class"], "water"],
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Open Sans Italic", "Arial Unicode MS Regular"],
+        "text-size": 12
+      },
+      "paint": { "text-color": "#A9CAD8", "text-halo-color": "#10283A", "text-halo-width": 1.1 }
+    }
+  ]
+}
