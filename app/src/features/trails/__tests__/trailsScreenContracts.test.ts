@@ -64,11 +64,16 @@ describe('Trails personal journey library screen contracts', () => {
     expect(routeStore).toContain('routesLoading: true');
   });
 
-  test('Route Detail is use-first and enters a truthful preselected Hike/Run map flow', () => {
+  test('Route Detail keeps direct Hike/Run/Edit actions and enters a truthful preselected map flow', () => {
     expect(detail).toContain('route-use-action');
+    expect(detail).toContain('route-use-run-action');
+    expect(detail).toContain('route-share-action');
+    expect(detail).toContain('route-delete-action');
     expect(detail).toContain("nav.navigate(mode === 'running' ? 'Running' : 'Hiking', { routeId: ready.id })");
     expect(detail).not.toContain('title="Use this Route"');
     expect(detail.indexOf('route-use-action')).toBeLessThan(detail.indexOf("accessibilityLabel={cairnText('map-history-screen.edit-route')}") );
+    expect(detail).not.toContain('route-detail-header-more');
+    expect(detail).not.toContain('route-detail-more-menu');
     expect(read('src/screens/HikingScreen.tsx')).toContain("cairnText('hiking-screen.this-route-is-shown-on-the-map')");
     expect(read('src/screens/RunningScreen.tsx')).toContain("cairnText('running-screen.this-route-is-shown-on-the-map')");
     expect(read('src/screens/HikingMap.tsx')).toContain('id="planned-route-line"');

@@ -115,7 +115,6 @@ export function ContentStep({
             </View>
             <View style={styles.headerCopy}>
               <Text style={[styles.title, { color: theme.foreground }]}>{CAIRN_TERMS.leaveTitle}</Text>
-              <Text style={[styles.headerEyebrow, { color: theme.foregroundSecondary }]}>{cairnText('plant.content-step.mark-this-place')}</Text>
             </View>
             <View style={styles.headerBalance} accessibilityElementsHidden />
           </View>
@@ -231,7 +230,6 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     textAlign: 'center',
   },
-  headerEyebrow: { marginTop: 2, fontSize: 10, lineHeight: 13, fontWeight: '700', letterSpacing: 1.2 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: { paddingBottom: Spacing.lg },
   sub: {

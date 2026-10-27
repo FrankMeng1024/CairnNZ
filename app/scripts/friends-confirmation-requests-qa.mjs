@@ -4,17 +4,25 @@ import { chromium } from 'playwright';
 import sharp from 'sharp';
 
 const baseUrl = process.env.CAIRN_QA_URL || 'http://localhost:8081';
-const outputDir = path.resolve('..', 'docs', 'review', 'friends-confirmation-requests-ux', 'after');
-const boardPath = path.resolve('..', 'docs', 'review', 'friends-confirmation-requests-ux', 'friends-confirmation-requests-ux-board.jpg');
+const reviewDir = process.env.CAIRN_FRIENDS_REQUESTS_QA_DIR
+  ? path.resolve(process.env.CAIRN_FRIENDS_REQUESTS_QA_DIR)
+  : path.resolve('..', 'docs', 'review', 'friends-confirmation-requests-ux');
+const outputDir = path.join(reviewDir, 'after');
+const boardPath = path.join(reviewDir, 'friends-confirmation-requests-ux-board.jpg');
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(outputDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true, executablePath: chromePath });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+await page.addInitScript(() => {
+  localStorage.setItem('cairn_jwt', 'friends-confirmation-qa');
+  localStorage.setItem('cairn_onboarding_v1_done', 'true');
+  localStorage.setItem('cairn_onboarding_v1_done_friends-confirmation-qa', 'true');
+});
 const runtimeErrors = [];
 const assertions = { matrix: {}, transitions: {}, confirmation: {} };
 
-const friends = [
+let friends = [
   { id: 11, name: 'Mia Rangi', email: 'mia@example.com', added_at: '2026-08-20T08:00:00.000Z' },
   { id: 12, name: 'Theo Walker', email: 'theo@example.com', added_at: '2026-08-19T08:00:00.000Z' },
 ];
@@ -23,8 +31,8 @@ const receivedFixtures = [
   { id: 32, from_user_id: 32, from_name: 'Alexander Thompson', from_email: 'alexander.thompson@example.com', sent_at: '2026-09-02T08:00:00.000Z' },
 ];
 const sentFixtures = [
-  { id: 41, to_user_id: 41, to_name: 'Jamie Reed', to_email: 'jamie@example.com', sent_at: '2026-09-01T08:00:00.000Z' },
-  { id: 42, to_user_id: 42, to_name: 'Wiremu King', to_email: 'wiremu.king@example.com', sent_at: '2026-08-31T08:00:00.000Z' },
+  { id: 41, to_user_id: 41, to_name: 'Jamie Reed', to_email: 'jamie@example.com', sent_at: '2026-09-01T08:00:00.000Z', status: 'pending', requester_memory_share: false },
+  { id: 42, to_user_id: 42, to_name: 'Wiremu King', to_email: 'wiremu.king@example.com', sent_at: '2026-08-31T08:00:00.000Z', status: 'pending', requester_memory_share: true },
 ];
 let received = [];
 let sent = [];
@@ -43,13 +51,23 @@ const json = (route, body, status = 200) => route.fulfill({
 await page.route('**/api/**', async route => {
   const request = route.request();
   const pathname = new URL(request.url()).pathname;
+  if (pathname === '/api/auth/me') return json(route, { user: { id: 'friends-confirmation-qa', name: 'Aroha', email: 'qa@example.invalid' } });
   if (pathname === '/api/friends' && request.method() === 'GET') return json(route, friends);
   if (pathname === '/api/friends/requests' && request.method() === 'GET') return json(route, received);
   if (pathname === '/api/friends/requests/outbound' && request.method() === 'GET') return json(route, sent);
   if (pathname === '/api/friends/accept' && request.method() === 'POST') {
     const requestId = Number(JSON.parse(request.postData() || '{}').requestId);
+    const accepted = received.find(item => item.id === requestId);
+    if (accepted && !friends.some(friend => friend.id === accepted.from_user_id)) {
+      friends = [...friends, {
+        id: accepted.from_user_id,
+        name: accepted.from_name,
+        email: accepted.from_email,
+        added_at: new Date().toISOString(),
+      }];
+    }
     received = received.filter(item => item.id !== requestId);
-    return json(route, { message: 'Request accepted' });
+    return json(route, { message: 'Request accepted', friend_id: accepted?.from_user_id ?? null });
   }
   if (pathname === '/api/friends/reject' && request.method() === 'POST') {
     const requestId = Number(JSON.parse(request.postData() || '{}').requestId);
@@ -104,19 +122,16 @@ await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.useAppStore),
 await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120000 });
 await page.evaluate(() => {
   localStorage.setItem('cairn_onboarding_v1_done', 'true');
-  globalThis.__cairnStores.useAppStore.setState({
-    user: { id: 'friends-confirmation-qa', name: 'Aroha', email: 'qa@example.invalid' },
-    isLoggedIn: true,
-    hydrated: true,
-    sessionExpired: false,
-    logout: () => {},
-  });
+  const app = globalThis.__cairnStores.useAppStore.getState();
+  app.setUser({ id: 'friends-confirmation-qa', name: 'Aroha', email: 'qa@example.invalid' });
+  app.setLoggedIn(true);
   globalThis.__cairnStores.useSettingsStore.getState().saveAll({ appearance: 'day', debugMode: false });
 });
 await page.waitForFunction(() => globalThis.__cairnStores?.getCurrentRoute?.() === 'Home', null, { timeout: 30000 });
 
 setFixtures(receivedFixtures, sentFixtures);
 await mountFriends();
+await page.getByTestId('friend-card-11').waitFor({ state: 'visible', timeout: 30_000 });
 await page.getByTestId('friend-card-11').click();
 await page.getByTestId('friend-profile-modal').waitFor({ state: 'visible' });
 await shot('remove-friend-normal');
@@ -125,8 +140,8 @@ await shot('remove-friend-confirmation');
 const profileDialog = page.getByTestId('friend-profile-modal');
 assertions.confirmation.removeFriend = {
   dialogCount: await page.getByRole('dialog').count(),
-  warningVisible: await page.getByText(/Removing Mia will remove routes, cairns, and exploration/).isVisible(),
-  finalActionCount: await page.getByRole('button', { name: 'Remove Mia', exact: true }).count(),
+  warningVisible: await page.getByText('You’ll lose access to routes, cairns, and explored areas shared by this friend. Your own exploration won’t be affected.', { exact: true }).isVisible(),
+  finalActionCount: await page.getByTestId('friend-profile-remove-final').count(),
   cancelActionCount: await profileDialog.getByRole('button', { name: /^(Cancel|Keep|Never mind|Back)$/ }).count(),
 };
 await page.getByTestId('friend-profile-close').click();
@@ -174,6 +189,8 @@ setFixtures([receivedFixtures[0]], []);
 await mountFriends();
 await openRequests();
 await page.getByLabel('Accept friend request').click();
+await page.getByTestId('friend-card-31').waitFor({ state: 'visible', timeout: 30_000 });
+await openRequests();
 await page.getByText('No friend requests', { exact: true }).waitFor({ state: 'visible' });
 assertions.transitions.receivedOnlyAcceptFinal = await matrixState();
 

@@ -1080,6 +1080,7 @@ export function HikingScreen() {
   const routePolyline = activitySessionVisible && activityRouteReference
     ? activityRouteReference.points
     : (sharedRouteLease && selectedRoute === sharedRouteKey ? sharedRouteLease.points : (activeRoute?.points ?? []));
+  const [activityDockHeight, setActivityDockHeight] = useState(132);
   const hikeMapSurface = (
     <HikingMap
       key="hike-map-surface"
@@ -1103,6 +1104,7 @@ export function HikingScreen() {
       followUser={activitySessionVisible ? followUser : true}
       onUserGesture={activitySessionVisible ? () => setFollowUser(false) : undefined}
       recenterImperativeRef={activitySessionVisible ? recenterImperativeRef : undefined}
+      ornamentBottomClearance={activityDockHeight + Spacing.sm}
     />
   );
 
@@ -1198,6 +1200,7 @@ export function HikingScreen() {
           onOpenSettings={backgroundTrackingWarning ? () => { void Linking.openSettings(); } : undefined}
           starting={operationalState === 'starting'}
           startError={activityStartErrorMessage(startError)}
+          onHeightChange={setActivityDockHeight}
         />
 
         {/* Route picker sheet — non-fullscreen, slides up from bottom */}
@@ -1349,6 +1352,7 @@ export function HikingScreen() {
             });
           }}
           onFinish={() => { void handleFinishHike(); }}
+          onHeightChange={setActivityDockHeight}
         />
       ) : null}
 

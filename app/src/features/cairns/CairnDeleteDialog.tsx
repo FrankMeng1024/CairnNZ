@@ -54,6 +54,6 @@ export function CairnDeleteDialog({
 }
 
 const styles = StyleSheet.create({
-  actions: { flexDirection: 'row', gap: Spacing.md },
-  action: { flex: 1 },
+  actions: { gap: Spacing.md },
+  action: { alignSelf: 'stretch', minHeight: 50 },
 });

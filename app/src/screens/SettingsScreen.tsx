@@ -732,7 +732,6 @@ export function SettingsScreen() {
     { paddingBottom: Spacing.xxl + Spacing.xl + Spacing.md },
   ], []);
   const scrollIndicatorInsets = useMemo(() => ({ bottom: 0 }), []);
-
   const latestExport = visibleExports[0] ?? null;
   const exportExpired = latestExport?.expires_at
     ? new Date(latestExport.expires_at).getTime() <= Date.now()
@@ -754,7 +753,7 @@ export function SettingsScreen() {
   const renderRoot = () => (
     <>
       {renderHeader(cairnText('settings-screen.settings'))}
-      <ScrollView style={styles.pageScroll} testID="settings-root" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
+      <ScrollView key="settings-root-scroll" style={styles.pageScroll} testID="settings-root" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
         <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.account')}</SectionTitle>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row
@@ -898,7 +897,7 @@ export function SettingsScreen() {
   const renderAccount = () => (
     <>
       {renderHeader(cairnText('settings-screen.account'))}
-      <ScrollView style={styles.pageScroll} testID="settings-account" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
+      <ScrollView key="settings-account-scroll" style={styles.pageScroll} testID="settings-account" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={scrollContentStyle}>
         <Text style={[styles.intro, { color: theme.foreground, textShadowColor: theme.surfaceElevated }]}>{cairnText('settings-screen.your-identity-and-account-actions')}</Text>
         <ContentSurface style={[styles.surface, surfaceStyle]}>
           <Row icon="User" title={user?.name || cairnText('settings-screen.cairn-user')} detail={cairnText('settings-screen.name-a93fc9a')} />
@@ -1020,7 +1019,7 @@ export function SettingsScreen() {
   const renderPrivacy = () => (
     <>
       {renderHeader(cairnText('settings-screen.privacy-data'))}
-      <ScrollView style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
+      <ScrollView key="settings-privacy-scroll" style={styles.pageScroll} testID="settings-privacy" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -1072,7 +1071,7 @@ export function SettingsScreen() {
         </ContentSurface>
 
         <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.your-data')}</SectionTitle>
-        <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-export-card">
+        <ContentSurface style={[styles.surface, styles.dataActionSurface, surfaceStyle]} testID="settings-export-card">
           <View style={styles.cardHeading}>
             <Icon name="Download" size={IconSize.md} color={theme.icon} />
             <View style={styles.rowCopy}>
@@ -1080,13 +1079,16 @@ export function SettingsScreen() {
               <Text style={[styles.body, { color: theme.textSecondary }]}>{cairnText('settings-screen.request-a-json-copy-track-preparation-here')}</Text>
             </View>
           </View>
-          {renderExportState()}
-          {visibleExportError ? <Text accessibilityLiveRegion="polite" style={[styles.error, { color: theme.destructive }]}>{visibleExportError}</Text> : null}
-          {latestExport?.status !== 'queued' && latestExport?.status !== 'building' ? (
-            <PrimaryButton
-              label={latestExport?.status === 'failed' || exportExpired ? cairnText('settings-screen.request-fresh-export') : cairnText('settings-screen.request-export')}
-              loading={visibleExportRequesting}
-              onPress={() => void (async () => {
+          <View style={styles.cardBody}>
+            {renderExportState()}
+            {visibleExportError ? <Text accessibilityLiveRegion="polite" style={[styles.cardError, { color: theme.destructive }]}>{visibleExportError}</Text> : null}
+            {latestExport?.status !== 'queued' && latestExport?.status !== 'building' ? (
+              <PrimaryButton
+                label={latestExport?.status === 'failed' || exportExpired ? cairnText('settings-screen.request-fresh-export') : cairnText('settings-screen.request-export')}
+                variant="secondary"
+                renderIcon={(color) => <Icon name="Download" size={IconSize.sm} color={color} />}
+                loading={visibleExportRequesting}
+                onPress={() => void (async () => {
                 const ownerId = currentOwnerId();
                 if (exportFlight.current) return;
                 if (!settingsMounted.current
@@ -1118,10 +1120,11 @@ export function SettingsScreen() {
                     setExportRequesting(false);
                   }
                 }
-              })()}
-              testID="settings-export-request"
-            />
-          ) : null}
+                })()}
+                testID="settings-export-request"
+              />
+            ) : null}
+          </View>
         </ContentSurface>
 
         <ContentSurface style={[styles.surface, surfaceStyle]}>
@@ -1165,7 +1168,7 @@ export function SettingsScreen() {
   const renderHelp = () => (
     <>
       {renderHeader(cairnText('settings-screen.help-about'))}
-      <ScrollView style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle} keyboardShouldPersistTaps="handled">
+      <ScrollView key="settings-help-scroll" style={styles.pageScroll} testID="settings-help" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle} keyboardShouldPersistTaps="handled">
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="MessageSquare" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -1175,7 +1178,7 @@ export function SettingsScreen() {
         </ContentSurface>
 
         <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.feedback')}</SectionTitle>
-        <ContentSurface style={[styles.surface, surfaceStyle]} testID="settings-feedback-card">
+        <ContentSurface style={[styles.surface, styles.formSurface, surfaceStyle]} testID="settings-feedback-card">
           <SegmentedControl<FeedbackKind>
             value={feedbackKind}
             segments={FEEDBACK_SEGMENTS}
@@ -1306,7 +1309,7 @@ export function SettingsScreen() {
   const renderContentReview = () => (
     <>
       {renderHeader(cairnText('settings-screen.content-issue-appeal'))}
-      <ScrollView style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
+      <ScrollView key="settings-content-review-scroll" style={styles.pageScroll} testID="settings-content-review" showsVerticalScrollIndicator={false} scrollIndicatorInsets={scrollIndicatorInsets} contentContainerStyle={subpageScrollContentStyle}>
         <ContentSurface style={[styles.surface, styles.infoHero, surfaceStyle]}>
           <View style={[styles.heroIcon, { backgroundColor: theme.controlSelected }]}><Icon name="Shield" size={IconSize.md} color={theme.primary} /></View>
           <View style={styles.rowCopy}>
@@ -1375,6 +1378,9 @@ export function SettingsScreen() {
     <View style={[styles.root, { backgroundColor: background.settingsBackgroundColor }]}>
       <Image source={background.bgAsset} style={[styles.backgroundImage, backgroundLayout]} resizeMode="cover" />
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: background.settingsVeilColor }]} />
+      {page !== 'root' ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, styles.subpageReadabilityVeil, { backgroundColor: theme.background }]} />
+      ) : null}
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         {page === 'root'
           ? renderRoot()
@@ -1656,7 +1662,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xxl + Spacing.xl,
   },
-  subpageScroll: { paddingTop: Spacing.md },
+  subpageScroll: { paddingTop: Spacing.base },
+  subpageReadabilityVeil: { opacity: 0.54 },
   sectionTitle: {
     marginTop: Spacing.xl,
     marginBottom: Spacing.sm,
@@ -1712,6 +1719,10 @@ const styles = StyleSheet.create({
   passwordRuleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   passwordRuleText: { fontSize: FontSize.caption, fontWeight: '600' },
   cardHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, padding: Spacing.base, paddingBottom: Spacing.sm },
+  dataActionSurface: { marginBottom: Spacing.xs },
+  cardBody: { gap: Spacing.md, paddingHorizontal: Spacing.base, paddingBottom: Spacing.base },
+  cardError: { fontSize: FontSize.caption, lineHeight: 18, fontWeight: '600' },
+  formSurface: { padding: Spacing.base, gap: Spacing.base },
   infoHero: { padding: Spacing.lg, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
   heroIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: FontSize.h3, fontWeight: '700', lineHeight: 23 },
@@ -1724,7 +1735,7 @@ const styles = StyleSheet.create({
   inlineLoader: { position: 'absolute', right: Spacing.base, top: Spacing.xl },
   deleteResult: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, fontSize: FontSize.caption, lineHeight: 18, fontWeight: '600' },
   feedbackInput: { minHeight: 116, paddingTop: Spacing.md },
-  counter: { textAlign: 'right', fontSize: FontSize.small, marginTop: -Spacing.sm },
+  counter: { textAlign: 'right', fontSize: FontSize.small },
   deliveryStatus: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderRadius: Radius.button, padding: Spacing.md },
   modalActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.lg },
   flexButton: { flex: 1 },

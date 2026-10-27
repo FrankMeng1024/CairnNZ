@@ -478,7 +478,7 @@ export function PublicCairnDetailScreen() {
             <Text style={[styles.mapFallbackBody, { color: theme.foregroundSecondary }]}>{cairnText('public-cairn-detail-screen.the-cairn-text-remains-available')}</Text>
           </View>
         )}
-        <View style={styles.back}><BackButton variant="inline" /></View>
+        <View style={styles.back}><BackButton variant="mapInline" /></View>
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Text style={[styles.eyebrow, { color: theme.foregroundSecondary }]}>{cairnText('public-cairn-detail-screen.public-cairn-read-only')}</Text>

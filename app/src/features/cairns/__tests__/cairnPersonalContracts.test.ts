@@ -107,6 +107,15 @@ describe('Own Cairn Detail and personal All Cairns contracts', () => {
     expect(deletion).toContain('tombstoneMarker');
     expect(deletion).toContain("remoteState: 'queued'");
     expect(deletion).not.toMatch(/useSessionStore|useRouteStore|useMemoryStore|resetMemory/);
+    expect(deleteDialog).toContain("actions: { gap: Spacing.md }");
+    expect(deleteDialog).not.toContain("flexDirection: 'row'");
+  });
+
+  test('Cairn edit uses protected Back while the map detail uses map-readable Back', () => {
+    expect(detail).toContain('<BackButton variant="mapInline" />');
+    expect(detail).toContain('testID="cairn-edit-back"');
+    expect(detail).toContain('onPress={requestCloseEdit}');
+    expect(detail).not.toContain('onClose={requestCloseEdit}');
   });
 
   test('Detail map is optional, has legal ornaments, and never exposes raw coordinate copy', () => {

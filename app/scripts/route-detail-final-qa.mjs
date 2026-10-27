@@ -1,0 +1,570 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { chromium } from 'playwright';
+import sharp from 'sharp';
+
+const baseUrl = process.env.CAIRN_QA_URL || 'http://127.0.0.1:8098';
+const output = path.resolve(process.env.CAIRN_QA_ARTIFACT_DIR || '/tmp/cairn24-route-detail');
+const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+fs.mkdirSync(output, { recursive: true });
+
+const user = {
+  id: 'route-detail-final-qa',
+  name: 'Aroha',
+  email: 'route.detail.qa@example.invalid',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  dateOfBirth: '1990-01-01',
+  hasPassword: true,
+  providers: ['email'],
+};
+const points = [
+  { lng: 174.7638, lat: -36.8482, alt: 22 },
+  { lng: 174.7650, lat: -36.8480, alt: 38 },
+  { lng: 174.7661, lat: -36.8475, alt: 67 },
+  { lng: 174.7670, lat: -36.8469, alt: 82 },
+];
+const ownRoute = {
+  id: '9001',
+  remoteId: '9001',
+  name: 'Milford Foreshore Track',
+  createdAt: 1_760_000_000_000,
+  updatedAt: 1_760_000_000_000,
+  points,
+  originalPoints: points,
+  waypoints: [],
+  distanceM: 6400,
+  elevationGainM: 214,
+  runCount: 3,
+  isActive: false,
+  activityMode: 'hiking',
+  permission: 'personal',
+  resolutionState: 'continuous',
+  creationOrigin: 'planned',
+  originPersistence: 'pending',
+  syncState: 'synced',
+};
+const longOwnRoute = {
+  ...ownRoute,
+  id: '9002',
+  remoteId: '9002',
+  name: 'Milford Foreshore Track through the quiet beech forest and harbour edge',
+  distanceM: 42860,
+  elevationGainM: 3840,
+};
+const receivedRoute = {
+  ...ownRoute,
+  id: 'route-detail-received',
+  clientRouteId: undefined,
+  name: 'Te Ara shared harbour loop',
+  permission: 'friends',
+  sharedBy: 'Mia Rangi',
+  sharedDeliveryId: 'delivery-route-detail-received',
+  sharedContentHash: 'qa-hash',
+  originPersistence: 'durable',
+};
+
+const browser = await chromium.launch({
+  headless: true,
+  ...(fs.existsSync(chromePath) ? { executablePath: chromePath } : {}),
+  args: ['--disable-web-security'],
+});
+const context = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 1,
+  locale: 'en-NZ',
+  geolocation: { latitude: -36.8480, longitude: 174.7650, accuracy: 8 },
+  permissions: ['geolocation'],
+  reducedMotion: 'reduce',
+  timezoneId: 'Pacific/Auckland',
+});
+await context.addInitScript(() => {
+  const NativeDate = Date;
+  globalThis.__cairnQaNowMs = new NativeDate('2026-10-26T10:00:00+13:00').getTime();
+  class QaDate extends NativeDate {
+    constructor(...args) { super(...(args.length ? args : [globalThis.__cairnQaNowMs])); }
+    static now() { return globalThis.__cairnQaNowMs; }
+  }
+  globalThis.Date = QaDate;
+  localStorage.setItem('cairn_jwt', 'route-detail-final-qa');
+  localStorage.setItem('cairn_onboarding_v1_done', 'true');
+  localStorage.setItem('cairn_onboarding_v1_done_route-detail-final-qa', 'true');
+});
+const page = await context.newPage();
+const runtimeErrors = [];
+const captures = [];
+const assertions = {};
+const layoutEvidence = {};
+const mapNetwork = [];
+const routeMutationNetwork = [];
+let activeMapEvidence = null;
+
+page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
+page.on('console', message => {
+  if (message.type() === 'error' && !message.text().includes('Failed to load resource')) {
+    runtimeErrors.push(`console: ${message.text()}`);
+  }
+});
+page.on('response', response => {
+  const url = new URL(response.url());
+  if (url.pathname.includes('/api/routes/shared/')) {
+    routeMutationNetwork.push({ method: response.request().method(), path: url.pathname, status: response.status() });
+  }
+  if (!url.hostname.includes('mapbox.com')) return;
+  mapNetwork.push({ host: url.hostname, path: url.pathname, status: response.status() });
+});
+page.on('requestfailed', request => {
+  const url = new URL(request.url());
+  if (url.pathname.includes('/api/routes/shared/')) {
+    routeMutationNetwork.push({ method: request.method(), path: url.pathname, failed: request.failure()?.errorText ?? 'unknown' });
+  }
+  if (!url.hostname.includes('mapbox.com')) return;
+  mapNetwork.push({ host: url.hostname, path: url.pathname, failed: request.failure()?.errorText ?? 'unknown' });
+});
+page.on('dialog', dialog => dialog.dismiss());
+await page.route('**/api/**', async route => {
+  const request = route.request();
+  const url = new URL(request.url());
+  const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  if (url.pathname === '/api/auth/me') return json({ user });
+  if (url.pathname === '/api/friends') return json([{ id: 41, name: 'Mia Rangi', email: 'mia@example.invalid', added_at: new Date().toISOString() }]);
+  if (request.method() === 'DELETE') return json({ deleted: true, state: 'deleted' });
+  return json({ data: [], routes: [], markers: [], notifications: [], count: 0 });
+});
+
+const settle = (ms = 500) => page.waitForTimeout(ms);
+async function currentRoute(name) {
+  try {
+    await page.waitForFunction(
+      expected => globalThis.__cairnStores?.getCurrentRoute?.() === expected,
+      name,
+      { timeout: 20_000 },
+    );
+  } catch (error) {
+    // A failed behaviour gate must preserve enough state to distinguish an
+    // actual navigation/delete regression from an exhausted local QA runtime.
+    // This is diagnostic-only and deliberately does not relax the assertion.
+    const diagnostic = await page.evaluate(() => ({
+      expectedRoute: null,
+      helperRoute: globalThis.__cairnStores?.getCurrentRoute?.() ?? null,
+      navigationRoute: globalThis.__cairnStores?.navigationRef?.getCurrentRoute?.()?.name ?? null,
+      routeIds: globalThis.__cairnStores?.useRouteStore?.getState?.().routes?.map(route => route.id) ?? [],
+      actionError: document.querySelector('[data-testid="route-action-error"]')?.textContent ?? null,
+      confirmationVisible: Boolean(document.querySelector('[data-testid="route-delete-confirmation"]')),
+    }));
+    diagnostic.expectedRoute = name;
+    throw new Error(`Route gate timed out: ${JSON.stringify(diagnostic)}`, { cause: error });
+  }
+}
+async function setTheme(theme) {
+  await page.evaluate(nextTheme => {
+    const stores = globalThis.__cairnStores;
+    stores.useSettingsStore.getState().saveAll({ appearance: nextTheme, debugMode: false, mapLayer: 'outdoors' });
+    stores.useWeatherStore.getState().setConditionOverride('sunny');
+    stores.useWeatherStore.getState().setDayNightOverride(null);
+  }, theme);
+  await settle(300);
+}
+async function seedRoutes() {
+  await page.evaluate(({ own, longOwn, received, ownerId }) => {
+    const stores = globalThis.__cairnStores;
+    stores.useRouteStore.setState({
+      routes: [own, longOwn],
+      sharedRoutes: [received],
+      routeOwnerId: ownerId,
+      routesLoading: false,
+      routesLoadError: false,
+      routeDetailState: { [own.id]: 'ready', [longOwn.id]: 'ready' },
+    });
+    stores.useTrackingStore.setState({ status: 'idle', activityMode: null, sessionId: null });
+    stores.useFriendStore.setState({
+      friends: [{ id: '41', userId: '41', name: 'Mia Rangi', email: 'mia@example.invalid', addedAt: Date.now(), shareMarkers: true }],
+    });
+  }, { own: ownRoute, longOwn: longOwnRoute, received: receivedRoute, ownerId: user.id });
+}
+async function openDetail({ routeId, sharedDeliveryId, theme, timeContext, viewport }) {
+  await page.setViewportSize(viewport);
+  await page.evaluate(({ name, iso }) => {
+    globalThis.__cairnQaNowMs = new Date(iso).getTime();
+    globalThis.__cairnQaTimeContext = name;
+  }, timeContext);
+  await setTheme(theme);
+  await seedRoutes();
+  await page.evaluate(params => {
+    globalThis.__cairnStores.navigationRef.reset({
+      index: 1,
+      routes: [{ name: 'Home' }, { name: 'MapHistory', params }],
+    });
+  }, routeId ? { routeId } : { sharedDeliveryId });
+  await currentRoute('MapHistory');
+  await page.getByTestId('route-detail-panel').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+  await page.locator('.mapboxgl-map:visible canvas').last().waitFor({ state: 'visible', timeout: 30_000 });
+  await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.isStyleLoaded?.()), null, { timeout: 30_000 });
+  await page.waitForFunction(() => globalThis.__cairnMap?.areTilesLoaded?.() === true, null, { timeout: 30_000 });
+  await page.waitForFunction(() => {
+    try {
+      const map = globalThis.__cairnMap;
+      return (map?.queryRenderedFeatures?.() ?? []).some(feature => !String(feature.source ?? '').startsWith('route-detail-'));
+    } catch { return false; }
+  }, null, { timeout: 30_000 });
+  // Require panel and both genuine Mapbox legal controls to remain at the
+  // same geometry for five animation frames. This replaces the former fixed
+  // delay that captured the Route Detail fallback clearance on one QA path.
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('[data-testid="route-detail-panel"]')?.getBoundingClientRect();
+    const logo = [...document.querySelectorAll('.mapboxgl-ctrl-logo')].filter(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+    }).at(-1)?.getBoundingClientRect();
+    const attribution = [...document.querySelectorAll('.mapboxgl-ctrl-attrib')].filter(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+    }).at(-1)?.getBoundingClientRect();
+    if (!panel || !logo || !attribution) return false;
+    const signature = [panel.x, panel.y, panel.width, panel.height, logo.x, logo.y, logo.width, logo.height,
+      attribution.x, attribution.y, attribution.width, attribution.height].map(value => Math.round(value * 10) / 10).join('|');
+    const state = globalThis.__cairnRouteDetailLayoutStable ?? { signature: '', frames: 0 };
+    state.frames = state.signature === signature ? state.frames + 1 : 0;
+    state.signature = signature;
+    globalThis.__cairnRouteDetailLayoutStable = state;
+    return state.frames >= 5;
+  }, null, { timeout: 30_000, polling: 'raf' });
+  activeMapEvidence = await page.evaluate(() => {
+    const map = globalThis.__cairnMap;
+    let renderedBasemapFeatureCount = 0;
+    try {
+      renderedBasemapFeatureCount = (map?.queryRenderedFeatures?.() ?? [])
+        .filter(feature => !String(feature.source ?? '').startsWith('route-detail-')).length;
+    } catch { /* diagnostic only */ }
+    const canvas = document.querySelector('.mapboxgl-map canvas');
+    const rect = canvas?.getBoundingClientRect();
+    const style = canvas ? getComputedStyle(canvas) : null;
+    return {
+      loaded: Boolean(map?.loaded?.()),
+      styleLoaded: Boolean(map?.isStyleLoaded?.()),
+      tilesLoaded: Boolean(map?.areTilesLoaded?.()),
+      renderedBasemapFeatureCount,
+      canvas: rect ? { width: rect.width, height: rect.height, opacity: style?.opacity, display: style?.display, visibility: style?.visibility } : null,
+    };
+  });
+}
+async function shot(name) {
+  const file = path.join(output, `${name}.png`);
+  await page.screenshot({ path: file, fullPage: false });
+  const viewport = page.viewportSize();
+  captures.push({ name, file, viewport });
+  return file;
+}
+async function ornamentPixelsVisible(file, rect) {
+  if (!rect || rect.width < 4 || rect.height < 4) return false;
+  const metadata = await sharp(file).metadata();
+  const left = Math.max(0, Math.floor(rect.x));
+  const top = Math.max(0, Math.floor(rect.y));
+  const width = Math.max(1, Math.min((metadata.width ?? left + Math.ceil(rect.width)) - left, Math.ceil(rect.width)));
+  const height = Math.max(1, Math.min((metadata.height ?? top + Math.ceil(rect.height)) - top, Math.ceil(rect.height)));
+  const stats = await sharp(file).extract({ left, top, width, height }).stats();
+  return stats.entropy > 0.55 && stats.channels.slice(0, 3).some(channel => channel.stdev > 12);
+}
+async function box(testId) {
+  return page.getByTestId(testId).boundingBox();
+}
+async function assertOwnLayout(label, screenshotFile) {
+  const panel = await box('route-detail-panel');
+  const share = await box('route-share-action');
+  const hike = await box('route-use-action');
+  const run = await box('route-use-run-action');
+  const edit = await page.getByLabel('Edit route').boundingBox();
+  const destructive = await box('route-delete-action');
+  const canvas = await page.locator('.mapboxgl-map:visible canvas').last().boundingBox();
+  const logo = await page.locator('.mapboxgl-ctrl-logo:visible').last().boundingBox();
+  const attribution = await page.locator('.mapboxgl-ctrl-attrib:visible').last().boundingBox();
+  const ellipsisCount = await page.getByTestId('route-detail-header-more').count();
+  const title = await page.getByLabel('Rename route').boundingBox();
+  const width = page.viewportSize()?.width ?? 0;
+  const height = page.viewportSize()?.height ?? 0;
+  const hitEvidence = await page.evaluate(() => {
+    const inspect = selector => {
+      const element = [...document.querySelectorAll(selector)].filter(candidate => {
+        const rect = candidate.getBoundingClientRect();
+        const style = getComputedStyle(candidate);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+      }).at(-1);
+      if (!element) return { visible: false, unobscured: false };
+      const rect = element.getBoundingClientRect();
+      const points = [[0.2, 0.2], [0.5, 0.5], [0.8, 0.8]];
+      const unobscured = points.every(([px, py]) => {
+        const stack = document.elementsFromPoint(rect.x + rect.width * px, rect.y + rect.height * py);
+        const covering = stack.find(item => item === element || element.contains(item) || item.contains(element));
+        const coverIndex = covering ? stack.indexOf(covering) : -1;
+        return coverIndex >= 0
+          && !stack.slice(0, coverIndex).some(item => item.closest?.('[data-testid="route-detail-panel"]'));
+      });
+      return { visible: true, unobscured };
+    };
+    return { logo: inspect('.mapboxgl-ctrl-logo'), attribution: inspect('.mapboxgl-ctrl-attrib') };
+  });
+  const logoPixelsVisible = await ornamentPixelsVisible(screenshotFile, logo);
+  const attributionPixelsVisible = await ornamentPixelsVisible(screenshotFile, attribution);
+  const legalControlGap = panel && logo && attribution
+    ? Math.min(panel.y - (logo.y + logo.height), panel.y - (attribution.y + attribution.height))
+    : null;
+  layoutEvidence[label] = { panel, logo, attribution, legalControlGap };
+  assertions[label] = {
+    realMapboxCanvas: Boolean(canvas && canvas.width > 0 && canvas.height > 0),
+    styleLoaded: activeMapEvidence?.styleLoaded === true,
+    tilesLoaded: activeMapEvidence?.tilesLoaded === true,
+    realBasemapFeaturesRendered: (activeMapEvidence?.renderedBasemapFeatureCount ?? 0) > 0,
+    noHeaderEllipsis: ellipsisCount === 0,
+    shareTransparentHitArea: Boolean(share && share.width >= 44 && share.height >= 44),
+    shareBesideTitle: Boolean(share && title && share.x >= title.x + title.width && share.y < title.y + title.height + 4),
+    threeActionsVisible: Boolean(hike && run && edit),
+    threeActionsAligned: Boolean(hike && run && edit && Math.abs(hike.y - run.y) < 1 && Math.abs(run.y - edit.y) < 1 && Math.abs(hike.height - run.height) < 1 && Math.abs(run.height - edit.height) < 1),
+    actionsMin44: Boolean(hike && run && edit && hike.height >= 44 && run.height >= 44 && edit.height >= 44),
+    destructiveBelowActions: Boolean(destructive && hike && destructive.y >= hike.y + hike.height),
+    noHorizontalClipping: Boolean(panel && panel.x >= 0 && panel.x + panel.width <= width + 0.5 && share && share.x + share.width <= width),
+    legalControlsFullyInViewport: Boolean(logo && attribution && logo.x >= 0 && logo.y >= 0
+      && attribution.x >= 0 && attribution.y >= 0
+      && logo.x + logo.width <= width && attribution.x + attribution.width <= width
+      && logo.y + logo.height <= height && attribution.y + attribution.height <= height),
+    legalControlsAbovePanel: Boolean(panel && logo && attribution && logo.y + logo.height + 8 <= panel.y && attribution.y + attribution.height + 8 <= panel.y),
+    legalControlGapInStableBand: Boolean(legalControlGap != null && legalControlGap >= 8 && legalControlGap <= 24),
+    legalControlsNotOccluded: hitEvidence.logo.unobscured && hitEvidence.attribution.unobscured,
+    legalControlPixelsVisible: logoPixelsVisible && attributionPixelsVisible,
+    logoAtLeft: Boolean(logo && logo.x + logo.width <= width / 2),
+    attributionAtRight: Boolean(attribution && attribution.x >= width / 2),
+  };
+}
+
+await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.useAppStore), null, { timeout: 120_000 });
+await page.waitForFunction(() => globalThis.__cairnStores.useAppStore.getState().hydrated === true, null, { timeout: 120_000 });
+await page.evaluate(nextUser => {
+  localStorage.setItem('cairn_jwt', 'route-detail-final-qa');
+  localStorage.setItem('cairn_onboarding_v1_done', 'true');
+  localStorage.setItem(`cairn_onboarding_v1_done_${nextUser.id}`, 'true');
+  globalThis.__cairnStores.useAppStore.setState({ user: nextUser, isLoggedIn: true, hydrated: true, sessionExpired: false });
+}, user);
+await page.waitForFunction(() => Boolean(globalThis.__cairnStores?.navigationRef?.reset), null, { timeout: 30_000 });
+
+const daytime = { name: 'daytime', iso: '2026-10-26T10:00:00+13:00' };
+const nighttime = { name: 'nighttime', iso: '2026-10-26T21:00:00+13:00' };
+for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
+  for (const theme of ['day', 'sunset', 'night']) {
+    await openDetail({ routeId: ownRoute.id, theme, timeContext: daytime, viewport });
+    const name = `route-detail-${theme}-daytime-${viewport.width}x${viewport.height}-own`;
+    const file = await shot(name);
+    await assertOwnLayout(`own-${theme}-${viewport.width}`, file);
+  }
+}
+
+for (const theme of ['day', 'sunset', 'night']) {
+  await openDetail({ routeId: ownRoute.id, theme, timeContext: nighttime, viewport: { width: 390, height: 844 } });
+  const name = `route-detail-${theme}-nighttime-390x844-own`;
+  const file = await shot(name);
+  await assertOwnLayout(`own-${theme}-nighttime-390`, file);
+}
+
+await openDetail({ routeId: longOwnRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 320, height: 568 } });
+const longDayFile = await shot('route-detail-day-daytime-320x568-long-name');
+await assertOwnLayout('long-day-320', longDayFile);
+
+await openDetail({ routeId: longOwnRoute.id, theme: 'night', timeContext: nighttime, viewport: { width: 430, height: 932 } });
+const longNightFile = await shot('route-detail-night-nighttime-430x932-long-name');
+await assertOwnLayout('long-night-430', longNightFile);
+
+// Re-entry is a separate path: unmount the detail, then require the same
+// stable/visible legal-control contract when returning to it.
+await page.evaluate(() => globalThis.__cairnStores.navigationRef.reset({ index: 0, routes: [{ name: 'Home' }] }));
+await currentRoute('Home');
+await openDetail({ routeId: ownRoute.id, theme: 'sunset', timeContext: daytime, viewport: { width: 390, height: 844 } });
+const reentryFile = await shot('route-detail-sunset-daytime-390x844-reentry');
+await assertOwnLayout('own-sunset-390-reentry', reentryFile);
+
+// Exercise the user-facing Trails row rather than navigating directly. The
+// resulting Route Detail must converge on the same measured ornament band at
+// compact, standard and large widths without a special navigation fixture.
+for (const trailsCase of [
+  { theme: 'day', viewport: { width: 320, height: 568 } },
+  { theme: 'sunset', viewport: { width: 390, height: 844 } },
+  { theme: 'night', viewport: { width: 430, height: 932 } },
+]) {
+  await page.setViewportSize(trailsCase.viewport);
+  await setTheme(trailsCase.theme);
+  await seedRoutes();
+  await page.evaluate(() => globalThis.__cairnStores.navigationRef.reset({
+    index: 1,
+    routes: [{ name: 'Home' }, { name: 'Routes', params: { initialTab: 'routes' } }],
+  }));
+  await currentRoute('Routes');
+  await settle(800);
+  await seedRoutes();
+  await page.getByTestId(`route-record-${ownRoute.id}`).waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId(`route-record-${ownRoute.id}`).click();
+  await currentRoute('MapHistory');
+  await page.getByTestId('route-detail-panel').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('history-map-load-overlay').waitFor({ state: 'hidden', timeout: 30_000 });
+  await page.waitForFunction(() => globalThis.__cairnMap?.isStyleLoaded?.() === true
+    && globalThis.__cairnMap?.areTilesLoaded?.() === true
+    && (globalThis.__cairnMap?.queryRenderedFeatures?.() ?? []).some(feature => !String(feature.source ?? '').startsWith('route-detail-')),
+  null, { timeout: 30_000 });
+  await page.evaluate(() => { delete globalThis.__cairnTrailsRouteStable; });
+  await page.waitForFunction(() => {
+    const visible = selector => [...document.querySelectorAll(selector)].filter(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }).at(-1)?.getBoundingClientRect();
+    const panel = visible('[data-testid="route-detail-panel"]');
+    const logo = visible('.mapboxgl-ctrl-logo');
+    const attribution = visible('.mapboxgl-ctrl-attrib');
+    if (!panel || !logo || !attribution) return false;
+    const signature = [panel.y, panel.height, logo.y, attribution.y].map(value => Math.round(value * 10) / 10).join('|');
+    const state = globalThis.__cairnTrailsRouteStable ?? { signature: '', frames: 0 };
+    state.frames = state.signature === signature ? state.frames + 1 : 0;
+    state.signature = signature;
+    globalThis.__cairnTrailsRouteStable = state;
+    return state.frames >= 5;
+  }, null, { timeout: 30_000, polling: 'raf' });
+  activeMapEvidence = await page.evaluate(() => {
+    const map = globalThis.__cairnMap;
+    return {
+      styleLoaded: map?.isStyleLoaded?.() === true,
+      tilesLoaded: map?.areTilesLoaded?.() === true,
+      renderedBasemapFeatureCount: (map?.queryRenderedFeatures?.() ?? [])
+        .filter(feature => !String(feature.source ?? '').startsWith('route-detail-')).length,
+    };
+  });
+  const trailsName = `route-detail-${trailsCase.theme}-daytime-${trailsCase.viewport.width}x${trailsCase.viewport.height}-trails-entry`;
+  const trailsEntryFile = await shot(trailsName);
+  await assertOwnLayout(`own-${trailsCase.theme}-${trailsCase.viewport.width}-trails-entry`, trailsEntryFile);
+}
+
+await openDetail({ sharedDeliveryId: receivedRoute.sharedDeliveryId, theme: 'sunset', timeContext: daytime, viewport: { width: 390, height: 844 } });
+assertions.receivedPermissions = {
+  shareAbsent: await page.getByTestId('route-share-action').count() === 0,
+  removeVisible: await page.getByText('Remove', { exact: true }).isVisible(),
+  editVisible: await page.getByLabel('Edit route').isVisible(),
+  hikeVisible: await page.getByTestId('route-use-action').isVisible(),
+  runVisible: await page.getByTestId('route-use-run-action').isVisible(),
+};
+await shot('route-detail-sunset-daytime-390x844-received');
+await page.getByTestId('route-delete-action').click();
+await page.getByTestId('route-delete-confirmation').waitFor({ state: 'visible' });
+await settle(400);
+await shot('route-detail-sunset-daytime-390x844-received-remove-confirmation');
+await page.getByText('Keep Route', { exact: true }).click();
+
+await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
+await page.getByTestId('route-share-action').click();
+await page.getByTestId('route-share-friend-picker').waitFor({ state: 'visible' });
+await settle(400);
+assertions.shareFlow = { pickerVisible: true, originalFriendVisible: await page.getByText('Mia Rangi', { exact: true }).isVisible() };
+await shot('route-detail-day-daytime-390x844-share-picker');
+await page.getByText('Done', { exact: true }).click();
+await page.getByTestId('route-delete-action').click();
+await page.getByTestId('route-delete-confirmation').waitFor({ state: 'visible' });
+await settle(400);
+await shot('route-detail-day-daytime-390x844-delete-confirmation');
+await page.getByText('Keep Route', { exact: true }).click();
+
+async function assertNavigation(testId, expectedRoute, expectedParam) {
+  await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
+  await page.getByTestId(testId).click();
+  await currentRoute(expectedRoute);
+  return page.evaluate(({ routeName, param }) => {
+    const current = globalThis.__cairnStores.navigationRef.getCurrentRoute?.();
+    return {
+      route: current?.name,
+      routeId: current?.params?.routeId,
+      paramPreserved: current?.params?.routeId === param,
+      routeReferenceId: globalThis.__cairnStores.useRouteStore.getState().activityRouteReference?.routeId ?? null,
+      expectedRoute: routeName,
+    };
+  }, { routeName: expectedRoute, param: expectedParam });
+}
+assertions.hikeNavigation = await assertNavigation('route-use-action', 'Hiking', ownRoute.id);
+assertions.runNavigation = await assertNavigation('route-use-run-action', 'Running', ownRoute.id);
+assertions.editNavigation = await assertNavigation('route-edit-action', 'RouteEditor', ownRoute.id);
+
+await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
+await page.getByRole('button', { name: 'Back', exact: true }).click();
+await currentRoute('Home');
+assertions.backNavigation = { returnedHome: true };
+
+await openDetail({ routeId: ownRoute.id, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
+await page.getByTestId('route-delete-action').click();
+await page.getByTestId('route-delete-confirm').click();
+await currentRoute('Home');
+assertions.deleteBehavior = await page.evaluate(id => ({ removed: !globalThis.__cairnStores.useRouteStore.getState().routes.some(route => route.id === id) }), ownRoute.id);
+
+await openDetail({ sharedDeliveryId: receivedRoute.sharedDeliveryId, theme: 'day', timeContext: daytime, viewport: { width: 390, height: 844 } });
+await page.getByTestId('route-delete-action').click();
+await page.getByTestId('route-delete-confirm').click();
+await page.getByTestId('route-delete-confirmation').waitFor({ state: 'hidden', timeout: 20_000 });
+await settle(500);
+assertions.removeBehavior = await page.evaluate(deliveryId => {
+  const current = globalThis.__cairnStores.navigationRef.getCurrentRoute?.();
+  return {
+    removed: !globalThis.__cairnStores.useRouteStore.getState().sharedRoutes.some(route => route.sharedDeliveryId === deliveryId),
+    returnedHome: current?.name === 'Home',
+    currentRoute: current?.name ?? null,
+    currentUserId: globalThis.__cairnStores.useAppStore.getState().user?.id ?? null,
+    routeActionError: document.querySelector('[data-testid="route-action-error"]')?.textContent ?? null,
+  };
+}, receivedRoute.sharedDeliveryId);
+
+const boardNames = [
+  'route-detail-day-daytime-320x568-own', 'route-detail-sunset-daytime-390x844-own', 'route-detail-night-nighttime-430x932-own',
+  'route-detail-day-daytime-320x568-long-name', 'route-detail-night-nighttime-430x932-long-name', 'route-detail-sunset-daytime-390x844-received',
+  'route-detail-sunset-daytime-390x844-reentry', 'route-detail-day-daytime-390x844-delete-confirmation', 'route-detail-sunset-daytime-390x844-received-remove-confirmation',
+];
+const thumbWidth = 320;
+const labelHeight = 38;
+const gap = 18;
+const columns = 3;
+const rows = Math.ceil(boardNames.length / columns);
+const maxThumbHeight = 694;
+const composites = [];
+for (let index = 0; index < boardNames.length; index += 1) {
+  const name = boardNames[index];
+  const item = captures.find(capture => capture.name === name);
+  if (!item) continue;
+  const col = index % columns;
+  const row = Math.floor(index / columns);
+  const left = gap + col * (thumbWidth + gap);
+  const top = gap + row * (labelHeight + maxThumbHeight + gap);
+  const image = await sharp(item.file).resize({ width: thumbWidth, height: maxThumbHeight, fit: 'contain', background: '#101715' }).toBuffer();
+  const label = `<svg width="${thumbWidth}" height="${labelHeight}"><rect width="100%" height="100%" fill="#22312C"/><text x="${thumbWidth / 2}" y="25" text-anchor="middle" font-family="Arial" font-size="13" font-weight="700" fill="#F5F3EC">${name}</text></svg>`;
+  composites.push({ input: Buffer.from(label), left, top });
+  composites.push({ input: image, left, top: top + labelHeight });
+}
+await sharp({ create: { width: gap + columns * (thumbWidth + gap), height: gap + rows * (labelHeight + maxThumbHeight + gap), channels: 3, background: '#101715' } })
+  .composite(composites)
+  .jpeg({ quality: 91 })
+  .toFile(path.join(output, 'route-detail-final-board.jpg'));
+
+await browser.close();
+const allChecks = Object.values(assertions).flatMap(group => Object.values(group));
+const booleanChecksPass = allChecks.filter(value => typeof value === 'boolean').every(Boolean);
+const navigationChecksPass = [
+  ['hikeNavigation', 'Hiking'],
+  ['runNavigation', 'Running'],
+  ['editNavigation', 'RouteEditor'],
+].every(([key, expectedRoute]) => assertions[key]?.route === expectedRoute && assertions[key]?.paramPreserved === true);
+const result = {
+  generatedAt: new Date().toISOString(),
+  sourceBoundary: 'Actual Expo Web components with real Mapbox GL style/tile rendering and synthetic local QA Route data; not native iOS evidence',
+  captures,
+  assertions,
+  layoutEvidence,
+  mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()],
+  routeMutationNetwork,
+  runtimeErrors: [...new Set(runtimeErrors)],
+  pass: booleanChecksPass && navigationChecksPass && runtimeErrors.length === 0,
+};
+fs.writeFileSync(path.join(output, 'results.json'), `${JSON.stringify(result, null, 2)}\n`);
+console.log(JSON.stringify({ output, captureCount: captures.length, pass: result.pass, runtimeErrors: result.runtimeErrors }, null, 2));
+if (!result.pass) process.exitCode = 1;

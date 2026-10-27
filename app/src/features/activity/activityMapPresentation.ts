@@ -1,4 +1,5 @@
 import type { MapTheme } from '../../config/mapbox';
+import { mapOrnamentsAbove } from '../../config/mapOrnaments';
 
 export interface ActivityMapPresentation {
   routeColor: string;
@@ -30,13 +31,13 @@ const PALETTES: Record<MapTheme, Record<'hike' | 'run', ActivityMapPresentation>
   },
   sunset: {
     hike: {
-      routeColor: '#315B4B', routeCasingColor: '#F5E4D3',
+      routeColor: '#27634D', routeCasingColor: '#FFF2E3',
       routeWidth: 5.2, routeCasingWidth: 9.4, routeCasingOpacity: 0.94,
       emissiveStrength: 0.72,
       puckHaloColor: '#B9663D', puckRingColor: '#FFF2E5', puckCoreColor: '#A95032',
     },
     run: {
-      routeColor: '#315F7C', routeCasingColor: '#F5E4D3',
+      routeColor: '#2E668A', routeCasingColor: '#FFF2E3',
       routeWidth: 5.2, routeCasingWidth: 9.4, routeCasingOpacity: 0.94,
       emissiveStrength: 0.72,
       puckHaloColor: '#B9663D', puckRingColor: '#FFF2E5', puckCoreColor: '#A95032',
@@ -44,13 +45,13 @@ const PALETTES: Record<MapTheme, Record<'hike' | 'run', ActivityMapPresentation>
   },
   night: {
     hike: {
-      routeColor: '#B8D2A2', routeCasingColor: '#0B131E',
+      routeColor: '#C8DDB0', routeCasingColor: '#162432',
       routeWidth: 5.4, routeCasingWidth: 9.8, routeCasingOpacity: 0.96,
       emissiveStrength: 1,
       puckHaloColor: '#E09B62', puckRingColor: '#F1F3F0', puckCoreColor: '#C86F3D',
     },
     run: {
-      routeColor: '#86BCE4', routeCasingColor: '#0B131E',
+      routeColor: '#95C6E8', routeCasingColor: '#162432',
       routeWidth: 5.4, routeCasingWidth: 9.8, routeCasingOpacity: 0.96,
       emissiveStrength: 1,
       puckHaloColor: '#E09B62', puckRingColor: '#F1F3F0', puckCoreColor: '#C86F3D',
@@ -65,8 +66,7 @@ export function activityMapPresentation(
   return PALETTES[theme][activity];
 }
 
-/** Keep legal ornaments visible and together above the recording dock. */
-export const ACTIVITY_MAP_ORNAMENTS = {
-  logoPosition: { bottom: 132, left: 8 },
-  attributionPosition: { bottom: 132, left: 96 },
-} as const;
+/** Keep the split legal controls above the Activity dock's measured height. */
+export function activityMapOrnamentsAbove(bottomClearance: number) {
+  return mapOrnamentsAbove(bottomClearance);
+}

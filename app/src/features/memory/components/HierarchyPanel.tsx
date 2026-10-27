@@ -39,6 +39,7 @@ import {
   ActivityIndicator,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  useWindowDimensions,
 } from 'react-native';
 import { Colors, Radius, FontSize } from '../../../components/tokens';
 import { MemoryColors } from '../config/memoryConfig';
@@ -78,6 +79,11 @@ export function HierarchyPanel({
   friendRegionSources = {},
 }: Props) {
   const theme = useVisualTheme();
+  const { height: viewportHeight } = useWindowDimensions();
+  // Reserve the top chrome/safe area on compact devices while retaining the
+  // established 260pt list on normal iPhones. This changes only presentation;
+  // hierarchy data, ownership and city-camera behavior remain untouched.
+  const listMaxHeight = Math.max(150, Math.min(LIST_MAX_HEIGHT, viewportHeight - 340));
   const [data, setData] = useState<PanelData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,10 +122,10 @@ export function HierarchyPanel({
   }, []);
 
   const onContentSizeChange = useCallback((_w: number, h: number) => {
-    const scrollable = h > LIST_MAX_HEIGHT - 1;
+    const scrollable = h > listMaxHeight - 1;
     setIsScrollable(scrollable);
     setShowScrollHint(scrollable);
-  }, []);
+  }, [listMaxHeight]);
 
   // Sort items: is_here first (green), then marked (desc), then walked (alpha)
   const visibleLevel = data?.title.id === 'world' ? 2 : 3;
@@ -173,7 +179,7 @@ export function HierarchyPanel({
   return (
     <>
       <Pressable style={styles.backdrop} onPress={onClose} testID="hierarchy-backdrop" />
-      <Animated.View style={[styles.panel, { backgroundColor: theme.surfaceElevated, shadowColor: theme.shadow }]} pointerEvents="box-none" testID="hierarchy-panel">
+      <Animated.View style={[styles.panel, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, shadowColor: theme.shadow }]} pointerEvents="box-none" testID="hierarchy-panel">
         {/* Header: title + ↑ button (hidden at world) */}
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <Text
@@ -187,13 +193,13 @@ export function HierarchyPanel({
           </Text>
           {data?.parent ? (
             <TouchableOpacity
-              style={[styles.upBtn, { backgroundColor: theme.surface }]}
+              style={[styles.upBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
               onPress={onGoUp}
               activeOpacity={0.7}
               accessibilityLabel={cairnText('memory.hierarchy-panel.go-up')}
               testID="hierarchy-up-btn"
             >
-              <Icon name="ArrowUp" size={16} color={Colors.primary} strokeWidth={2.5} />
+              <Icon name="ArrowUp" size={16} color={theme.iconActive} strokeWidth={2.5} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -201,21 +207,22 @@ export function HierarchyPanel({
         {/* Body */}
         {loading && !data ? (
           <View style={styles.loading}>
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={theme.primary} />
           </View>
         ) : error && !data ? (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={[styles.errorText, { color: theme.destructive }]}>{error}</Text>
           </View>
         ) : data ? (
           <View style={[styles.listContainer, loading && styles.stale]}>
             {showEmptyBanner ? (
-              <View style={styles.emptyBanner} testID="hierarchy-empty-banner">
-                <Text style={styles.emptyBannerText}>{cairnText('memory.hierarchy-panel.head-out-and-start-walking-to-unlock')}</Text>
+              <View style={[styles.emptyBanner, { backgroundColor: theme.surface, borderBottomColor: theme.border }]} testID="hierarchy-empty-banner">
+                <Text style={[styles.emptyBannerText, { color: theme.foregroundSecondary }]}>{cairnText('memory.hierarchy-panel.head-out-and-start-walking-to-unlock')}</Text>
               </View>
             ) : null}
             <ScrollView
-              style={styles.list}
+              style={[styles.list, { maxHeight: listMaxHeight }]}
+              testID="hierarchy-list"
               contentContainerStyle={styles.listContent}
               onScroll={onScroll}
               scrollEventThrottle={16}
@@ -249,16 +256,15 @@ export function HierarchyPanel({
                     <View
                       style={[
                         styles.dot,
-                        isHere ? styles.dotHere
+                        isHere ? [styles.dotHere, { backgroundColor: theme.primary }]
                           : item.state === 'marked' ? styles.dotMarked
                           : styles.dotWalked,
                       ]}
                     />
                     <Text
+                      testID={`hierarchy-row-name-${item.id}`}
                       style={[styles.rowName, { color: theme.foreground }, isHere && [styles.rowNameHere, { color: theme.primary }]]}
-                      numberOfLines={2}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.75}
+                      numberOfLines={3}
                     >
                       {item.name_en}
                     </Text>
@@ -283,8 +289,12 @@ export function HierarchyPanel({
               })}
             </ScrollView>
             {isScrollable && showScrollHint ? (
-              <View style={styles.scrollHint} pointerEvents="none">
-                <Text style={styles.scrollHintText}>{cairnText('memory.hierarchy-panel.more')}</Text>
+              <View
+                style={[styles.scrollHint, { backgroundColor: theme.surfaceElevated, borderTopColor: theme.border }]}
+                pointerEvents="none"
+                testID="hierarchy-scroll-hint"
+              >
+                <Text style={[styles.scrollHintText, { color: theme.muted }]}>{cairnText('memory.hierarchy-panel.more')}</Text>
               </View>
             ) : null}
           </View>
@@ -292,22 +302,22 @@ export function HierarchyPanel({
 
         {/* Locked summary row */}
         {data && !error && lockedCount > 0 && !showEmptyBanner ? (
-          <View style={styles.lockedSummary} testID="hierarchy-locked-summary">
+          <View style={[styles.lockedSummary, { backgroundColor: theme.surface, borderTopColor: theme.border }]} testID="hierarchy-locked-summary">
             <View style={[styles.dot, styles.dotLocked]} />
-            <Text style={styles.lockedSummaryText}>{cairnText('memory.hierarchy-panel.value-more-locked', { lockedCount: lockedCount })}</Text>
+            <Text style={[styles.lockedSummaryText, { color: theme.muted }]}>{cairnText('memory.hierarchy-panel.value-more-locked', { lockedCount: lockedCount })}</Text>
           </View>
         ) : null}
 
         {/* Legend: Marked / Walked */}
         {data && !error && !showEmptyBanner ? (
-          <View style={styles.legend} testID="hierarchy-legend">
+          <View style={[styles.legend, { backgroundColor: theme.surface, borderTopColor: theme.border }]} testID="hierarchy-legend">
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, styles.dotMarked]} />
-              <Text style={styles.legendText}>{cairnText('memory.hierarchy-panel.marked')}</Text>
+              <Text style={[styles.legendText, { color: theme.foregroundSecondary }]}>{cairnText('memory.hierarchy-panel.marked')}</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, styles.dotWalked]} />
-              <Text style={styles.legendText}>{cairnText('memory.hierarchy-panel.walked')}</Text>
+              <Text style={[styles.legendText, { color: theme.foregroundSecondary }]}>{cairnText('memory.hierarchy-panel.walked')}</Text>
             </View>
           </View>
         ) : null}
@@ -337,6 +347,7 @@ const styles = StyleSheet.create({
     elevation: 12,
     zIndex: 20,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   header: {
     flexDirection: 'row',
@@ -360,6 +371,7 @@ const styles = StyleSheet.create({
     width: 28, height: 28, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#f5efe4',
+    borderWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
   },
   loading: { padding: 24, alignItems: 'center' },
@@ -367,7 +379,10 @@ const styles = StyleSheet.create({
   errorText: { fontSize: FontSize.small, color: '#a89a82', textAlign: 'center' },
   listContainer: { position: 'relative' },
   list: { maxHeight: LIST_MAX_HEIGHT },
-  listContent: { paddingVertical: 4 },
+  // The final row must be able to scroll completely clear of the fixed locked
+  // summary/legend. The hint is a real layout row below this viewport, not an
+  // absolute overlay on top of city copy.
+  listContent: { paddingTop: 4, paddingBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -421,18 +436,17 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   scrollHint: {
-    position: 'absolute',
-    bottom: 4, left: 0, right: 0,
+    minHeight: 22,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   scrollHintText: {
     fontSize: FontSize.tiny,
     color: '#a89a82',
     letterSpacing: 0.5,
-    backgroundColor: 'rgba(255,255,255,0.9)',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingVertical: 3,
   },
   emptyBanner: {
     paddingHorizontal: 14,

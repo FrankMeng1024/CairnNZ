@@ -19,6 +19,7 @@ let createdMarker = null;
 let failNextMarkerUpdate = false;
 const motionEvidence = [];
 const foundDetailOnly = process.env.CAIRN18_FOUND_DETAIL_ONLY === '1';
+const cairnCoreOnly = process.env.CAIRN26_CAIRN_CORE_ONLY === '1';
 
 fs.mkdirSync(outputDir, { recursive: true });
 fs.mkdirSync(path.join(outputDir, 'video'), { recursive: true });
@@ -393,10 +394,10 @@ await page.getByRole('textbox', { name: 'Short title' }).waitFor({ state: 'visib
 await capture('01-day-plant-only-me', { route: 'Plant', theme: 'day', fixture: 'isolated QA', interaction: 'Hike Activity route' });
 await page.getByRole('textbox', { name: 'Cairn note' }).fill('The pavement shines, and the city sounds softer for a minute.');
 await page.getByRole('textbox', { name: 'Short title' }).fill('Plane trees after rain');
-await page.getByLabel('Visibility Friends').click();
+await page.getByLabel('Visibility: Friends').click();
 await setTheme('sunset');
 await capture('02-sunset-plant-friends', { route: 'Plant', theme: 'sunset', fixture: 'isolated QA', interaction: 'Hike Activity route' });
-await page.getByLabel('Visibility Public').click();
+await page.getByLabel('Visibility: Public').click();
 await setTheme('night');
 await capture('03-night-plant-public', { route: 'Plant', theme: 'night', fixture: 'isolated QA', interaction: 'Hike Activity route' });
 
@@ -542,6 +543,28 @@ motionEvidence.push({
   wall_ms: Date.now() - archiveStartedAt, result: 'server-accepted-then-paper-closed',
 });
 await capture('11b-day-found-archive-complete', { route: 'AllCairns', theme: 'day', fixture: 'isolated QA', interaction: 'Archive returned to Library' });
+
+if (cairnCoreOnly) {
+  const coreResult = {
+    generated_at: new Date().toISOString(),
+    source_boundary: 'Actual Expo Web Cairn create/detail/edit/delete/library components with local-only API fixtures; no production writes; Memory/Public Encounter continuation intentionally excluded.',
+    captures,
+    motion_evidence: motionEvidence,
+    request_count: requests.length,
+    runtime_errors: runtimeErrors,
+    mapbox: {
+      requested: mapboxNetwork.requested.length,
+      finished: mapboxNetwork.finished.length,
+      failed: mapboxNetwork.failed,
+    },
+    pass: runtimeErrors.length === 0 && mapboxNetwork.failed.length === 0 && mapboxNetwork.finished.length > 0,
+  };
+  fs.writeFileSync(path.join(outputDir, 'CAIRN_CORE_RESULTS.json'), `${JSON.stringify(coreResult, null, 2)}\n`);
+  await context.close();
+  await browser.close();
+  process.stdout.write(`${JSON.stringify({ outputDir, captureCount: captures.length, pass: coreResult.pass }, null, 2)}\n`);
+  process.exit(coreResult.pass ? 0 : 1);
+}
 
 await navigate('Memory');
 const gotIt = page.getByText('Got it', { exact: true }).last();

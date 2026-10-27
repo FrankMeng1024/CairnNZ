@@ -110,10 +110,6 @@ export function PaywallSheet({ visible, onClose, onEntitled }: Props) {
   return (
     <BottomSheetFrame visible={visible} onDismiss={onClose} testID="paywall-sheet">
         <View style={styles.content}>
-          <TouchableOpacity style={styles.close} onPress={onClose} testID="paywall-close">
-            <Icon name="X" size={20} color={theme.iconInactive} strokeWidth={2.2} />
-          </TouchableOpacity>
-
           {/* Hero — sepia gradient circle with sparkle */}
           <View style={styles.hero}>
             <View style={[styles.heroCircle, { backgroundColor: theme.surface }]}>
@@ -176,7 +172,6 @@ const valueRowStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   content: { paddingBottom: Spacing.sm },
-  close: { alignSelf: 'flex-end', padding: Spacing.xs },
   hero: { alignItems: 'center', marginVertical: Spacing.md },
   heroCircle: {
     width: 72, height: 72, borderRadius: 36,

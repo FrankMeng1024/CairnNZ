@@ -3,7 +3,7 @@
  *
  * Three states drive every non-satellite Mapbox surface through Standard:
  *   day    → Standard + lightPreset=day
- *   sunset → Standard + lightPreset=dusk
+ *   sunset → Standard + lightPreset=dawn
  *   night  → Standard + lightPreset=night
  * Satellite remains imagery-led and intentionally skips Standard imports.
  *
