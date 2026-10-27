@@ -63,4 +63,45 @@ describe('serialized Activity route flush authority', () => {
       .resolves.toMatchObject({ acknowledged: false, acknowledgedCount: 0 });
     expect(mockAppend).not.toHaveBeenCalled();
   });
+
+  test('normalizes every production caller shape to the strict append contract', async () => {
+    const callerPoints = [{
+      lat: -41,
+      lng: 174,
+      t: 1_000.75,
+      alt: 12,
+      accuracy: 4,
+      verticalAccuracy: 6,
+      speed: 1.2,
+      course: 180,
+      rawOrdinal: 3,
+      segmentId: 'segment-camel',
+      segmentStartReason: 'resume' as const,
+      // A component-only field must never cross the API boundary.
+      continuityPreclassified: true,
+    }];
+
+    await expect(flushActivityRoutePrefix({
+      identity,
+      points: callerPoints,
+      isCurrent: () => true,
+    })).resolves.toMatchObject({ acknowledged: true, appendedCount: 1 });
+
+    expect(mockAppend).toHaveBeenCalledWith(identity.serverActivityId, [{
+      lat: -41,
+      lng: 174,
+      t: 1_000,
+      alt: 12,
+      acc: 4,
+      v_acc: 6,
+      speed_mps: 1.2,
+      course_deg: 180,
+      raw_ordinal: 3,
+      segment_id: 'segment-camel',
+      segment_start_reason: 'resume',
+    }], {
+      userId: identity.ownerUserId,
+      clientActivityId: identity.clientActivityId,
+    });
+  });
 });

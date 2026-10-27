@@ -1,13 +1,12 @@
 import { appendPoints as remoteAppendPoints } from '../../services/sessionService';
-import type { SegmentStartReason } from './activityContracts';
+import {
+  toActivityAppendWirePoint,
+  type ActivityAppendPointInput,
+} from './activityAppendContract';
 import { recordActivityStageEvent } from './activityStageLedger';
 
-export interface FlushableActivityPoint {
-  lat: number;
-  lng: number;
+export interface FlushableActivityPoint extends ActivityAppendPointInput {
   t: number;
-  segment_id?: string;
-  segment_start_reason?: SegmentStartReason;
 }
 
 export interface ActivityRouteFlushIdentity {
@@ -58,6 +57,12 @@ function stateFor(key: string): FlushState {
 }
 
 /**
+ * Public discovery, recovery and the foreground store share this authority,
+ * but their in-memory points do not all use the wire spelling.  Keep the
+ * strict API schema as the boundary: only documented fields cross it and
+ * Core Location timestamps/sentinels are normalized before fingerprinting.
+ */
+/**
  * The only live route uploader. Periodic backup, foreground recovery and
  * walking discovery all enter this per-Activity serial tail. The full
  * canonical prefix is supplied each time; only the server-acknowledged suffix
@@ -72,7 +77,7 @@ export async function flushActivityRoutePrefix(input: {
   const key = identityKey(input.identity);
   const state = stateFor(key);
   let result = { acknowledged: false, acknowledgedCount: state.acknowledgedCount, appendedCount: 0 };
-  const points = input.points.map(point => ({ ...point }));
+  const points = input.points.map(toActivityAppendWirePoint);
   const run = state.tail.catch(() => {}).then(async () => {
     if (!input.isCurrent()) return;
     if (state.acknowledgedCount > points.length
@@ -149,4 +154,5 @@ export function resetActivityRouteFlush(identity: ActivityRouteFlushIdentity): v
 
 export const __activityRouteFlushTest = {
   reset() { states.clear(); },
+  toAppendContractPoint: toActivityAppendWirePoint,
 };

@@ -32,6 +32,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { authenticatedFetch } from './apiService';
 import { crashLogger } from './crashLogger';
 import networkMonitor from './networkMonitor';
+import { toActivityAppendWirePoint } from '../features/activity/activityAppendContract';
 
 const STORAGE_KEY = '@cairn:offline_queue:v1';
 type OfflineOpKind =
@@ -144,13 +145,7 @@ function makeChunkOpId(baseOpId: string, idx: number): string {
 
 function normalizeAppendPoint(point: any): any {
   if (!point || typeof point !== 'object') return point;
-  const normalized = { ...point };
-  for (const key of ['acc', 'v_acc', 'speed_mps', 'course_deg']) {
-    const value = normalized[key];
-    if (value != null && (!Number.isFinite(value) || value < 0)) normalized[key] = null;
-  }
-  if (normalized.t != null && Number.isFinite(normalized.t)) normalized.t = Math.floor(normalized.t);
-  return normalized;
+  return toActivityAppendWirePoint(point);
 }
 
 /** Repair legacy queued batches before dispatch without changing their order. */

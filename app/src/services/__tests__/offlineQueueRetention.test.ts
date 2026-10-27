@@ -33,13 +33,18 @@ describe('offline operation evidence retention and legacy append repair', () => 
       lng: 174,
       t: 1_000.9 + index,
       v_acc: -1,
+      speed_accuracy_mps: 3,
+      continuityPreclassified: true,
     }));
     await enqueue(makeOp('session_append', '/api/sessions/7/append-points', 'PATCH', { points }, 'append-a', {
       userId: 'user-a', clientActivityId: 'activity-a',
     }));
     expect(queue().map((op: any) => op.body.points.length)).toEqual([500, 500, 201]);
     expect(queue().flatMap((op: any) => op.body.points).every((point: any) => (
-      Number.isInteger(point.t) && point.v_acc === null
+      Number.isInteger(point.t)
+      && point.v_acc === null
+      && !Object.prototype.hasOwnProperty.call(point, 'speed_accuracy_mps')
+      && !Object.prototype.hasOwnProperty.call(point, 'continuityPreclassified')
     ))).toBe(true);
   });
 

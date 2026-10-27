@@ -490,6 +490,52 @@ export async function recordActivityDiagnosticReplayEvent(input: {
   return Promise.resolve();
 }
 
+function captureAutomaticActivityReplayEvent(input: {
+  ownerUserId: string;
+  clientActivityId: string;
+  kind: string;
+  data: Record<string, unknown>;
+  wallTimeMs?: number;
+  monotonicTimeMs?: number | null;
+}): Promise<void> {
+  try {
+    // Capture is a bounded local storage append. Existing sync opportunities
+    // perform upload; this never adds a GPS watcher or per-point HTTP call.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { captureAutomaticDiagnosticEvent } = require('../../services/automaticDiagnosticOutbox');
+    return captureAutomaticDiagnosticEvent({
+      ownerUserId: input.ownerUserId,
+      stream: {
+        streamId: `activity:${input.clientActivityId}:precise`,
+        sourceType: 'activity',
+        clientActivityId: input.clientActivityId,
+      },
+      eventCode: `ACTIVITY_REPLAY_${input.kind.replace(/-/g, '_').toUpperCase()}`,
+      sourceModule: 'activityDiagnosticReplay',
+      eventAt: input.wallTimeMs,
+      monotonicMs: input.monotonicTimeMs,
+      requiredPolicyTier: 'tier_b',
+      details: { replayKind: input.kind, ...input.data },
+    });
+  } catch {
+    return Promise.resolve();
+  }
+}
+
+function recordReplayAndAutomatic(input: {
+  ownerUserId: string;
+  clientActivityId: string;
+  kind: ActivityDiagnosticReplayKind;
+  data: Record<string, unknown>;
+  wallTimeMs?: number;
+  monotonicTimeMs?: number | null;
+}): Promise<void> {
+  return Promise.all([
+    recordActivityDiagnosticReplayEvent(input),
+    captureAutomaticActivityReplayEvent(input),
+  ]).then(() => undefined);
+}
+
 export function recordActivityDiagnosticObservation(input: {
   ownerUserId: string;
   clientActivityId: string;
@@ -504,32 +550,33 @@ export function recordActivityDiagnosticObservation(input: {
   observationTimeMs: number;
 }): Promise<void> {
   const value = input.coordinate;
-  return recordActivityDiagnosticReplayEvent({
+  const data = {
+    observationTimeMs: input.observationTimeMs,
+    receiptWallTimeMs: value.receiptWallTimeMs ?? Date.now(),
+    lat: value.lat,
+    lng: value.lng,
+    altitudeM: value.alt ?? null,
+    horizontalAccuracyM: value.accuracy ?? null,
+    verticalAccuracyM: value.verticalAccuracy ?? null,
+    speedMps: value.speed ?? null,
+    speedAccuracyMps: value.speedAccuracy ?? null,
+    courseDeg: value.course ?? null,
+    courseAccuracyDeg: value.courseAccuracy ?? null,
+    source: value.source ?? 'foreground',
+    callbackIdentity: value.callbackIdentity ?? null,
+    nativeBatchSequence: value.nativeBatchSequence ?? null,
+    nativeBatchIndex: value.nativeBatchIndex ?? null,
+    appStateAtReceipt: value.appStateAtReceipt ?? null,
+    receiptEvidenceId: value.receiptEvidenceId ?? null,
+    ownerGeneration: value.ownerGeneration ?? null,
+  };
+  return recordReplayAndAutomatic({
     ownerUserId: input.ownerUserId,
     clientActivityId: input.clientActivityId,
     kind: 'raw-observation',
     wallTimeMs: value.receiptWallTimeMs,
     monotonicTimeMs: value.receiptMonotonicTimeMs,
-    data: {
-      observationTimeMs: input.observationTimeMs,
-      receiptWallTimeMs: value.receiptWallTimeMs ?? Date.now(),
-      lat: value.lat,
-      lng: value.lng,
-      altitudeM: value.alt ?? null,
-      horizontalAccuracyM: value.accuracy ?? null,
-      verticalAccuracyM: value.verticalAccuracy ?? null,
-      speedMps: value.speed ?? null,
-      speedAccuracyMps: value.speedAccuracy ?? null,
-      courseDeg: value.course ?? null,
-      courseAccuracyDeg: value.courseAccuracy ?? null,
-      source: value.source ?? 'foreground',
-      callbackIdentity: value.callbackIdentity ?? null,
-      nativeBatchSequence: value.nativeBatchSequence ?? null,
-      nativeBatchIndex: value.nativeBatchIndex ?? null,
-      appStateAtReceipt: value.appStateAtReceipt ?? null,
-      receiptEvidenceId: value.receiptEvidenceId ?? null,
-      ownerGeneration: value.ownerGeneration ?? null,
-    },
+    data,
   });
 }
 
@@ -542,7 +589,7 @@ export function recordActivityDiagnosticDecision(input: {
   segmentId: string | null;
   receiptEvidenceId?: string | null;
 }): Promise<void> {
-  return recordActivityDiagnosticReplayEvent({
+  return recordReplayAndAutomatic({
     ownerUserId: input.ownerUserId,
     clientActivityId: input.clientActivityId,
     kind: 'observation-decision',
@@ -565,7 +612,7 @@ export function recordActivityDiagnosticCanonicalPromotion(input: {
   segmentId: string | null;
   receiptEvidenceId?: string | null;
 }): Promise<void> {
-  return recordActivityDiagnosticReplayEvent({
+  return recordReplayAndAutomatic({
     ownerUserId: input.ownerUserId,
     clientActivityId: input.clientActivityId,
     kind: 'canonical-promotion',
@@ -578,7 +625,7 @@ export function recordActivityDiagnosticProviderExchange(input: {
   clientActivityId: string;
   exchange: ActivityDiagnosticProviderExchange;
 }): Promise<void> {
-  return recordActivityDiagnosticReplayEvent({
+  return recordReplayAndAutomatic({
     ownerUserId: input.ownerUserId,
     clientActivityId: input.clientActivityId,
     kind: 'provider-exchange',

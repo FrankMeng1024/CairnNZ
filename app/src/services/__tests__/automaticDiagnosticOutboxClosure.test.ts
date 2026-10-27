@@ -53,12 +53,16 @@ function jsonResponse(body: unknown, status = 200, headers: Record<string, strin
   });
 }
 
-async function authorize(ownerUserId = 'owner-a', expiresAt: string | null = null) {
+async function authorize(
+  ownerUserId = 'owner-a',
+  expiresAt: string | null = null,
+  tier: 'tier_a' | 'tier_b' = 'tier_a',
+) {
   mockCurrentOwner.value = ownerUserId;
   mockOnline.value = true;
   mockAuthenticatedFetch.mockResolvedValueOnce(jsonResponse({
     enabled: true,
-    tier: 'tier_a',
+    tier,
     consentVersion: 'owner-qa-v1',
     expiresAt,
   }));
@@ -239,6 +243,78 @@ describe('automatic diagnostic pre-deployment closure', () => {
     await drainAutomaticDiagnosticOutbox('owner-a', { reason: 'sync' });
     expect(uploaded).toContain('accuracyM');
     expect(uploaded).not.toMatch(/174\.7633|-36\.8485|secret-token|private free text/);
+  });
+
+  test('captures precise Activity replay only under a fresh Tier B policy', async () => {
+    const precise = {
+      ...event('activity:precise', 1, 'activity'),
+      requiredPolicyTier: 'tier_b' as const,
+      details: {
+        replayKind: 'raw-observation',
+        lat: -41.28664,
+        lng: 174.77557,
+        accessToken: 'must-not-survive',
+        note: 'free text must not survive',
+      },
+    };
+
+    await authorize();
+    await captureAutomaticDiagnosticEvent(precise);
+    expect(await getAutomaticDiagnosticStatus('owner-a', 'activity:precise')).toMatchObject({
+      pendingCount: 0,
+    });
+
+    await AsyncStorage.clear();
+    await _resetAutomaticDiagnosticOutboxForTesting();
+    await authorize('owner-a', null, 'tier_b');
+    await captureAutomaticDiagnosticEvent(precise);
+    mockOnline.value = true;
+    let uploaded: any = null;
+    mockAuthenticatedFetch.mockImplementation(async (_path: string, request: any) => {
+      uploaded = JSON.parse(request.body);
+      return jsonResponse({ ok: true });
+    });
+    await drainAutomaticDiagnosticOutbox('owner-a', { reason: 'sync' });
+    expect(uploaded.requiredPolicyTier).toBe('tier_b');
+    expect(uploaded.events[0].details).toMatchObject({
+      lat: -41.28664,
+      lng: 174.77557,
+      replayKind: 'raw-observation',
+    });
+    expect(uploaded.events[0].details).not.toHaveProperty('accessToken');
+    expect(uploaded.events[0].details).not.toHaveProperty('note');
+  });
+
+  test('purges queued Tier B coordinates when the authoritative policy downgrades', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(80_000_000);
+    await authorize('owner-a', null, 'tier_b');
+    await captureAutomaticDiagnosticEvent({
+      ...event('activity:policy-downgrade', 1, 'activity'),
+      requiredPolicyTier: 'tier_b',
+      details: { replayKind: 'raw-observation', lat: -41.28664, lng: 174.77557 },
+    });
+    expect(await getAutomaticDiagnosticStatus('owner-a', 'activity:policy-downgrade')).toMatchObject({
+      pendingCount: 1,
+    });
+
+    now.mockReturnValue(80_000_000 + 7 * 60 * 60 * 1_000);
+    mockOnline.value = true;
+    mockAuthenticatedFetch.mockResolvedValueOnce(jsonResponse({
+      enabled: true,
+      tier: 'tier_a',
+      consentVersion: 'owner-qa-downgraded',
+      expiresAt: null,
+    }));
+    await drainAutomaticDiagnosticOutbox('owner-a', { reason: 'foreground' });
+
+    expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(await getAutomaticDiagnosticStatus('owner-a', 'activity:policy-downgrade')).toMatchObject({
+      pendingCount: 0,
+    });
+    const stored = (await Promise.all((await AsyncStorage.getAllKeys()).map(async key => (
+      [key, await AsyncStorage.getItem(key)] as const
+    )))).map(([, value]) => value ?? '').join('\n');
+    expect(stored).not.toMatch(/-41\.28664|174\.77557/);
   });
 
   test('applies independent 503/429 backoff without starving eligible streams and stops globally on 401', async () => {

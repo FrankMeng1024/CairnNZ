@@ -548,6 +548,30 @@ if (scenario === 'full') {
     .filter(record => record.kind === 'application-event' && record.data?.event === 'completed-activity-sync')
     .map(record => record.data.phase);
   const mapboxRequestsObserved = mapboxBlockedRequests - mapboxBefore;
+  // Persist the Store/API/WAL/ACK proof before entering the optional map
+  // pixel stage. A local Mapbox/WebGL failure must remain visible, but it
+  // must not erase the already completed transaction and cleanup evidence.
+  writeJson(path.join(outputRoot, 'FUNCTIONAL_CHECKPOINT_PRE_VISUAL.json'), {
+    schema: 'cairn.hike-run.functional-checkpoint-pre-visual.v1',
+    sourceIdentity: { head: sourceHead, tree: sourceTree },
+    cases,
+    recorder: {
+      input,
+      started,
+      observations,
+      finish,
+      beforeReload,
+      afterColdReopen,
+      drain,
+      afterAck,
+      afterCleanup,
+      cleanClientReopen,
+      diagnosticPhases,
+      mapboxRequestsObserved,
+    },
+    clientRequests: requestLog,
+    clientResponses: responseLog,
+  });
   const freshBrowser = await chromium.launch({
     headless: true,
     executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',

@@ -21,6 +21,7 @@ function batch({
   sequence = 1,
   eventCode = 'ACTIVITY_WAL_COMMITTED',
   details = {},
+  requiredPolicyTier = 'tier_a',
 }) {
   return {
     schema: 'cairn-auto-diagnostics-batch',
@@ -38,6 +39,7 @@ function batch({
       updateId: 'synthetic-harness-update',
     },
     droppedCount: 0,
+    requiredPolicyTier,
     events: [{
       eventId: `${batchId}-event`,
       eventSequence: sequence,
@@ -268,6 +270,53 @@ async function main() {
       sequenceGaps: activityQuery.json.streams[0].sequenceGaps,
       preciseCoordinatesPresent: false,
     };
+
+    const tierARejected = batch({
+      batchId: 'precise-tier-a-rejected',
+      streamId: 'activity:precise-tier-a',
+      ownerEpoch: 'epoch-precise-tier-a',
+      requiredPolicyTier: 'tier_b',
+      details: { replayKind: 'raw-observation', lat: -41.28664, lng: 174.77557 },
+    });
+    const tierARejectedReceipt = await request(
+      baseUrl, tokenA, 'POST', '/api/telemetry/diagnostics/batches', tierARejected,
+    );
+    assert.equal(tierARejectedReceipt.status, 403);
+    assert.equal(tierARejectedReceipt.json.code, 'DIAGNOSTIC_TIER_REQUIRED');
+
+    await setAutomaticDiagnosticEnrollment(pool, {
+      ownerUserId: 2, enabled: true, tier: 'tier_b', consentVersion: 'owner-qa-tier-b-v1',
+    });
+    const precise = batch({
+      batchId: 'precise-tier-b-accepted',
+      streamId: 'activity:precise-tier-b',
+      ownerEpoch: 'epoch-precise-tier-b',
+      requiredPolicyTier: 'tier_b',
+      details: {
+        replayKind: 'raw-observation',
+        lat: -41.28664,
+        lng: 174.77557,
+        accessToken: 'must-not-survive',
+      },
+    });
+    const preciseReceipt = await request(
+      baseUrl, tokenB, 'POST', '/api/telemetry/diagnostics/batches', precise,
+    );
+    assert.equal(preciseReceipt.status, 200);
+    const preciseQuery = await request(
+      baseUrl, null, 'GET', `/api/telemetry/diagnostics/activity/${ACTIVITY_ID}?owner_id=2`, null, ops,
+    );
+    assert.equal(preciseQuery.status, 200);
+    const preciseSerialized = JSON.stringify(preciseQuery.json);
+    assert.equal(preciseSerialized.includes('-41.28664'), true);
+    assert.equal(preciseSerialized.includes('174.77557'), true);
+    assert.equal(preciseSerialized.includes('must-not-survive'), false);
+    checks.preciseOwnerDiagnostics = {
+      tierARejected: tierARejectedReceipt.status,
+      tierBStoredAndReadable: true,
+      credentialsRemoved: true,
+      retrieval: 'operations-key-plus-owner-id',
+    };
     const missingQuery = await request(
       baseUrl, null, 'GET', '/api/telemetry/diagnostics/activity/cccccccc-cccc-4ccc-8ccc-cccccccccccc?owner_id=1', null, ops,
     );
@@ -421,7 +470,9 @@ async function main() {
     await pool.execute("UPDATE diagnostic_batches SET expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE owner_user_id = 2");
     await pool.execute("UPDATE diagnostic_streams SET expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE owner_user_id = 2");
     checks.ttlPurgedRows = await purgeExpiredAutomaticDiagnostics(pool, 500);
-    assert.equal(checks.ttlPurgedRows, 4);
+    // One additional Tier B stream plus its batch are now part of the
+    // owner-scoped expiry proof (the purge reports affected batches+streams).
+    assert.equal(checks.ttlPurgedRows, 6);
 
     const disabled = await setAutomaticDiagnosticEnrollment(pool, {
       ownerUserId: 1, enabled: false, tier: 'tier_a', consentVersion: 'owner-qa-v1-revoked',

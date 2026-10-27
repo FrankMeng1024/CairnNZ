@@ -1,10 +1,15 @@
 import { storage } from '../store/storage';
 import networkMonitor from './networkMonitor';
-import { sanitizeTelemetryEventForUpload } from './telemetryPrivacy';
+import {
+  sanitizePreciseOwnerDiagnosticEvent,
+  sanitizeTelemetryEventForUpload,
+} from './telemetryPrivacy';
 
 const ROOT = '@cairn:automatic-diagnostics:v1:';
-const MAX_EVENTS_PER_OWNER = 600;
-const MAX_BYTES_PER_OWNER = 512 * 1024;
+const MAX_TIER_A_EVENTS_PER_OWNER = 600;
+const MAX_TIER_A_BYTES_PER_OWNER = 512 * 1024;
+const MAX_TIER_B_EVENTS_PER_OWNER = 6_000;
+const MAX_TIER_B_BYTES_PER_OWNER = 5 * 1024 * 1024;
 const MAX_EVENTS_PER_BATCH = 50;
 const MAX_BATCH_BYTES = 60 * 1024;
 const MAX_EVENT_DETAILS_BYTES = 8 * 1024;
@@ -37,6 +42,7 @@ export interface AutomaticDiagnosticInput {
   eventAt?: number;
   monotonicMs?: number | null;
   details?: Record<string, unknown>;
+  requiredPolicyTier?: 'tier_a' | 'tier_b';
 }
 
 interface QueuedAutomaticDiagnostic {
@@ -52,6 +58,7 @@ interface QueuedAutomaticDiagnostic {
   eventAt: number;
   monotonicMs: number | null;
   details: Record<string, unknown>;
+  requiredPolicyTier: 'tier_a' | 'tier_b';
   capturedAt: number;
   approximateBytes: number;
 }
@@ -317,6 +324,7 @@ function makeEvent(
   input: AutomaticDiagnosticInput,
   streamSequence: number,
   ownerEpoch: string,
+  policyTier: 'tier_a' | 'tier_b',
 ): QueuedAutomaticDiagnostic {
   const eventAt = Math.max(0, Math.floor(input.eventAt ?? Date.now()));
   eventCounter = (eventCounter + 1) % 1_000;
@@ -324,7 +332,10 @@ function makeEvent(
   const eventId = input.eventId
     ? safeIdentifier(input.eventId, 96)
     : `${eventAt.toString(36)}-${queueSequence.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const safe = sanitizeTelemetryEventForUpload({ fields: tierASafeDetails(input.details ?? {}) });
+  const requiredPolicyTier = input.requiredPolicyTier ?? 'tier_a';
+  const safe = requiredPolicyTier === 'tier_b' && policyTier === 'tier_b'
+    ? sanitizePreciseOwnerDiagnosticEvent({ fields: tierASafeDetails(input.details ?? {}) })
+    : sanitizeTelemetryEventForUpload({ fields: tierASafeDetails(input.details ?? {}) });
   const sanitizedDetails = (safe.fields ?? {}) as Record<string, unknown>;
   const detailsBytes = utf8ByteLength(JSON.stringify(sanitizedDetails));
   const boundedDetails = detailsBytes <= MAX_EVENT_DETAILS_BYTES
@@ -354,6 +365,7 @@ function makeEvent(
     eventAt,
     monotonicMs: input.monotonicMs == null ? null : Math.max(0, Number(input.monotonicMs)),
     details: boundedDetails,
+    requiredPolicyTier,
     capturedAt: Date.now(),
   };
   const approximateBytes = JSON.stringify(base).length;
@@ -361,12 +373,16 @@ function makeEvent(
 }
 
 async function enforceOwnerBounds(ownerUserId: string, meta: OwnerMeta): Promise<void> {
-  if (meta.pendingCount <= MAX_EVENTS_PER_OWNER && meta.pendingBytes <= MAX_BYTES_PER_OWNER) return;
+  const maxEvents = meta.policy === 'tier_b'
+    ? MAX_TIER_B_EVENTS_PER_OWNER : MAX_TIER_A_EVENTS_PER_OWNER;
+  const maxBytes = meta.policy === 'tier_b'
+    ? MAX_TIER_B_BYTES_PER_OWNER : MAX_TIER_A_BYTES_PER_OWNER;
+  if (meta.pendingCount <= maxEvents && meta.pendingBytes <= maxBytes) return;
   const events = await readOwnerEvents(ownerUserId);
   let bytes = events.reduce((sum, item) => sum + item.event.approximateBytes, 0);
   const remove: string[] = [];
   for (const item of events) {
-    if (events.length - remove.length <= MAX_EVENTS_PER_OWNER && bytes <= MAX_BYTES_PER_OWNER) break;
+    if (events.length - remove.length <= maxEvents && bytes <= maxBytes) break;
     remove.push(item.key);
     bytes -= item.event.approximateBytes;
     meta.pendingCount = Math.max(0, meta.pendingCount - 1);
@@ -380,6 +396,24 @@ async function enforceOwnerBounds(ownerUserId: string, meta: OwnerMeta): Promise
     const removed = new Set(remove);
     compactAcknowledgedStreamMetadata(meta, events.filter(item => !removed.has(item.key)));
   }
+}
+
+async function purgeTierBEventsAfterPolicyDowngrade(
+  ownerUserId: string,
+  meta: OwnerMeta,
+): Promise<void> {
+  if (meta.policy === 'tier_b') return;
+  const events = await readOwnerEvents(ownerUserId);
+  const precise = events.filter(item => item.event.requiredPolicyTier === 'tier_b');
+  if (precise.length === 0) return;
+  await storage.removeItemsStrict(precise.map(item => item.key));
+  meta.pendingCount = Math.max(0, meta.pendingCount - precise.length);
+  meta.pendingBytes = Math.max(0, meta.pendingBytes - precise.reduce(
+    (sum, item) => sum + item.event.approximateBytes,
+    0,
+  ));
+  const remaining = events.filter(item => item.event.requiredPolicyTier !== 'tier_b');
+  compactAcknowledgedStreamMetadata(meta, remaining);
 }
 
 function compactAcknowledgedStreamMetadata(
@@ -415,9 +449,10 @@ export function captureAutomaticDiagnosticEvent(input: AutomaticDiagnosticInput)
     try {
       meta = await readMeta(input.ownerUserId);
       if (!policyAuthorizesCapture(meta) || !await currentOwnerMatches(input.ownerUserId)) return;
+      if (input.requiredPolicyTier === 'tier_b' && meta.policy !== 'tier_b') return;
       const streamId = safeIdentifier(input.stream.streamId, 96);
       const status = meta.streams[streamId] ?? emptyStatus();
-      const event = makeEvent(input, status.nextSequence, meta.ownerEpoch);
+      const event = makeEvent(input, status.nextSequence, meta.ownerEpoch, meta.policy as 'tier_a' | 'tier_b');
       if (await storage.getItemStrict(eventStorageKey(input.ownerUserId, event.eventId, event.stream.streamId))) return;
       status.lastCapturedAt = event.eventAt;
       status.coverageStart = status.coverageStart == null
@@ -513,6 +548,7 @@ function batchFor(items: Array<{ key: string; event: QueuedAutomaticDiagnostic }
       batchSequence: first.streamSequence,
       stream: first.stream,
       droppedCount,
+      requiredPolicyTier: first.requiredPolicyTier,
       events: chosen.map(item => ({
         eventId: item.event.eventId,
         eventSequence: item.event.streamSequence,
@@ -572,6 +608,7 @@ async function refreshPolicy(ownerUserId: string, meta: OwnerMeta): Promise<bool
     await writeMeta(ownerUserId, meta);
     return false;
   }
+  await purgeTierBEventsAfterPolicyDowngrade(ownerUserId, meta);
   await writeMeta(ownerUserId, meta);
   return true;
 }
@@ -691,7 +728,7 @@ export async function drainAutomaticDiagnosticOutbox(
           response.headers.get('Retry-After'),
         );
         failedBatches += 1;
-        if (response.status === 403) {
+        if (response.status === 403 && code !== 'DIAGNOSTIC_TIER_REQUIRED') {
           meta.policy = 'disabled';
           meta.policyCheckedAt = Date.now();
           meta.policyExpiresAt = null;
@@ -699,6 +736,21 @@ export async function drainAutomaticDiagnosticOutbox(
           meta.pendingCount = 0;
           meta.pendingBytes = 0;
           meta.streams = {};
+          await writeMeta(ownerUserId, meta).catch(() => undefined);
+        } else if (response.status === 403 && code === 'DIAGNOSTIC_TIER_REQUIRED') {
+          await storage.removeItemsStrict(chosen.map(item => item.key));
+          meta.pendingCount = Math.max(0, meta.pendingCount - chosen.length);
+          meta.pendingBytes = Math.max(0, meta.pendingBytes - chosen.reduce(
+            (sum, item) => sum + item.event.approximateBytes,
+            0,
+          ));
+          status.lastFailure = code;
+          status.quarantinedCount += chosen.length;
+          status.quarantinedThroughSequence = Math.max(
+            status.quarantinedThroughSequence,
+            chosen[chosen.length - 1].event.streamSequence,
+          );
+          status.nextAttemptAt = null;
           await writeMeta(ownerUserId, meta).catch(() => undefined);
         } else if (response.status === 410 && body.stream.clientActivityId) {
           await purgeActivityUnlocked(ownerUserId, body.stream.clientActivityId);
@@ -716,7 +768,8 @@ export async function drainAutomaticDiagnosticOutbox(
         } else {
           await writeMeta(ownerUserId, meta).catch(() => undefined);
         }
-        if (response.status === 401 || response.status === 403) break;
+        if (response.status === 401
+          || (response.status === 403 && code !== 'DIAGNOSTIC_TIER_REQUIRED')) break;
         if (response.status === 410) continue;
         failedThisPass.add(streamId);
         continue;

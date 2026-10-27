@@ -8,6 +8,10 @@ export const ACTIVITY_BACKGROUND_SOURCE_HEALTH_FRESH_MS = 30_000;
 export const ACTIVITY_FOREGROUND_RECOVERY_GRACE_MS = 12_000;
 export const ACTIVITY_CANONICAL_HEALTH_FRESH_MS = 5_000;
 export const ACTIVITY_CANONICAL_USER_WARNING_MS = 30_000;
+/** A distance-filtered stationary device can be quiet for a while, but an old
+ * motion classification is not perpetual proof that the provider is healthy.
+ * This only affects the status explanation; it never changes GPS acceptance. */
+export const ACTIVITY_STATIONARY_QUIET_MAX_MS = 2 * 60_000;
 
 export type ActivitySourceHealth = 'inactive' | 'awaiting-first-fix' | 'fresh' | 'stale';
 export type ActivityCanonicalHealth = 'awaiting-first-fix' | 'fresh' | 'degraded';
@@ -115,7 +119,9 @@ export function deriveActivityLocationHealth(args: {
   // is not, by itself, source loss. Native source inactivity remains a real
   // unavailable state, and stale evidence while moving/uncertain still warns.
   const stationaryQuietProvider = args.sourceActive
-    && args.motionState === 'probably-stationary';
+    && args.motionState === 'probably-stationary'
+    && sourceAgeMs !== null
+    && sourceAgeMs <= ACTIVITY_STATIONARY_QUIET_MAX_MS;
   const userFacingIssue: ActivityUserFacingLocationIssue = (
     !foregroundRecoveryActive
     && (

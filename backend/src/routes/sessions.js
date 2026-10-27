@@ -26,6 +26,7 @@ const {
   buildCurrentActivityMemoryRows,
   upsertActivityMemoryRows,
 } = require('../services/activityMemoryIngestion');
+const { acquireActivitySaveGuard } = require('../services/activitySaveGuard');
 
 const router = express.Router();
 
@@ -287,6 +288,7 @@ router.patch('/:id', authenticate, validateBody(schemas.session.update), idempot
 //
 // 事务任何一步失败 → rollback → 5xx → client 走离线分支 (§0.9 pendingSyncStore)
 router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idempotency, async (req, res) => {
+  const requestStartedAt = Date.now();
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {
     return res.status(400).json({ error: 'Invalid session ID.' });
@@ -360,12 +362,44 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
   // memory_points: schema 已限 max(1000) + allow(null),此处不再重复检查。
   const memPts = Array.isArray(memory_points) ? memory_points : [];
 
-  const conn = await pool.getConnection();
-  let attributionRange = null;
+  let guard;
   try {
+    guard = await acquireActivitySaveGuard(pool, { userId, sessionId: id });
+  } catch (error) {
+    console.error('[sessions/save:guard]', { sessionId: id, code: error?.code || 'UNKNOWN' });
+    return res.status(503).json({
+      error: 'Activity Save coordination is temporarily unavailable.',
+      code: 'ACTIVITY_SAVE_GUARD_UNAVAILABLE',
+    });
+  }
+  if (!guard.acquired) {
+    res.set('Retry-After', '2');
+    return res.status(425).json({
+      error: 'The same Activity Save is already in progress.',
+      code: 'ACTIVITY_SAVE_IN_PROGRESS',
+      retryable: true,
+    });
+  }
+  let conn = null;
+  let coreCommitted = false;
+  let attributionRange = null;
+  const serverTiming = {
+    guard_wait_ms: guard.waitMs,
+    pool_wait_ms: 0,
+    session_lock_wait_ms: 0,
+    memory_write_ms: 0,
+    coverage_sync_ms: 0,
+    commit_ms: 0,
+    total_ms: 0,
+  };
+  try {
+    const poolWaitStartedAt = Date.now();
+    conn = await pool.getConnection();
+    serverTiming.pool_wait_ms = Math.max(0, Date.now() - poolWaitStartedAt);
     await conn.beginTransaction();
 
     // 1. FOR UPDATE 锁行, 校验归属 + 未 finalize
+    const sessionLockStartedAt = Date.now();
     const [rows] = await conn.execute(
       `SELECT id, client_activity_id, source_provenance, start_time, end_time,
               finalized_at, route_points_raw, route_points_canonical
@@ -373,6 +407,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
        WHERE id=? AND user_id=? FOR UPDATE`,
       [id, userId]
     );
+    serverTiming.session_lock_wait_ms = Math.max(0, Date.now() - sessionLockStartedAt);
     if (!rows[0]) {
       await conn.rollback();
       // R96 修补 A.1: session id 不存在 (可能被 R9B7 auto-migration 误删,
@@ -430,9 +465,22 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         canonicalPoints: rows[0].route_points_canonical,
         rawPoints: rows[0].route_points_raw,
       });
+      const replayMemoryStartedAt = Date.now();
       const replayAccepted = await upsertActivityMemoryRows(conn, replayMemory.rows);
-      await synchronizeCoverageEvidenceForActivity(conn, userId, rows[0].client_activity_id);
+      serverTiming.memory_write_ms = Math.max(0, Date.now() - replayMemoryStartedAt);
+      const replayCommitStartedAt = Date.now();
       await conn.commit();
+      coreCommitted = true;
+      serverTiming.commit_ms = Math.max(0, Date.now() - replayCommitStartedAt);
+      // Coverage is a deterministic projection of already durable evidence.
+      // Do not retain the session/Memory row locks while doing its spatial
+      // work.  This remains synchronous: a client receives success only after
+      // the projection completes, and a crash/failure leaves the existing
+      // durable pending Save to retry this idempotent replay path.
+      const replayCoverageStartedAt = Date.now();
+      await synchronizeCoverageEvidenceForActivity(conn, userId, rows[0].client_activity_id);
+      serverTiming.coverage_sync_ms = Math.max(0, Date.now() - replayCoverageStartedAt);
+      serverTiming.total_ms = Math.max(0, Date.now() - requestStartedAt);
       if (replayMemory.rows.length > 0) {
         const replayTimestamps = replayMemory.rows.map(row => row.ts);
         scheduleMemoryAttribution(pool, userId, Math.min(...replayTimestamps), Math.max(...replayTimestamps));
@@ -445,6 +493,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         client_activity_id: rows[0].client_activity_id ?? null,
         finalized_at: rows[0].finalized_at || rows[0].end_time,
         memory: { accepted: replayAccepted, rejected: 0 },
+        server_timing: serverTiming,
         idempotent_replay: true,
       });
     }
@@ -484,19 +533,31 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       canonicalPoints: route_points_canonical,
       rawPoints: route_points_raw,
     });
+    const memoryWriteStartedAt = Date.now();
     const accepted = await upsertActivityMemoryRows(conn, activityMemory.rows);
-    await synchronizeCoverageEvidenceForActivity(
-      conn,
-      userId,
-      rows[0].client_activity_id ?? client_activity_id ?? null,
-    );
+    serverTiming.memory_write_ms = Math.max(0, Date.now() - memoryWriteStartedAt);
     const rejected = activityMemory.rejected;
     if (activityMemory.rows.length > 0) {
       const tsList = activityMemory.rows.map(row => row.ts);
       attributionRange = { minTs: Math.min(...tsList), maxTs: Math.max(...tsList) };
     }
 
+    const commitStartedAt = Date.now();
     await conn.commit();
+    coreCommitted = true;
+    serverTiming.commit_ms = Math.max(0, Date.now() - commitStartedAt);
+    // Keep the complete ACK contract while shortening the business
+    // transaction: evidence is durable first, then its idempotent coverage
+    // projection completes before the 200 response. A post-commit failure is
+    // explicitly retryable and never reported as fully synchronized.
+    const coverageSyncStartedAt = Date.now();
+    await synchronizeCoverageEvidenceForActivity(
+      conn,
+      userId,
+      rows[0].client_activity_id ?? client_activity_id ?? null,
+    );
+    serverTiming.coverage_sync_ms = Math.max(0, Date.now() - coverageSyncStartedAt);
+    serverTiming.total_ms = Math.max(0, Date.now() - requestStartedAt);
     if (attributionRange) {
       scheduleMemoryAttribution(pool, userId, attributionRange.minTs, attributionRange.maxTs);
       scheduleCoverageMaterialization(pool, userId);
@@ -509,17 +570,30 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       client_activity_id: rows[0].client_activity_id ?? null,
       finalized_at: finalizedAtDate.toISOString(),
       memory: { accepted, rejected },
+      server_timing: serverTiming,
     });
   } catch (err) {
     try {
-      await conn.rollback();
+      if (!conn) throw new Error('save_connection_not_acquired');
+      if (!coreCommitted) await conn.rollback();
     } catch (rollErr) {
       console.error('[sessions/save] rollback failed', rollErr);
     }
     console.error('[sessions/save]', err);
+    if (coreCommitted) {
+      res.set('Retry-After', '2');
+      return res.status(503).json({
+        error: 'Activity is durable but its derived coverage is still pending.',
+        code: 'ACTIVITY_POST_COMMIT_SYNC_PENDING',
+        retryable: true,
+      });
+    }
     return res.status(500).json({ error: 'Server error.' });
   } finally {
-    conn.release();
+    if (conn) conn.release();
+    await guard.release().catch(error => {
+      console.error('[sessions/save:guard-release]', { sessionId: id, code: error?.code || 'UNKNOWN' });
+    });
   }
 });
 

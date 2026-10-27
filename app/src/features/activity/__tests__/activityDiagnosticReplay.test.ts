@@ -1,4 +1,5 @@
 const mockValues = new Map<string, string>();
+const mockAutomaticCapture = jest.fn(async (_input: unknown) => undefined);
 
 jest.mock('../../../store/storage', () => ({
   storage: {
@@ -7,6 +8,10 @@ jest.mock('../../../store/storage', () => ({
     getAllKeysStrict: jest.fn(async () => [...mockValues.keys()]),
     removeItemsStrict: jest.fn(async (keys: string[]) => keys.forEach(key => mockValues.delete(key))),
   },
+}));
+
+jest.mock('../../../services/automaticDiagnosticOutbox', () => ({
+  captureAutomaticDiagnosticEvent: (input: unknown) => mockAutomaticCapture(input),
 }));
 
 import {
@@ -24,7 +29,70 @@ import {
 } from '../activityDiagnosticReplay';
 
 describe('Activity diagnostic replay', () => {
-  beforeEach(() => mockValues.clear());
+  beforeEach(() => {
+    mockValues.clear();
+    mockAutomaticCapture.mockClear();
+  });
+
+  test('mirrors OS-visible observation lineage to the opt-in Tier B automatic stream', async () => {
+    await recordActivityDiagnosticObservation({
+      ownerUserId: 'owner-auto',
+      clientActivityId: 'activity-auto',
+      observationTimeMs: 1_000,
+      coordinate: {
+        lat: -41.28664,
+        lng: 174.77557,
+        accuracy: 6,
+        source: 'background',
+        nativeBatchSequence: 4,
+        nativeBatchIndex: 2,
+        receiptWallTimeMs: 1_250,
+        receiptMonotonicTimeMs: 800,
+        appStateAtReceipt: 'background',
+        receiptEvidenceId: 'receipt-auto',
+      },
+    });
+    await recordActivityDiagnosticDecision({
+      ownerUserId: 'owner-auto',
+      clientActivityId: 'activity-auto',
+      observationTimeMs: 1_000,
+      accepted: true,
+      reason: 'accepted',
+      segmentId: 'segment-auto',
+      receiptEvidenceId: 'receipt-auto',
+    });
+
+    expect(mockAutomaticCapture).toHaveBeenCalledTimes(2);
+    expect(mockAutomaticCapture.mock.calls[0][0]).toMatchObject({
+      ownerUserId: 'owner-auto',
+      stream: {
+        streamId: 'activity:activity-auto:precise',
+        sourceType: 'activity',
+        clientActivityId: 'activity-auto',
+      },
+      eventCode: 'ACTIVITY_REPLAY_RAW_OBSERVATION',
+      requiredPolicyTier: 'tier_b',
+      details: {
+        replayKind: 'raw-observation',
+        lat: -41.28664,
+        lng: 174.77557,
+        source: 'background',
+        nativeBatchSequence: 4,
+        nativeBatchIndex: 2,
+        receiptEvidenceId: 'receipt-auto',
+      },
+    });
+    expect(mockAutomaticCapture.mock.calls[1][0]).toMatchObject({
+      eventCode: 'ACTIVITY_REPLAY_OBSERVATION_DECISION',
+      requiredPolicyTier: 'tier_b',
+      details: {
+        replayKind: 'observation-decision',
+        accepted: true,
+        reason: 'accepted',
+        receiptEvidenceId: 'receipt-auto',
+      },
+    });
+  });
 
   test('persists a long exact stream beyond the stage-ledger ring and replays it standalone', async () => {
     await beginActivityDiagnosticReplay({

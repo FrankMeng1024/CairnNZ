@@ -9,6 +9,7 @@
  */
 import { authenticatedFetch } from './apiService';
 import { enqueue, makeOp, retireActivityAppendOps, uuidv4 } from './offlineQueue';
+import { toActivityAppendWirePoint } from '../features/activity/activityAppendContract';
 
 /**
  * A native fetch can remain pending indefinitely after a radio transition.
@@ -36,6 +37,53 @@ async function authenticatedFetchWithDeadline(
   try {
     return await Promise.race([
       authenticatedFetch(path, { ...options, signal: controller.signal }),
+      deadline,
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+interface DeadlineJsonResponse {
+  response: Response;
+  body: any;
+}
+
+/** Save completion includes response-body delivery and parsing, not merely
+ * receipt of HTTP headers.  A native radio transition can leave either stage
+ * pending, so both are owned by the same AbortSignal and wall-clock budget. */
+async function authenticatedJsonWithDeadline(
+  path: string,
+  options: RequestInit & { expectedUserId?: string },
+  timeoutMs = ACTIVITY_MUTATION_TIMEOUT_MS,
+): Promise<DeadlineJsonResponse> {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      const error: any = new Error('activity_transport_timeout');
+      error.code = 'ACTIVITY_TRANSPORT_TIMEOUT';
+      reject(error);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await authenticatedFetch(path, { ...options, signal: controller.signal });
+        let body: any = null;
+        try {
+          body = await response.json();
+        } catch (error) {
+          if (response.ok) {
+            const parseError: any = new Error('activity_response_parse_failed');
+            parseError.code = 'ACTIVITY_RESPONSE_PARSE_FAILED';
+            parseError.cause = error;
+            throw parseError;
+          }
+        }
+        return { response, body };
+      })(),
       deadline,
     ]);
   } finally {
@@ -311,7 +359,7 @@ export async function appendPoints(
   authority: { userId: string; clientActivityId: string },
 ): Promise<boolean> {
   if (points.length === 0) return true;
-  const normalizedPoints = normalizeActivityPointTimestamps(points);
+  const normalizedPoints = normalizeActivityPointTimestamps(points).map(toActivityAppendWirePoint);
   const path = `/api/sessions/${remoteId}/append-points`;
   // The server contract is max 500 points. A long foreground interval or a
   // recovered journal can legitimately exceed that; every bounded chunk gets
@@ -454,6 +502,15 @@ interface SaveHikeAtomicResult {
   finalized_at: string;
   memory: { accepted: number; rejected: number };
   idempotent_replay?: boolean;
+  server_timing?: {
+    guard_wait_ms?: number;
+    pool_wait_ms?: number;
+    session_lock_wait_ms?: number;
+    memory_write_ms?: number;
+    coverage_sync_ms?: number;
+    commit_ms?: number;
+    total_ms?: number;
+  };
 }
 
 export function normalizeActivitySavePayloadTimestamps(
@@ -508,7 +565,7 @@ async function performSaveHikeAtomic(
   // saveHikeAtomic so we don't fall into pending on a single flake.
   // Idempotency key stays the same → server treats retry as replay if
   // it did succeed on attempt 1 but the response never came back.
-  const doFetch = () => authenticatedFetchWithDeadline(path, {
+  const doFetch = () => authenticatedJsonWithDeadline(path, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -518,10 +575,13 @@ async function performSaveHikeAtomic(
     expectedUserId: expectedOwnerUserId,
   });
   let res: Response;
+  let responseBody: any = null;
   let lastNetErrMsg = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      res = await doFetch();
+      const completed = await doFetch();
+      res = completed.response;
+      responseBody = completed.body;
       if (res.ok || (res.status >= 400 && res.status < 500
         && res.status !== 408 && res.status !== 425 && res.status !== 429)) {
         // Success or a 4xx that a retry can't fix — break out.
@@ -536,7 +596,13 @@ async function performSaveHikeAtomic(
       break;
     } catch (netErr) {
       lastNetErrMsg = String((netErr as any)?.message || netErr).slice(0, 150);
-      if (attempt === 0) {
+      // A transport timeout or malformed success body is ambiguous: the
+      // server may still be committing.  An immediate duplicate is precisely
+      // what caused overlapping Save transactions.  The durable pending-sync
+      // worker retries the same identity later; explicit 5xx responses still
+      // receive the one immediate retry above because the server responded.
+      if (attempt === 0 && (netErr as any)?.code !== 'ACTIVITY_TRANSPORT_TIMEOUT'
+        && (netErr as any)?.code !== 'ACTIVITY_RESPONSE_PARSE_FAILED') {
         await new Promise((r) => setTimeout(r, 500));
         continue;
       }
@@ -560,8 +626,7 @@ async function performSaveHikeAtomic(
   res = res!;
   if (!res.ok) {
     // 4xx / 5xx / 网络异常都算失败, 让 caller 决定是否入 pendingSyncStore
-    let errBody: any = null;
-    try { errBody = await res.json(); } catch { /* ignore */ }
+    const errBody: any = responseBody;
     // O18 SAF-07: log HTTP failure to aliyun with status + body preview.
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -579,7 +644,7 @@ async function performSaveHikeAtomic(
     err.body = errBody;
     throw err;
   }
-  const body = await res.json();
+  const body = responseBody;
   // O17 EDGE_HUNT #22: validate response shape before marking session
   // synced. Pre-O17, a malformed backend reply (missing session_id or
   // ok=false) would still be cast to SaveHikeAtomicResult and the client
@@ -613,6 +678,7 @@ async function performSaveHikeAtomic(
       mem_accepted: body.memory?.accepted ?? null,
       mem_rejected: body.memory?.rejected ?? null,
       replay: !!body.idempotent_replay,
+      serverTiming: body.server_timing ?? null,
     });
   } catch { /* silent */ }
   return body as SaveHikeAtomicResult;

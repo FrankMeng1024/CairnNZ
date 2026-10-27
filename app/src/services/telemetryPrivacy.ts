@@ -69,6 +69,18 @@ export function sanitizeTelemetryEventForUpload(event: Record<string, unknown>):
   return removeCoordinateFields(secretSafe) as Record<string, unknown>;
 }
 
+/**
+ * Precise Activity replay is permitted only after the owner-scoped automatic
+ * diagnostics policy has resolved to tier_b. Keep credentials and embedded
+ * free-text coordinates scrubbed while retaining numeric coordinate fields.
+ * The server independently rechecks its enrollment row before storage.
+ */
+export function sanitizePreciseOwnerDiagnosticEvent(
+  event: Record<string, unknown>,
+): Record<string, unknown> {
+  return scrubSecrets(event) as Record<string, unknown>;
+}
+
 /** Invalid lines are dropped rather than uploaded as an opaque privacy bypass. */
 export function sanitizeTelemetryJsonlForUpload(jsonl: string): string {
   return jsonl.split(/\r?\n/).flatMap((line) => {

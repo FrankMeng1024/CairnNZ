@@ -886,6 +886,7 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
         finalRevision: hike.finalArtifact?.revision ?? null,
         finalFingerprint: hike.finalArtifact?.displayFingerprint ?? null,
         idempotentReplay: !!result.idempotent_replay,
+        serverTiming: result.server_timing ?? null,
         elapsedMs: Math.max(0, Date.now() - syncAttemptStartedAt),
       },
     });
@@ -893,6 +894,7 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
       serverActivityId: result.session_id,
       activityIdentityMatched: result.client_activity_id === hike.localId,
       idempotentReplay: !!result.idempotent_replay,
+      serverTiming: result.server_timing ?? null,
     });
     if (simulatorActivity) {
       const { appendSimulatorLog } = require('../features/activitySimulator/simulatorLog');

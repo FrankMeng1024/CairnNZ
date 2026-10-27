@@ -101,6 +101,8 @@ describe('Activity API timestamp boundary', () => {
       lng: 174,
       t: 1_000 + index,
       v_acc: index === 531 ? -1 : 5,
+      speed_accuracy_mps: 3,
+      continuityPreclassified: true,
     }));
 
     await expect(appendPoints(77, points, {
@@ -114,6 +116,10 @@ describe('Activity API timestamp boundary', () => {
     expect(bodies.map((body: any) => body.points.length)).toEqual([500, 500, 201]);
     expect(new Set(bodies.map((body: any) => body.client_op_id)).size).toBe(3);
     expect(bodies.flatMap((body: any) => body.points)[531].v_acc).toBeNull();
+    expect(bodies.flatMap((body: any) => body.points).every((point: any) => (
+      !Object.prototype.hasOwnProperty.call(point, 'speed_accuracy_mps')
+      && !Object.prototype.hasOwnProperty.call(point, 'continuityPreclassified')
+    ))).toBe(true);
   });
 
   test('rejects malformed list success instead of converting it to an empty account', () => {
@@ -290,7 +296,7 @@ describe('Activity API timestamp boundary', () => {
     });
   });
 
-  test('a never-resolving Save expires both attempts and evicts its single-flight', async () => {
+  test('an ambiguous never-resolving Save does not immediately overlap itself and evicts its single-flight', async () => {
     jest.useFakeTimers();
     try {
       const signals: AbortSignal[] = [];
@@ -305,10 +311,10 @@ describe('Activity API timestamp boundary', () => {
         'saveHikeAtomic network error: activity_transport_timeout',
       );
 
-      await jest.advanceTimersByTimeAsync(ACTIVITY_MUTATION_TIMEOUT_MS * 2 + 501);
+      await jest.advanceTimersByTimeAsync(ACTIVITY_MUTATION_TIMEOUT_MS + 1);
       await rejected;
-      expect(authenticatedFetch).toHaveBeenCalledTimes(2);
-      expect(signals).toHaveLength(2);
+      expect(authenticatedFetch).toHaveBeenCalledTimes(1);
+      expect(signals).toHaveLength(1);
       expect(signals.every(signal => signal.aborted)).toBe(true);
 
       authenticatedFetch.mockReset();
@@ -329,6 +335,37 @@ describe('Activity API timestamp boundary', () => {
     } finally {
       await jest.runOnlyPendingTimersAsync();
       expect(jest.getTimerCount()).toBe(0);
+      jest.useRealTimers();
+    }
+  });
+
+  test('Save deadline covers a response body that never resolves', async () => {
+    jest.useFakeTimers();
+    try {
+      let signal: AbortSignal | undefined;
+      authenticatedFetch.mockImplementationOnce((_path: string, init: RequestInit) => {
+        signal = init.signal as AbortSignal;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: jest.fn(() => new Promise(() => {})),
+        });
+      });
+      const save = saveHikeAtomic(
+        77,
+        activitySavePayload(),
+        'body-hang-finish-op',
+        'activity-body-hang',
+        'account-a',
+      );
+      const rejected = expect(save).rejects.toMatchObject({
+        cause: expect.objectContaining({ code: 'ACTIVITY_TRANSPORT_TIMEOUT' }),
+      });
+      for (let turn = 0; turn < 10 && !signal; turn += 1) await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(ACTIVITY_MUTATION_TIMEOUT_MS + 1);
+      await rejected;
+      expect(signal?.aborted).toBe(true);
+    } finally {
       jest.useRealTimers();
     }
   });

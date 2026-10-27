@@ -213,6 +213,23 @@ describe('Activity source and canonical health', () => {
     }).userFacingIssue).toBe('source-unavailable');
   });
 
+  test('old stationary evidence cannot suppress a prolonged provider outage forever', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 700_000,
+      sourceActive: true,
+      latestSourceTimestamp: 100_000,
+      latestCanonicalTimestamp: 90_000,
+      latestSourceKind: 'background',
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'stationary-cluster-refined',
+      continuityGapOpen: false,
+      motionState: 'probably-stationary',
+    })).toMatchObject({
+      sourceHealth: 'stale',
+      userFacingIssue: 'source-unavailable',
+    });
+  });
+
   test('foreground puck uses fresh retained evidence but never presents a stale point as current', () => {
     expect(deriveActivityPresentationFreshness({
       nowMs: 100_000, sourceActive: true, latestSourceTimestamp: 95_000,
