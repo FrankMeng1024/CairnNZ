@@ -8,11 +8,12 @@
  *
  * Green rule:
  *   The item matching "user's current map center region" is green.
- *   `is_here` is computed on server from currentCityId (country layer)
- *   or currentCountryId (world layer). Client only renders.
+ *   The server supplies the initial state; while the panel stays open, the
+ *   confirmed parent currentCityId/currentCountryId updates it locally so a
+ *   rapid second city tap cannot land on a list being replaced by a refetch.
  *
  * Actions:
- *   - Tap city (country layer): parent flies map + refetches with new here_city_id
+ *   - Tap city (country layer): parent flies map + updates the local here marker
  *   - Tap country (world layer): parent switches title to that country. NO fly.
  *   - Tap ↑: parent sets title = 'world'.
  *
@@ -90,7 +91,10 @@ export function HierarchyPanel({
   const [showScrollHint, setShowScrollHint] = useState(false);
   const [isScrollable, setIsScrollable] = useState(false);
 
-  // Fetch on any change of titleId or here-ids
+  // Fetch only when the visible hierarchy level changes. City selection does
+  // not change the items or their authorization; refetching the same list only
+  // to move the green `is_here` marker created a short replacement window that
+  // could swallow a rapid second tap.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -112,7 +116,10 @@ export function HierarchyPanel({
         }
       });
     return () => { cancelled = true; };
-  }, [titleId, currentCityId, currentCountryId]);
+  // The current ids are still supplied to the initial request; subsequent
+  // same-level changes are applied to the stable keyed rows below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleId]);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -132,8 +139,10 @@ export function HierarchyPanel({
   const ownIds = new Set(data?.items.map(item => item.id) ?? []);
   type Ownership = 'mine' | 'friends' | 'both';
   type OwnedPanelItem = PanelItem & { ownership: Ownership; friendNames: string[] };
+  const currentRegionId = visibleLevel === 2 ? currentCountryId : currentCityId;
   const ownItems: OwnedPanelItem[] = (data?.items ?? []).map(item => ({
     ...item,
+    is_here: item.id === currentRegionId,
     ownership: friendRegionSources[item.id] ? 'both' : 'mine',
     friendNames: friendRegionSources[item.id]?.names ?? [],
   }));
@@ -146,9 +155,7 @@ export function HierarchyPanel({
       name_en: source.region.name,
       state: 'walked',
       bbox: source.region.bbox,
-      is_here: visibleLevel === 2
-        ? source.region.id === currentCountryId
-        : source.region.id === currentCityId,
+      is_here: source.region.id === currentRegionId,
       ownership: 'friends',
       friendNames: source.names,
     }));

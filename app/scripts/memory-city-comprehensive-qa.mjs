@@ -93,6 +93,7 @@ async function runScenario(scenario) {
   const page = await context.newPage();
   const runtimeErrors = [];
   const mapNetwork = [];
+  const cityDiagnosticEvents = [];
   let emptyWorldMode = false;
   page.on('pageerror', error => runtimeErrors.push(`pageerror:${error.message}`));
   page.on('console', message => {
@@ -128,7 +129,17 @@ async function runScenario(scenario) {
     const authorizedAt = new Date(fixedMs - 60_000).toISOString();
     const expiresAt = new Date(fixedMs + 60 * 60_000).toISOString();
     if (endpoint === '/api/auth/me') return json({ user });
-    if (endpoint === '/api/edit-diag') return json({ ok: true });
+    if (endpoint === '/api/edit-diag') {
+      try {
+        const body = request.postDataJSON();
+        for (const event of body?.events ?? []) {
+          if (/hierarchy|city_|camera_(command|destination)/.test(String(event?.tag ?? ''))) {
+            cityDiagnosticEvents.push({ tag: event.tag, ctx: event.ctx ?? null });
+          }
+        }
+      } catch { /* diagnostics must not alter the interaction */ }
+      return json({ ok: true });
+    }
     if (endpoint === '/api/memory-subscriptions') return json({
       limit: null, count: 1,
       subscriptions: [{ friend_id: friendId, friend_name: 'Mia Rangi', subscribed_at: authorizedAt }],
@@ -616,7 +627,7 @@ async function runScenario(scenario) {
       runtimeClean: runtimeErrors.length === 0,
       hostedMapboxResponses: mapNetwork.some(item => item.status >= 200 && item.status < 400),
     };
-    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, findingLocationWaitMs, clickToPanelMs, cityBox, logoBox, attributionBox, panelBox, openListGeometry, ownership, scrollEvidence, finalRowGeometry, selection, mineStable, friendSelection, friendStable, backToMapStable, stable, returnState, assertions, runtimeErrors: [...new Set(runtimeErrors)], mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()], pass: Object.values(assertions).every(Boolean) });
+    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, findingLocationWaitMs, clickToPanelMs, cityBox, logoBox, attributionBox, panelBox, openListGeometry, ownership, scrollEvidence, finalRowGeometry, selection, mineStable, friendSelection, friendStable, backToMapStable, stable, returnState, assertions, cityDiagnosticEvents, runtimeErrors: [...new Set(runtimeErrors)], mapNetwork: [...new Map(mapNetwork.map(item => [JSON.stringify(item), item])).values()], pass: Object.values(assertions).every(Boolean) });
   } catch (error) {
     let failureScreenshot = null;
     try { failureScreenshot = await shot('failure'); } catch { /* preserve the original failure */ }
@@ -632,8 +643,29 @@ async function runScenario(scenario) {
         : null,
       subscriptions: globalThis.__cairnStores?.useMemorySubscriptionsStore?.getState?.(),
       friendSourceStates: globalThis.__cairnStores?.useFriendMemoryStore?.getState?.().sourceStates,
+      preparedCoverage: (() => {
+        const prepared = globalThis.__cairnStores?.usePreparedMemoryCoverageStore?.getState?.();
+        return prepared ? {
+          status: prepared.status,
+          userId: prepared.userId,
+          snapshotId: prepared.coverage?.snapshotId ?? null,
+          complete: prepared.coverage?.complete === true,
+          regionIds: prepared.coverage?.regions?.map(region => region.id) ?? [],
+        } : null;
+      })(),
+      navigationSession: (() => {
+        const session = globalThis.__cairnStores?.useMemoryNavigationSessionStore?.getState?.();
+        return session ? {
+          sessionId: session.sessionId,
+          ownerId: session.ownerId,
+          mineSnapshotId: session.mineCoverage?.snapshotId ?? null,
+          mineComplete: session.mineCoverage?.complete === true,
+          selectedCityId: session.selectedCityId,
+        } : null;
+      })(),
+      manualCity: globalThis.__cairnStores?.useMemoryCameraStore?.getState?.().manualCity ?? null,
     })).catch(() => null);
-    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, failureScreenshot, failureState, runtimeErrors: [...new Set(runtimeErrors)], error: error?.stack || String(error), pass: false });
+    results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, failureScreenshot, failureState, cityDiagnosticEvents, runtimeErrors: [...new Set(runtimeErrors)], error: error?.stack || String(error), pass: false });
   } finally {
     await context.close();
   }

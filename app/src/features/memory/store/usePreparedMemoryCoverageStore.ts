@@ -68,6 +68,11 @@ interface PreparedMemoryCoverageState {
 let requestSequence = 0;
 let activeRequestController: AbortController | null = null;
 let activeRequestSessionId: string | null | undefined;
+let activeRequestCompletion: {
+  sequence: number;
+  promise: Promise<void>;
+  resolve: () => void;
+} | null = null;
 let refreshAfterLoad = false;
 export const PREPARED_MEMORY_COVERAGE_TIMEOUT_MS = 30_000;
 const SNAPSHOT_PAGE_SIZE = 24;
@@ -167,6 +172,12 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
       && activeRequestSessionId === sessionId) {
       if (get().viewport?.key !== viewport.key) set({ viewport });
       if (force) refreshAfterLoad = true;
+      // `loadViewport` is a completion contract, not only a request trigger.
+      // City navigation needs to wait for the same immutable Mine snapshot
+      // that Fog will render. Returning here while the shared request was
+      // still in flight let the city row become tappable before its exact
+      // coverage target existed.
+      if (activeRequestCompletion) await activeRequestCompletion.promise;
       return;
     }
     const sequence = ++requestSequence;
@@ -174,6 +185,16 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
     const controller = new AbortController();
     activeRequestController = controller;
     activeRequestSessionId = sessionId;
+    let resolveRequestCompletion!: () => void;
+    const requestCompletion = new Promise<void>((resolve) => {
+      resolveRequestCompletion = resolve;
+    });
+    const completion = {
+      sequence,
+      promise: requestCompletion,
+      resolve: resolveRequestCompletion,
+    };
+    activeRequestCompletion = completion;
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -407,6 +428,10 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
         activeRequestController = null;
         activeRequestSessionId = undefined;
       }
+      completion.resolve();
+      if (activeRequestCompletion?.sequence === sequence) {
+        activeRequestCompletion = null;
+      }
       if (sequence === requestSequence && refreshAfterLoad && get().userId === userId) {
         refreshAfterLoad = false;
         // A visible navigation session is deliberately frozen. New evidence
@@ -448,6 +473,8 @@ export const usePreparedMemoryCoverageStore = create<PreparedMemoryCoverageState
     activeRequestController?.abort();
     activeRequestController = null;
     activeRequestSessionId = undefined;
+    activeRequestCompletion?.resolve();
+    activeRequestCompletion = null;
     set({
       userId: null,
       coverage: null,

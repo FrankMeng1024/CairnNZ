@@ -1433,6 +1433,7 @@ export function MemoryScreen() {
           accessibilityLabel={cairnText('memory.memory-screen.browse-explored-cities')}
           onPress={async () => {
             if (hierarchyOpen) {
+              panelOpenRequestIdRef.current += 1;
               setHierarchyOpen(false);
               return;
             }
@@ -1686,8 +1687,8 @@ export function MemoryScreen() {
           currentCityId={hierarchyCurrentCityId}
           currentCountryId={hierarchyCurrentCountryId}
           friendRegionSources={friendRegionSources}
-          onSelectItem={(itemId, itemType, bbox) => {
-            panelOpenRequestIdRef.current += 1;
+          onSelectItem={async (itemId, itemType, bbox) => {
+            const selectionRequestId = ++panelOpenRequestIdRef.current;
             log('v434.hierarchy_tap', { id: itemId, type: itemType });
             if (itemType === 'country') {
               // World layer → tap country: switch title, do NOT fly.
@@ -1697,10 +1698,27 @@ export function MemoryScreen() {
               setHierarchyTitleId(itemId);
               return;
             }
-            // Country layer → tap city: fly + refetch panel with new here_city_id.
+            // Country layer → tap city: resolve the exact coverage target, then fly.
             manualBrowseThisMountRef.current = true;
+            // A hierarchy row can arrive before the complete Mine snapshot.
+            // Await the already-coalesced acquisition so the camera target is
+            // derived from the exact authority Fog renders, never a city
+            // centroid. A newer city tap, panel close or Recenter invalidates
+            // this result before it can move the camera.
+            const coverageViewport = mapRef.current?.getCoverageViewport();
+            if (coverageViewport) {
+              await usePreparedMemoryCoverageStore.getState().loadViewport(coverageViewport);
+            }
+            if (panelOpenRequestIdRef.current !== selectionRequestId) {
+              log('memory.city_selection_stale_drop', { city_id: itemId });
+              return;
+            }
             const citySources: MemoryCityCoverageSource[] = [];
-            const prepared = usePreparedMemoryCoverageStore.getState().coverage;
+            const navigationSession = useMemoryNavigationSessionStore.getState();
+            const prepared = navigationSession.ownerId === activeOwnerId
+              && navigationSession.mineCoverage?.complete
+              ? navigationSession.mineCoverage
+              : usePreparedMemoryCoverageStore.getState().coverage;
             const mineRegion = prepared?.complete
               ? prepared.regions.find(region => region.level === 3 && region.id === itemId)
               : null;
@@ -1799,7 +1817,10 @@ export function MemoryScreen() {
             // currentCountryId — those follow map center, not tap history.
             setHierarchyTitleId('world');
           }}
-          onClose={() => setHierarchyOpen(false)}
+          onClose={() => {
+            panelOpenRequestIdRef.current += 1;
+            setHierarchyOpen(false);
+          }}
         />
       )}
     </View>
