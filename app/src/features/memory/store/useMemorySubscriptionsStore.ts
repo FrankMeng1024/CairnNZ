@@ -157,10 +157,35 @@ function applyPendingSelectionIntents(
   }
   return {
     subscriptions: nextSubscriptions,
-    sources: sources.map(source => {
-      const intent = pending[String(source.friend_id)];
-      return intent ? { ...source, selected: intent === 'select' } : source;
-    }),
+    // `subscriptions` is immediate checkbox intent. `source.selected` remains
+    // the most recent server-confirmed selection and must not be rewritten by
+    // an unacknowledged local intent: Friend geometry uses that distinction
+    // as a fail-closed visibility boundary.
+    sources,
+  };
+}
+
+function rollbackCancelledSelection(
+  state: Pick<State, 'subscriptions' | 'availableSources' | 'selectionPending'>,
+  friendId: number,
+): Pick<State, 'subscriptions' | 'availableSources' | 'selectionPending'> {
+  const id = String(friendId);
+  const source = state.availableSources.find(item => String(item.friend_id) === id);
+  const serverConfirmed = source?.selected === true && source.sharing_status !== 'not_shared';
+  const current = state.subscriptions.find(item => Number(item.friend_id) === friendId);
+  const selectionPending = { ...state.selectionPending };
+  delete selectionPending[id];
+  return {
+    subscriptions: serverConfirmed
+      ? current
+        ? state.subscriptions
+        : [...state.subscriptions, {
+            friend_id: friendId,
+            friend_name: source?.friend_name ?? id,
+          }]
+      : state.subscriptions.filter(item => Number(item.friend_id) !== friendId),
+    availableSources: state.availableSources,
+    selectionPending,
   };
 }
 
@@ -355,9 +380,6 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     };
     set(state => ({
       subscriptions: existing ? state.subscriptions : [...state.subscriptions, optimistic],
-      availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
-        ? { ...item, selected: true }
-        : item),
       selectionPending: { ...state.selectionPending, [String(friendId)]: 'select' },
       selectionError: null,
       selectionLastFailure: null,
@@ -378,7 +400,14 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
           set(state => {
             const selectionPending = { ...state.selectionPending };
             delete selectionPending[String(friendId)];
-            return { selectionPending, selectionError: null, selectionLastFailure: null };
+            return {
+              availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
+                ? { ...item, selected: true }
+                : item),
+              selectionPending,
+              selectionError: null,
+              selectionLastFailure: null,
+            };
           });
           persistSelectionIntents(viewerAtStart, get().selectionPending);
         } else {
@@ -424,12 +453,19 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
             operation: 'memory-selection',
             stage: 'persist-select',
             targetRevision: `${friendId}:select:${mutationGeneration}`,
+            cancelled: (error as any)?.name === 'AbortError'
+              || (error as any)?.code === 'REQUEST_CANCELLED',
           });
           set(state => {
-            const selectionPending = { ...state.selectionPending };
-            if (failure.kind === 'cancelled') delete selectionPending[String(friendId)];
+            const rollback = failure.kind === 'cancelled'
+              ? rollbackCancelledSelection(state, friendId)
+              : {
+                  subscriptions: state.subscriptions,
+                  availableSources: state.availableSources,
+                  selectionPending: state.selectionPending,
+                };
             return {
-              selectionPending,
+              ...rollback,
               selectionError: failure.kind === 'cancelled'
                 ? null
                 : friendMemoryPresentationFailure(failure),
@@ -457,9 +493,6 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     const mutationGeneration = nextSelectionMutationGeneration(friendId);
     set(state => ({
       subscriptions: state.subscriptions.filter(item => Number(item.friend_id) !== friendId),
-      availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
-        ? { ...item, selected: false }
-        : item),
       selectionPending: { ...state.selectionPending, [String(friendId)]: 'deselect' },
       selectionError: null,
       selectionLastFailure: null,
@@ -480,7 +513,14 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
           set(state => {
             const selectionPending = { ...state.selectionPending };
             delete selectionPending[String(friendId)];
-            return { selectionPending, selectionError: null, selectionLastFailure: null };
+            return {
+              availableSources: state.availableSources.map(item => Number(item.friend_id) === friendId
+                ? { ...item, selected: false }
+                : item),
+              selectionPending,
+              selectionError: null,
+              selectionLastFailure: null,
+            };
           });
           persistSelectionIntents(viewerAtStart, get().selectionPending);
         } else {
@@ -514,12 +554,19 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
             operation: 'memory-selection',
             stage: 'persist-deselect',
             targetRevision: `${friendId}:deselect:${mutationGeneration}`,
+            cancelled: (error as any)?.name === 'AbortError'
+              || (error as any)?.code === 'REQUEST_CANCELLED',
           });
           set(state => {
-            const selectionPending = { ...state.selectionPending };
-            if (failure.kind === 'cancelled') delete selectionPending[String(friendId)];
+            const rollback = failure.kind === 'cancelled'
+              ? rollbackCancelledSelection(state, friendId)
+              : {
+                  subscriptions: state.subscriptions,
+                  availableSources: state.availableSources,
+                  selectionPending: state.selectionPending,
+                };
             return {
-              selectionPending,
+              ...rollback,
               selectionError: failure.kind === 'cancelled'
                 ? null
                 : friendMemoryPresentationFailure(failure),

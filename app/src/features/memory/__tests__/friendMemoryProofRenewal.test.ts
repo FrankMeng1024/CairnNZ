@@ -453,6 +453,106 @@ describe('Friend Memory server proof renewal', () => {
     expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(0);
   });
 
+  test('a never-settling renewal times out, releases single-flight, and bounded retry restores the same grant', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-27T00:00:00.000Z'));
+    let neverRequestSignal: AbortSignal | undefined;
+    mockAuthenticatedFetch.mockReset()
+      .mockResolvedValueOnce(snapshotResponse())
+      .mockImplementationOnce(async (_path, init) => {
+        neverRequestSignal = init.signal;
+        return new Promise(() => undefined);
+      })
+      .mockImplementationOnce(async (_path, init) => renewalResponse(JSON.parse(init.body).request_id));
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    const geometry = useFriendMemoryStore.getState().projections['11'].geometry;
+    const projection = useFriendMemoryStore.getState().projections['11'];
+    useFriendMemoryStore.setState({
+      projections: {
+        ...useFriendMemoryStore.getState().projections,
+        '11': { ...projection, authorizationExpiresAtMs: Date.now() - 1 },
+      },
+    });
+
+    let firstSettled = false;
+    const firstRenewal = useFriendMemoryStore.getState().renewAuthorizationProofs(['11'])
+      .then((result: boolean) => {
+        firstSettled = true;
+        return result;
+      });
+    await Promise.resolve();
+    expect(mockAuthenticatedFetch.mock.calls.filter(call => call[0] === '/api/friend-sharing/coverage-proof-renewal')).toHaveLength(1);
+
+    await jest.advanceTimersByTimeAsync(10_001);
+
+    expect(firstSettled).toBe(true);
+    await expect(firstRenewal).resolves.toBe(false);
+    expect(neverRequestSignal?.aborted).toBe(true);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(0);
+    expect(useFriendMemoryStore.getState()).toMatchObject({
+      loading: false,
+      error: 'offline',
+      lastFailure: { kind: 'timeout' },
+    });
+
+    // The existing bounded recovery policy owns the retry. Connectivity is
+    // already available for the next request; advancing to the first 15 s
+    // retry must be enough—no manual renewal call or camera action is needed.
+    await jest.advanceTimersByTimeAsync(15_000);
+    await Promise.resolve();
+    expect(mockAuthenticatedFetch.mock.calls.filter(call => call[0] === '/api/friend-sharing/coverage-snapshot')).toHaveLength(1);
+    expect(mockAuthenticatedFetch.mock.calls.filter(call => call[0] === '/api/friend-sharing/coverage-proof-renewal')).toHaveLength(2);
+    expect(useFriendMemoryStore.getState().projections['11'].geometry).toBe(geometry);
+    expect(useFriendMemoryStore.getState().sourceStates['11']).toMatchObject({ status: 'loaded', cellCount: 1 });
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
+  test('account fencing aborts a hung renewal and the replacement identity is not blocked', async () => {
+    let snapshotCalls = 0;
+    let renewalCalls = 0;
+    let neverRequestSignal: AbortSignal | undefined;
+    mockAuthenticatedFetch.mockReset().mockImplementation(async (path, init) => {
+      if (path === '/api/friend-sharing/coverage-snapshot') {
+        snapshotCalls += 1;
+        return snapshotResponse('grant-a', `snapshot-${snapshotCalls}`);
+      }
+      renewalCalls += 1;
+      if (renewalCalls === 1) {
+        neverRequestSignal = init.signal;
+        return new Promise(() => undefined);
+      }
+      return renewalResponse(JSON.parse(init.body).request_id);
+    });
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    const oldRenewal = useFriendMemoryStore.getState().renewAuthorizationProofs(['11']);
+    await Promise.resolve();
+
+    useFriendMemoryStore.getState().reset();
+    await expect(oldRenewal).resolves.toBe(false);
+    expect(neverRequestSignal?.aborted).toBe(true);
+    expect(useFriendMemoryStore.getState()).toMatchObject({
+      userId: null,
+      projections: {},
+      error: null,
+      lastFailure: null,
+    });
+
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    await expect(useFriendMemoryStore.getState().renewAuthorizationProofs(['11'])).resolves.toBe(true);
+    expect(snapshotCalls).toBe(2);
+    expect(renewalCalls).toBe(2);
+    expect(useFriendMemoryStore.getState().projections['11']).toMatchObject({
+      snapshotId: 'snapshot-2',
+      grantEpoch: 'grant-a',
+    });
+    expect(useFriendMemoryStore.getState().sourceStates['11'].status).toBe('loaded');
+  });
+
   test('a complete sources refresh retains same-grant hidden geometry across deselect and reselect', async () => {
     mockAuthenticatedFetch.mockReset().mockResolvedValueOnce(snapshotResponse());
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
