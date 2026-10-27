@@ -25,14 +25,24 @@ import { useMemoryScopeStore } from '../store/useMemoryScopeStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 
 const sources = [
-  { friend_id: '11', friend_name: 'First Friend', selected: false, authorization_version: 1, effective_at: '2026-10-15T00:00:00Z', sharing_status: 'shared' as const, coverage_scope: 'full_history_delayed_v1' as const },
-  { friend_id: '22', friend_name: 'Second Friend', selected: false, authorization_version: 1, effective_at: '2026-10-15T00:00:00Z', sharing_status: 'shared' as const, coverage_scope: 'full_history_delayed_v1' as const },
+  { friend_id: '11', friend_name: 'First Friend', selected: false, authorization_version: 1, grant_epoch: 'grant-11', friendship_episode_id: 'episode-11', effective_at: '2026-10-15T00:00:00Z', sharing_status: 'shared' as const, coverage_scope: 'full_history_delayed_v1' as const },
+  { friend_id: '22', friend_name: 'Second Friend', selected: false, authorization_version: 1, grant_epoch: 'grant-22', friendship_episode_id: 'episode-22', effective_at: '2026-10-15T00:00:00Z', sharing_status: 'shared' as const, coverage_scope: 'full_history_delayed_v1' as const },
   { friend_id: '33', friend_name: 'Unavailable Friend', selected: false, authorization_version: 0, effective_at: '', sharing_status: 'not_shared' as const, coverage_scope: null },
 ];
 const TEST_VIEWPORT = { bbox: [174.6, -41.4, 174.9, -41.1] as [number, number, number, number], key: 'test-viewport' };
 
 function ok(body: any, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
+}
+
+function selectionAck(init: any, selected: boolean, status = selected ? 201 : 200) {
+  const request = JSON.parse(init.body);
+  return ok({
+    selected,
+    selection_chain_id: request.selection_chain_id,
+    selection_sequence: request.selection_sequence,
+    selection_request_id: request.selection_request_id,
+  }, status);
 }
 
 function projection(friendId: number) {
@@ -101,8 +111,8 @@ describe('Memory friend picker interaction owner', () => {
         return ok({ limit: null, count: 0, subscriptions: [] });
       }
       if (path === '/api/friend-sharing/sources') return ok({ sources });
-      if (path === '/api/memory-subscriptions' && init.method === 'POST') return ok({}, 201);
-      if (path.startsWith('/api/memory-subscriptions/') && init.method === 'DELETE') return ok({});
+      if (path === '/api/memory-subscriptions' && init.method === 'POST') return selectionAck(init, true);
+      if (path.startsWith('/api/memory-subscriptions/') && init.method === 'DELETE') return selectionAck(init, false);
       if (path === '/api/friend-sharing/coverage-snapshot') {
         const friendId = JSON.parse(init.body).friend_id;
         if (friendId === 11) await firstGate;
@@ -198,7 +208,7 @@ describe('Memory friend picker interaction owner', () => {
     mockAuthenticatedFetch.mockImplementation(async (path: string, init: any = {}) => {
       if (path === '/api/memory-subscriptions' && init.method === 'POST') {
         await pending;
-        return ok({}, 201);
+        return selectionAck(init, true);
       }
       if (path === '/api/memory-subscriptions') return ok({ limit: null, count: 0, subscriptions: [] });
       if (path === '/api/friend-sharing/sources') return ok({ sources });
@@ -226,11 +236,19 @@ describe('Memory friend picker interaction owner', () => {
       loading: false,
       error: null,
     });
-    mockAuthenticatedFetch
-      .mockResolvedValueOnce(ok({}, 503))
-      .mockResolvedValueOnce(ok({ sources: [] }))
-      .mockResolvedValueOnce(ok({ limit: null, count: 1, subscriptions: [selectedSubscription] }))
-      .mockResolvedValueOnce(ok({ sources: [selectedSource] }));
+    let sourceReads = 0;
+    mockAuthenticatedFetch.mockImplementation(async (path: string) => {
+      if (path === '/api/friend-sharing/sources') {
+        sourceReads += 1;
+        return sourceReads === 1
+          ? ok({}, 503)
+          : ok({ complete: true, sources: [selectedSource] });
+      }
+      if (path === '/api/memory-subscriptions') {
+        return ok({ limit: null, count: 1, subscriptions: [selectedSubscription] });
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
 
     const onClose = jest.fn();
     const screen = render(<MemoryFriendPickModal visible onClose={onClose} />);

@@ -19,7 +19,11 @@ import path from 'node:path';
 
 const source = {
   friend_id: '31', friend_name: 'QA Friend', selected: false,
-  authorization_version: 7, effective_at: '2026-10-23T00:00:00.000Z',
+  authorization_version: 7,
+  grant_epoch: 'grant-a',
+  friendship_episode_id: 'episode-a',
+  friendship_episode_uuid: 'episode-uuid-a',
+  effective_at: '2026-10-23T00:00:00.000Z',
   sharing_status: 'shared' as const,
   coverage_scope: 'full_history_delayed_v1' as const,
 };
@@ -29,6 +33,20 @@ const authorizedSource = {
   grant_epoch: 'grant-a',
   friendship_episode_id: 'episode-a',
 };
+
+function selectionAck(init: any, selected: boolean, status = selected ? 201 : 200) {
+  const request = JSON.parse(init.body);
+  return {
+    ok: true,
+    status,
+    json: async () => ({
+      selected,
+      selection_chain_id: request.selection_chain_id,
+      selection_sequence: request.selection_sequence,
+      selection_request_id: request.selection_request_id,
+    }),
+  };
+}
 
 function friendSnapshotResponse() {
   const now = Date.now();
@@ -98,7 +116,7 @@ describe('Memory friend selection intent', () => {
     });
     mockAuthenticatedFetch.mockImplementation(async (path: string, init: any) => {
       if (path === '/api/friend-sharing/coverage-snapshot') return friendSnapshotResponse();
-      if (init?.method === 'DELETE') return { ok: true, status: 200 };
+      if (init?.method === 'DELETE') return selectionAck(init, false);
       throw new Error(`unexpected ${path}`);
     });
     await useFriendMemoryStore.getState().hydrate('viewer-a');
@@ -165,8 +183,8 @@ describe('Memory friend selection intent', () => {
   test('genuine reselect ACK reveals the same cached geometry without another coverage request', async () => {
     await prepareHiddenCachedFriend();
     const geometry = useFriendMemoryStore.getState().projections['31'].geometry;
-    mockAuthenticatedFetch.mockImplementation(async (path: string) => {
-      if (path === '/api/memory-subscriptions') return { ok: true, status: 201 };
+    mockAuthenticatedFetch.mockImplementation(async (path: string, init: any) => {
+      if (path === '/api/memory-subscriptions') return selectionAck(init, true);
       throw new Error(`unexpected ${path}`);
     });
 
@@ -188,20 +206,23 @@ describe('Memory friend selection intent', () => {
     mockAuthenticatedFetch.mockImplementation(async (path: string, init: any) => {
       if (path === '/api/memory-subscriptions' && init?.method === 'POST') {
         await new Promise<void>(resolve => { releaseSelect = resolve; });
-        return { ok: true, status: 201 };
+        return selectionAck(init, true);
       }
       if (path === '/api/memory-subscriptions/31' && init?.method === 'DELETE') {
-        return { ok: true, status: 200 };
+        return selectionAck(init, false);
       }
       throw new Error(`unexpected ${path}`);
     });
 
     const select = useMemorySubscriptionsStore.getState().subscribe(31);
+    // The production mutation first durably allocates its causal sequence.
+    // Wait until the POST is genuinely in flight before issuing the newer
+    // deselect; otherwise this is only a pre-dispatch cancellation case.
+    while (!releaseSelect) await Promise.resolve();
     const deselect = useMemorySubscriptionsStore.getState().unsubscribe(31);
     expect(useMemorySubscriptionsStore.getState().isSubscribed(31)).toBe(false);
     expect(useMemorySubscriptionsStore.getState().selectionPending).toEqual({ '31': 'deselect' });
     expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(0);
-    while (!releaseSelect) await Promise.resolve();
     releaseSelect();
     await expect(Promise.all([select, deselect])).resolves.toEqual([0, 200]);
 
@@ -225,7 +246,7 @@ describe('Memory friend selection intent', () => {
     });
     expect(useMemorySubscriptionsStore.getState().isSubscribed(31)).toBe(true);
 
-    mockAuthenticatedFetch.mockResolvedValueOnce({ ok: true, status: 201 });
+    mockAuthenticatedFetch.mockImplementationOnce(async (_path: string, init: any) => selectionAck(init, true));
     await expect(useMemorySubscriptionsStore.getState().retrySelectionIntents()).resolves.toBe(true);
     expect(useMemorySubscriptionsStore.getState().selectionPending).toEqual({});
     expect(useMemorySubscriptionsStore.getState().selectionError).toBeNull();
@@ -264,12 +285,15 @@ describe('Memory friend selection intent', () => {
     mockAuthenticatedFetch.mockImplementation(async (_path: string, init: any) => {
       if (init.method === 'DELETE') {
         await deleteGate;
-        return { ok: true, status: 204 };
+        return selectionAck(init, false);
       }
-      return { ok: true, status: 201 };
+      return selectionAck(init, true);
     });
 
     const deselect = useMemorySubscriptionsStore.getState().unsubscribe(31);
+    // Establish the intended adverse ordering: the DELETE has left the
+    // client, then a newer select intent supersedes it before its ACK.
+    while (mockAuthenticatedFetch.mock.calls.length === 0) await Promise.resolve();
     const reselect = useMemorySubscriptionsStore.getState().subscribe(31);
     expect(useMemorySubscriptionsStore.getState().isSubscribed(31)).toBe(true);
     expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
