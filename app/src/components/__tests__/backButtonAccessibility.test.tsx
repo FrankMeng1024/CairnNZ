@@ -17,9 +17,9 @@ jest.mock('../../hooks/useVisualTheme', () => {
 
 jest.mock('../Icon', () => ({ Icon: () => null }));
 
-type Variant = 'pill' | 'inline' | 'ghostRound';
+type Variant = 'pill' | 'inline' | 'mapInline' | 'ghostRound';
 
-const variants: Variant[] = ['pill', 'inline', 'ghostRound'];
+const variants: Variant[] = ['pill', 'inline', 'mapInline', 'ghostRound'];
 const backButtonPath = path.resolve(__dirname, '..', 'BackButton.tsx');
 const publicDetailPath = path.resolve(__dirname, '..', '..', 'screens', 'PublicCairnDetailScreen.tsx');
 
@@ -119,7 +119,7 @@ describe('BackButton accessibility contract', () => {
     // semantic key without coupling navigation coverage to English wording.
     expect(unavailableBranch).toContain("cairnText('public-cairn-detail-screen.public-cairn-unavailable')");
     expect(unavailableBranch).toContain('<BackButton variant="inline" />');
-    expect(authorizedBranch).toContain('<BackButton variant="inline" />');
+    expect(authorizedBranch).toContain('<BackButton variant="mapInline" />');
   });
 
   it('uses the Activity-standard inline composition on every production BackButton callsite', () => {
@@ -137,6 +137,6 @@ describe('BackButton accessibility contract', () => {
     const memory = fs.readFileSync(path.resolve(sourceRoot, 'features/memory/screens/MemoryScreen.tsx'), 'utf8');
     expect(memory).not.toContain('memoryBackSurface');
     const activityDetail = fs.readFileSync(path.resolve(sourceRoot, 'screens/MapHistoryScreen.tsx'), 'utf8');
-    expect(activityDetail).toContain('<BackButton\n            variant="inline"');
+    expect(activityDetail).toContain("variant={isRouteDetail ? 'mapInline' : 'inline'}");
   });
 });
