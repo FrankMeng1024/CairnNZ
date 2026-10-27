@@ -86,7 +86,10 @@ describe('O87 Memory presentation state contracts', () => {
       authorizedSourceVersions: { '31': 7 },
       lastObservedWallClockMs: now,
     });
-    useMemorySubscriptionsStore.setState({ subscriptions: [{ friend_id: 31, friend_name: 'Frank' }] });
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 31, friend_name: 'Frank' }],
+      availableSources: [resolvedSource],
+    });
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toEqual([
       expect.objectContaining({
         id: 'pudong',
@@ -124,11 +127,15 @@ describe('O87 Memory presentation state contracts', () => {
     });
     useMemorySubscriptionsStore.setState({
       subscriptions: [{ friend_id: 31, friend_name: 'Frank' }],
+      availableSources: [{ ...resolvedSource, selected: false }],
       selectionPending: { '31': 'select' },
     });
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toEqual([]);
 
-    useMemorySubscriptionsStore.setState({ selectionPending: {} });
+    useMemorySubscriptionsStore.setState({
+      availableSources: [resolvedSource],
+      selectionPending: {},
+    });
     expect(useFriendMemoryStore.getState().getVisibleRegions()).toHaveLength(1);
   });
 
@@ -159,7 +166,10 @@ describe('O87 Memory presentation state contracts', () => {
       authorizedSourceVersions: {},
       lastObservedWallClockMs: now,
     });
-    useMemorySubscriptionsStore.setState({ subscriptions: [{ friend_id: 31, friend_name: 'Frank' }] });
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 31, friend_name: 'Frank' }],
+      availableSources: [resolvedSource],
+    });
 
     await useFriendMemoryStore.getState().reconcileAuthorizedSources([{
       friend_id: 31, authorization_version: 7, selected: true,

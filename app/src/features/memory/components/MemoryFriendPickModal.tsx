@@ -113,7 +113,11 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
   const load = useMemorySubscriptionsStore((s) => s.load);
   const subscribe = useMemorySubscriptionsStore((s) => s.subscribe);
   const unsubscribe = useMemorySubscriptionsStore((s) => s.unsubscribe);
-  const isSubscribed = useMemorySubscriptionsStore((s) => s.isSubscribed);
+  // Subscribe to the intent data itself. Selecting the stable isSubscribed
+  // method does not re-render when only the optimistic checkbox collection
+  // changes (server-confirmed source.selected deliberately stays unchanged
+  // until ACK).
+  const subscriptions = useMemorySubscriptionsStore((s) => s.subscriptions);
   const setScope = useMemoryScopeStore((s) => s.setScope);
   const loadFriendProjections = useFriendMemoryStore((s) => s.loadSelectedProjections);
 
@@ -235,7 +239,9 @@ export function MemoryFriendPickModal({ visible, onClose, activateCombinedOnSele
               renderItem={({ item }) => (
                 <FriendMemoryRow
                   source={item}
-                  subscribed={isSubscribed(Number(item.friend_id))}
+                  subscribed={subscriptions.some(subscription => (
+                    Number(subscription.friend_id) === Number(item.friend_id)
+                  ))}
                   onToggle={onTap}
                 />
               )}

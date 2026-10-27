@@ -4,6 +4,20 @@ const TEST_VIEWPORT = {
   key: 'test-viewport',
 };
 
+function selectedSource(friendId: number, authorizationVersion: number) {
+  return {
+    friend_id: String(friendId),
+    friend_name: `Friend ${friendId}`,
+    selected: true,
+    authorization_version: authorizationVersion,
+    grant_epoch: `grant-${friendId}`,
+    friendship_episode_id: `episode-${friendId}`,
+    effective_at: new Date(0).toISOString(),
+    sharing_status: 'shared' as const,
+    coverage_scope: 'full_history_delayed_v1' as const,
+  };
+}
+
 function projection(friendId = '11', authorizedAt = 1_000_000) {
   return {
     friendId,
@@ -266,7 +280,10 @@ describe('friend Memory authorization cache ordering', () => {
       geometry: { type: 'MultiPolygon' as const, coordinates: [[base.cells[0].polygon]] },
       tiles: [], regions: [],
     };
-    useMemorySubscriptionsStore.setState({ subscriptions: [{ friend_id: 11, friend_name: 'Mia' }] });
+    useMemorySubscriptionsStore.setState({
+      subscriptions: [{ friend_id: 11, friend_name: 'Mia' }],
+      availableSources: [selectedSource(11, 4)],
+    });
     useFriendMemoryStore.setState({ userId: 'viewer-a', projections: { '11': retained } });
 
     await useFriendMemoryStore.getState().reconcileAuthorizedSources([], false);
@@ -423,9 +440,7 @@ describe('friend Memory authorization cache ordering', () => {
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }],
       availableSources: [{
-        friend_id: '11', authorization_version: 4,
-        grant_epoch: 'grant-11', friendship_episode_id: 'episode-11',
-        coverage_scope: 'full_history_delayed_v1',
+        ...selectedSource(11, 4),
       }],
     };
     const authenticatedFetch = jest.fn();
@@ -524,7 +539,12 @@ describe('friend Memory authorization cache ordering', () => {
       useAppStore: { getState: () => appState },
     }));
     jest.doMock('../store/useMemorySubscriptionsStore', () => ({
-      useMemorySubscriptionsStore: { getState: () => ({ subscriptions: [{ friend_id: 11 }] }) },
+      useMemorySubscriptionsStore: {
+        getState: () => ({
+          subscriptions: [{ friend_id: 11 }],
+          availableSources: [selectedSource(11, 4)],
+        }),
+      },
     }));
 
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
@@ -543,8 +563,12 @@ describe('friend Memory authorization cache ordering', () => {
   test('a deselect and purge while loading fences the earlier same-account response', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
     const appState: { user: { id: string } } = { user: { id: 'viewer-a' } };
-    const subscriptionState: { subscriptions: Array<{ friend_id: number }> } = {
+    const subscriptionState: {
+      subscriptions: Array<{ friend_id: number }>;
+      availableSources: ReturnType<typeof selectedSource>[];
+    } = {
       subscriptions: [{ friend_id: 11 }],
+      availableSources: [selectedSource(11, 4)],
     };
     let releaseResponse!: (value: any) => void;
     const response = new Promise(resolve => { releaseResponse = resolve; });
@@ -598,7 +622,7 @@ describe('friend Memory authorization cache ordering', () => {
     jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
     jest.doMock('../store/useMemorySubscriptionsStore', () => ({
       useMemorySubscriptionsStore: {
-        getState: () => ({ subscriptions, availableSources: [{ friend_id: '11', authorization_version: 4 }] }),
+        getState: () => ({ subscriptions, availableSources: [selectedSource(11, 4)] }),
       },
     }));
     const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
@@ -621,7 +645,7 @@ describe('friend Memory authorization cache ordering', () => {
     const appState = { user: { id: 'viewer-a' } };
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }],
-      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+      availableSources: [selectedSource(11, 4)],
     };
     const wellingtonBbox: [number, number, number, number] = [174.6, -41.4, 174.9, -41.1];
     const fiordlandBbox: [number, number, number, number] = [166.8, -46.2, 167.1, -45.9];
@@ -665,7 +689,7 @@ describe('friend Memory authorization cache ordering', () => {
     const appState = { user: { id: 'viewer-a' } };
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }],
-      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+      availableSources: [selectedSource(11, 4)],
     };
     const bbox: [number, number, number, number] = TEST_VIEWPORT.bbox;
     const ring = [[bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[2], bbox[3]], [bbox[0], bbox[3]], [bbox[0], bbox[1]]];
@@ -693,7 +717,7 @@ describe('friend Memory authorization cache ordering', () => {
     const appState = { user: { id: 'viewer-a' } };
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }],
-      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+      availableSources: [selectedSource(11, 4)],
     };
     const values = new Map<string, string>();
     values.set(`${CACHE_PREFIX}viewer-a`, persisted('viewer-a', projection()));
@@ -733,8 +757,8 @@ describe('friend Memory authorization cache ordering', () => {
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }, { friend_id: 22 }],
       availableSources: [
-        { friend_id: '11', authorization_version: 4 },
-        { friend_id: '22', authorization_version: 7 },
+        selectedSource(11, 4),
+        selectedSource(22, 7),
       ],
     };
     const authenticatedFetch = jest.fn(async (_path: string, init: { body: string }) => {
@@ -768,8 +792,8 @@ describe('friend Memory authorization cache ordering', () => {
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }, { friend_id: 22 }],
       availableSources: [
-        { friend_id: '11', authorization_version: 4 },
-        { friend_id: '22', authorization_version: 7 },
+        selectedSource(11, 4),
+        selectedSource(22, 7),
       ],
     };
     const responses: any[] = [];
@@ -811,7 +835,7 @@ describe('friend Memory authorization cache ordering', () => {
     const appState = { user: { id: 'viewer-a' } };
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }],
-      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+      availableSources: [selectedSource(11, 4)],
     };
     const deferred: Array<{ resolve: (value: any) => void }> = [];
     const authenticatedFetch = jest.fn(() => new Promise(resolve => deferred.push({ resolve })));
@@ -836,7 +860,7 @@ describe('friend Memory authorization cache ordering', () => {
     await stale;
     expect(useFriendMemoryStore.getState().projections).toEqual({});
 
-    subscriptionState.availableSources = [{ friend_id: '11', authorization_version: 5 }];
+    subscriptionState.availableSources = [selectedSource(11, 5)];
     const fresh = useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);
     while (deferred.length < 2) await Promise.resolve();
     deferred[1].resolve(response(5, 'fresh-after-new-grant'));
