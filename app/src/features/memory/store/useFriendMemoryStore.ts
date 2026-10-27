@@ -204,7 +204,11 @@ function legacyCacheKey(userId: string) {
   return `${LEGACY_CACHE_PREFIX}${userId}`;
 }
 
-function validProjection(value: any, now: number): value is FriendProjection {
+function validProjection(
+  value: any,
+  now: number,
+  requireUnexpired = true,
+): value is FriendProjection {
   return value
     && typeof value.friendId === 'string'
     && Number.isInteger(value.authorizationVersion)
@@ -214,7 +218,7 @@ function validProjection(value: any, now: number): value is FriendProjection {
     && typeof value.projectionVersion === 'string'
     && Number.isFinite(value.serverAuthorizedAtMs)
     && Number.isFinite(value.authorizationExpiresAtMs)
-    && value.authorizationExpiresAtMs > now
+    && (!requireUnexpired || value.authorizationExpiresAtMs > now)
     && value.authorizationExpiresAtMs - value.serverAuthorizedAtMs <= MAX_CACHE_AGE_MS
     && Array.isArray(value.cells)
     && value.cells.every((cell: any) => typeof cell?.id === 'string'
@@ -1385,18 +1389,19 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     );
     const next = Object.fromEntries(Object.entries(get().projections).filter(([id, projection]) => {
       const source = authoritative.get(id);
-      if (!source) return !complete && validProjection(projection, now);
+      if (!source) return !complete && validProjection(projection, now, false);
       return Number(source.authorization_version) === projection.authorizationVersion
         && source.grant_epoch === projection.grantEpoch
         && String(source.friendship_episode_id) === projection.friendshipEpisodeId
         && source.coverage_scope === projection.coverageScope
-        && validProjection(projection, now);
+        && validProjection(projection, now, false);
     }));
     for (const [id, version] of [...verifiedSourceVersions.entries()]) {
       const source = authoritative.get(id);
       if ((source && Number(source.authorization_version) !== version)
         || (complete && !source)
-        || !(id in next)) verifiedSourceVersions.delete(id);
+        || !(id in next)
+        || !validProjection(next[id], now)) verifiedSourceVersions.delete(id);
     }
     for (const id of Object.keys(get().projections)) {
       if (!(id in next)) invalidateSource(id);
@@ -1405,6 +1410,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     // unexpired in-memory projection from the same grant. This is what makes
     // focus revalidation coherent after a deliberate hard visibility fence.
     for (const [id, projection] of Object.entries(next)) {
+      if (!validProjection(projection, now)) continue;
       verifiedSourceVersions.set(id, projection.authorizationVersion);
       scheduleSourceExpiry(projection);
     }
@@ -1431,8 +1437,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       return [];
     }
     const current = get().projections;
+    // Expiry removes display authority, not the process-only complete
+    // geometry. Retain a structurally valid exact-grant snapshot so a later
+    // positive proof renewal can restore it without another geometry fetch.
     const retained = Object.fromEntries(
-      Object.entries(current).filter(([, projection]) => validProjection(projection, now)),
+      Object.entries(current).filter(([, projection]) => validProjection(projection, now, false)),
     );
     if (Object.keys(retained).length !== Object.keys(current).length) {
       for (const id of Object.keys(current)) {

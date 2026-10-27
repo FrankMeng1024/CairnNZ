@@ -109,6 +109,7 @@ docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/053_cairn_qa_fixture_cohorts.sql" >/dev/null
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/054_memory_hit_push_explicit_opt_in.sql" >/dev/null
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/055_notification_delivery_outbox.sql" >/dev/null
+docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/058_memory_subscription_intent_order.sql" >/dev/null
 legacy_fixture_state="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse "
   SELECT CONCAT(
     (SELECT COUNT(*) FROM $DB_NAME.memory_share_grants WHERE owner_id=990001 AND viewer_id=990002 AND status='revoked' AND revoked_reason='legacy_contract_retired'), ':',
@@ -153,6 +154,7 @@ if [ -n "${EVIDENCE_DIR:-}" ]; then
   "$SCRIPT_DIR/verify-migration-049.sh" | tee "$EVIDENCE_DIR/migration-049.txt"
   "$SCRIPT_DIR/verify-migration-050.sh" | tee "$EVIDENCE_DIR/migration-050.txt"
   "$SCRIPT_DIR/verify-migration-051.sh" | tee "$EVIDENCE_DIR/migration-051.txt"
+  "$SCRIPT_DIR/verify-migration-058.sh" | tee "$EVIDENCE_DIR/migration-058.txt"
   node "$HARNESS_PROGRAM" | tee "$EVIDENCE_DIR/result.json"
 else
   "$SCRIPT_DIR/verify-migration-047.sh"
@@ -160,6 +162,7 @@ else
   "$SCRIPT_DIR/verify-migration-049.sh"
   "$SCRIPT_DIR/verify-migration-050.sh"
   "$SCRIPT_DIR/verify-migration-051.sh"
+  "$SCRIPT_DIR/verify-migration-058.sh"
   node "$HARNESS_PROGRAM"
 fi
 

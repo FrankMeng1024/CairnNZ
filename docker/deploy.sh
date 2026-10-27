@@ -97,6 +97,8 @@ LAST_APPLIED_FILE="$SCRIPT_DIR/.migrations_applied"
 REPO_ROOT="$REPO_ROOT" LAST_APPLIED_FILE="$LAST_APPLIED_FILE" \
   DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_NAME=cairn DB_PASSWORD="$DB_PASSWORD" \
   "$SCRIPT_DIR/run-pending-migrations.sh"
+DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_NAME=cairn DB_PASSWORD="$DB_PASSWORD" \
+  "$REPO_ROOT/backend/scripts/verify-migration-058.sh"
 if [ "${PUBLIC_CAIRN_PILOT_ENABLED:-0}" = "1" ]; then
   DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_NAME=cairn DB_PASSWORD="$DB_PASSWORD" \
     "$REPO_ROOT/backend/scripts/verify-migration-044.sh"

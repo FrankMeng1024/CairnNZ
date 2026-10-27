@@ -226,6 +226,40 @@ describe('Friend Memory server proof renewal', () => {
     expect(useFriendMemoryStore.getState().projections['11'].geometry).toBe(cached.geometry);
   });
 
+  test('same-grant authority refresh retains expired hidden geometry for proof-only recovery', async () => {
+    mockAuthenticatedFetch.mockReset().mockResolvedValueOnce(snapshotResponse());
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    await useFriendMemoryStore.getState().hydrate('viewer-a');
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+    const cached = useFriendMemoryStore.getState().projections['11'];
+    const geometry = cached.geometry;
+    useFriendMemoryStore.setState({
+      projections: {
+        ...useFriendMemoryStore.getState().projections,
+        '11': { ...cached, authorizationExpiresAtMs: Date.now() - 1 },
+      },
+    });
+
+    await useFriendMemoryStore.getState().reconcileAuthorizedSources(
+      mockSubscriptions.availableSources,
+      true,
+    );
+
+    expect(useFriendMemoryStore.getState().projections['11']?.geometry).toBe(geometry);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(0);
+    mockAuthenticatedFetch.mockImplementationOnce(async (_path, init) => (
+      renewalResponse(JSON.parse(init.body).request_id)
+    ));
+    await useFriendMemoryStore.getState().loadSelectedProjections();
+
+    expect(mockAuthenticatedFetch.mock.calls.map(call => call[0])).toEqual([
+      '/api/friend-sharing/coverage-snapshot',
+      '/api/friend-sharing/coverage-proof-renewal',
+    ]);
+    expect(useFriendMemoryStore.getState().projections['11']?.geometry).toBe(geometry);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
   test('crosses two five-minute proof boundaries without another geometry download or loader', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-10-26T00:00:00.000Z'));

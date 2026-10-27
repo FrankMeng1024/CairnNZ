@@ -24,7 +24,11 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const authenticate = require('../middleware/authenticate');
-const { currentMemoryGrant } = require('../services/friendAuthorization');
+const {
+  applyLegacyMemorySelection,
+  applyOrderedMemorySelection,
+  parseOrderedSelectionIntent,
+} = require('../services/memorySubscriptionIntent');
 
 router.use(authenticate);
 
@@ -50,15 +54,26 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const grant = await currentMemoryGrant(pool, friendId, userId);
-    if (!grant) {
-      return res.status(404).json({ error: 'Memory source not available' });
+    const intent = parseOrderedSelectionIntent(req.body);
+    if (intent?.invalid) {
+      return res.status(400).json({
+        error: 'Invalid ordered selection identity',
+        code: 'INVALID_SELECTION_INTENT',
+      });
     }
-    await pool.execute(
-      'INSERT INTO memory_subscriptions (user_id, friend_id) VALUES (?, ?)',
-      [userId, friendId]
-    );
-    return res.status(201).json({ user_id: userId, friend_id: friendId });
+    const result = intent
+      ? await applyOrderedMemorySelection(pool, {
+          viewerId: userId,
+          friendId,
+          selected: true,
+          intent,
+        })
+      : await applyLegacyMemorySelection(pool, {
+          viewerId: userId,
+          friendId,
+          selected: true,
+        });
+    return res.status(result.status).json(result.body);
   } catch (err) {
     // SIGNAL SQLSTATE '45000' from trigger surfaces as ER_SIGNAL_EXCEPTION
     // with the trigger's MESSAGE_TEXT in err.sqlMessage.
@@ -82,14 +97,26 @@ router.delete('/:friend_id', async (req, res) => {
     return res.status(400).json({ error: 'Invalid friend_id' });
   }
   try {
-    const [result] = await pool.execute(
-      'DELETE FROM memory_subscriptions WHERE user_id = ? AND friend_id = ?',
-      [userId, friendId]
-    );
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Not subscribed' });
+    const intent = parseOrderedSelectionIntent(req.body);
+    if (intent?.invalid) {
+      return res.status(400).json({
+        error: 'Invalid ordered selection identity',
+        code: 'INVALID_SELECTION_INTENT',
+      });
     }
-    return res.json({ message: 'Unsubscribed' });
+    const result = intent
+      ? await applyOrderedMemorySelection(pool, {
+          viewerId: userId,
+          friendId,
+          selected: false,
+          intent,
+        })
+      : await applyLegacyMemorySelection(pool, {
+          viewerId: userId,
+          friendId,
+          selected: false,
+        });
+    return res.status(result.status).json(result.body);
   } catch (err) {
     console.error('[memory-subscriptions/delete]', err.message);
     return res.status(500).json({ error: 'Server error' });
