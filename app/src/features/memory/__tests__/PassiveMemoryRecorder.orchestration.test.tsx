@@ -16,6 +16,7 @@ const mockAuth: { isLoggedIn: boolean; user: { id: string } | null } = {
 };
 const mockTracking = { status: 'idle' };
 const mockMemory = { setLastWatcherFix: jest.fn() };
+const mockMemorySetState = jest.fn();
 let mockSelectedSource: 'real' | 'simulator' = 'real';
 let mockSimulatorEnabled = false;
 let mockDebugMode = true;
@@ -61,7 +62,7 @@ jest.mock('../../../store/useSettingsStore', () => ({
   ),
 }));
 jest.mock('../store/useMemoryStore', () => ({
-  useMemoryStore: { getState: () => mockMemory, setState: jest.fn() },
+  useMemoryStore: { getState: () => mockMemory, setState: mockMemorySetState },
 }));
 jest.mock('../services/recordMemoryEvidence', () => ({
   recordMemoryEvidence: jest.fn(async () => ({ committed: true, deduplicated: false })),
@@ -103,7 +104,10 @@ jest.mock('../../activity/nativeRealLocationSupervisor', () => ({
   },
 }));
 
-import { PassiveMemoryRecorder } from '../components/PassiveMemoryRecorder';
+import {
+  PassiveMemoryRecorder,
+  transitionInvalidatesSharedFix,
+} from '../components/PassiveMemoryRecorder';
 
 const Location = require('expo-location');
 const supervisor = require('../../activity/nativeRealLocationSupervisor').nativeRealLocationSupervisor;
@@ -326,6 +330,58 @@ describe('PassiveMemoryRecorder acquisition transition ownership', () => {
     expect(supervisor.setConsumer).toHaveBeenCalledTimes(1);
     expect(supervisor.setConsumer.mock.calls[0][0]).toMatchObject({ ownerUserId: 'owner-b' });
     view.unmount();
+  });
+
+  test('anonymous ineligible bootstrap cannot erase the signed-in owner shared fix', async () => {
+    mockSettings.passiveExplorationEnabled = false;
+    mockAuth.isLoggedIn = false;
+    mockAuth.user = null;
+    const view = render(<PassiveMemoryRecorder />);
+    await act(async () => { await flushMicrotasks(); });
+
+    // Memory/Activity may already have established this owner's current fix
+    // before the passive recorder observes the authenticated settings render.
+    mockMemorySetState.mockClear();
+    mockAuth.isLoggedIn = true;
+    mockAuth.user = { id: 'owner-a' };
+    mockSettings.passiveExplorationEnabled = true;
+    view.rerender(<PassiveMemoryRecorder />);
+    await act(async () => { await flushMicrotasks(); });
+
+    expect(mockMemorySetState).not.toHaveBeenCalledWith({ lastWatcherFix: null });
+    view.unmount();
+  });
+
+  test('shared-fix invalidation preserves boot handoff but fences real authority boundaries', () => {
+    const authority = (
+      ownerUserId: string,
+      source: 'real' | 'simulator',
+      eligible: boolean,
+    ) => ({
+      ownerUserId,
+      source,
+      eligible,
+      effectGeneration: 0,
+      continuityState: {} as any,
+      rawOrdinal: 0,
+      backgroundEpoch: null,
+    });
+    expect(transitionInvalidatesSharedFix(
+      authority('', 'real', false),
+      authority('owner-a', 'real', true),
+    )).toBe(false);
+    expect(transitionInvalidatesSharedFix(
+      authority('owner-a', 'real', true),
+      authority('owner-a', 'real', false),
+    )).toBe(true);
+    expect(transitionInvalidatesSharedFix(
+      authority('owner-a', 'real', false),
+      authority('owner-b', 'real', false),
+    )).toBe(true);
+    expect(transitionInvalidatesSharedFix(
+      authority('owner-a', 'real', false),
+      authority('owner-a', 'simulator', false),
+    )).toBe(true);
   });
 
   test('OFF then ON replaces same-owner pending continuity instead of relabelling it fresh', async () => {

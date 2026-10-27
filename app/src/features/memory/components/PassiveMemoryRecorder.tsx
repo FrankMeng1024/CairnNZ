@@ -49,6 +49,24 @@ interface PassiveContinuityAuthority {
   backgroundEpoch: string | null;
 }
 
+export function transitionInvalidatesSharedFix(
+  prior: PassiveContinuityAuthority | null,
+  next: PassiveContinuityAuthority,
+) {
+  if (!prior) return false;
+  // A real/simulator boundary always invalidates provenance, even when the
+  // former authority was not yet eligible to start its producer.
+  if (prior.source !== next.source) return true;
+  // Account reset normally clears this store first. Keep this local fence as
+  // defence in depth, but do not treat the anonymous boot authority as an
+  // owner: it cannot have produced the signed-in user's shared fix.
+  if (prior.ownerUserId && prior.ownerUserId !== next.ownerUserId) return true;
+  // Only an authority that could actually own passive evidence may revoke it
+  // when consent is disabled or Activity takes priority. Ineligible render
+  // churn must not erase a Memory/Activity fix acquired for the same owner.
+  return prior.eligible;
+}
+
 /** App-scoped optional exploration. Activity capture has higher priority and
  * supplies its own Memory evidence, so there is never a second native watcher
  * or duplicate passive write while Hike/Run is actively recording. */
@@ -100,7 +118,8 @@ export function PassiveMemoryRecorder() {
     continuityAuthority.effectGeneration += 1;
     const effectGeneration = continuityAuthority.effectGeneration;
     continuityAuthorityRef.current = continuityAuthority;
-    if (priorAuthority && priorAuthority !== continuityAuthority
+    if (priorAuthority !== continuityAuthority
+      && transitionInvalidatesSharedFix(priorAuthority, continuityAuthority)
       && typeof useMemoryStore.setState === 'function') {
       // Qualified passive position is ephemeral source evidence. Account,
       // consent/OFF, Activity-priority, and real/simulator boundaries must not

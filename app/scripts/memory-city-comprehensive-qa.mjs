@@ -19,12 +19,18 @@ const compactScenarios = [
   { theme: 'day', time: timeContexts[0], viewport: { width: 320, height: 568 } },
   { theme: 'night', time: timeContexts[1], viewport: { width: 430, height: 932 } },
 ];
+const fullViewportMatrix = process.env.CAIRN_MEMORY_QA_FULL_VIEWPORT_MATRIX === '1';
+const fullScenarios = themeNames.flatMap(theme => timeContexts.flatMap(time => [
+  { theme, time, viewport: { width: 320, height: 568 } },
+  { theme, time, viewport: { width: 390, height: 844 } },
+  { theme, time, viewport: { width: 430, height: 932 } },
+]));
 const requestedScenarios = (process.env.CAIRN_MEMORY_QA_SCENARIOS || '')
   .split(',').map(value => value.trim()).filter(Boolean);
 const repeatCount = Math.max(1, Number(process.env.CAIRN_MEMORY_QA_REPEAT || 1));
 const seedLocationAfterMount = process.env.CAIRN_MEMORY_QA_SEED_AFTER_MOUNT !== '0';
 const locationOnly = process.env.CAIRN_MEMORY_QA_LOCATION_ONLY === '1';
-const scenarioPool = [...primaryScenarios, ...compactScenarios]
+const scenarioPool = (fullViewportMatrix ? fullScenarios : [...primaryScenarios, ...compactScenarios])
   .filter(({ theme, time, viewport }) => requestedScenarios.length === 0
     || requestedScenarios.includes(`${theme}-${time.name}-${viewport.width}x${viewport.height}`));
 const scenarios = Array.from({ length: repeatCount }, (_, repeatIndex) => scenarioPool
@@ -44,6 +50,8 @@ const cityItems = [
   { id: 'nz-invercargill', name_en: 'Invercargill', state: 'walked', bbox: [168.25, -46.50, 168.50, -46.30] },
 ];
 const friendId = 26042;
+const friendGrantEpoch = 'qa-grant-26042';
+const friendshipEpisodeId = 'qa-episode-26042';
 // O94 deliberately refuses arbitrary city-centre navigation: a city must
 // contain actual authorized Mine or Friends coverage. Keep distinct real
 // polygons in the fixture so the interaction gate proves both source paths.
@@ -128,6 +136,7 @@ async function runScenario(scenario) {
     if (endpoint === '/api/friend-sharing/sources') return json({ sources: [{
       friend_id: String(friendId), friend_name: 'Mia Rangi', selected: true,
       authorization_version: 7, effective_at: authorizedAt,
+      grant_epoch: friendGrantEpoch, friendship_episode_id: friendshipEpisodeId,
       sharing_status: 'shared', coverage_scope: 'full_history_delayed_v1',
     }] });
     if (endpoint === '/api/memory/coverage-snapshot') return json({
@@ -146,6 +155,8 @@ async function runScenario(scenario) {
       revoked_friend_ids: [],
       projections: [{
         source_friend_id: friendId, authorization_version: 7,
+        grant_epoch: friendGrantEpoch, friendship_episode_id: friendshipEpisodeId,
+        coverage_scope: 'full_history_delayed_v1',
         server_authorized_at: authorizedAt, authorization_expires_at: expiresAt,
         manifest: {
           snapshot_id: `friend-${scenarioKey}`, dataset_revision: 'friend-v1', coverage_rule_version: 4,
@@ -319,9 +330,14 @@ async function runScenario(scenario) {
       stores.useMemoryStore.setState(state => ({
         points: [], testPoints: [], pendingPreparedCoverageCids: [], initialRevealDone: true,
         geometryVersion: state.geometryVersion + 1,
-        lastWatcherFix: { lat: -36.8485, lng: 174.7633, ts: Date.now(), accuracyM: 8, provenance: 'real' },
         localHydration: { ownerUserId: userValue.id, status: 'ready', requiresInitialReconcile: false, initialReconcile: 'not_required', revision: state.localHydration.revision + 1 },
       }));
+      // Model an account-bound last known real fix, including its durable
+      // cache. App authority hydration is allowed to reset the projection;
+      // Memory must restore this exact owner's fix after that reset.
+      stores.useMemoryStore.getState().setLastWatcherFix(
+        -36.8485, 174.7633, Date.now(), 8, 'real', userValue.id,
+      );
       stores.navigationRef.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'Memory' }] });
     }, { userValue: user, appearance: theme });
     await page.getByTestId('memory-city-switcher').waitFor({ state: 'visible', timeout: 30_000 });
@@ -330,11 +346,10 @@ async function runScenario(scenario) {
     // represents a qualified current-location state, not a fixture-induced
     // "Finding your location" banner.
     if (seedLocationAfterMount) {
-      await page.evaluate(({ lat, lng }) => {
-        globalThis.__cairnStores.useMemoryStore.setState({
-          lastWatcherFix: { lat, lng, ts: Date.now(), accuracyM: 8, provenance: 'real' },
-        });
-      }, { lat: auckland.anchor[1], lng: auckland.anchor[0] });
+      await page.evaluate(({ lat, lng, ownerUserId }) => {
+        globalThis.__cairnStores.useMemoryStore.getState()
+          .setLastWatcherFix(lat, lng, Date.now(), 8, 'real', ownerUserId);
+      }, { lat: auckland.anchor[1], lng: auckland.anchor[0], ownerUserId: user.id });
     }
     let findingLocationReadyWithinLimit = true;
     const remainingLocationBudgetMs = Math.max(1, 10_000 - (performance.now() - memoryEntryStartedAt));
@@ -356,15 +371,25 @@ async function runScenario(scenario) {
     if (locationOnly) {
       const postReadyMonitor = await page.evaluate(async () => {
         const samples = [];
-        for (let index = 0; index < 48; index += 1) {
+        const intervalMs = 250;
+        const sampleCount = 60;
+        for (let index = 0; index < sampleCount; index += 1) {
+          const fix = globalThis.__cairnStores.useMemoryStore.getState().lastWatcherFix;
           samples.push({
-            elapsedMs: index * 250,
+            elapsedMs: index * intervalMs,
             visible: Boolean(document.querySelector('[data-testid="memory-finding-location"]')),
+            lastWatcherFix: fix ? {
+              lat: fix.lat,
+              lng: fix.lng,
+              ts: fix.ts,
+              provenance: fix.provenance,
+            } : null,
           });
-          await new Promise(resolve => setTimeout(resolve, 250));
+          await new Promise(resolve => setTimeout(resolve, intervalMs));
         }
         return {
           samples,
+          monitoredMs: intervalMs * sampleCount,
           visibleSampleCount: samples.filter(sample => sample.visible).length,
           reappeared: samples.some(sample => sample.visible),
         };
@@ -408,11 +433,10 @@ async function runScenario(scenario) {
     // the local QA fix once more at the actual capture boundary, then require
     // the location-status banner to be absent from every stable screenshot.
     if (seedLocationAfterMount) {
-      await page.evaluate(({ lat, lng }) => {
-        globalThis.__cairnStores.useMemoryStore.setState({
-          lastWatcherFix: { lat, lng, ts: Date.now(), accuracyM: 8, provenance: 'real' },
-        });
-      }, { lat: auckland.anchor[1], lng: auckland.anchor[0] });
+      await page.evaluate(({ lat, lng, ownerUserId }) => {
+        globalThis.__cairnStores.useMemoryStore.getState()
+          .setLastWatcherFix(lat, lng, Date.now(), 8, 'real', ownerUserId);
+      }, { lat: auckland.anchor[1], lng: auckland.anchor[0], ownerUserId: user.id });
     }
     const locationReadyStartedAt = performance.now();
     await page.getByTestId('memory-finding-location').waitFor({ state: 'hidden', timeout: 10_000 });
@@ -500,19 +524,17 @@ async function runScenario(scenario) {
 
     let friendSelection = null;
     let friendStable = null;
-    if (viewport.width === 390) {
-      await page.getByTestId(`hierarchy-row-${wellington.id}`).click();
-      friendStable = await waitForStableMemoryMap({ bbox: wellington.bbox, expectedCoverage: 'friends', panelOpen: true });
-      friendSelection = await page.evaluate(() => {
-        const center = globalThis.__cairnMap?.getCenter?.();
-        return {
-          center: center ? [center.lng, center.lat] : null,
-          manualCity: globalThis.__cairnStores.useMemoryCameraStore.getState().manualCity,
-          scope: globalThis.__cairnStores.useMemoryScopeStore.getState().scope,
-        };
-      });
-      await shot('city-friends-selected');
-    }
+    await page.getByTestId(`hierarchy-row-${wellington.id}`).click();
+    friendStable = await waitForStableMemoryMap({ bbox: wellington.bbox, expectedCoverage: 'friends', panelOpen: true });
+    friendSelection = await page.evaluate(() => {
+      const center = globalThis.__cairnMap?.getCenter?.();
+      return {
+        center: center ? [center.lng, center.lat] : null,
+        manualCity: globalThis.__cairnStores.useMemoryCameraStore.getState().manualCity,
+        scope: globalThis.__cairnStores.useMemoryScopeStore.getState().scope,
+      };
+    });
+    await shot('city-friends-selected');
     await page.mouse.click(8, Math.round(viewport.height / 2));
     await page.getByTestId('hierarchy-panel').waitFor({ state: 'hidden', timeout: 10_000 });
     const finalBounds = friendSelection ? wellington.bbox : dunedin.bbox;
@@ -576,10 +598,10 @@ async function runScenario(scenario) {
       citySelectionApplied: selection.manualCity?.cityId === dunedin.id && selection.center && Math.hypot(selection.center[0] - dunedin.anchor[0], selection.center[1] - dunedin.anchor[1]) < 0.2,
       mineMapStableAfterSelection: mineStable.styleLoaded && mineStable.tilesLoaded && !mineStable.moving
         && mineStable.fogSourcePresent && mineStable.coverageAtCenter.mine + mineStable.coverageAtCenter.overlap > 0,
-      friendOnlyCitySelectionApplied: viewport.width !== 390 || (friendSelection?.manualCity == null && friendSelection?.scope === 'combined'
+      friendOnlyCitySelectionApplied: friendSelection?.manualCity == null && friendSelection?.scope === 'combined'
         && friendSelection.center && friendSelection.center[0] >= wellington.bbox[0] && friendSelection.center[0] <= wellington.bbox[2]
-        && friendSelection.center[1] >= wellington.bbox[1] && friendSelection.center[1] <= wellington.bbox[3]),
-      friendMapStableAfterSelection: viewport.width !== 390 || Boolean(friendStable?.styleLoaded && friendStable?.tilesLoaded
+        && friendSelection.center[1] >= wellington.bbox[1] && friendSelection.center[1] <= wellington.bbox[3],
+      friendMapStableAfterSelection: Boolean(friendStable?.styleLoaded && friendStable?.tilesLoaded
         && !friendStable?.moving && friendStable?.fogSourcePresent
         && friendStable.coverageAtCenter.friends + friendStable.coverageAtCenter.overlap > 0),
       backToMapStable: backToMapStable.styleLoaded && backToMapStable.tilesLoaded && !backToMapStable.moving
@@ -608,6 +630,8 @@ async function runScenario(scenario) {
       center: globalThis.__cairnMap?.getCenter?.()
         ? [globalThis.__cairnMap.getCenter().lng, globalThis.__cairnMap.getCenter().lat]
         : null,
+      subscriptions: globalThis.__cairnStores?.useMemorySubscriptionsStore?.getState?.(),
+      friendSourceStates: globalThis.__cairnStores?.useFriendMemoryStore?.getState?.().sourceStates,
     })).catch(() => null);
     results.push({ scenario: scenarioKey, theme, time: time.name, fixedTime: time.iso, viewport, failureScreenshot, failureState, runtimeErrors: [...new Set(runtimeErrors)], error: error?.stack || String(error), pass: false });
   } finally {
@@ -623,6 +647,7 @@ const report = {
   sourceBoundary: 'Actual Expo Web Memory screen, hierarchy UI, Fog layers and hosted Mapbox style/tiles; local QA account/data only; not native iOS evidence',
   seedLocationAfterMount,
   locationOnly,
+  fullViewportMatrix,
   themeTimeModel: 'Manual Day/Sunset/Night appearance overrides the auto clock by product design. Both NZ 10:00 and 21:00 contexts are genuinely re-rendered; within a fixed manual theme, identical material is expected.',
   captureCount: captureManifest.length,
   captureManifest,

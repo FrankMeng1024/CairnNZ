@@ -621,12 +621,24 @@ export function MemoryScreen() {
   // map can draw at the last-known location while the watcher boots.
   // Prevents 12s "Looking for your position" on every cold-start.
   useEffect(() => {
+    // The app-scoped Memory authority resets the in-memory projection before
+    // it publishes this owner's durable state. Reading before that boundary
+    // creates an intermittent race: this effect sees a warm fix and returns,
+    // hydration clears it a moment later, and the unchanged userId means the
+    // cache is never read again. Wait for the account-bound authority so the
+    // cached fix is restored after (never before) its security reset.
+    if (!activeOwnerId
+      || localHydration.ownerUserId !== activeOwnerId
+      || localHydration.status !== 'ready') return;
     if (useMemoryStore.getState().lastWatcherFix) return;
     let cancelled = false;
     void (async () => {
-      const cached = await readLastFix(String(userId ?? ''));
+      const cached = await readLastFix(activeOwnerId);
       if (cancelled) return;
       if (!cached) return;
+      const latestHydration = useMemoryStore.getState().localHydration;
+      if (latestHydration.ownerUserId !== activeOwnerId
+        || latestHydration.status !== 'ready') return;
       // Don't overwrite if a fresh watcher fix arrived during the await.
       if (useMemoryStore.getState().lastWatcherFix) return;
       log('memory.last_fix_hydrated', { age_ms: Date.now() - cached.ts });
@@ -640,7 +652,7 @@ export function MemoryScreen() {
       );
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [activeOwnerId, localHydration.ownerUserId, localHydration.status]);
 
   useFocusEffect(
     React.useCallback(() => {
