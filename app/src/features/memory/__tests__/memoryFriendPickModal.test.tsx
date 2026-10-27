@@ -40,6 +40,9 @@ function projection(friendId: number) {
   const now = Date.now();
   return {
     source_friend_id: friendId,
+    grant_epoch: `grant-${friendId}`,
+    friendship_episode_id: `episode-${friendId}`,
+    coverage_scope: 'full_history_delayed_v1',
     authorization_version: 1,
     server_authorized_at: new Date(now - 60_000).toISOString(),
     authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
@@ -141,7 +144,11 @@ describe('Memory friend picker interaction owner', () => {
 
     fireEvent.press(screen.getByTestId('memory-friend-row-11'));
     await waitFor(() => expect(useMemorySubscriptionsStore.getState().subscriptions.map(item => item.friend_id)).toEqual([22]));
-    expect(useFriendMemoryStore.getState().projections['11']).toBeUndefined();
+    // Deselection is UI intent, not grant revocation. Keep the bounded
+    // process-only same-grant geometry for a zero-download reselect, but make
+    // it immediately ineligible for every visible selector.
+    expect(useFriendMemoryStore.getState().projections['11']).toBeDefined();
+    expect(useFriendMemoryStore.getState().getVisibleGeometries().map(item => item.sourceFriendId)).toEqual(['22']);
     expect(screen.getByTestId('memory-friend-pick-modal')).toBeTruthy();
     expect(screen.getByText('Not shared with you')).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();

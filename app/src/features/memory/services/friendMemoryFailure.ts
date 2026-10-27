@@ -36,8 +36,14 @@ export function memoryOperationFailure(input: {
   const error = input.error as any;
   const httpStatus = Number.isFinite(input.httpStatus) ? Number(input.httpStatus) : undefined;
   const syntaxFailure = error instanceof SyntaxError || error?.name === 'SyntaxError';
+  const causeCode = input.causeCode
+    ?? (typeof error?.code === 'string' ? error.code : undefined);
   const kind: MemoryOperationFailureKind = input.cancelled
     ? 'cancelled'
+    : causeCode === 'ACCOUNT_CHANGED'
+      ? 'cancelled'
+      : causeCode === 'AUTHORIZATION_CHANGED'
+        ? 'authorization'
     : input.timedOut
       ? 'timeout'
       : input.renderReadiness
@@ -56,8 +62,7 @@ export function memoryOperationFailure(input: {
     operation: input.operation,
     stage: input.stage,
     ...(httpStatus === undefined ? {} : { httpStatus }),
-    causeCode: input.causeCode
-      ?? (typeof error?.code === 'string' ? error.code : undefined)
+    causeCode: causeCode
       ?? (typeof error?.name === 'string' ? error.name : undefined)
       ?? kind,
     message: String(error?.message ?? error ?? kind).slice(0, 240),

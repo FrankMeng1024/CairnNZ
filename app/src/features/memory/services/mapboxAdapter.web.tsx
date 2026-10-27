@@ -51,6 +51,7 @@ import {
   CURRENT_LOCATION_DOT_STYLE,
   CURRENT_LOCATION_RING_STYLE,
 } from '../../../components/map/currentLocationMarkerStyle';
+import { memoryWebInitialViewState } from './memoryCameraSettings';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
 const POINT_MOTION_RASTER_SOURCE_ID = 'cairn-point-motion-basemap-source';
@@ -487,6 +488,7 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
   const defaults = firstCamera?.props.defaultSettings;
   const initialCenter = defaults?.centerCoordinate ?? firstCamera?.props.centerCoordinate;
   const initialZoom = defaults?.zoomLevel ?? firstCamera?.props.zoomLevel ?? 12;
+  const initialViewState = memoryWebInitialViewState(defaults, initialCenter, initialZoom);
 
   return (
     <MapInstanceContext.Provider value={mapRef}>
@@ -594,18 +596,22 @@ export const MapView = React.forwardRef<any, MapViewProps>(function MapView({
             if (logoEnabled) applyLogoOffset(event.target, logoPosition);
             emitWebMapReadiness(event.target, false);
           }}
-          initialViewState={
-            initialCenter && Array.isArray(initialCenter)
-              ? { longitude: initialCenter[0], latitude: initialCenter[1], zoom: initialZoom }
-              : { longitude: 0, latitude: 0, zoom: initialZoom }
-          }
+          initialViewState={initialViewState}
           onIdle={(e) => {
             const c = e.target.getCenter();
             const z = e.target.getZoom();
             // Synthesize a feature payload matching the @rnmapbox/maps
             // onCameraChanged / onMapIdle shape so component code reads
             // properties.center + properties.zoom identically.
-            onMapIdle?.({ properties: { center: [c.lng, c.lat], zoom: z } });
+            onMapIdle?.({
+              properties: {
+                center: [c.lng, c.lat],
+                zoom: z,
+                heading: e.target.getBearing?.() ?? 0,
+                pitch: e.target.getPitch?.() ?? 0,
+              },
+              gestures: { isGestureActive: false },
+            });
             onDidFinishRenderingMapFully?.();
             onDidFinishRenderingFrameFully?.();
           }}
@@ -718,7 +724,14 @@ interface WebCameraBounds {
 interface CameraProps {
   centerCoordinate?: [number, number];
   zoomLevel?: number;
-  defaultSettings?: { centerCoordinate?: [number, number]; zoomLevel?: number; bounds?: WebCameraBounds; animationDuration?: number };
+  defaultSettings?: {
+    centerCoordinate?: [number, number];
+    zoomLevel?: number;
+    heading?: number;
+    pitch?: number;
+    bounds?: WebCameraBounds;
+    animationDuration?: number;
+  };
   bounds?: WebCameraBounds;
   animationMode?: string;
   animationDuration?: number;

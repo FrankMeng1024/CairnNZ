@@ -187,4 +187,26 @@ describe('Memory friend selection intent', () => {
     await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
     expect(useMemorySubscriptionsStore.getState().loading).toBe(false);
   });
+
+  test.each([
+    ['select', () => useMemorySubscriptionsStore.getState().subscribe(31)],
+    ['deselect', () => {
+      useMemorySubscriptionsStore.setState({
+        subscriptions: [{ friend_id: 31, friend_name: 'QA Friend' }],
+        availableSources: [{ ...source, selected: true }],
+      });
+      return useMemorySubscriptionsStore.getState().unsubscribe(31);
+    }],
+  ] as const)('ACCOUNT_CHANGED cancellation retires the current %s mutation without an offline banner', async (_label, mutate) => {
+    const cancelled = Object.assign(new Error('Account request cancelled'), { code: 'ACCOUNT_CHANGED' });
+    mockAuthenticatedFetch.mockRejectedValueOnce(cancelled);
+
+    await expect(mutate()).resolves.toBe(0);
+
+    expect(useMemorySubscriptionsStore.getState()).toMatchObject({
+      selectionPending: {},
+      selectionError: null,
+      selectionLastFailure: { kind: 'cancelled', causeCode: 'ACCOUNT_CHANGED' },
+    });
+  });
 });

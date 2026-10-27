@@ -8,6 +8,9 @@ function projection(friendId = '11', authorizedAt = 1_000_000) {
   return {
     friendId,
     authorizationVersion: 4,
+    grantEpoch: `grant-${friendId}`,
+    friendshipEpisodeId: `episode-${friendId}`,
+    coverageScope: 'full_history_delayed_v1' as const,
     projectionVersion: 'projection-4',
     cellSizeM: 200,
     cells: [{ id: 'coarse-cell', polygon: [[174.7, -41.3], [174.8, -41.3], [174.8, -41.2], [174.7, -41.2], [174.7, -41.3]] }],
@@ -31,6 +34,9 @@ function snapshotResponse(
       projections: [{
         source_friend_id: friendId,
         authorization_version: authorizationVersion,
+        grant_epoch: `grant-${friendId}`,
+        friendship_episode_id: `episode-${friendId}`,
+        coverage_scope: 'full_history_delayed_v1',
         server_authorized_at: new Date(now - 100).toISOString(),
         authorization_expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
         manifest: {
@@ -82,6 +88,9 @@ function pagedSnapshotResponse(input: {
       projections: [{
         source_friend_id: friendId,
         authorization_version: input.authorizationVersion ?? 4,
+        grant_epoch: `grant-${friendId}`,
+        friendship_episode_id: `episode-${friendId}`,
+        coverage_scope: 'full_history_delayed_v1',
         server_authorized_at: new Date(now - 100).toISOString(),
         authorization_expires_at: new Date(now + 5 * 60 * 1000).toISOString(),
         manifest: {
@@ -238,6 +247,35 @@ describe('friend Memory authorization cache ordering', () => {
     expect(useFriendMemoryStore.getState().authorizedSourceVersions).toEqual({});
   });
 
+  test('a truncated sources page cannot revoke a valid source omitted from that page', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
+    const appState = { user: { id: 'viewer-a' } };
+    jest.doMock('../../../store/storage', () => ({
+      storage: { getAllKeysStrict: async () => [], removeItemsStrict: async () => undefined },
+    }));
+    jest.doMock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
+    jest.doMock('../../../store/useAppStore', () => ({ useAppStore: { getState: () => appState } }));
+
+    const { useFriendMemoryStore } = require('../store/useFriendMemoryStore');
+    const { useMemorySubscriptionsStore } = require('../store/useMemorySubscriptionsStore');
+    const base = projection('11');
+    const retained = {
+      ...base,
+      viewportKey: 'all-authorized', projectionVersion: 'retained', snapshotId: 'retained',
+      datasetRevision: 'retained', complete: true, expectedPages: 1, expectedTiles: 1,
+      geometry: { type: 'MultiPolygon' as const, coordinates: [[base.cells[0].polygon]] },
+      tiles: [], regions: [],
+    };
+    useMemorySubscriptionsStore.setState({ subscriptions: [{ friend_id: 11, friend_name: 'Mia' }] });
+    useFriendMemoryStore.setState({ userId: 'viewer-a', projections: { '11': retained } });
+
+    await useFriendMemoryStore.getState().reconcileAuthorizedSources([], false);
+
+    expect(useFriendMemoryStore.getState().projections['11']).toBe(retained);
+    expect(useFriendMemoryStore.getState().authorizedSourceVersions['11']).toBe(4);
+    expect(useFriendMemoryStore.getState().getVisibleGeometries()).toHaveLength(1);
+  });
+
   test('a half-open Friends projection request times out into a truthful error state', async () => {
     jest.useFakeTimers();
     jest.spyOn(Date, 'now').mockReturnValue(1_000_100);
@@ -384,7 +422,11 @@ describe('friend Memory authorization cache ordering', () => {
     const appState = { user: { id: 'viewer-a' } };
     const subscriptionState = {
       subscriptions: [{ friend_id: 11 }],
-      availableSources: [{ friend_id: '11', authorization_version: 4 }],
+      availableSources: [{
+        friend_id: '11', authorization_version: 4,
+        grant_epoch: 'grant-11', friendship_episode_id: 'episode-11',
+        coverage_scope: 'full_history_delayed_v1',
+      }],
     };
     const authenticatedFetch = jest.fn();
     jest.doMock('../../../store/storage', () => ({
@@ -424,6 +466,8 @@ describe('friend Memory authorization cache ordering', () => {
     });
     await useFriendMemoryStore.getState().reconcileAuthorizedSources([{
       friend_id: 11, authorization_version: 4, selected: true,
+      grant_epoch: 'grant-11', friendship_episode_id: 'episode-11',
+      coverage_scope: 'full_history_delayed_v1',
     }]);
 
     await useFriendMemoryStore.getState().loadSelectedProjections(undefined, TEST_VIEWPORT);

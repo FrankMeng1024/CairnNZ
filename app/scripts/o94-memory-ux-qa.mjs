@@ -136,6 +136,8 @@ await page.route('**/api/**', async route => {
   if (url.pathname === '/api/friend-sharing/coverage-snapshot') return json({
     projections: [{
       source_friend_id: String(friendId), authorization_version: 7,
+      grant_epoch: 'o94-qa-grant-epoch', friendship_episode_id: 'o94-qa-episode',
+      coverage_scope: 'full_history_delayed_v1',
       server_authorized_at: nowIso, authorization_expires_at: expiresIso,
       manifest: {
         snapshot_id: 'o94-friend-v1', dataset_revision: 'friend-rev-1', as_of: nowIso,
@@ -155,9 +157,10 @@ await page.route('**/api/**', async route => {
     subscriptions: [{ friend_id: friendId, friend_name: 'Friend Beijing', subscribed_at: nowIso }],
     count: 1, limit: null,
   });
-  if (url.pathname === '/api/friend-sharing/sources') return json({ sources: [{
+  if (url.pathname === '/api/friend-sharing/sources') return json({ complete: true, sources: [{
     friend_id: String(friendId), friend_name: 'Friend Beijing', selected: true,
     authorization_version: 7, effective_at: nowIso, sharing_status: 'shared',
+    grant_epoch: 'o94-qa-grant-epoch', friendship_episode_id: 'o94-qa-episode',
     coverage_scope: 'full_history_delayed_v1',
   }] });
   if (url.pathname === '/api/hierarchy/deepest') {
@@ -219,6 +222,8 @@ const mapDiagnostics = () => page.evaluate(() => {
   return {
     center: map?.getCenter?.()?.toArray?.() ?? null,
     zoom: map?.getZoom?.() ?? null,
+    bearing: map?.getBearing?.() ?? null,
+    pitch: map?.getPitch?.() ?? null,
     bounds: bounds ? [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()] : null,
     canvasCss: canvas ? { width: canvas.getBoundingClientRect().width, height: canvas.getBoundingClientRect().height } : null,
     canvasBacking: canvas ? { width: canvas.width, height: canvas.height } : null,
@@ -237,6 +242,7 @@ const report = {
   generatedAt: new Date().toISOString(), baseUrl,
   evidenceBoundary: 'Expo Web production screens + real Mapbox GL renderer + local source-free style; not Hosted Standard or native iPhone',
   requestCounts: {}, gestureSamples: [], themes: [], city: {}, controls: {}, locationMarkers: {},
+  cameraRestoration: {},
   runtimeErrors,
 };
 
@@ -275,7 +281,10 @@ try {
 
   await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Memory', null, { timeout: 30_000 });
   try {
-    await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.getLayer?.('memory-overlap')), null, { timeout: 15_000 });
+    // First Metro access lazily compiles Mapbox GL. Wait on the actual layer,
+    // not a fixed delay; 15 seconds falsely failed while compilation was still
+    // active on the review host even though the app had not reached Map mount.
+    await page.waitForFunction(() => Boolean(globalThis.__cairnMap?.getLayer?.('memory-overlap')), null, { timeout: 60_000 });
   } catch (error) {
     const diagnostic = await page.evaluate(() => ({
       body: document.body?.innerText?.slice(0, 2_000) ?? '',
@@ -338,6 +347,39 @@ try {
   report.requestCounts.after15Gestures = snapshotRequestCount();
   report.requestCounts.gestureDelta = report.requestCounts.after15Gestures - report.requestCounts.afterInitialPreparation;
 
+  // A child navigation push is the same Memory session. Exercise all camera
+  // dimensions and prove that Back neither issues a coverage request nor
+  // replays Current City/Recenter.
+  await page.evaluate(() => new Promise(resolve => {
+    const map = globalThis.__cairnMap;
+    map.once?.('idle', resolve);
+    map.easeTo({ center: [174.771, -36.846], zoom: 15.25, bearing: 31, pitch: 38, duration: 120 });
+    setTimeout(resolve, 2_000);
+  }));
+  await waitForMapIdle();
+  const cameraBeforeCairns = await mapDiagnostics();
+  const requestsBeforeCairns = snapshotRequestCount();
+  await captureMap('cairns-back-before-390x844.png');
+  await page.getByTestId('memory-all-cairns-entry').click();
+  await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'AllCairns', null, { timeout: 30_000 });
+  await page.getByTestId('all-cairns-back').click();
+  await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Memory', null, { timeout: 30_000 });
+  await waitForMapIdle();
+  const cameraAfterCairns = await mapDiagnostics();
+  await captureMap('cairns-back-after-390x844.png');
+  const close = (a, b, tolerance) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tolerance;
+  report.cameraRestoration = {
+    before: cameraBeforeCairns,
+    after: cameraAfterCairns,
+    snapshotRequestDelta: snapshotRequestCount() - requestsBeforeCairns,
+    equal: Boolean(cameraBeforeCairns.center && cameraAfterCairns.center
+      && close(cameraBeforeCairns.center[0], cameraAfterCairns.center[0], 0.00002)
+      && close(cameraBeforeCairns.center[1], cameraAfterCairns.center[1], 0.00002)
+      && close(cameraBeforeCairns.zoom, cameraAfterCairns.zoom, 0.01)
+      && close(cameraBeforeCairns.bearing, cameraAfterCairns.bearing, 0.1)
+      && close(cameraBeforeCairns.pitch, cameraAfterCairns.pitch, 0.1)),
+  };
+
   for (const theme of ['day', 'sunset', 'night']) {
     await page.evaluate(nextTheme => {
       globalThis.__cairnStores.useSettingsStore.getState().saveAll({ appearance: nextTheme });
@@ -378,7 +420,17 @@ try {
 
   // Capture the shared Web puck implementation in Memory and Route. Native
   // identity is separately proven by both screens importing the same styles.
+  // The full visual journey deliberately lasts longer than Memory's 30-second
+  // warm-fix window. Renew the synthetic browser fix here so this puck check
+  // measures marker composition rather than expiry of the isolated fixture.
+  await page.evaluate(() => {
+    const now = Date.now();
+    globalThis.__cairnStores.useMemoryStore.setState({
+      lastWatcherFix: { lat: -36.848, lng: 174.763, ts: now },
+    });
+  });
   await page.getByTestId('memory-recenter').click();
+  await context.setGeolocation({ latitude: -36.84795, longitude: 174.76305, accuracy: 9 });
   await waitForMapIdle();
   await page.getByTestId('web-user-location-puck').waitFor({ state: 'visible', timeout: 15_000 });
   const memoryMarkerStyle = await page.getByTestId('web-user-location-puck').evaluate(node => ({
@@ -395,6 +447,10 @@ try {
   }), routeFixture.id);
   await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'RouteEditor', null, { timeout: 30_000 });
   await page.getByTestId('ordered-route-map-load-overlay').waitFor({ state: 'hidden', timeout: 45_000 });
+  // A second location owner was mounted after Memory released its watcher.
+  // Emit a genuine browser geolocation change so this test covers delayed
+  // attach instead of depending on Chromium replaying the prior fix.
+  await context.setGeolocation({ latitude: -36.8479, longitude: 174.7631, accuracy: 9 });
   const browserLocationPermission = await page.evaluate(async () => {
     try { return (await navigator.permissions.query({ name: 'geolocation' })).state; }
     catch { return 'unsupported'; }
@@ -403,7 +459,9 @@ try {
     // Exercise the production permission/location path once. Absence after
     // this remains a truthful QA failure; the harness never inserts a puck.
     await page.getByTestId('route-current-location').click();
-    await page.waitForTimeout(1_000);
+    await page.getByTestId('web-user-location-puck')
+      .waitFor({ state: 'visible', timeout: 20_000 })
+      .catch(() => undefined);
   }
   await waitForMapIdle();
   const routePuck = page.getByTestId('web-user-location-puck');
@@ -431,6 +489,7 @@ try {
 
 const failures = [];
 if (report.requestCounts.gestureDelta !== 0) failures.push(`gesture-snapshot-request-delta:${report.requestCounts.gestureDelta}`);
+if (!report.cameraRestoration.equal || report.cameraRestoration.snapshotRequestDelta !== 0) failures.push('cairns-back-camera-or-data-session-changed');
 if (report.gestureSamples.some(sample => sample.statusText?.includes('Loading shared map'))) failures.push('loading-shared-map-visible-during-gesture');
 if (!report.controls.aligned || report.controls.cairnsText?.trim() !== 'Cairns') failures.push('cairns-control-mismatch');
 if (!report.city.targetInsideAuthorizedPolygon || !report.city.coarseAnchorWasIgnored) failures.push('beijing-camera-missed-authorized-fog');

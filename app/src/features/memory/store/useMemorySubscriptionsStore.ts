@@ -14,6 +14,7 @@ import { authenticatedFetch } from '../../../services/apiService';
 import { storage } from '../../../store/storage';
 import {
   classifyFriendMemoryFailure,
+  friendMemoryPresentationFailure,
   memoryOperationFailure,
   type FriendMemoryFailure,
   type MemoryOperationFailure,
@@ -31,6 +32,9 @@ export interface AvailableMemorySource {
   friend_name: string;
   selected: boolean;
   authorization_version: number;
+  grant_epoch?: string | null;
+  friendship_episode_id?: string | null;
+  friendship_episode_uuid?: string | null;
   effective_at: string;
   sharing_status: 'not_shared' | 'shared_empty' | 'shared';
   coverage_scope: 'full_history_delayed_v1' | null;
@@ -184,6 +188,8 @@ export function reconcileAvailableMemorySources(
       && prior.friend_name === next.friend_name
       && prior.selected === next.selected
       && prior.authorization_version === next.authorization_version
+      && prior.grant_epoch === next.grant_epoch
+      && prior.friendship_episode_id === next.friendship_episode_id
       && prior.effective_at === next.effective_at
       && prior.sharing_status === next.sharing_status
       && prior.coverage_scope === next.coverage_scope
@@ -283,7 +289,10 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         // subscriptions list failed, consume a successful source response so
         // a revoke/version rotation still fences geometry immediately.
         if (nextSources) {
-          await useFriendMemoryStore.getState().reconcileAuthorizedSources(nextSources);
+          await useFriendMemoryStore.getState().reconcileAuthorizedSources(
+            nextSources,
+            sourcesBody?.complete !== false,
+          );
         }
         return false;
       }
@@ -315,7 +324,10 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       // usable only until its own expiry timer; a caller-applied hard fence
       // remains fenced because there is no successful reconciliation.
       if (nextSources) {
-        await useFriendMemoryStore.getState().reconcileAuthorizedSources(nextSources);
+        await useFriendMemoryStore.getState().reconcileAuthorizedSources(
+          nextSources,
+          sourcesBody?.complete !== false,
+        );
       }
       return Boolean(nextSources);
     } catch (e: any) {
@@ -407,15 +419,24 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         if (generationAtStart === subscriptionGeneration
           && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
           && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
-          set({
-            selectionError: 'offline',
-            selectionLastFailure: memoryOperationFailure({
-              error,
-              operation: 'memory-selection',
-              stage: 'persist-select',
-              targetRevision: `${friendId}:select:${mutationGeneration}`,
-            }),
+          const failure = memoryOperationFailure({
+            error,
+            operation: 'memory-selection',
+            stage: 'persist-select',
+            targetRevision: `${friendId}:select:${mutationGeneration}`,
           });
+          set(state => {
+            const selectionPending = { ...state.selectionPending };
+            if (failure.kind === 'cancelled') delete selectionPending[String(friendId)];
+            return {
+              selectionPending,
+              selectionError: failure.kind === 'cancelled'
+                ? null
+                : friendMemoryPresentationFailure(failure),
+              selectionLastFailure: failure,
+            };
+          });
+          persistSelectionIntents(viewerAtStart, get().selectionPending);
         }
         return 0;
       }
@@ -445,12 +466,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
       authorityValidatedAtMs: 0,
     }));
     persistSelectionIntents(viewerAtStart, get().selectionPending);
-    useFriendMemoryStore.getState().invalidateFriend(friendId);
-    // Privacy state is fenced synchronously above. Durable cache cleanup must
-    // not prevent the authoritative DELETE from being attempted if local
-    // storage itself is unhealthy.
-    void useFriendMemoryStore.getState().purgeFriend(friendId, viewerAtStart)
-      .catch(() => undefined);
+    useFriendMemoryStore.getState().hideFriend(friendId);
     return enqueueSelectionMutation(friendId, async () => {
       try {
         const res = await authenticatedFetch(`/api/memory-subscriptions/${friendId}`, {
@@ -493,15 +509,24 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         if (generationAtStart === subscriptionGeneration
           && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
           && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
-          set({
-            selectionError: 'offline',
-            selectionLastFailure: memoryOperationFailure({
-              error,
-              operation: 'memory-selection',
-              stage: 'persist-deselect',
-              targetRevision: `${friendId}:deselect:${mutationGeneration}`,
-            }),
+          const failure = memoryOperationFailure({
+            error,
+            operation: 'memory-selection',
+            stage: 'persist-deselect',
+            targetRevision: `${friendId}:deselect:${mutationGeneration}`,
           });
+          set(state => {
+            const selectionPending = { ...state.selectionPending };
+            if (failure.kind === 'cancelled') delete selectionPending[String(friendId)];
+            return {
+              selectionPending,
+              selectionError: failure.kind === 'cancelled'
+                ? null
+                : friendMemoryPresentationFailure(failure),
+              selectionLastFailure: failure,
+            };
+          });
+          persistSelectionIntents(viewerAtStart, get().selectionPending);
         }
         return 0;
       }

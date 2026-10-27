@@ -103,5 +103,26 @@
     "text": "Apple Standard EULA",
     "classification": "THIRD_PARTY_LEGAL_TITLE",
     "reason": "Official third-party legal document title; Cairn does not own or translate the linked document."
+  },
+  {
+    "path": "src/features/memory/store/useFriendMemoryStore.ts",
+    "syntax": "property:error",
+    "text": "unavailable",
+    "classification": "TECHNICAL_PAYLOAD",
+    "reason": "Typed Friend Memory failure category; the visible presentation resolves catalogued copy separately."
+  },
+  {
+    "path": "src/features/memory/store/useFriendMemoryStore.ts",
+    "syntax": "display-assignment:terminalError",
+    "text": "unavailable",
+    "classification": "TECHNICAL_PAYLOAD",
+    "reason": "Typed Friend Memory failure category; the visible presentation resolves catalogued copy separately."
+  },
+  {
+    "path": "src/features/memory/store/useFriendMemoryStore.ts",
+    "syntax": "display-assignment:terminalError",
+    "text": "unauthorized",
+    "classification": "TECHNICAL_PAYLOAD",
+    "reason": "Typed authorization outcome used for fail-closed behavior; the visible presentation resolves catalogued copy separately."
   }
 ]

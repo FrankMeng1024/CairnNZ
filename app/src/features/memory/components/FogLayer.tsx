@@ -14,12 +14,10 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useFriendMemoryStore } from '../store/useFriendMemoryStore';
-import {
-  selectPreparedCoverageViewport,
-  usePreparedMemoryCoverageStore,
-} from '../store/usePreparedMemoryCoverageStore';
+import { usePreparedMemoryCoverageStore } from '../store/usePreparedMemoryCoverageStore';
 import { useMemorySubscriptionsStore } from '../store/useMemorySubscriptionsStore';
 import { useMemoryScopeStore, type MemoryScope } from '../store/useMemoryScopeStore';
+import { useMemoryNavigationSessionStore } from '../store/useMemoryNavigationSessionStore';
 import { getMapbox } from '../services/mapboxAdapter';
 import { log } from '../../../services/appLog';
 import { useVisualTheme } from '../../../hooks/useVisualTheme';
@@ -1394,7 +1392,7 @@ export function buildFogShape(
   return null;
 }
 
-async function combinePreparedCoverage(
+export async function combinePreparedCoverage(
   selfEvidence: Feature<Polygon | MultiPolygon> | null,
   friendGeometries: MultiPolygon[],
 ): Promise<{
@@ -1514,36 +1512,43 @@ export function FogLayer({
   const authorizedSourceVersions = useFriendMemoryStore((s) => s.authorizedSourceVersions);
   const preparedMemoryVersion = usePreparedMemoryCoverageStore((s) => s.version);
   const preparedMemoryStatus = usePreparedMemoryCoverageStore((s) => s.status);
-  const preparedMemoryCoverage = usePreparedMemoryCoverageStore((s) => s.coverage);
+  const globalPreparedMemoryCoverage = usePreparedMemoryCoverageStore((s) => s.coverage);
   const loadPreparedViewport = usePreparedMemoryCoverageStore((s) => s.loadViewport);
-  const viewportKey = viewport?.key;
+  const sessionId = useMemoryNavigationSessionStore((s) => s.sessionId);
+  const sessionOwnerId = useMemoryNavigationSessionStore((s) => s.ownerId);
+  const sessionPreparedMemoryCoverage = useMemoryNavigationSessionStore((s) => s.mineCoverage);
+  const sessionLocalOverlayPoints = useMemoryNavigationSessionStore((s) => s.localOverlayPoints);
+  const activeNavigationSession = Boolean(sessionId && sessionOwnerId === accountId);
+  const preparedMemoryCoverage = activeNavigationSession
+    ? sessionPreparedMemoryCoverage
+    : globalPreparedMemoryCoverage;
 
   useEffect(() => {
-    if (!viewport || syntheticQaAuthority) return;
+    if (!viewport || syntheticQaAuthority || sessionPreparedMemoryCoverage?.complete) return;
     void loadPreparedViewport(viewport);
     // The checkbox reflects intent immediately, but the coverage endpoint is
     // grant-authorized. Wait for the POST/DELETE to settle before requesting
     // projection geometry so selection cannot race its own authorization.
     if (scope === 'combined' && !selectionPendingKey) {
-      void friendMemoryRef().loadSelectedProjections(undefined, viewport);
+      void friendMemoryRef().loadSelectedProjections();
     }
     // Map camera callbacks intentionally replace the viewport value as they
     // update. The stable quantized key, not object identity, owns network work;
     // otherwise each store update can trigger another request/render cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [friendMemoryRef, loadPreparedViewport, scope, selectedFriendIdsKey, selectionPendingKey, syntheticQaAuthority, viewportKey]);
+  }, [friendMemoryRef, loadPreparedViewport, scope, selectedFriendIdsKey, selectionPendingKey, sessionPreparedMemoryCoverage?.complete, syntheticQaAuthority]);
 
   const preparedSelfReady = !syntheticQaAuthority
-    && (preparedMemoryStatus === 'ready' || preparedMemoryStatus === 'refreshing')
+    && (sessionPreparedMemoryCoverage?.complete === true
+      || preparedMemoryStatus === 'ready' || preparedMemoryStatus === 'refreshing')
     && preparedMemoryCoverage?.complete === true;
   const preparedSelfEvidence = useMemo(
     () => preparedSelfReady && preparedMemoryCoverage
       ? (() => {
-          const selected = selectPreparedCoverageViewport(preparedMemoryCoverage, viewport);
-          return selected ? multiPolygon(selected.coordinates) : null;
+          return multiPolygon(preparedMemoryCoverage.geometry.coordinates);
         })()
       : null,
-    [preparedMemoryCoverage, preparedSelfReady, viewport],
+    [preparedMemoryCoverage, preparedSelfReady],
   );
 
   // v413: union self ∪ enabled friend points. 每次 self 或 friend 变化都重算.
@@ -1562,15 +1567,16 @@ export function FogLayer({
     // With a real viewport, the prepared read model is authoritative. Do not
     // make a cold entry synchronously rebuild the owner's entire history while
     // its bounded response is in flight; the last committed map remains shown.
+    if (activeNavigationSession) return sessionLocalOverlayPoints;
     return selectLocalCoverageOverlayPoints(selfPoints, pendingPreparedCoverageCids, viewport);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localHydrationReady, pendingPreparedCoverageCids, preparedMemoryVersion, selfPoints, syntheticQaAuthority, syntheticTestPoints, viewport]);
+  }, [activeNavigationSession, localHydrationReady, pendingPreparedCoverageCids, preparedMemoryVersion, selfPoints, sessionLocalOverlayPoints, syntheticQaAuthority, syntheticTestPoints, viewport]);
   const friendGeometries = useMemo(
     () => syntheticQaAuthority || scope === 'self'
       ? []
-      : friendMemoryRef().getVisibleGeometries(null, viewport),
+      : friendMemoryRef().getVisibleGeometries(null, null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [friendMemoryVersion, scope, syntheticQaAuthority, viewport],
+    [friendMemoryVersion, scope, syntheticQaAuthority],
   );
   const selectedFriendIds = useMemo(
     () => selectedFriendIdsKey ? selectedFriendIdsKey.split(',') : [],
@@ -1618,19 +1624,19 @@ export function FogLayer({
     () => prepareMemoryFogContent(authority, points, []).contentSignature,
     [authority, points],
   );
-  const contentSignature = `${overlaySignature}|viewport:${viewport?.key ?? 'legacy'}|mine:${preparedMemoryCoverage?.coverageVersion ?? 'local'}|friends:${friendAuthority}`;
+  const contentSignature = `${overlaySignature}|mine:${preparedMemoryCoverage?.coverageVersion ?? 'local'}|friends:${friendAuthority}`;
   const selfContentSignature = useMemo(
-    () => `${prepareMemoryFogContent(`${accountId}|self`, points, []).contentSignature}|viewport:${viewport?.key ?? 'legacy'}|mine:${preparedMemoryCoverage?.coverageVersion ?? 'local'}`,
-    [accountId, points, preparedMemoryCoverage?.coverageVersion, viewport?.key],
+    () => `${prepareMemoryFogContent(`${accountId}|self`, points, []).contentSignature}|mine:${preparedMemoryCoverage?.coverageVersion ?? 'local'}`,
+    [accountId, points, preparedMemoryCoverage?.coverageVersion],
   );
   const preparedSelfHasCoverage = Boolean(preparedSelfEvidence?.geometry.coordinates.length);
-  const coverageReadReady = !viewport || syntheticQaAuthority || preparedSelfReady;
+  const coverageReadReady = syntheticQaAuthority || preparedSelfReady;
   // The authenticated, source-owned prepared read model can paint before a
   // large local journal has finished hydrating. Local hydration still gates
   // its small live overlay and Cairn pins, not historical viewport coverage.
   const fogAuthorityReady = (syntheticQaAuthority
     ? localHydrationReady
-    : preparedSelfReady || (!viewport && localHydrationReady))
+    : preparedSelfReady)
     && combinedPreparationSettled
     && !combinedPreparationFailed;
   const hasAnyEvidence = points.length > 0 || preparedSelfHasCoverage || friendGeometries.length > 0;
@@ -1656,7 +1662,8 @@ export function FogLayer({
     && _moduleFogAuthority === authority
     && _moduleFogSig === contentSignature
     && Boolean(_moduleFogShape)
-    && memoryFogSceneRemainsAuthorized({
+    && memoryFogSceneMatchesSelection({
+      scope,
       sceneAccountId: accountId,
       currentAccountId: accountId,
       friendSources: _moduleFriendSources,
@@ -1668,7 +1675,8 @@ export function FogLayer({
     && selectedFriendIds.length > 0
     && _moduleFriendSources.length > 0
     && Boolean(_moduleFogShape)
-    && memoryFogSceneRemainsAuthorized({
+    && memoryFogSceneMatchesSelection({
+      scope,
       sceneAccountId: accountId,
       currentAccountId: accountId,
       friendSources: _moduleFriendSources,
@@ -1759,7 +1767,8 @@ export function FogLayer({
   }, [accountId]);
   useLayoutEffect(() => {
     const currentScene = publishedSceneRef.current;
-    if (memoryFogSceneRemainsAuthorized({
+    if (memoryFogSceneMatchesSelection({
+      scope,
       sceneAccountId: currentScene.accountId,
       currentAccountId: accountId,
       friendSources: currentScene.friendSources,
@@ -1779,12 +1788,13 @@ export function FogLayer({
       overlapShape: null,
       friendSources: [],
     });
-  }, [accountId, authorizedSourceVersions, publishScene, reusableCachedSelf, safeFallbackPresentationKey, selectedFriendIds]);
+  }, [accountId, authorizedSourceVersions, publishScene, reusableCachedSelf, safeFallbackPresentationKey, scope, selectedFriendIds]);
   useLayoutEffect(() => {
     if (!combinedPreparationFailed) return;
     const currentScene = publishedSceneRef.current;
     const sceneAuthorized = Boolean(currentScene.presentationKey)
-      && memoryFogSceneRemainsAuthorized({
+      && memoryFogSceneMatchesSelection({
+      scope,
         sceneAccountId: currentScene.accountId,
         currentAccountId: accountId,
         friendSources: currentScene.friendSources,
@@ -1826,10 +1836,10 @@ export function FogLayer({
     onFogUnavailableRef.current?.(presentationKey);
   }, [accountId, authorizedSourceVersions, combinedPreparationFailed, presentationKey, scope, selectedFriendIds]);
   useEffect(() => {
-    if (syntheticQaAuthority || !viewport || preparedMemoryStatus !== 'error') return;
+    if (syntheticQaAuthority || preparedMemoryStatus !== 'error') return;
     setGeometryReady(false);
     onFogUnavailableRef.current?.(presentationKey);
-  }, [preparedMemoryStatus, presentationKey, syntheticQaAuthority, viewport]);
+  }, [preparedMemoryStatus, presentationKey, syntheticQaAuthority]);
   // Reset borrowed presentation only when its actual account/scope/content
   // authority changes. Local hydration can finish or bump its journal revision
   // after the exact prepared geometry has painted; treating that bookkeeping
@@ -1839,12 +1849,13 @@ export function FogLayer({
     fogReadyFiredRef.current = '';
     const currentScene = publishedSceneRef.current;
     const sceneAuthorized = Boolean(currentScene.presentationKey)
-      && memoryFogSceneRemainsAuthorized({
-      sceneAccountId: currentScene.accountId,
-      currentAccountId: accountId,
-      friendSources: currentScene.friendSources,
-      selectedFriendIds,
-      authorizedSourceVersions,
+      && memoryFogSceneMatchesSelection({
+        scope,
+        sceneAccountId: currentScene.accountId,
+        currentAccountId: accountId,
+        friendSources: currentScene.friendSources,
+        selectedFriendIds,
+        authorizedSourceVersions,
       });
     // Publish a fail-closed Mine scene synchronously when account/source
     // authority is lost. A normal viewport or added-Friend preparation keeps
@@ -1869,13 +1880,9 @@ export function FogLayer({
         friendSources: [],
       });
     }
-    // A scope change is not an authorization revocation. Keep the complete,
-    // still-authorized scene mounted while its self/combined replacement is
-    // assembled, then publish that replacement atomically below. Clearing to
-    // an unkeyed Mine placeholder here remounted the source during an ordinary
-    // self -> combined cycle and reintroduced the exact Mapbox worker race the
-    // stable presentation source is designed to avoid. Deselect/revoke takes
-    // the fail-closed branch above because its source proof no longer passes.
+    // A self -> combined transition may keep the coherent Mine fallback while
+    // the new target is prepared. A combined -> self transition must remove
+    // borrowed paint synchronously; exact scope matching above enforces both.
     setGeometryReady(false);
     onFogPreparingRef.current?.(presentationKey, sceneAuthorized);
   // Internal `readinessKey` still cancels stale async work, while callbacks
@@ -2054,7 +2061,9 @@ export function FogLayer({
       // disjoint, so overlap is painted once rather than darkening Mine under
       // a second translucent fill. Full `selfEvidence` remains the only
       // durable Mine cache; borrowed classifications live only in session.
-      const displayEvidence = combined?.mineEvidence ?? selfEvidence;
+      // `null` is the valid result when Friends fully cover Mine. Only an
+      // absent combined computation may use the complete Mine geometry.
+      const displayEvidence = combined ? combined.mineEvidence : selfEvidence;
       const nextFriendDisplay = combined?.friendEvidence ?? null;
       const nextOverlapDisplay = combined?.overlapEvidence ?? null;
       const selfShape = selfEvidence ? composeFogShape(selfEvidence) : solidFogShape();

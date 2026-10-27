@@ -48,6 +48,8 @@ import {
   CURRENT_LOCATION_DOT_STYLE,
   CURRENT_LOCATION_RING_STYLE,
 } from '../../../components/map/currentLocationMarkerStyle';
+import { useMemoryNavigationSessionStore } from '../store/useMemoryNavigationSessionStore';
+import { memoryCameraDefaultSettings } from '../services/memoryCameraSettings';
 
 let memoryMapHasRendered = false;
 
@@ -146,6 +148,7 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
   const memoryResolvedMapStyle = getMapStyleForTheme('outdoors', memoryMapTheme);
   const memoryLightPreset = themeToStandardPreset(memoryMapTheme);
   const Mapbox = getMapbox();
+  const sessionCamera = useMemoryNavigationSessionStore((state) => state.camera);
   const storedOwnMarkers = useMarkerStore((s) => s.markers);
   const ownMarkers = useMemo(
     () => markersForVisibleWorkspace(storedOwnMarkers, qaWorkspaceActive),
@@ -302,6 +305,21 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     const zoom = feature?.properties?.zoom;
     if (!center || typeof zoom !== 'number') return;
     renderedCameraCenterRef.current = center;
+    const cameraOwnerId = String(useAppStore.getState().user?.id ?? '');
+    if (cameraOwnerId) {
+      useMemoryNavigationSessionStore.getState().setCamera(cameraOwnerId, {
+        center: [Number(center[0]), Number(center[1])],
+        zoom,
+        // RNMapbox 10.3 MapState calls this `heading`; the Web adapter has no
+        // rotation payload yet and therefore falls back to zero.
+        bearing: Number(feature?.properties?.heading
+          ?? feature?.properties?.bearing
+          ?? feature?.bearing
+          ?? 0),
+        pitch: Number(feature?.properties?.pitch ?? feature?.pitch ?? 0),
+        actionId: Date.now(),
+      });
+    }
     // RNMapbox emits the installed terminal camera event through onMapIdle.
     // The Web adapter carries the centre in geometry.coordinates while native
     // currently uses properties.center, so accept both event shapes.
@@ -533,7 +551,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
     if (flyToTarget.token === lastFlyTokenRef.current) return;
     lastFlyTokenRef.current = flyToTarget.token;
     pendingFlyRef.current = { token: flyToTarget.token, center: flyToTarget.center };
-    onCameraTransitionState?.('loading');
+    // Camera intent is not Memory dataset intent. A city/recenter fly must
+    // never put an already complete shared scene back into a loading state.
     // 更新 anchor 到目标 center, 防止 flyTo 触发 pan-detected → 弹回 recenter pill
     anchorRef.current = { lat: flyToTarget.center[1], lng: flyToTarget.center[0] };
     setHasPannedAway(true);  // 已经不在自己 GPS 位置了, recenter pill 应该出现
@@ -736,11 +755,11 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           // so a centerLat/Lng prop change (e.g. watcher push) does NOT
           // auto-fly back to the user's current position. The user
           // explicitly drives recenter via the pill button.
-          defaultSettings={{
-            centerCoordinate: [centerLng, centerLat],
-            zoomLevel: INITIAL_ZOOM,
-            pitch: 0,
-          }}
+          defaultSettings={memoryCameraDefaultSettings(
+            sessionCamera,
+            [centerLng, centerLat],
+            INITIAL_ZOOM,
+          )}
           animationMode={'flyTo'}
           animationDuration={280}
         />
@@ -795,8 +814,10 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
           }}
           onFogReady={(readinessKey, requiredSourceIds) => {
             if (fogReadinessKeyRef.current !== readinessKey) return;
-            // Geometry has committed in JS. Cairns remain gated until Mapbox
-            // reports a fully rendered frame for this same readiness key.
+            // FogLayer publishes one coherent React/ShapeSource revision. That
+            // supported native-reachable source submission is the data-ready
+            // terminal; an optional full-frame callback remains diagnostic
+            // physical-pixel evidence and cannot strand visible content.
             fogGeometryReadyKeyRef.current = readinessKey;
             fogRetainingSceneRef.current = false;
             fogRequiredSourceIdsRef.current = requiredSourceIds;
@@ -805,6 +826,8 @@ export const MemoryMap = forwardRef<MemoryMapHandle, Props>(function MemoryMap(
               prepare_to_geometry_ms: fogGeometryReadyAtRef.current - fogPreparingAtRef.current,
               scope: memoryScope,
             });
+            setFogReady(true);
+            onFogReady?.(readinessKey);
             // A source update normally schedules a frame. Under a cold,
             // imported Mapbox style it can instead land immediately after
             // the last style frame, leaving otherwise rendered Fog behind

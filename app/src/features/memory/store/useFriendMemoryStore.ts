@@ -31,6 +31,9 @@ export interface FriendProjectionTile {
 export interface FriendProjection {
   friendId: string;
   authorizationVersion: number;
+  grantEpoch: string;
+  friendshipEpisodeId: string;
+  coverageScope: 'full_history_delayed_v1';
   projectionVersion: string;
   cellSizeM: number;
   cells: FriendProjectionCell[];
@@ -77,11 +80,21 @@ interface FriendMemoryState {
   hydrate: (userId: string) => Promise<void>;
   activeViewport: MemoryCoverageViewport | null;
   loadSelectedProjections: (friendIds?: Array<string | number>, viewport?: MemoryCoverageViewport) => Promise<void>;
+  renewAuthorizationProofs: (friendIds?: Array<string | number>) => Promise<boolean>;
   /** Synchronously fence in-flight work for a source without changing product selection. */
   invalidateFriend: (friendId: string | number) => void;
+  /** Hide selection immediately while retaining same-grant process-only geometry. */
+  hideFriend: (friendId: string | number) => void;
   purgeFriend: (friendId: string | number, expectedUserId?: string) => Promise<void>;
   /** Reconcile session projections with a fresh authoritative sources read. */
-  reconcileAuthorizedSources: (sources: Array<{ friend_id: string | number; authorization_version: number; selected?: boolean }>) => Promise<void>;
+  reconcileAuthorizedSources: (sources: Array<{
+    friend_id: string | number;
+    authorization_version: number;
+    grant_epoch?: string | null;
+    friendship_episode_id?: string | null;
+    coverage_scope?: string | null;
+    selected?: boolean;
+  }>, complete?: boolean) => Promise<void>;
   /** Hide every cached source after an authorization refresh failure. */
   suspendVisibility: () => void;
   getVisibleCells: (friendId?: string | null) => FriendProjectionCell[];
@@ -115,6 +128,22 @@ const verifiedSourceVersions = new Map<string, number>();
 const activeSourceControllers = new Map<string, AbortController>();
 const sourceExpiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 export const FRIEND_MEMORY_PROJECTION_TIMEOUT_MS = 30_000;
+export const FRIEND_MEMORY_PROOF_RENEWAL_LEAD_MS = 30_000;
+export const FRIEND_MEMORY_PROOF_RETRY_BASE_MS = 15_000;
+export const FRIEND_MEMORY_PROOF_RETRY_MAX_ATTEMPTS = 3;
+const FRIEND_MEMORY_PROOF_RENEWAL_BATCH_SIZE = 100;
+type FriendGrantIdentity = Pick<FriendProjection,
+  'friendId' | 'authorizationVersion' | 'grantEpoch' | 'friendshipEpisodeId' | 'coverageScope'>;
+type FriendProofRenewalTarget = {
+  identity: FriendGrantIdentity;
+  sourceGeneration: number;
+  navigationSessionId: string | null;
+};
+const proofRenewalRetryStates = new Map<string, { identityKey: string; attempts: number }>();
+let proofRenewalInFlight: {
+  identities: Map<string, string>;
+  promise: Promise<boolean>;
+} | null = null;
 
 function legacyCacheKey(userId: string) {
   return `${LEGACY_CACHE_PREFIX}${userId}`;
@@ -124,6 +153,9 @@ function validProjection(value: any, now: number): value is FriendProjection {
   return value
     && typeof value.friendId === 'string'
     && Number.isInteger(value.authorizationVersion)
+    && typeof value.grantEpoch === 'string' && value.grantEpoch.length > 0
+    && typeof value.friendshipEpisodeId === 'string' && value.friendshipEpisodeId.length > 0
+    && value.coverageScope === 'full_history_delayed_v1'
     && typeof value.projectionVersion === 'string'
     && Number.isFinite(value.serverAuthorizedAtMs)
     && Number.isFinite(value.authorizationExpiresAtMs)
@@ -181,6 +213,9 @@ function parseProjection(incoming: any, viewportKey?: string): FriendProjection 
   return {
     friendId: String(incoming?.source_friend_id ?? ''),
     authorizationVersion: Number(incoming?.authorization_version),
+    grantEpoch: String(incoming?.grant_epoch ?? ''),
+    friendshipEpisodeId: String(incoming?.friendship_episode_id ?? ''),
+    coverageScope: incoming?.coverage_scope,
     projectionVersion: String(incoming?.projection_version ?? ''),
     cellSizeM: Number(incoming?.cell_size_m),
     cells: (Array.isArray(incoming?.cells) ? incoming.cells : []).map((cell: any) => ({
@@ -224,6 +259,9 @@ async function loadCompleteFriendProjection(input: {
   userId: string;
   controller: AbortController;
   expectedAuthorizationVersion?: number;
+  expectedGrantEpoch?: string;
+  expectedFriendshipEpisodeId?: string;
+  expectedCoverageScope?: string;
   requestId: string;
 }): Promise<{ projection?: FriendProjection; revoked: boolean; decodedBytes: number }> {
   let cursor: string | null | undefined;
@@ -231,6 +269,9 @@ async function loadCompleteFriendProjection(input: {
   let asOf: string | undefined;
   let manifest: any = null;
   let authorizationVersion: number | undefined;
+  let grantEpoch: string | undefined;
+  let friendshipEpisodeId: string | undefined;
+  let coverageScope: 'full_history_delayed_v1' | undefined;
   let serverAuthorizedAtMs = 0;
   let authorizationExpiresAtMs = Number.POSITIVE_INFINITY;
   const pageIndexes = new Set<number>();
@@ -252,14 +293,23 @@ async function loadCompleteFriendProjection(input: {
       signal: input.controller.signal,
     });
     if (!response.ok) {
+      let payload: any = null;
+      try { payload = await response.json(); } catch { /* HTTP status remains authoritative */ }
       const error = new Error(`HTTP ${response.status}`) as Error & {
         httpStatus?: number;
         operationStage?: string;
         code?: string;
       };
       error.httpStatus = response.status;
-      error.operationStage = response.status === 409 ? 'snapshot-consistency' : 'http';
-      error.code = response.status === 409 ? 'SNAPSHOT_CHANGED' : `HTTP_${response.status}`;
+      error.operationStage = payload?.code === 'AUTHORIZATION_CHANGED'
+        ? 'authorization'
+        : response.status === 409 ? 'snapshot-consistency' : 'http';
+      error.code = payload?.code === 'AUTHORIZATION_CHANGED'
+        ? 'AUTHORIZATION_CHANGED'
+        : response.status === 409 ? 'SNAPSHOT_CHANGED' : `HTTP_${response.status}`;
+      (error as any).revokedFriendIds = Array.isArray(payload?.revoked_friend_ids)
+        ? payload.revoked_friend_ids.map(String)
+        : [];
       throw error;
     }
     let body: any;
@@ -285,6 +335,9 @@ async function loadCompleteFriendProjection(input: {
     snapshotId = String(manifest?.snapshot_id ?? '');
     asOf = String(manifest?.as_of ?? '');
     const nextAuthorizationVersion = Number(incoming?.authorization_version);
+    const nextGrantEpoch = String(incoming?.grant_epoch ?? '');
+    const nextFriendshipEpisodeId = String(incoming?.friendship_episode_id ?? '');
+    const nextCoverageScope = incoming?.coverage_scope;
     const nextAuthorizedAt = Date.parse(incoming?.server_authorized_at);
     const nextExpiresAt = Date.parse(incoming?.authorization_expires_at);
     if (!incoming || !snapshotId || !asOf || Number(manifest?.coverage_rule_version) !== 4
@@ -292,6 +345,8 @@ async function loadCompleteFriendProjection(input: {
       || !Number.isInteger(Number(manifest?.expected_tiles))
       || !Number.isFinite(Number(manifest?.expected_evidence_count))
       || !Number.isInteger(nextAuthorizationVersion)
+      || !nextGrantEpoch || !nextFriendshipEpisodeId
+      || nextCoverageScope !== 'full_history_delayed_v1'
       || !Number.isFinite(nextAuthorizedAt) || !Number.isFinite(nextExpiresAt)
       || !page || page.snapshot_id !== snapshotId
       || typeof page.complete !== 'boolean' || !Array.isArray(page.tiles)) {
@@ -304,7 +359,17 @@ async function loadCompleteFriendProjection(input: {
       Object.assign(error, { invalidPayload: true, operationStage: 'authorization', code: 'AUTHORIZATION_CHANGED' });
       throw error;
     }
+    if ((grantEpoch !== undefined && grantEpoch !== nextGrantEpoch)
+      || (friendshipEpisodeId !== undefined && friendshipEpisodeId !== nextFriendshipEpisodeId)
+      || (coverageScope !== undefined && coverageScope !== nextCoverageScope)) {
+      const error = new Error('Friend Memory grant identity changed during acquisition');
+      Object.assign(error, { operationStage: 'authorization', code: 'AUTHORIZATION_CHANGED' });
+      throw error;
+    }
     authorizationVersion = nextAuthorizationVersion;
+    grantEpoch = nextGrantEpoch;
+    friendshipEpisodeId = nextFriendshipEpisodeId;
+    coverageScope = nextCoverageScope;
     serverAuthorizedAtMs = Math.max(serverAuthorizedAtMs, nextAuthorizedAt);
     authorizationExpiresAtMs = Math.min(authorizationExpiresAtMs, nextExpiresAt);
     if (page.tiles.length > 0) {
@@ -362,7 +427,11 @@ async function loadCompleteFriendProjection(input: {
     || receivedEvidenceCount !== expectedEvidenceCount
     || manifest?.complete !== (expectedTiles === 0)
     || (Number.isFinite(input.expectedAuthorizationVersion)
-      && authorizationVersion !== input.expectedAuthorizationVersion)) {
+      && authorizationVersion !== input.expectedAuthorizationVersion)
+    || (input.expectedGrantEpoch && grantEpoch !== input.expectedGrantEpoch)
+    || (input.expectedFriendshipEpisodeId
+      && friendshipEpisodeId !== input.expectedFriendshipEpisodeId)
+    || (input.expectedCoverageScope && coverageScope !== input.expectedCoverageScope)) {
     const error = new Error('Incomplete Friend Memory snapshot');
     Object.assign(error, { invalidPayload: true, operationStage: 'completeness', code: 'INCOMPLETE_SNAPSHOT' });
     throw error;
@@ -377,6 +446,9 @@ async function loadCompleteFriendProjection(input: {
     projection: {
       friendId: String(input.friendId),
       authorizationVersion: authorizationVersion!,
+      grantEpoch: grantEpoch!,
+      friendshipEpisodeId: friendshipEpisodeId!,
+      coverageScope: coverageScope!,
       projectionVersion: snapshotId!,
       snapshotId,
       datasetRevision: String(manifest.dataset_revision ?? ''),
@@ -397,6 +469,69 @@ async function loadCompleteFriendProjection(input: {
 
 function sourceGeneration(friendId: string): number {
   return sourceGenerations.get(friendId) ?? 0;
+}
+
+function grantIdentity(projection: FriendProjection): FriendGrantIdentity {
+  return {
+    friendId: projection.friendId,
+    authorizationVersion: projection.authorizationVersion,
+    grantEpoch: projection.grantEpoch,
+    friendshipEpisodeId: projection.friendshipEpisodeId,
+    coverageScope: projection.coverageScope,
+  };
+}
+
+function grantIdentityKey(identity: FriendGrantIdentity): string {
+  return [
+    identity.friendId,
+    identity.grantEpoch,
+    identity.friendshipEpisodeId,
+    identity.authorizationVersion,
+    identity.coverageScope,
+  ].join('|');
+}
+
+function projectionMatchesGrantIdentity(
+  projection: FriendProjection | undefined,
+  identity: FriendGrantIdentity | undefined,
+): projection is FriendProjection {
+  return Boolean(projection && identity
+    && projection.friendId === identity.friendId
+    && projection.authorizationVersion === identity.authorizationVersion
+    && projection.grantEpoch === identity.grantEpoch
+    && projection.friendshipEpisodeId === identity.friendshipEpisodeId
+    && projection.coverageScope === identity.coverageScope);
+}
+
+function projectionTerminalState(projection: FriendProjection): FriendProjectionSourceState {
+  const featureCount = projection.geometry?.coordinates.length ?? projection.cells.length;
+  return {
+    status: featureCount > 0 ? 'loaded' : 'empty',
+    cellCount: featureCount,
+  };
+}
+
+function currentMemoryNavigationSessionId(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('./useMemoryNavigationSessionStore').useMemoryNavigationSessionStore
+      .getState().sessionId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function proofRenewalTargetIsCurrent(
+  friendId: string,
+  target: FriendProofRenewalTarget | undefined,
+): boolean {
+  return Boolean(target
+    && sourceGeneration(friendId) === target.sourceGeneration
+    && currentMemoryNavigationSessionId() === target.navigationSessionId
+    && projectionMatchesGrantIdentity(
+      useFriendMemoryStore.getState().projections[friendId],
+      target.identity,
+    ));
 }
 
 function clearSourceExpiryTimer(friendId: string): void {
@@ -423,6 +558,7 @@ function invalidateSource(friendId: string): void {
   activeSourceControllers.delete(friendId);
   sourceGenerations.set(friendId, sourceGeneration(friendId) + 1);
   latestSourceRequests.delete(friendId);
+  proofRenewalRetryStates.delete(friendId);
 }
 
 function fenceAllProjectionAuthority(): void {
@@ -434,6 +570,8 @@ function fenceAllProjectionAuthority(): void {
   for (const controller of activeSourceControllers.values()) controller.abort();
   activeSourceControllers.clear();
   clearAllSourceExpiryTimers();
+  proofRenewalRetryStates.clear();
+  proofRenewalInFlight = null;
 }
 
 /** A server-issued projection is authority only until its signed expiry. The
@@ -441,7 +579,9 @@ function fenceAllProjectionAuthority(): void {
  * without waiting for a camera event or another selector call. */
 function scheduleSourceExpiry(projection: FriendProjection): void {
   const friendId = projection.friendId;
+  const identity = grantIdentity(projection);
   clearSourceExpiryTimer(friendId);
+  proofRenewalRetryStates.delete(friendId);
   const expire = () => {
     // The delay was fixed while the grant's wall-clock proof was current.
     // Once that real-time boundary arrives, fail closed unconditionally for
@@ -450,37 +590,82 @@ function scheduleSourceExpiry(projection: FriendProjection): void {
     sourceExpiryTimers.delete(friendId);
     const state = useFriendMemoryStore.getState();
     const current = state.projections[friendId];
-    if (!current
-      || current.authorizationVersion !== projection.authorizationVersion
+    if (!projectionMatchesGrantIdentity(current, identity)
       || current.authorizationExpiresAtMs !== projection.authorizationExpiresAtMs) return;
     invalidateSource(friendId);
     verifiedSourceVersions.delete(friendId);
-    const projections = { ...state.projections };
-    delete projections[friendId];
     useFriendMemoryStore.setState({
-      projections,
       authorizedSourceVersions: Object.fromEntries(verifiedSourceVersions),
       sourceStates: {
         ...state.sourceStates,
         [friendId]: { status: 'idle', cellCount: 0 },
       },
       version: state.version + 1,
+      error: state.lastFailure
+        ? friendMemoryPresentationFailure(state.lastFailure)
+        : 'unavailable',
       lastObservedWallClockMs: Math.max(Date.now(), state.lastObservedWallClockMs),
     });
-    // After the synchronous fence, opportunistically obtain a new bounded
-    // proof for the same selected source and viewport.
+    // Geometry remains process-only and hidden. Network recovery may renew
+    // the exact same epoch without downloading it again.
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
       const stillSelected = useMemorySubscriptionsStore.getState().subscriptions
         .some((source: { friend_id: string | number }) => String(source.friend_id) === friendId);
       if (stillSelected) {
-        void useFriendMemoryStore.getState().loadSelectedProjections([friendId], state.activeViewport ?? undefined);
+        void useFriendMemoryStore.getState().renewAuthorizationProofs();
       }
     } catch { /* a later selection/viewport event can refresh the projection */ }
   };
   const remainingMs = projection.authorizationExpiresAtMs - Date.now();
-  setSourceExpiryTimer(friendId, expire, Math.max(0, remainingMs));
+  const renewalDelayMs = Math.max(0, remainingMs - FRIEND_MEMORY_PROOF_RENEWAL_LEAD_MS);
+  const hardExpiryDelayAfterRenewalStarts = Math.max(0, remainingMs - renewalDelayMs);
+  const renew = () => {
+    sourceExpiryTimers.delete(friendId);
+    // Preserve the server-issued wall-clock boundary using the originally
+    // scheduled duration. A later device clock rollback cannot extend it.
+    setSourceExpiryTimer(friendId, expire, hardExpiryDelayAfterRenewalStarts);
+    void useFriendMemoryStore.getState().renewAuthorizationProofs();
+  };
+  setSourceExpiryTimer(
+    friendId,
+    remainingMs > 0 ? renew : expire,
+    renewalDelayMs,
+  );
+}
+
+function scheduleExpiredProofRenewalRetry(
+  projection: FriendProjection,
+  expectedAccountGeneration: number,
+  expectedSourceGeneration: number,
+  expectedNavigationSessionId: string | null,
+): void {
+  const friendId = projection.friendId;
+  const identity = grantIdentity(projection);
+  const identityKey = grantIdentityKey(identity);
+  const previous = proofRenewalRetryStates.get(friendId);
+  const attempts = previous?.identityKey === identityKey ? previous.attempts : 0;
+  if (attempts >= FRIEND_MEMORY_PROOF_RETRY_MAX_ATTEMPTS) return;
+  const nextAttempts = attempts + 1;
+  proofRenewalRetryStates.set(friendId, { identityKey, attempts: nextAttempts });
+  const delayMs = FRIEND_MEMORY_PROOF_RETRY_BASE_MS * (2 ** (nextAttempts - 1));
+  clearSourceExpiryTimer(friendId);
+  setSourceExpiryTimer(friendId, () => {
+    sourceExpiryTimers.delete(friendId);
+    if (accountGeneration !== expectedAccountGeneration) return;
+    if (sourceGeneration(friendId) !== expectedSourceGeneration
+      || currentMemoryNavigationSessionId() !== expectedNavigationSessionId) return;
+    const current = useFriendMemoryStore.getState().projections[friendId];
+    if (!projectionMatchesGrantIdentity(current, identity)) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const selected = require('./useMemorySubscriptionsStore').useMemorySubscriptionsStore
+        .getState().subscriptions
+        .some((source: { friend_id: string | number }) => String(source.friend_id) === friendId);
+      if (selected) void useFriendMemoryStore.getState().renewAuthorizationProofs([friendId]);
+    } catch { /* a later authoritative selection refresh may retry */ }
+  }, delayMs);
 }
 
 function retireLegacyPersistentGeometry(userId: string): Promise<void> {
@@ -499,6 +684,16 @@ function retireLegacyPersistentGeometry(userId: string): Promise<void> {
   });
   legacyPurgeTail = purge.catch(() => {});
   return purge;
+}
+
+function displayEligibleSelectedSourceIds(): Set<string> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const state = require('./useMemorySubscriptionsStore').useMemorySubscriptionsStore.getState();
+  return new Set(state.subscriptions
+    .map((source: { friend_id: string | number }) => String(source.friend_id))
+    // A reselect checkbox is immediate UI intent, but borrowed geometry cannot
+    // reappear until the POST has re-established requireSelected server state.
+    .filter((id: string) => state.selectionPending?.[id] !== 'select'));
 }
 
 export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
@@ -523,7 +718,9 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     for (const controller of activeSourceControllers.values()) controller.abort();
     activeSourceControllers.clear();
     clearAllSourceExpiryTimers();
-    const now = Date.now();
+    proofRenewalRetryStates.clear();
+    proofRenewalInFlight = null;
+    let now = Date.now();
     // Never hydrate borrowed exploration from disk. Removal is best-effort
     // and deliberately does not hold up the fresh authorization/API path.
     void retireLegacyPersistentGeometry(userId).catch(() => {});
@@ -554,7 +751,7 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     const selectedIds = friendIds === undefined
       ? allSelectedIds
       : [...new Set(friendIds.map(Number).filter(id => Number.isInteger(id) && selectedSet.has(id)))];
-    const now = Date.now();
+    let now = Date.now();
     if (now < get().lastObservedWallClockMs) {
       fenceAllProjectionAuthority();
       set({
@@ -564,9 +761,24 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     }
     const requestAccountGeneration = accountGeneration;
     if (selectedIds.length === 0) {
-      const retained = Object.fromEntries(Object.entries(get().projections).filter(([id]) => selectedSet.has(Number(id))));
+      const retained = Object.fromEntries(Object.entries(get().projections)
+        .filter(([, projection]) => projection?.complete === true));
       set({ projections: retained, loading: false, error: null, lastFailure: null, version: get().version + 1 });
       return;
+    }
+    // A complete projection belongs to this process/session cache. Once its
+    // proof expires we may only renew the exact grant identity; falling back
+    // to a geometry download would turn a transient proof failure into an
+    // unexpected shared-map reload and could blur a definitive denial.
+    const cachedGeometryIds = new Set(selectedIds.filter(friendId =>
+      get().projections[String(friendId)]?.complete === true));
+    const proofRenewalIds = selectedIds.filter(friendId => {
+      const existing = get().projections[String(friendId)];
+      return Boolean(existing?.complete && existing.authorizationExpiresAtMs <= now);
+    });
+    if (proofRenewalIds.length > 0) {
+      await get().renewAuthorizationProofs(proofRenewalIds);
+      now = Date.now();
     }
     const reusableIds = new Set(selectedIds.filter(friendId => {
       const id = String(friendId);
@@ -585,9 +797,14 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           || existing.authorizationVersion === requiredAuthorizationVersion);
     }));
     const idsToLoad = selectedIds.filter(friendId => !reusableIds.has(friendId)
+      && !cachedGeometryIds.has(friendId)
       && !activeSourceControllers.has(String(friendId)));
     if (idsToLoad.length === 0) {
       if (selectedIds.some(friendId => activeSourceControllers.has(String(friendId)))) return;
+      if (selectedIds.some(friendId => cachedGeometryIds.has(friendId) && !reusableIds.has(friendId))) {
+        set({ loading: false, lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs) });
+        return;
+      }
       const nextStates = { ...get().sourceStates };
       for (const friendId of reusableIds) {
         const id = String(friendId);
@@ -663,6 +880,9 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
           expectedAuthorizationVersion: Number.isFinite(Number(source?.authorization_version))
             ? Number(source.authorization_version)
             : undefined,
+          expectedGrantEpoch: source?.grant_epoch ?? undefined,
+          expectedFriendshipEpisodeId: source?.friendship_episode_id ?? undefined,
+          expectedCoverageScope: source?.coverage_scope ?? undefined,
           requestId: request.requestId,
         });
         if (String(useAppStore.getState().user?.id ?? '') !== userId
@@ -805,10 +1025,8 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       await Promise.all(Array.from({ length: Math.min(4, requests.length) }, () => runNext()));
       if (String(useAppStore.getState().user?.id ?? '') === userId
         && get().userId === userId && requestAccountGeneration === accountGeneration) {
-        const currentlySelected = new Set(useMemorySubscriptionsStore.getState().subscriptions
-          .map((subscription: { friend_id: number }) => String(subscription.friend_id)));
         const next = Object.fromEntries(Object.entries(get().projections)
-          .filter(([id, projection]) => currentlySelected.has(id) && validProjection(projection, Date.now())));
+          .filter(([, projection]) => projection && projection.complete === true));
         set({
           projections: next,
           version: get().version + 1,
@@ -829,6 +1047,220 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     }
   },
 
+  renewAuthorizationProofs: async (friendIds) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAppStore } = require('../../../store/useAppStore');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useMemorySubscriptionsStore } = require('./useMemorySubscriptionsStore');
+    const userId = String(useAppStore.getState().user?.id ?? '');
+    if (!userId || get().userId !== userId) return false;
+    const selected = new Set(useMemorySubscriptionsStore.getState().subscriptions
+      .map((source: { friend_id: string | number }) => String(source.friend_id)));
+    const ids = [...new Set((friendIds ?? [...selected]).map(String))]
+      .filter(id => selected.has(id) && Boolean(get().projections[id]));
+    if (ids.length === 0) return true;
+    const navigationSessionId = currentMemoryNavigationSessionId();
+    const renewalTargets = new Map<string, FriendProofRenewalTarget>(ids.map(id => [id, {
+      identity: grantIdentity(get().projections[id]),
+      sourceGeneration: sourceGeneration(id),
+      navigationSessionId,
+    }]));
+    const renewalIdentityKeys = new Map([...renewalTargets]
+      .map(([id, target]) => [id, [
+        grantIdentityKey(target.identity),
+        target.sourceGeneration,
+        target.navigationSessionId ?? 'no-session',
+      ].join('|')]));
+    if (proofRenewalInFlight) {
+      if (ids.every(id => proofRenewalInFlight?.identities.get(id) === renewalIdentityKeys.get(id))) {
+        return proofRenewalInFlight.promise;
+      }
+      await proofRenewalInFlight.promise.catch(() => false);
+      return get().renewAuthorizationProofs(ids);
+    }
+    const generation = accountGeneration;
+    const work = (async () => {
+      let allAuthorized = true;
+      let terminalFailure: MemoryOperationFailure | null = null;
+      let terminalError: FriendMemoryFailure | null = null;
+      for (let offset = 0; offset < ids.length; offset += FRIEND_MEMORY_PROOF_RENEWAL_BATCH_SIZE) {
+        const batchIds = ids.slice(offset, offset + FRIEND_MEMORY_PROOF_RENEWAL_BATCH_SIZE);
+        const requestId = `friend-proof-${++requestSequence}`;
+        const applicableIds = () => batchIds.filter(id => proofRenewalTargetIsCurrent(
+          id,
+          renewalTargets.get(id),
+        ));
+        const scheduleExpiredRecovery = (candidateIds: string[]) => {
+          for (const id of candidateIds) {
+            const projection = get().projections[id];
+            const target = renewalTargets.get(id);
+            if (target && proofRenewalTargetIsCurrent(id, target)
+              && projection.authorizationExpiresAtMs <= Date.now()) {
+              scheduleExpiredProofRenewalRetry(
+                projection,
+                generation,
+                target.sourceGeneration,
+                target.navigationSessionId,
+              );
+            }
+          }
+        };
+        try {
+          const response = await authenticatedFetch('/api/friend-sharing/coverage-proof-renewal', {
+            method: 'POST',
+            expectedUserId: userId,
+            body: JSON.stringify({
+              request_id: requestId,
+              sources: batchIds.map(id => {
+                const projection = renewalTargets.get(id)!.identity;
+                return {
+                  friend_id: id,
+                  grant_epoch: projection.grantEpoch,
+                  friendship_episode_id: projection.friendshipEpisodeId,
+                  authorization_version: projection.authorizationVersion,
+                  coverage_scope: projection.coverageScope,
+                };
+              }),
+            }),
+          });
+          let body: any = null;
+          try { body = await response.json(); } catch { /* classified below */ }
+          if (generation !== accountGeneration || get().userId !== userId
+            || String(useAppStore.getState().user?.id ?? '') !== userId) return false;
+          const currentBatchIds = applicableIds();
+          // The request belonged to a retired grant. Its eventual success or
+          // denial cannot authorize, hide or delete a replacement grant.
+          if (currentBatchIds.length === 0) continue;
+          if (!response.ok || !body?.complete || !Array.isArray(body?.outcomes)) {
+            const failure = memoryOperationFailure({
+              httpStatus: response.status,
+              operation: 'friend-proof-renewal',
+              stage: response.status === 404 ? 'unsupported-backend' : 'http',
+              targetRevision: requestId,
+              invalidPayload: response.ok,
+              causeCode: body?.code ?? `HTTP_${response.status}`,
+            });
+            terminalFailure = failure;
+            allAuthorized = false;
+            const provenRejection = response.status === 401 || response.status === 403;
+            const expired = currentBatchIds.some(id => (get().projections[id]?.authorizationExpiresAtMs ?? 0) <= Date.now());
+            if (provenRejection) {
+              const next = { ...get().projections };
+              const nextStates = { ...get().sourceStates };
+              for (const id of currentBatchIds) {
+                invalidateSource(id);
+                verifiedSourceVersions.delete(id);
+                delete next[id];
+                nextStates[id] = { status: 'unauthorized', cellCount: 0 };
+              }
+              set({ projections: next, sourceStates: nextStates, authorizedSourceVersions: Object.fromEntries(verifiedSourceVersions), version: get().version + 1 });
+              terminalError = 'unauthorized';
+            } else if (expired) {
+              terminalError = friendMemoryPresentationFailure(failure);
+              scheduleExpiredRecovery(currentBatchIds);
+            }
+            continue;
+          }
+          const outcomes = body.outcomes as any[];
+          const outcomeIds = outcomes.map(outcome => String(outcome?.friend_id));
+          const outcomeById = new Map(outcomes.map(outcome => [String(outcome?.friend_id), outcome]));
+          const authorizedAtMs = Date.parse(body.server_authorized_at);
+          const expiresAtMs = Date.parse(body.authorization_expires_at);
+          const validEnvelope = body.request_id === requestId
+            && outcomes.length === batchIds.length
+            && new Set(outcomeIds).size === outcomeIds.length
+            && Number.isFinite(authorizedAtMs) && Number.isFinite(expiresAtMs)
+            && expiresAtMs > authorizedAtMs && expiresAtMs - authorizedAtMs <= MAX_CACHE_AGE_MS
+            && batchIds.every(id => outcomeById.has(id));
+          if (!validEnvelope) {
+            const failure = memoryOperationFailure({ operation: 'friend-proof-renewal', stage: 'validate', invalidPayload: true, causeCode: 'INVALID_PROOF_RENEWAL', targetRevision: requestId });
+            terminalFailure = failure;
+            allAuthorized = false;
+            if (currentBatchIds.some(id => (get().projections[id]?.authorizationExpiresAtMs ?? 0) <= Date.now())) {
+              terminalError = 'unavailable';
+              scheduleExpiredRecovery(currentBatchIds);
+            }
+            continue;
+          }
+          const next = { ...get().projections };
+          const nextStates = { ...get().sourceStates };
+          let deniedCount = 0;
+          for (const id of batchIds) {
+            const projection = next[id];
+            const target = renewalTargets.get(id);
+            if (!target || !proofRenewalTargetIsCurrent(id, target)) continue;
+            const outcome: any = outcomeById.get(id);
+            const sameIdentity = projection && outcome?.status === 'authorized'
+              && outcome.grant_epoch === projection.grantEpoch
+              && String(outcome.friendship_episode_id) === projection.friendshipEpisodeId
+              && Number(outcome.authorization_version) === projection.authorizationVersion
+              && outcome.coverage_scope === projection.coverageScope;
+            if (!sameIdentity) {
+              invalidateSource(id);
+              verifiedSourceVersions.delete(id);
+              delete next[id];
+              nextStates[id] = { status: 'unauthorized', cellCount: 0 };
+              deniedCount += 1;
+              allAuthorized = false;
+              continue;
+            }
+            next[id] = {
+              ...projection,
+              serverAuthorizedAtMs: authorizedAtMs,
+              authorizationExpiresAtMs: expiresAtMs,
+            };
+            nextStates[id] = projectionTerminalState(next[id]);
+            verifiedSourceVersions.set(id, projection.authorizationVersion);
+            scheduleSourceExpiry(next[id]);
+          }
+          if (deniedCount > 0) {
+            terminalFailure = memoryOperationFailure({ operation: 'friend-proof-renewal', stage: 'authorization', causeCode: 'AUTHORIZATION_CHANGED', targetRevision: requestId });
+            terminalError = 'unauthorized';
+          }
+          set({
+            projections: next,
+            sourceStates: nextStates,
+            authorizedSourceVersions: Object.fromEntries(verifiedSourceVersions),
+            version: get().version + 1,
+            lastObservedWallClockMs: Math.max(Date.now(), get().lastObservedWallClockMs),
+          });
+          log('memory.friend_proof_renewed', { request_id: requestId, sources_n: batchIds.length, denied_n: deniedCount });
+        } catch (error: any) {
+          if (generation !== accountGeneration || get().userId !== userId) return false;
+          const currentBatchIds = applicableIds();
+          if (currentBatchIds.length === 0) continue;
+          const failure = memoryOperationFailure({
+            error,
+            operation: 'friend-proof-renewal',
+            stage: 'transport',
+            targetRevision: requestId,
+            causeCode: error?.code,
+          });
+          if (failure.kind !== 'cancelled') {
+            terminalFailure = failure;
+            allAuthorized = false;
+            if (currentBatchIds.some(id => (get().projections[id]?.authorizationExpiresAtMs ?? 0) <= Date.now())) {
+              terminalError = friendMemoryPresentationFailure(failure);
+              scheduleExpiredRecovery(currentBatchIds);
+            }
+          }
+        }
+      }
+      if (generation === accountGeneration
+        && get().userId === userId
+        && currentMemoryNavigationSessionId() === navigationSessionId) {
+        set({ lastFailure: terminalFailure, error: terminalError });
+      }
+      return allAuthorized;
+    })();
+    proofRenewalInFlight = { identities: renewalIdentityKeys, promise: work };
+    try {
+      return await work;
+    } finally {
+      if (proofRenewalInFlight?.promise === work) proofRenewalInFlight = null;
+    }
+  },
+
   invalidateFriend: (friendId) => {
     const id = String(friendId);
     invalidateSource(id);
@@ -837,6 +1269,17 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       authorizedSourceVersions: Object.fromEntries(verifiedSourceVersions),
       version: get().version + 1,
     });
+  },
+
+  hideFriend: (friendId) => {
+    const id = String(friendId);
+    // Cancel a not-yet-published acquisition and fence its stale callback, but
+    // do not revoke the already-issued grant proof or delete complete geometry.
+    activeSourceControllers.get(id)?.abort();
+    activeSourceControllers.delete(id);
+    sourceGenerations.set(id, sourceGeneration(id) + 1);
+    latestSourceRequests.delete(id);
+    set({ loading: false, version: get().version + 1 });
   },
 
   purgeFriend: async (friendId, expectedUserId) => {
@@ -860,17 +1303,30 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     });
   },
 
-  reconcileAuthorizedSources: async (sources) => {
+  reconcileAuthorizedSources: async (sources, complete = true) => {
     const now = Date.now();
     const authoritative = new Map(
       sources
-        .filter(source => source.selected !== false && Number.isInteger(Number(source.authorization_version)))
-        .map(source => [String(source.friend_id), Number(source.authorization_version)]),
+        // `selected` is presentation intent, not grant authority. A complete
+        // /sources result may legitimately contain an unselected, still-valid
+        // grant whose process-only geometry remains reusable but invisible.
+        .filter(source => Number.isInteger(Number(source.authorization_version)))
+        .map(source => [String(source.friend_id), source]),
     );
-    const next = Object.fromEntries(Object.entries(get().projections).filter(([id, projection]) =>
-      authoritative.get(id) === projection.authorizationVersion && validProjection(projection, now)));
+    const next = Object.fromEntries(Object.entries(get().projections).filter(([id, projection]) => {
+      const source = authoritative.get(id);
+      if (!source) return !complete && validProjection(projection, now);
+      return Number(source.authorization_version) === projection.authorizationVersion
+        && source.grant_epoch === projection.grantEpoch
+        && String(source.friendship_episode_id) === projection.friendshipEpisodeId
+        && source.coverage_scope === projection.coverageScope
+        && validProjection(projection, now);
+    }));
     for (const [id, version] of [...verifiedSourceVersions.entries()]) {
-      if (authoritative.get(id) !== version || !(id in next)) verifiedSourceVersions.delete(id);
+      const source = authoritative.get(id);
+      if ((source && Number(source.authorization_version) !== version)
+        || (complete && !source)
+        || !(id in next)) verifiedSourceVersions.delete(id);
     }
     for (const id of Object.keys(get().projections)) {
       if (!(id in next)) invalidateSource(id);
@@ -922,9 +1378,12 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
         lastObservedWallClockMs: Math.max(now, get().lastObservedWallClockMs),
       });
     }
+    if (Object.keys(retained).length === 0) return [];
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const selectedIds = displayEligibleSelectedSourceIds();
     const selected = friendId
       ? [retained[friendId]].filter(Boolean)
-      : Object.values(retained);
+      : Object.values(retained).filter(projection => selectedIds.has(projection.friendId));
     const cells = new Map<string, FriendProjectionCell>();
     for (const projection of selected) {
       if (!validProjection(projection, now)
@@ -949,9 +1408,12 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       });
       return [];
     }
+    if (Object.keys(get().projections).length === 0) return [];
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const selectedIds = displayEligibleSelectedSourceIds();
     const selected = friendId
       ? [get().projections[friendId]].filter(Boolean)
-      : Object.values(get().projections);
+      : Object.values(get().projections).filter(projection => selectedIds.has(projection.friendId));
     return selected.flatMap(projection => {
       if (!validProjection(projection, now)
         || verifiedSourceVersions.get(projection.friendId) !== projection.authorizationVersion) return [];
@@ -984,7 +1446,11 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
       });
       return [];
     }
+    if (Object.keys(get().projections).length === 0) return [];
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const selectedIds = displayEligibleSelectedSourceIds();
     return Object.values(get().projections).flatMap(projection => {
+      if (!selectedIds.has(projection.friendId)) return [];
       if (!validProjection(projection, now)
         || get().authorizedSourceVersions[projection.friendId] !== projection.authorizationVersion) return [];
       return projection.regions.map(region => ({
@@ -1003,19 +1469,21 @@ export const useFriendMemoryStore = create<FriendMemoryState>((set, get) => ({
     latestSourceRequests.clear();
     verifiedSourceVersions.clear();
     clearAllSourceExpiryTimers();
+    proofRenewalRetryStates.clear();
+    proofRenewalInFlight = null;
     for (const controller of activeSourceControllers.values()) controller.abort();
     activeSourceControllers.clear();
     set({
-    userId: null,
-    projections: {},
-    version: get().version + 1,
-    loading: false,
-    error: null,
-    lastFailure: null,
-    sourceStates: {},
-    authorizedSourceVersions: {},
-    lastObservedWallClockMs: 0,
-    activeViewport: null,
+      userId: null,
+      projections: {},
+      version: get().version + 1,
+      loading: false,
+      error: null,
+      lastFailure: null,
+      sourceStates: {},
+      authorizedSourceVersions: {},
+      lastObservedWallClockMs: 0,
+      activeViewport: null,
     });
   },
 }));

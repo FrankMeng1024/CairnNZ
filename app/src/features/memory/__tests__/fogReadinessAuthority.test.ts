@@ -107,7 +107,10 @@ describe('Memory fog readiness authority', () => {
     const fog = read('src/features/memory/components/FogLayer.tsx');
     expect(fog).toMatch(/const reusableCachedSelf = !syntheticQaAuthority\s+&& _moduleSelfAccount/);
     expect(fog).not.toMatch(/const reusableCachedSelf[\s\S]{0,140}friendCells\.length === 0/);
-    expect(fog).toContain('memoryFogSceneRemainsAuthorized({');
+    // Authorization alone is insufficient for presentation reuse: a Combined
+    // scene must never satisfy self scope, and a subset cannot satisfy a newer
+    // selected-source target.
+    expect(fog).toContain('memoryFogSceneMatchesSelection({');
     expect(fog).toContain('const fallback = reusableCachedSelf && _moduleSelfFogShape');
     expect(fog).toContain('friendSources: currentScene.friendSources');
     expect(fog).toContain('const exactCachedAuthority = _moduleFogAccount === accountId');
@@ -130,5 +133,20 @@ describe('Memory fog readiness authority', () => {
     expect(web).toContain('hasRenderedScene:');
     expect(web).toContain('return layerIds.some');
     expect(web).toContain('feature?.properties?.cairnReadinessKey === readinessKey');
+  });
+
+  test('coherent source publication is terminal even when native full-frame never arrives', () => {
+    const map = read('src/features/memory/components/MemoryMap.tsx');
+    const handler = map.slice(
+      map.indexOf('onFogReady={(readinessKey, requiredSourceIds) =>'),
+      map.indexOf('onFogUnavailable={(readinessKey) =>'),
+    );
+    const dataReady = handler.indexOf('setFogReady(true);');
+    const ownerReady = handler.indexOf('onFogReady?.(readinessKey);');
+    const renderRequest = handler.indexOf('requestRender?.();');
+    expect(dataReady).toBeGreaterThan(-1);
+    expect(ownerReady).toBeGreaterThan(dataReady);
+    expect(renderRequest).toBeGreaterThan(ownerReady);
+    expect(handler).not.toContain('onDidFinishRenderingMapFully');
   });
 });
