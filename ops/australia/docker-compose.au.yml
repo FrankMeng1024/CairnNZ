@@ -1,0 +1,83 @@
+services:
+  db:
+    image: ${MYSQL_IMAGE:-mysql:8.0.45}
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --binlog-format=ROW
+      - --binlog-expire-logs-seconds=2592000
+      - --server-id=2
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:?DB_NAME is required}
+      MYSQL_USER: ${DB_USER:?DB_USER is required}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+    volumes:
+      - ${DEPLOY_ROOT:-/srv/cairn-au}/mysql:/var/lib/mysql
+    ports:
+      - "127.0.0.1:${DB_ADMIN_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$${MYSQL_ROOT_PASSWORD} mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - private
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: ops/australia/Dockerfile.backend
+      args:
+        CAIRN_GIT_SHA: ${BACKEND_GIT_SHA:?BACKEND_GIT_SHA is required}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?DB_NAME is required}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      NONCE_SECRET: ${NONCE_SECRET:?NONCE_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CAIRN_TELEMETRY_API_KEY: ${CAIRN_TELEMETRY_API_KEY:?CAIRN_TELEMETRY_API_KEY is required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      APPLE_BUNDLE_ID: ${APPLE_BUNDLE_ID:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EXPO_PUSH_ACCESS_TOKEN: ${EXPO_PUSH_ACCESS_TOKEN:-}
+      PUSH_TRANSPORT: ${PUSH_TRANSPORT:-expo}
+      PUBLIC_CAIRN_PILOT_ENABLED: ${PUBLIC_CAIRN_PILOT_ENABLED:-0}
+      PUBLIC_CAIRN_PILOT_USER_IDS: ${PUBLIC_CAIRN_PILOT_USER_IDS:-}
+      PUBLIC_CAIRN_SENSITIVE_ZONES_JSON: ${PUBLIC_CAIRN_SENSITIVE_ZONES_JSON:-}
+      DEBUG_SNAPSHOT_ADMIN_USER_IDS: ${DEBUG_SNAPSHOT_ADMIN_USER_IDS:-}
+      EXPORT_DIR: ${EXPORT_DIR:-/srv/cairn/exports}
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:?PUBLIC_API_BASE_URL is required}
+      DISABLE_CRON: ${DISABLE_CRON:-1}
+    volumes:
+      - ${DEPLOY_ROOT:-/srv/cairn-au}/exports:/srv/cairn/exports
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - private
+
+networks:
+  private:
+    driver: bridge

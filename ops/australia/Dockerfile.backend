@@ -1,0 +1,23 @@
+FROM node:20-bookworm-slim
+
+ARG CAIRN_GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${CAIRN_GIT_SHA}"
+
+WORKDIR /app
+
+COPY backend/package.json backend/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+COPY backend/src ./src
+COPY backend/public ./public
+
+RUN mkdir -p /app/logs /srv/cairn/exports \
+  && chown -R node:node /app /srv/cairn
+
+USER node
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+
+CMD ["node", "src/index.js"]

@@ -1,0 +1,9 @@
+[Unit]
+Description=Cairn Australia local health check
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/cairn-au/au.env
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3001/health

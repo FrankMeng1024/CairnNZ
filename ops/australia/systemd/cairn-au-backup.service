@@ -1,0 +1,13 @@
+[Unit]
+Description=Cairn Australia consistent database backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/cairn-au/au.env
+ExecStart=__OPS_ROOT__/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

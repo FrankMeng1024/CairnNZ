@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Cairn Australia backup timer
+
+[Timer]
+OnCalendar=*-*-* 02:40:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+Unit=cairn-au-backup.service
+
+[Install]
+WantedBy=timers.target
