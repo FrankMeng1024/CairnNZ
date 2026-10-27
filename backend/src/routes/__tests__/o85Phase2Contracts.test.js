@@ -38,6 +38,7 @@ test('declined history does not invent a resend policy and passive server promot
   assert.match(memory, /if \(evidenceSource === 'passive_real'\) continuityState = 'unknown'/);
   assert.match(memory, /durationMs >= 15_000 && plausibleSpeedMps <= 15/);
   assert.match(memory, /UPDATE memory_points point[\s\S]*memory_presence_witnesses witness/);
+  assert.match(memory, /await synchronizeCoverageEvidenceForClientIds\([\s\S]*await synchronizeCoverageEvidenceForSegments\([\s\S]*return res\.json\(\{ points: finalEcho/);
 });
 
 test('Friends source status and projection both include server-accepted passive witnesses', () => {

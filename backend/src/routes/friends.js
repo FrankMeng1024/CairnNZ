@@ -69,7 +69,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
     const { email, shareMemory = false } = req.body;
     const fromUserId = req.user.userId;
 
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!email) return res.status(400).json({ code: 'EMAIL_REQUIRED', error: 'Email is required' });
 
     // Find target user (Sprint 6 review M1: exclude soft-deleted accounts
     // so a friend request can't be sent to a user pending deletion, and
@@ -78,7 +78,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
       'SELECT id, name, email FROM users WHERE email = ? AND deleted_at IS NULL',
       [email],
     );
-    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+    if (users.length === 0) return res.status(404).json({ code: 'USER_NOT_FOUND', error: 'User not found' });
 
     const toUser = users[0];
     // Sprint 6 round-45 R45: fix type-coercion self-request bypass.
@@ -88,7 +88,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
     // and string is always false → self-request guard silently failed,
     // letting a user friend-request themselves. Same class as R38B2
     // (own-marker vote) and R45's block-self check below.
-    if (String(toUser.id) === String(fromUserId)) return res.status(400).json({ error: 'Cannot add yourself' });
+    if (String(toUser.id) === String(fromUserId)) return res.status(400).json({ code: 'SELF_REQUEST', error: 'Cannot add yourself' });
 
     const conn = await pool.getConnection();
     let createdRequest;
@@ -96,7 +96,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
       await conn.beginTransaction();
       if (!await lockActivePairUsers(conn, fromUserId, toUser.id)) {
         await conn.rollback();
-        return res.status(404).json({ error: 'User not found' });
+        return res.status(404).json({ code: 'USER_NOT_FOUND', error: 'User not found' });
       }
 
       const [blocks] = await conn.execute(
@@ -108,7 +108,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
       );
       if (blocks.length > 0) {
         await conn.rollback();
-        return res.status(404).json({ error: 'User not found' });
+        return res.status(404).json({ code: 'USER_NOT_FOUND', error: 'User not found' });
       }
 
       // Friendship and request checks are inside the same pair lock as the
@@ -123,7 +123,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
       );
       if (existing.length > 0) {
         await conn.rollback();
-        return res.status(400).json({ error: 'Already friends' });
+        return res.status(400).json({ code: 'ALREADY_FRIENDS', error: 'Already friends' });
       }
       const [pending] = await conn.execute(
         `SELECT id FROM friend_requests
@@ -135,7 +135,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
       );
       if (pending.length > 0) {
         await conn.rollback();
-        return res.status(400).json({ error: 'Request already sent' });
+        return res.status(400).json({ code: 'REQUEST_ALREADY_PENDING', error: 'Request already sent' });
       }
       const [reqResult] = await conn.execute(
         `INSERT INTO friend_requests
@@ -157,7 +157,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
     } catch (txErr) {
       try { await conn.rollback(); } catch (_) {}
       if (txErr.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ error: 'Request already sent' });
+        return res.status(400).json({ code: 'REQUEST_ALREADY_PENDING', error: 'Request already sent' });
       }
       throw txErr;
     } finally {
@@ -188,7 +188,7 @@ router.post('/request', friendRequestLimiter, validateBody(schemas.friend.reques
     res.status(201).json({ message: 'Friend request sent', request: createdRequest });
   } catch (err) {
     console.error('[friends/request]', err.message);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ code: 'SERVER_ERROR', error: 'Server error' });
   }
 });
 

@@ -342,6 +342,9 @@ router.post('/points', authenticate, pointsLimiter, validateBody(schemas.memory.
       schedulePublicMemoryReconciliation(userId, clientActivityId);
     }
     scheduleCoverageMaterialization(pool, userId);
+    // The ACK is emitted only after both bounded coverage-evidence sync calls
+    // above complete. A subsequent Mine snapshot reads that same primary
+    // evidence/state authority; it cannot legitimately predate this ACK.
     // O1: dropped accepted/duplicates/rejected — client 只用 points echo,
     // 三个数字纯 debug 遗留(memorySync 从不 read)。
     return res.json({ points: finalEcho, presence_witnesses: finalPresenceEcho });

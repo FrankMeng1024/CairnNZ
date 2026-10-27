@@ -76,7 +76,9 @@ test('owned backend data has cascading or explicit hard-delete coverage', () => 
 
 test('privacy authority describes implemented controls instead of historical promises', () => {
   const policy = read('public/privacy.html');
-  assert.match(policy, /Last updated: 14 September 2026/);
+  // REVISE_WITH_REASON: the policy authority was deliberately updated with
+  // the October walking/diagnostics disclosure; assert its current revision.
+  assert.match(policy, /Last updated: 23 October 2026/);
   assert.match(policy, /restore server-backed data by signing in during the next seven days/i);
   assert.match(policy, /Ready links expire after 24 hours/);
   assert.match(policy, /precise coordinates from real-location events before sending/);

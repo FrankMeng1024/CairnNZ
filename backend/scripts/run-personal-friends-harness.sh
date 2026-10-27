@@ -41,15 +41,16 @@ docker run -d --name "$CONTAINER" --security-opt seccomp=unconfined \
   -p 127.0.0.1::3306 "$MYSQL_IMAGE" >/dev/null
 
 stable_mysql_checks=0
-for attempt in $(seq 1 60); do
+mysql_ready_attempts="${HARNESS_MYSQL_READY_ATTEMPTS:-180}"
+for attempt in $(seq 1 "$mysql_ready_attempts"); do
   if docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse 'SELECT 1' >/dev/null 2>&1; then
     stable_mysql_checks=$((stable_mysql_checks + 1))
     if [ "$stable_mysql_checks" -ge 2 ]; then break; fi
   else
     stable_mysql_checks=0
   fi
-  if [ "$attempt" = 60 ]; then
-    echo "MySQL did not become ready from image $MYSQL_IMAGE" >&2
+  if [ "$attempt" = "$mysql_ready_attempts" ]; then
+    echo "MySQL did not become ready from image $MYSQL_IMAGE after ${mysql_ready_attempts}s" >&2
     docker logs "$CONTAINER" >&2 || true
     exit 1
   fi
@@ -108,6 +109,7 @@ docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/053_cairn_qa_fixture_cohorts.sql" >/dev/null
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/054_memory_hit_push_explicit_opt_in.sql" >/dev/null
 docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/055_notification_delivery_outbox.sql" >/dev/null
+docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" < "$BACKEND_DIR/src/migrations/058_memory_subscription_intent_order.sql" >/dev/null
 legacy_fixture_state="$(docker exec "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" -Nse "
   SELECT CONCAT(
     (SELECT COUNT(*) FROM $DB_NAME.memory_share_grants WHERE owner_id=990001 AND viewer_id=990002 AND status='revoked' AND revoked_reason='legacy_contract_retired'), ':',
@@ -152,6 +154,7 @@ if [ -n "${EVIDENCE_DIR:-}" ]; then
   "$SCRIPT_DIR/verify-migration-049.sh" | tee "$EVIDENCE_DIR/migration-049.txt"
   "$SCRIPT_DIR/verify-migration-050.sh" | tee "$EVIDENCE_DIR/migration-050.txt"
   "$SCRIPT_DIR/verify-migration-051.sh" | tee "$EVIDENCE_DIR/migration-051.txt"
+  "$SCRIPT_DIR/verify-migration-058.sh" | tee "$EVIDENCE_DIR/migration-058.txt"
   node "$HARNESS_PROGRAM" | tee "$EVIDENCE_DIR/result.json"
 else
   "$SCRIPT_DIR/verify-migration-047.sh"
@@ -159,6 +162,7 @@ else
   "$SCRIPT_DIR/verify-migration-049.sh"
   "$SCRIPT_DIR/verify-migration-050.sh"
   "$SCRIPT_DIR/verify-migration-051.sh"
+  "$SCRIPT_DIR/verify-migration-058.sh"
   node "$HARNESS_PROGRAM"
 fi
 
