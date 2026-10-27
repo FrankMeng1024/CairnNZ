@@ -141,6 +141,33 @@ function sourceAuthorityKey(source: AvailableMemorySource | undefined): string {
   ].join('|');
 }
 
+type SelectionMutationAuthorityFence = {
+  viewerId: string;
+  subscriptionGeneration: number;
+  friendId: number;
+  mutationGeneration: number;
+  sourceAuthority: string;
+};
+
+type SelectionMutationCommitStatus = 'current' | 'retired' | 'authority-replaced';
+
+function selectionMutationCommitStatus(
+  fence: SelectionMutationAuthorityFence,
+  currentViewerId: string,
+  state: Pick<State, 'availableSources'>,
+): SelectionMutationCommitStatus {
+  if (fence.subscriptionGeneration !== subscriptionGeneration
+    || currentViewerId !== fence.viewerId
+    || selectionMutationGenerations.get(String(fence.friendId)) !== fence.mutationGeneration) {
+    return 'retired';
+  }
+  const currentSource = state.availableSources
+    .find(item => Number(item.friend_id) === fence.friendId);
+  return sourceAuthorityKey(currentSource) === fence.sourceAuthority
+    ? 'current'
+    : 'authority-replaced';
+}
+
 function boundedSelectionRequest(
   path: string,
   options: RequestInit & { expectedUserId: string },
@@ -544,6 +571,18 @@ function rollbackCancelledSelection(
     availableSources: state.availableSources,
     selectionPending,
   };
+}
+
+/** A response issued for a retired grant cannot commit against its replacement.
+ * Remove only the old operation's pending intent and align the checkbox list to
+ * the current authority read. Do not touch the replacement grant's error,
+ * permission proof or geometry. A newer selection generation never enters this
+ * path and retains ownership of its own pending state. */
+function settleReplacedAuthorityMutation(
+  state: Pick<State, 'subscriptions' | 'availableSources' | 'selectionPending'>,
+  friendId: number,
+): Pick<State, 'subscriptions' | 'availableSources' | 'selectionPending'> {
+  return rollbackCancelledSelection(state, friendId);
 }
 
 function resolvedFriendName(nextName: unknown, previousName?: string): string {
@@ -996,6 +1035,22 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     const mutationGeneration = nextSelectionMutationGeneration(friendId);
     const source = get().availableSources.find(item => Number(item.friend_id) === friendId);
     const sourceAuthorityAtStart = sourceAuthorityKey(source);
+    const mutationFence: SelectionMutationAuthorityFence = {
+      viewerId: viewerAtStart,
+      subscriptionGeneration: generationAtStart,
+      friendId,
+      mutationGeneration,
+      sourceAuthority: sourceAuthorityAtStart,
+    };
+    const retireStaleMutation = (): boolean => {
+      const currentViewerId = String(useAppStore.getState().user?.id ?? '');
+      const status = selectionMutationCommitStatus(mutationFence, currentViewerId, get());
+      if (status === 'authority-replaced') {
+        set(state => settleReplacedAuthorityMutation(state, friendId));
+        persistSelectionIntents(viewerAtStart, get().selectionPending);
+      }
+      return status !== 'current';
+    };
     if (source?.sharing_status === 'not_shared') {
       const failure = memoryOperationFailure({
         httpStatus: 403,
@@ -1039,14 +1094,10 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     }));
     persistSelectionIntents(viewerAtStart, get().selectionPending);
     return enqueueSelectionMutation(friendId, async () => {
-      if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-        || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+      if (retireStaleMutation()) return 0;
       try {
         const selectionOrder = await allocateSelectionOrder(viewerAtStart, friendId);
-        if (generationAtStart !== subscriptionGeneration
-          || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-          || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+        if (retireStaleMutation()) return 0;
         const { response: res, body: responseBody } = await boundedSelectionRequest('/api/memory-subscriptions', {
           method: 'POST',
           body: JSON.stringify({
@@ -1061,9 +1112,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
           }),
           expectedUserId: viewerAtStart,
         }, true);
-        if (generationAtStart !== subscriptionGeneration
-          || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-          || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+        if (retireStaleMutation()) return 0;
         const responseCode = typeof responseBody?.code === 'string' ? responseBody.code : null;
         if (res.ok && !isValidOrderedSelectionAck(responseBody, {
           selected: true,
@@ -1124,6 +1173,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
                 responseBody?.selection_chain_id,
                 responseBody?.selection_sequence,
               );
+              if (retireStaleMutation()) return 0;
             }
             set({
               selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }),
@@ -1133,9 +1183,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         }
         return res.status;
       } catch (error) {
-        if (generationAtStart === subscriptionGeneration
-          && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
-          && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
+        if (!retireStaleMutation()) {
           const failure = memoryOperationFailure({
             error,
             operation: 'memory-selection',
@@ -1185,6 +1233,22 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     const mutationGeneration = nextSelectionMutationGeneration(friendId);
     const source = get().availableSources.find(item => Number(item.friend_id) === friendId);
     const sourceAuthorityAtStart = sourceAuthorityKey(source);
+    const mutationFence: SelectionMutationAuthorityFence = {
+      viewerId: viewerAtStart,
+      subscriptionGeneration: generationAtStart,
+      friendId,
+      mutationGeneration,
+      sourceAuthority: sourceAuthorityAtStart,
+    };
+    const retireStaleMutation = (): boolean => {
+      const currentViewerId = String(useAppStore.getState().user?.id ?? '');
+      const status = selectionMutationCommitStatus(mutationFence, currentViewerId, get());
+      if (status === 'authority-replaced') {
+        set(state => settleReplacedAuthorityMutation(state, friendId));
+        persistSelectionIntents(viewerAtStart, get().selectionPending);
+      }
+      return status !== 'current';
+    };
     set(state => ({
       subscriptions: state.subscriptions.filter(item => Number(item.friend_id) !== friendId),
       selectionPending: { ...state.selectionPending, [String(friendId)]: 'deselect' },
@@ -1195,14 +1259,10 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
     persistSelectionIntents(viewerAtStart, get().selectionPending);
     useFriendMemoryStore.getState().hideFriend(friendId);
     return enqueueSelectionMutation(friendId, async () => {
-      if (generationAtStart !== subscriptionGeneration
-        || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-        || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+      if (retireStaleMutation()) return 0;
       try {
         const selectionOrder = await allocateSelectionOrder(viewerAtStart, friendId);
-        if (generationAtStart !== subscriptionGeneration
-          || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-          || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+        if (retireStaleMutation()) return 0;
         const { response: res, body: responseBody } = await boundedSelectionRequest(`/api/memory-subscriptions/${friendId}`, {
           method: 'DELETE',
           body: JSON.stringify({
@@ -1216,9 +1276,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
           }),
           expectedUserId: viewerAtStart,
         }, true);
-        if (generationAtStart !== subscriptionGeneration
-          || String(useAppStore.getState().user?.id ?? '') !== viewerAtStart
-          || selectionMutationGenerations.get(String(friendId)) !== mutationGeneration) return 0;
+        if (retireStaleMutation()) return 0;
         const responseCode = typeof responseBody?.code === 'string' ? responseBody.code : null;
         if (res.ok && !isValidOrderedSelectionAck(responseBody, {
           selected: false,
@@ -1269,6 +1327,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
                 responseBody?.selection_chain_id,
                 responseBody?.selection_sequence,
               );
+              if (retireStaleMutation()) return 0;
             }
             set({
               selectionError: classifyFriendMemoryFailure({ httpStatus: res.status }),
@@ -1278,9 +1337,7 @@ export const useMemorySubscriptionsStore = create<State>((set, get) => ({
         }
         return res.status;
       } catch (error) {
-        if (generationAtStart === subscriptionGeneration
-          && String(useAppStore.getState().user?.id ?? '') === viewerAtStart
-          && selectionMutationGenerations.get(String(friendId)) === mutationGeneration) {
+        if (!retireStaleMutation()) {
           const failure = memoryOperationFailure({
             error,
             operation: 'memory-selection',
