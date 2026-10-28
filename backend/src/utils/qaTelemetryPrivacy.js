@@ -75,6 +75,13 @@ function sanitizeQaEvent(event) {
   return removeCoordinates(secretSafe);
 }
 
+// Tier B automatic diagnostics retain numeric coordinates only after the
+// server has verified the owner enrollment. Credentials and coordinate-like
+// free text remain scrubbed; this function is never selected by client input.
+function sanitizePreciseOwnerDiagnosticEvent(event) {
+  return scrubSecrets(event);
+}
+
 function qaError(code, message) {
   const error = new Error(message);
   error.code = code;
@@ -114,5 +121,6 @@ module.exports = {
   MAX_QA_EVENTS,
   MAX_QA_PAYLOAD_BYTES,
   sanitizeQaEvent,
+  sanitizePreciseOwnerDiagnosticEvent,
   sanitizeQaJsonl,
 };

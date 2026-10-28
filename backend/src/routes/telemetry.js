@@ -32,6 +32,7 @@ const {
   getAutomaticDiagnosticPolicy,
   ingestAutomaticDiagnosticBatch,
   queryAutomaticDiagnostics,
+  setSelfServiceAutomaticDiagnosticConsent,
 } = require('../services/automaticDiagnostics');
 
 const router = express.Router();
@@ -70,6 +71,14 @@ const diagnosticReadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const diagnosticConsentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many diagnostic consent changes. Try again later.', code: 'DIAGNOSTIC_CONSENT_RATE_LIMIT' },
+});
+
 // ── Auth middleware ───────────────────────────────────────────────────────
 // Upload accepts either the signed-in app JWT or the server-held operations
 // key. Retrieval is operations-only and always requires the key. A missing
@@ -105,6 +114,24 @@ router.get('/diagnostics/policy', authenticate, async (req, res) => {
   } catch (error) {
     console.error('[diagnostics/policy]', error.message);
     return res.status(500).json({ error: 'Diagnostic policy unavailable.', code: 'DIAGNOSTIC_POLICY_UNAVAILABLE' });
+  }
+});
+
+router.put('/diagnostics/consent', diagnosticConsentLimiter, authenticate, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json(await setSelfServiceAutomaticDiagnosticConsent(
+      pool,
+      req.user.userId,
+      req.body,
+    ));
+  } catch (error) {
+    const status = Number(error.status) || 500;
+    if (status >= 500) console.error('[diagnostics/consent]', error.code, error.message);
+    return res.status(status).json({
+      error: status >= 500 ? 'Diagnostic consent could not be updated.' : error.message,
+      code: error.code || 'DIAGNOSTIC_CONSENT_FAILED',
+    });
   }
 });
 

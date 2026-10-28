@@ -117,7 +117,9 @@ for migration in \
   053_cairn_qa_fixture_cohorts.sql \
   054_memory_hit_push_explicit_opt_in.sql \
   055_notification_delivery_outbox.sql \
-  056_notification_target_receipt_reliability.sql; do
+  056_notification_target_receipt_reliability.sql \
+  057_automatic_diagnostics.sql \
+  058_memory_subscription_intent_order.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" \
     < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done

@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const mysql = require('mysql2/promise');
+const { spawn } = require('node:child_process');
 
 const ACTIVITY_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ROUTE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -21,6 +22,7 @@ function batch({
   sequence = 1,
   eventCode = 'ACTIVITY_WAL_COMMITTED',
   details = {},
+  requiredPolicyTier = 'tier_a',
 }) {
   return {
     schema: 'cairn-auto-diagnostics-batch',
@@ -38,6 +40,7 @@ function batch({
       updateId: 'synthetic-harness-update',
     },
     droppedCount: 0,
+    requiredPolicyTier,
     events: [{
       eventId: `${batchId}-event`,
       eventSequence: sequence,
@@ -73,6 +76,45 @@ async function request(baseUrl, token, method, urlPath, body, extraHeaders = {})
     responseBytes: Buffer.byteLength(responseText),
   });
   return { status: response.status, json };
+}
+
+async function runProductionClientE2E({ baseUrl, token, otherToken, operationsKey }) {
+  const appDir = path.resolve(__dirname, '../../app');
+  const args = [
+    'jest',
+    '--runInBand',
+    '--no-cache',
+    '--runTestsByPath',
+    'integration/automaticDiagnosticRealApi.e2e.test.ts',
+  ];
+  const child = spawn('npx', args, {
+    cwd: appDir,
+    env: {
+      ...process.env,
+      CAIRN_DIAGNOSTIC_E2E_BASE_URL: baseUrl,
+      CAIRN_DIAGNOSTIC_E2E_OWNER_ID: '3',
+      CAIRN_DIAGNOSTIC_E2E_BEARER_TOKEN: token,
+      CAIRN_DIAGNOSTIC_E2E_OTHER_BEARER_TOKEN: otherToken,
+      CAIRN_DIAGNOSTIC_E2E_OPERATIONS_KEY: operationsKey,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', chunk => { stdout += String(chunk); });
+  child.stderr.on('data', chunk => { stderr += String(chunk); });
+  const exitCode = await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', resolve);
+  });
+  if (exitCode !== 0) {
+    throw new Error(`production_client_real_api_e2e_failed\n${stdout}\n${stderr}`);
+  }
+  return {
+    exitCode,
+    test: 'app/integration/automaticDiagnosticRealApi.e2e.test.ts',
+    receipt: stderr.split('\n').filter(Boolean).slice(-8),
+  };
 }
 
 async function main() {
@@ -135,12 +177,13 @@ async function main() {
       deleted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, client_route_id)
     ) ENGINE=InnoDB;
-    INSERT INTO users (id, token_version) VALUES (1, 0), (2, 0);
+    INSERT INTO users (id, token_version) VALUES (1, 0), (2, 0), (3, 0);
     INSERT INTO sessions
       (user_id, client_activity_id, type, start_time, end_time, finalized_at)
     VALUES
       (1, '${ACTIVITY_ID}', 'hiking', UTC_TIMESTAMP(), UTC_TIMESTAMP(), UTC_TIMESTAMP()),
-      (2, '${ACTIVITY_ID}', 'running', UTC_TIMESTAMP(), UTC_TIMESTAMP(), UTC_TIMESTAMP());
+      (2, '${ACTIVITY_ID}', 'running', UTC_TIMESTAMP(), UTC_TIMESTAMP(), UTC_TIMESTAMP()),
+      (3, '${ACTIVITY_ID}', 'hiking', UTC_TIMESTAMP(), UTC_TIMESTAMP(), UTC_TIMESTAMP());
   `);
   const migration = fs.readFileSync(
     path.resolve(__dirname, '../src/migrations/057_automatic_diagnostics.sql'),
@@ -161,10 +204,14 @@ async function main() {
   await setAutomaticDiagnosticEnrollment(pool, {
     ownerUserId: 2, enabled: true, tier: 'tier_a', consentVersion: 'owner-qa-v1',
   });
+  await setAutomaticDiagnosticEnrollment(pool, {
+    ownerUserId: 3, enabled: true, tier: 'tier_a', consentVersion: 'owner-qa-v1',
+  });
 
   const { signToken } = require('../src/config/jwt');
   const tokenA = signToken({ userId: 1, token_version: 0 });
   const tokenB = signToken({ userId: 2, token_version: 0 });
+  const tokenC = signToken({ userId: 3, token_version: 0 });
   const app = express();
   app.set('trust proxy', false);
   app.use(express.json({ limit: '1mb' }));
@@ -180,6 +227,94 @@ async function main() {
   const ops = { 'X-API-Key': process.env.CAIRN_TELEMETRY_API_KEY };
   const checks = {};
   try {
+    const initialOwnerBPolicy = await request(
+      baseUrl, tokenB, 'GET', '/api/telemetry/diagnostics/policy', null,
+    );
+    assert.equal(initialOwnerBPolicy.status, 200);
+    assert.equal(initialOwnerBPolicy.json.tier, 'tier_a');
+    const tierBConsent = await request(
+      baseUrl,
+      tokenB,
+      'PUT',
+      '/api/telemetry/diagnostics/consent',
+      {
+        enabled: true,
+        consentVersion: 'activity-precise-v1',
+        // The authenticated owner must win over any caller-supplied identity.
+        ownerUserId: 1,
+      },
+    );
+    assert.equal(tierBConsent.status, 200);
+    assert.equal(tierBConsent.json.enabled, true);
+    assert.equal(tierBConsent.json.tier, 'tier_b');
+    assert.equal(tierBConsent.json.consentVersion, 'activity-precise-v1');
+    assert.ok(Date.parse(tierBConsent.json.expiresAt) > Date.now());
+    const [consentRows] = await pool.execute(
+      'SELECT owner_user_id, policy_tier, consent_version, enabled FROM diagnostic_qa_enrollments WHERE owner_user_id IN (1, 2) ORDER BY owner_user_id',
+    );
+    assert.deepEqual(consentRows.map(row => ({
+      ownerUserId: Number(row.owner_user_id),
+      tier: row.policy_tier,
+      consentVersion: row.consent_version,
+      enabled: Number(row.enabled),
+    })), [
+      { ownerUserId: 1, tier: 'tier_a', consentVersion: 'owner-qa-v1', enabled: 1 },
+      { ownerUserId: 2, tier: 'tier_b', consentVersion: 'activity-precise-v1', enabled: 1 },
+    ]);
+    checks.selfServiceConsent = {
+      status: tierBConsent.status,
+      authenticatedOwnerOnly: true,
+      serverExpiry: tierBConsent.json.expiresAt,
+      consentVersion: tierBConsent.json.consentVersion,
+    };
+
+    await pool.execute(
+      'UPDATE diagnostic_qa_enrollments SET expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE owner_user_id = 2',
+    );
+    const expiredPolicy = await request(
+      baseUrl, tokenB, 'GET', '/api/telemetry/diagnostics/policy', null,
+    );
+    assert.equal(expiredPolicy.status, 200);
+    assert.equal(expiredPolicy.json.enabled, false);
+    const expiredUpload = await request(
+      baseUrl,
+      tokenB,
+      'POST',
+      '/api/telemetry/diagnostics/batches',
+      batch({
+        batchId: 'expired-consent-rejected',
+        streamId: 'activity:expired-consent',
+        ownerEpoch: 'epoch-expired-consent',
+        requiredPolicyTier: 'tier_b',
+      }),
+    );
+    assert.equal(expiredUpload.status, 403);
+    const renewedTierBConsent = await request(
+      baseUrl,
+      tokenB,
+      'PUT',
+      '/api/telemetry/diagnostics/consent',
+      { enabled: true, consentVersion: 'activity-precise-v1' },
+    );
+    assert.equal(renewedTierBConsent.status, 200);
+    assert.equal(renewedTierBConsent.json.enabled, true);
+    checks.selfServiceConsent.expiryEnforced = true;
+
+    checks.productionClientRealApiE2E = await runProductionClientE2E({
+      baseUrl,
+      token: tokenC,
+      otherToken: tokenA,
+      operationsKey: process.env.CAIRN_TELEMETRY_API_KEY,
+    });
+    const [ownerCAfterRevocation] = await pool.execute(
+      'SELECT enabled FROM diagnostic_qa_enrollments WHERE owner_user_id = 3',
+    );
+    assert.equal(Number(ownerCAfterRevocation[0].enabled), 0);
+    const [ownerCStreams] = await pool.execute(
+      'SELECT COUNT(*) AS count FROM diagnostic_streams WHERE owner_user_id = 3',
+    );
+    assert.equal(Number(ownerCStreams[0].count), 0);
+
     checks.invalidToken = (await request(baseUrl, 'invalid', 'POST', '/api/telemetry/diagnostics/batches', {})).status;
     assert.equal(checks.invalidToken, 401);
 
@@ -267,6 +402,50 @@ async function main() {
       uploadStatus: activityQuery.json.streams[0].uploadStatus,
       sequenceGaps: activityQuery.json.streams[0].sequenceGaps,
       preciseCoordinatesPresent: false,
+    };
+
+    const tierARejected = batch({
+      batchId: 'precise-tier-a-rejected',
+      streamId: 'activity:precise-tier-a',
+      ownerEpoch: 'epoch-precise-tier-a',
+      requiredPolicyTier: 'tier_b',
+      details: { replayKind: 'raw-observation', lat: -41.28664, lng: 174.77557 },
+    });
+    const tierARejectedReceipt = await request(
+      baseUrl, tokenA, 'POST', '/api/telemetry/diagnostics/batches', tierARejected,
+    );
+    assert.equal(tierARejectedReceipt.status, 403);
+    assert.equal(tierARejectedReceipt.json.code, 'DIAGNOSTIC_TIER_REQUIRED');
+
+    const precise = batch({
+      batchId: 'precise-tier-b-accepted',
+      streamId: 'activity:precise-tier-b',
+      ownerEpoch: 'epoch-precise-tier-b',
+      requiredPolicyTier: 'tier_b',
+      details: {
+        replayKind: 'raw-observation',
+        lat: -41.28664,
+        lng: 174.77557,
+        accessToken: 'must-not-survive',
+      },
+    });
+    const preciseReceipt = await request(
+      baseUrl, tokenB, 'POST', '/api/telemetry/diagnostics/batches', precise,
+    );
+    assert.equal(preciseReceipt.status, 200);
+    const preciseQuery = await request(
+      baseUrl, null, 'GET', `/api/telemetry/diagnostics/activity/${ACTIVITY_ID}?owner_id=2`, null, ops,
+    );
+    assert.equal(preciseQuery.status, 200);
+    const preciseSerialized = JSON.stringify(preciseQuery.json);
+    assert.equal(preciseSerialized.includes('-41.28664'), true);
+    assert.equal(preciseSerialized.includes('174.77557'), true);
+    assert.equal(preciseSerialized.includes('must-not-survive'), false);
+    checks.preciseOwnerDiagnostics = {
+      tierARejected: tierARejectedReceipt.status,
+      tierBStoredAndReadable: true,
+      credentialsRemoved: true,
+      retrieval: 'operations-key-plus-owner-id',
     };
     const missingQuery = await request(
       baseUrl, null, 'GET', '/api/telemetry/diagnostics/activity/cccccccc-cccc-4ccc-8ccc-cccccccccccc?owner_id=1', null, ops,
@@ -421,11 +600,19 @@ async function main() {
     await pool.execute("UPDATE diagnostic_batches SET expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE owner_user_id = 2");
     await pool.execute("UPDATE diagnostic_streams SET expires_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE owner_user_id = 2");
     checks.ttlPurgedRows = await purgeExpiredAutomaticDiagnostics(pool, 500);
-    assert.equal(checks.ttlPurgedRows, 4);
+    // One additional Tier B stream plus its batch are now part of the
+    // owner-scoped expiry proof (the purge reports affected batches+streams).
+    assert.equal(checks.ttlPurgedRows, 6);
 
-    const disabled = await setAutomaticDiagnosticEnrollment(pool, {
-      ownerUserId: 1, enabled: false, tier: 'tier_a', consentVersion: 'owner-qa-v1-revoked',
-    });
+    const disabledReceipt = await request(
+      baseUrl,
+      tokenA,
+      'PUT',
+      '/api/telemetry/diagnostics/consent',
+      { enabled: false, consentVersion: 'activity-precise-v1' },
+    );
+    assert.equal(disabledReceipt.status, 200);
+    const disabled = disabledReceipt.json;
     checks.consentRevocation = { enabled: disabled.enabled, deletedStreams: disabled.deletedStreams };
     assert.equal(disabled.enabled, false);
     assert.ok(disabled.deletedStreams >= 2);

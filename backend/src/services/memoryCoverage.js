@@ -126,8 +126,30 @@ function viewportTileBounds(viewport) {
   return { minX: sw.x, maxX: ne.x, minY: sw.y, maxY: ne.y };
 }
 
+async function withCoverageTransaction(db, work) {
+  const ownsConnection = typeof db.getConnection === 'function';
+  const connection = ownsConnection ? await db.getConnection() : db;
+  let transactionStarted = false;
+  try {
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const result = await work(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    if (transactionStarted) {
+      try { await connection.rollback(); }
+      catch (rollbackError) { error.coverageRollbackError = rollbackError; }
+    }
+    throw error;
+  } finally {
+    if (ownsConnection) connection.release();
+  }
+}
+
 async function synchronizeCoverageSubset(db, ownerId, filterSql = '', filterParams = []) {
-  const [result] = await db.execute(
+  return withCoverageTransaction(db, async connection => {
+  const [result] = await connection.execute(
     `INSERT IGNORE INTO memory_coverage_evidence
        (memory_point_id, owner_id, coverage_rule_version, tile_x, tile_y,
         observed_at_ms, share_ready_at, evidence_source)
@@ -171,7 +193,7 @@ async function synchronizeCoverageSubset(db, ownerId, filterSql = '', filterPara
         ))`,
     [ownerId, ...filterParams],
   );
-  await db.execute(
+  const [regionResult] = await connection.execute(
     `INSERT IGNORE INTO memory_coverage_regions
        (memory_point_id,owner_id,coverage_rule_version,region_id,region_level,share_ready_at)
      SELECT evidence.memory_point_id,evidence.owner_id,evidence.coverage_rule_version,
@@ -188,17 +210,27 @@ async function synchronizeCoverageSubset(db, ownerId, filterSql = '', filterPara
         ${filterSql}`,
     [ownerId, ...filterParams],
   );
-  if (Number(result.affectedRows) > 0) {
-    await db.execute(
-      `INSERT INTO memory_coverage_source_state
-         (owner_id,coverage_rule_version,evidence_revision)
-       VALUES (?,${COVERAGE_RULE_VERSION},1)
-       ON DUPLICATE KEY UPDATE evidence_revision=evidence_revision+1,
-         coverage_rule_version=VALUES(coverage_rule_version)`,
-      [ownerId],
-    );
-  }
+  const changed = Number(result.affectedRows) > 0 || Number(regionResult.affectedRows) > 0;
+  // Keep the revision in the same transaction as both projection tables.
+  // The count-derived floor also repairs a legacy half-complete projection
+  // whose evidence/region rows committed before its revision statement.
+  await connection.execute(
+    `INSERT INTO memory_coverage_source_state
+       (owner_id,coverage_rule_version,evidence_revision)
+     SELECT ?,${COVERAGE_RULE_VERSION},COUNT(*)+1
+       FROM memory_coverage_evidence
+      WHERE owner_id=? AND coverage_rule_version=${COVERAGE_RULE_VERSION}
+     HAVING COUNT(*)>0
+     ON DUPLICATE KEY UPDATE
+       evidence_revision=GREATEST(
+         evidence_revision + ?,
+         VALUES(evidence_revision)
+       ),
+       coverage_rule_version=VALUES(coverage_rule_version)`,
+    [ownerId, ownerId, changed ? 1 : 0],
+  );
   return Number(result.affectedRows) || 0;
+  });
 }
 
 async function synchronizeCoverageEvidence(db, ownerId) {
@@ -666,6 +698,7 @@ module.exports = {
   synchronizeCoverageEvidenceForClientIds,
   synchronizeCoverageEvidenceForActivity,
   synchronizeCoverageEvidenceForSegments,
+  withCoverageTransaction,
   loadPreparedCoverage,
   loadCoverageRegions,
   loadCoverageSnapshotManifest,

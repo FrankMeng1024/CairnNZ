@@ -1,7 +1,10 @@
 'use strict';
 
 const crypto = require('crypto');
-const { sanitizeQaEvent } = require('../utils/qaTelemetryPrivacy');
+const {
+  sanitizePreciseOwnerDiagnosticEvent,
+  sanitizeQaEvent,
+} = require('../utils/qaTelemetryPrivacy');
 
 const DIAGNOSTIC_SCHEMA = 'cairn-auto-diagnostics-batch';
 const DIAGNOSTIC_VERSION = 1;
@@ -10,6 +13,8 @@ const MAX_BATCH_BYTES = 64 * 1024;
 const MAX_OWNER_BYTES_24H = 5 * 1024 * 1024;
 const TIER_A_RETENTION_DAYS = 30;
 const TIER_B_RETENTION_DAYS = 14;
+const SELF_SERVICE_CONSENT_VERSION = 'activity-precise-v1';
+const SELF_SERVICE_CONSENT_DAYS = 30;
 // Retention is anchored to server receipt, not client eventAt. eventAt is
 // useful forensic context but is client-controlled and may arrive after an
 // offline delay; every accepted batch receives its full stated server TTL.
@@ -62,8 +67,11 @@ function tierASafeDetails(value, depth = 0) {
   return output;
 }
 
-function sanitizeAutomaticDetails(value) {
-  const safe = sanitizeQaEvent({ coordinateSource: 'real', fields: tierASafeDetails(value ?? {}) }).fields;
+function sanitizeAutomaticDetails(value, policyTier) {
+  const bounded = { coordinateSource: 'real', fields: tierASafeDetails(value ?? {}) };
+  const safe = policyTier === 'tier_b'
+    ? sanitizePreciseOwnerDiagnosticEvent(bounded).fields
+    : sanitizeQaEvent(bounded).fields;
   if (!safe || typeof safe !== 'object' || Array.isArray(safe)) return {};
   const encoded = JSON.stringify(safe);
   if (Buffer.byteLength(encoded, 'utf8') > 8 * 1024) {
@@ -72,7 +80,8 @@ function sanitizeAutomaticDetails(value) {
   return safe;
 }
 
-function normalizeAutomaticDiagnosticBatch(body) {
+function normalizeAutomaticDiagnosticBatch(body, options = {}) {
+  const policyTier = options.policyTier === 'tier_b' ? 'tier_b' : 'tier_a';
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw diagnosticError(400, 'DIAGNOSTIC_SCHEMA_INVALID', 'Diagnostic batch must be an object.');
   }
@@ -82,6 +91,10 @@ function normalizeAutomaticDiagnosticBatch(body) {
   }
   if (body.schema !== DIAGNOSTIC_SCHEMA || body.version !== DIAGNOSTIC_VERSION) {
     throw diagnosticError(400, 'DIAGNOSTIC_SCHEMA_UNSUPPORTED', 'Unsupported diagnostic schema.');
+  }
+  const requiredPolicyTier = body.requiredPolicyTier === 'tier_b' ? 'tier_b' : 'tier_a';
+  if (requiredPolicyTier === 'tier_b' && policyTier !== 'tier_b') {
+    throw diagnosticError(403, 'DIAGNOSTIC_TIER_REQUIRED', 'Tier B diagnostic enrollment is required.');
   }
   const stream = body.stream;
   if (!stream || typeof stream !== 'object' || Array.isArray(stream)) {
@@ -151,7 +164,7 @@ function normalizeAutomaticDiagnosticBatch(body) {
       severity,
       eventAt,
       monotonicMs,
-      details: sanitizeAutomaticDetails(event.details),
+      details: sanitizeAutomaticDetails(event.details, requiredPolicyTier),
     };
   }).sort((left, right) => left.eventAt - right.eventAt || left.eventId.localeCompare(right.eventId));
   const eventSequences = events.map(event => event.eventSequence).sort((left, right) => left - right);
@@ -180,6 +193,7 @@ function normalizeAutomaticDiagnosticBatch(body) {
         ? null : boundedId(String(stream.updateId), 'updateId', 64),
     },
     droppedCount: Math.max(0, Math.floor(Number(body.droppedCount) || 0)),
+    requiredPolicyTier,
     events,
   };
   const payloadJson = JSON.stringify(normalized);
@@ -208,7 +222,6 @@ function sameStreamIdentity(row, stream) {
 }
 
 async function ingestAutomaticDiagnosticBatch(pool, ownerUserId, body) {
-  const batch = normalizeAutomaticDiagnosticBatch(body);
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -222,6 +235,7 @@ async function ingestAutomaticDiagnosticBatch(pool, ownerUserId, body) {
       || (policy.expires_at && new Date(policy.expires_at).getTime() <= Date.now())) {
       throw diagnosticError(403, 'DIAGNOSTIC_POLICY_DISABLED', 'Automatic diagnostics policy is disabled.');
     }
+    const batch = normalizeAutomaticDiagnosticBatch(body, { policyTier: policy.policy_tier });
 
     if (batch.stream.clientActivityId) {
       const [tombstones] = await conn.execute(
@@ -428,6 +442,35 @@ async function setAutomaticDiagnosticEnrollment(pool, input) {
   }
 }
 
+async function setSelfServiceAutomaticDiagnosticConsent(pool, ownerUserId, input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)
+    || typeof input.enabled !== 'boolean'
+    || input.consentVersion !== SELF_SERVICE_CONSENT_VERSION) {
+    throw diagnosticError(
+      400,
+      'DIAGNOSTIC_CONSENT_INVALID',
+      'A current explicit diagnostic consent decision is required.',
+    );
+  }
+  const enabled = input.enabled === true;
+  const expiresAt = enabled
+    ? new Date(Date.now() + SELF_SERVICE_CONSENT_DAYS * 24 * 60 * 60 * 1_000)
+    : null;
+  const result = await setAutomaticDiagnosticEnrollment(pool, {
+    ownerUserId,
+    enabled,
+    tier: 'tier_b',
+    consentVersion: SELF_SERVICE_CONSENT_VERSION,
+    expiresAt,
+  });
+  const policy = await getAutomaticDiagnosticPolicy(pool, ownerUserId);
+  return {
+    ...policy,
+    deletedStreams: result.deletedStreams,
+    serverTime: new Date().toISOString(),
+  };
+}
+
 async function purgeExpiredAutomaticDiagnostics(pool, limit = 500) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2_000));
   const conn = await pool.getConnection();
@@ -581,6 +624,8 @@ module.exports = {
   ingestAutomaticDiagnosticBatch,
   getAutomaticDiagnosticPolicy,
   setAutomaticDiagnosticEnrollment,
+  setSelfServiceAutomaticDiagnosticConsent,
+  SELF_SERVICE_CONSENT_VERSION,
   purgeExpiredAutomaticDiagnostics,
   queryAutomaticDiagnostics,
 };
