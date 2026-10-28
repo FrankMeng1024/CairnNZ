@@ -9,10 +9,14 @@ describe('backgroundLocationTask durable ownership fencing', () => {
   let flushRecordedMemoryEvidence: jest.Mock;
   let scheduleActivityMemoryProjection: jest.Mock;
   let recordActivityStageEvent: jest.Mock;
+  let recordActivityStageEventDurably: jest.Mock;
   let recordActivityDiagnosticObservation: jest.Mock;
   let recordActivityDiagnosticDecision: jest.Mock;
   let recordActivityDiagnosticCanonicalPromotion: jest.Mock;
   let breadcrumb: jest.Mock;
+  let taskDefined: boolean;
+  let hasStartedLocationUpdatesAsync: jest.Mock;
+  let stopLocationUpdatesAsync: jest.Mock;
 
   beforeEach(() => {
     jest.resetModules();
@@ -24,10 +28,14 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     flushRecordedMemoryEvidence = jest.fn(async () => undefined);
     scheduleActivityMemoryProjection = jest.fn(async () => undefined);
     recordActivityStageEvent = jest.fn(async () => undefined);
+    recordActivityStageEventDurably = jest.fn(async () => true);
     recordActivityDiagnosticObservation = jest.fn(async () => undefined);
     recordActivityDiagnosticDecision = jest.fn(async () => undefined);
     recordActivityDiagnosticCanonicalPromotion = jest.fn(async () => undefined);
     breadcrumb = jest.fn();
+    taskDefined = false;
+    hasStartedLocationUpdatesAsync = jest.fn(async () => false);
+    stopLocationUpdatesAsync = jest.fn(async () => undefined);
 
     jest.doMock('react-native', () => ({
       Platform: { OS: 'ios' },
@@ -39,8 +47,12 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       removeItem: jest.fn(async (key: string) => { delete values[key]; }),
     }));
     jest.doMock('expo-task-manager', () => ({
-      isTaskDefined: jest.fn(() => false),
+      isTaskDefined: jest.fn(() => taskDefined),
       defineTask: jest.fn((_name: string, callback: BackgroundHandler) => { handler = callback; }),
+    }));
+    jest.doMock('expo-location', () => ({
+      hasStartedLocationUpdatesAsync,
+      stopLocationUpdatesAsync,
     }));
     jest.doMock('../hikeTrackWriter', () => ({
       appendBackgroundHikePoints,
@@ -68,9 +80,13 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     jest.doMock('../../features/activity/activityMemoryProjector', () => ({
       scheduleActivityMemoryProjection,
     }));
+    jest.doMock('../../features/public/services/walkingEncounterEvidence', () => ({
+      recordWalkingEncounterObservations: jest.fn(async () => undefined),
+    }));
     jest.doMock('../../features/activity/activityStageLedger', () => ({
       activityStageMonotonicNow: jest.fn(() => 42.5),
       recordActivityStageEvent,
+      recordActivityStageEventDurably,
       flushActivityStageLedger: jest.fn(async () => undefined),
     }));
     jest.doMock('../../features/activity/activityDiagnosticReplay', () => ({
@@ -313,6 +329,150 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       .toEqual([1_000, 5_000, 9_000]);
   });
 
+  it('keeps owner identity on fresh non-ACCEPT Task decisions', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-refine', true, {
+      clientActivityId: 'activity-refine',
+      userId: 'user-a',
+      ownerGeneration: 'generation-refine',
+      segmentId: 'segment-refine',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+    });
+    const north10 = 10 / 111_320;
+    const east25 = 25 / (111_320 * Math.cos(41 * Math.PI / 180));
+    await handler({
+      data: { locations: [
+        pointAt(1_000, -41, 174),
+        pointAt(5_000, -41 + north10, 174),
+        pointAt(9_000, -41 + north10 * 2, 174),
+        pointAt(41_000, -41 + north10 * 2, 174 + east25, 12),
+      ] },
+      error: null,
+    });
+    const classified = task.drainBackgroundLocations();
+    expect(classified[classified.length - 1]).toEqual(expect.objectContaining({
+      timestamp: 41_000,
+      clientActivityId: 'activity-refine',
+      ownerGeneration: 'generation-refine',
+      segmentId: 'segment-refine',
+      canonicalDecision: expect.stringMatching(/REFINE|QUARANTINE|REJECT/),
+      continuityPreclassified: true,
+    }));
+  });
+
+  it('stages a silence gap before a recovering background callback replaces its anchor', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(132_000);
+    try {
+      const task = require('../backgroundLocationTask');
+      await task.persistBackgroundContext('activity-gap-recovery', true, {
+        clientActivityId: 'activity-gap-recovery',
+        userId: 'user-a',
+        ownerGeneration: 'generation-gap',
+        segmentId: 'segment-gap',
+        activityMode: 'hiking',
+        acceptAfterMs: 1_000,
+        sourceExpectedSinceMs: 1_000,
+        latestJsCallbackReceipt: {
+          receiptWallTimeMs: 1_000,
+          source: 'background',
+          batchSize: 1,
+          validObservationCount: 1,
+          errorDelivered: false,
+        },
+      });
+      await handler({ data: { locations: [point(132_000)] }, error: null });
+      expect(recordActivityStageEventDurably).toHaveBeenCalledWith(expect.objectContaining({
+        evidenceId: 'activity-gap-recovery:silence:1000',
+        details: expect.objectContaining({
+          trigger: 'task-receipt',
+          jsCallbackObservedAtDetection: true,
+          callbackDeliveryWithinSilentInterval: false,
+        }),
+      }));
+      const context = JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]);
+      expect(context.latestJsCallbackReceipt.receiptWallTimeMs).toBe(132_000);
+      expect(context.silenceGapReportedForReceiptWallTimeMs).toBe(1_000);
+      expect(context.pendingSilenceGap).toBeNull();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('persists callback and valid-observation liveness even when the canonical WAL rejects', async () => {
+    appendBackgroundHikePoints.mockRejectedValueOnce(new Error('synthetic-wal-failure'));
+    const now = jest.spyOn(Date, 'now').mockReturnValue(132_000);
+    try {
+      const task = require('../backgroundLocationTask');
+      await task.persistBackgroundContext('activity-wal-failure', true, {
+        clientActivityId: 'activity-wal-failure',
+        userId: 'user-a',
+        ownerGeneration: 'generation-wal',
+        segmentId: 'segment-wal',
+        activityMode: 'hiking',
+        acceptAfterMs: 1_000,
+        sourceExpectedSinceMs: 1_000,
+      });
+      await handler({ data: { locations: [point(132_000)] }, error: null });
+      const context = JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]);
+      expect(context.latestJsCallbackReceipt).toEqual(expect.objectContaining({
+        receiptWallTimeMs: 132_000,
+        validObservationCount: 1,
+        errorDelivered: false,
+      }));
+      expect(context.latestSourceReceipt).toEqual({
+        observationTimeMs: 132_000,
+        receiptWallTimeMs: 132_000,
+        source: 'background',
+      });
+      expect(task.drainBackgroundLocations()).toEqual([]);
+      expect(recordActivityStageEvent).toHaveBeenCalledWith(expect.objectContaining({
+        stage: 'native-js-delivery',
+        details: expect.objectContaining({ validObservationCount: 1 }),
+      }));
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('replays a pending silence gap until the strict ledger write is acknowledged', async () => {
+    recordActivityStageEventDurably.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-gap-crash', true, {
+      clientActivityId: 'activity-gap-crash',
+      userId: 'user-a',
+      ownerGeneration: 'generation-crash',
+      segmentId: 'segment-crash',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+      sourceExpectedSinceMs: 1_000,
+    });
+    const gap = await task.detectDurableSilenceGapAfterResume({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-gap-crash',
+      ownerGeneration: 'generation-crash',
+      nowMs: 131_000,
+      thresholdMs: 60_000,
+    });
+    await expect(task.persistDurableSilenceGapEvent({
+      ownerUserId: 'user-a', gap, trigger: 'process-recovery',
+    })).resolves.toBe(false);
+    expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]).pendingSilenceGap)
+      .toEqual(expect.objectContaining({ evidenceId: gap.evidenceId }));
+    const replay = await task.detectDurableSilenceGapAfterResume({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-gap-crash',
+      ownerGeneration: 'generation-crash',
+      nowMs: 140_000,
+      thresholdMs: 60_000,
+    });
+    expect(replay).toEqual(gap);
+    await expect(task.persistDurableSilenceGapEvent({
+      ownerUserId: 'user-a', gap: replay, trigger: 'process-recovery',
+    })).resolves.toBe(true);
+    expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]).pendingSilenceGap).toBeNull();
+  });
+
   it('wakes foreground projection only after the Task batch is durable', async () => {
     const task = require('../backgroundLocationTask');
     const wake = jest.fn();
@@ -374,13 +534,15 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       sourceExpectedSinceMs: 1_000,
     });
 
-    await expect(task.detectDurableSilenceGapAfterResume({
+    const gap = await task.detectDurableSilenceGapAfterResume({
       ownerUserId: 'user-a',
       clientActivityId: 'activity-silent',
       ownerGeneration: 'generation-silent',
       nowMs: 121_000,
       thresholdMs: 60_000,
-    })).resolves.toEqual({
+    });
+    expect(gap).toEqual({
+      evidenceId: 'activity-silent:silence:1000',
       clientActivityId: 'activity-silent',
       ownerGeneration: 'generation-silent',
       detectedAtMs: 121_000,
@@ -398,10 +560,26 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       ownerGeneration: 'generation-silent',
       nowMs: 181_000,
       thresholdMs: 60_000,
+    })).resolves.toEqual(gap);
+    await expect(task.persistDurableSilenceGapEvent({
+      ownerUserId: 'user-a',
+      gap,
+      trigger: 'foreground-resume',
+    })).resolves.toBe(true);
+    await expect(task.detectDurableSilenceGapAfterResume({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-silent',
+      ownerGeneration: 'generation-silent',
+      nowMs: 181_000,
+      thresholdMs: 60_000,
     })).resolves.toBeNull();
 
     const persisted = values[task.STORAGE_KEY_ACTIVITY_CONTEXT];
     expect(persisted).toContain('silenceGapReportedForReceiptWallTimeMs');
+    expect(recordActivityStageEventDurably).toHaveBeenCalledWith(expect.objectContaining({
+      evidenceId: 'activity-silent:silence:1000',
+      details: expect.objectContaining({ syntheticLocationCreated: false }),
+    }));
     expect(persisted).not.toMatch(/latitude|longitude|coordinates|\"lat\"|\"lng\"/i);
   });
 
@@ -421,5 +599,61 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       ownerGeneration: 'generation-old',
       nowMs: 200_000,
     })).resolves.toBeNull();
+  });
+
+  it('startup reconciliation preserves a legitimate cold-recovery owner', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-cold', true, {
+      clientActivityId: 'activity-cold',
+      userId: 'user-a',
+      ownerGeneration: 'generation-cold',
+      segmentId: 'segment-cold',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+    });
+    taskDefined = true;
+    hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(task.reconcileActivityBackgroundTaskOnStartup())
+      .resolves.toBe('preserved-active-owner');
+    expect(stopLocationUpdatesAsync).not.toHaveBeenCalled();
+  });
+
+  it('serializes a slow startup orphan probe ahead of a fresh Start lease', async () => {
+    let resolveProbe!: (started: boolean) => void;
+    hasStartedLocationUpdatesAsync.mockImplementation(() => new Promise<boolean>(resolve => {
+      resolveProbe = resolve;
+    }));
+    const task = require('../backgroundLocationTask');
+    taskDefined = true;
+    const startup = task.reconcileActivityBackgroundTaskOnStartup({
+      isTaskDefined: () => true,
+      hasStarted: hasStartedLocationUpdatesAsync,
+      stop: stopLocationUpdatesAsync,
+    });
+    for (let turn = 0; turn < 50 && !resolveProbe; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(resolveProbe).toBeDefined();
+    let startLeaseSettled = false;
+    const acquire = task.persistBackgroundContext('activity-new', true, {
+      clientActivityId: 'activity-new',
+      userId: 'user-a',
+      ownerGeneration: 'generation-new',
+      segmentId: 'segment-new',
+      activityMode: 'hiking',
+      acceptAfterMs: 2_000,
+    }).then((result: boolean) => {
+      startLeaseSettled = true;
+      return result;
+    });
+    await Promise.resolve();
+    expect(startLeaseSettled).toBe(false);
+    resolveProbe(true);
+    await expect(startup).resolves.toBe('orphan-stopped');
+    await expect(acquire).resolves.toBe(true);
+    expect(stopLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT])).toMatchObject({
+      clientActivityId: 'activity-new', ownerGeneration: 'generation-new',
+    });
   });
 });

@@ -107,7 +107,12 @@ function schedulePendingRetry(pending: PendingHike[]): void {
         && (!hike.failureKind || hike.failureKind === 'retryable' || hike.failureKind === 'dependency')
         ? Number(hike.lastAttemptAt) + retryBackoffMs(hike.attemptCount)
         : Number.POSITIVE_INFINITY;
-      const roadDueAt = hike.roadRefinementState === 'pending-retry'
+      // This daemon can execute a road retry only while the completion is still
+      // in its preparation lifecycle. Once the frozen upload is `ready`, the
+      // road job is a separate durable lifecycle; using its stale deadline here
+      // merely wakes drainPending every 50 ms while upload backoff skips work.
+      const roadDueAt = hike.uploadState === 'preparing'
+        && hike.roadRefinementState === 'pending-retry'
         && Number.isFinite(Number(hike.roadRefinementNextRetryAt))
         ? Number(hike.roadRefinementNextRetryAt)
         : Number.POSITIVE_INFINITY;

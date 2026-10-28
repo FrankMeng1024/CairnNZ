@@ -25,6 +25,7 @@ import {
   flushActivityStageLedger,
   purgeActivityStageLedgerForOwner,
   recordActivityStageEvent,
+  recordActivityStageEventDurably,
   summarizeActivityObservability,
 } from '../activityStageLedger';
 
@@ -257,6 +258,41 @@ describe('local owner-exportable Activity stage ledger', () => {
     warning.mockRestore();
   });
 
+  test('strict sparse-event persistence fails closed, then replays the same evidence id durably', async () => {
+    const values = (globalThis as any).__cairnTestAsyncStorage as Map<string, string>;
+    const ordinarySet = AsyncStorage.setItem as jest.Mock;
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    ordinarySet.mockRejectedValueOnce(new Error('synthetic-first-sparse-write-failure'));
+    const input = {
+      ownerUserId: 'owner-a',
+      clientActivityId: 'activity-gap-ledger',
+      stage: 'provider-state' as const,
+      evidenceId: 'activity-gap-ledger:silence:1000',
+      wallTimeMs: 121_000,
+      details: {
+        eventCode: 'ACTIVITY_SILENCE_GAP',
+        durationMs: 120_000,
+        movementDuringInterval: 'UNKNOWN',
+      },
+    };
+
+    await expect(recordActivityStageEventDurably(input)).resolves.toBe(false);
+    ordinarySet.mockImplementation(async (key: string, value: string) => { values.set(key, value); });
+    await expect(recordActivityStageEventDurably(input)).resolves.toBe(true);
+    const exported = await exportActivityStageLedger('owner-a', 'activity-gap-ledger');
+    expect(exported.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        evidenceId: input.evidenceId,
+        stage: 'provider-state',
+        details: expect.objectContaining({
+          eventCode: 'ACTIVITY_SILENCE_GAP',
+          movementDuringInterval: 'UNKNOWN',
+        }),
+      }),
+    ]));
+    warning.mockRestore();
+  });
+
   test('bounded retention is explicit and keeps a compact full phase summary', async () => {
     for (let ordinal = 1; ordinal <= 1_201; ordinal += 1) {
       await recordActivityStageEvent({
@@ -417,6 +453,36 @@ describe('local owner-exportable Activity stage ledger', () => {
     expect(summary.timing).toMatchObject({
       maximumObservationReceiptLagMs: 100,
       maximumWalToStoreLagMs: 12,
+    });
+  });
+
+  test('joins continuity decisions to JS receipts through details.receiptEvidenceId', () => {
+    const base = {
+      schema: 'cairn-activity-stage-ledger', version: 1,
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a',
+      monotonicTimeMs: null, processOriginWallTimeMs: null, processId: 'process-a',
+    } as const;
+    const events = [
+      {
+        ...base, eventId: 'receipt', stage: 'observation-received', wallTimeMs: 1_000,
+        evidenceId: 'background:1000:1:0', details: { observationTimeMs: 900 },
+      },
+      {
+        ...base, eventId: 'decision', stage: 'observation-decision', wallTimeMs: 1_010,
+        evidenceId: 'activity:raw:7', details: {
+          receiptEvidenceId: 'background:1000:1:0', decision: 'QUARANTINE',
+        },
+      },
+    ] as any;
+    const complete = summarizeActivityObservability(events);
+    expect(complete.pipelineFindings).toMatchObject({
+      jsReceiptsWithoutDecision: 0,
+      jsReceiptDecisionCorrelation: 'complete',
+    });
+    const truncated = summarizeActivityObservability(events.slice(0, 1), { retentionTruncated: true });
+    expect(truncated.pipelineFindings).toMatchObject({
+      jsReceiptsWithoutDecision: 0,
+      jsReceiptDecisionCorrelation: 'unknown-retention-truncated',
     });
   });
 

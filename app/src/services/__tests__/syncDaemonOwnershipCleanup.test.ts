@@ -8,6 +8,7 @@ const mockSavedPending: any[] = [];
 const mockAddedSessions: any[] = [];
 let mockArtifact: any = null;
 let mockTombstoned = false;
+let mockOnline = false;
 const mockPersistRemoteConflict = jest.fn(async (_input?: unknown) => ({
   conflictingActivities: [{ serverActivityId: 88 }],
 }));
@@ -51,6 +52,21 @@ jest.mock('../sessionService', () => ({
 jest.mock('../apiService', () => ({ authenticatedFetch: jest.fn() }));
 jest.mock('../markerTombstones', () => ({ listMarkerTombstones: jest.fn(async () => []) }));
 jest.mock('../crashLogger', () => ({ crashLogger: { breadcrumb: jest.fn() } }));
+jest.mock('../networkMonitor', () => ({
+  __esModule: true,
+  default: {
+    isOnline: jest.fn(() => mockOnline),
+    getState: jest.fn(() => ({ state: mockOnline ? 'online' : 'offline' })),
+    onChange: jest.fn(() => () => undefined),
+    start: jest.fn(async () => undefined),
+  },
+  networkMonitor: {
+    isOnline: jest.fn(() => mockOnline),
+    getState: jest.fn(() => ({ state: mockOnline ? 'online' : 'offline' })),
+    onChange: jest.fn(() => () => undefined),
+    start: jest.fn(async () => undefined),
+  },
+}));
 jest.mock('../../features/activity/activityRegistry', () => ({
   acknowledgeActivity: jest.fn(async () => { mockOrder.push('registry-ack'); return true; }),
   completeActivity: jest.fn(async () => true),
@@ -139,6 +155,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
     mockAddedSessions.length = 0;
     mockArtifact = null;
     mockTombstoned = false;
+    mockOnline = false;
     mockPersistRemoteConflict.mockClear();
     mockClearRemoteConflict.mockClear();
     jest.clearAllMocks();
@@ -444,6 +461,67 @@ describe('Activity ACK ownership and cleanup phases', () => {
     });
     expect(mockSaveHikeAtomic).not.toHaveBeenCalled();
   });
+
+  test('a due road deadline cannot busy-wake a ready upload during upload backoff', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-29T00:00:00.000Z'));
+    try {
+      mockOnline = true;
+      mockPendingRows = [{
+        ...pending,
+        uploadState: 'ready',
+        failureKind: 'retryable',
+        lastAttemptAt: Date.now(),
+        attemptCount: 4,
+        roadRefinementState: 'pending-retry',
+        roadRefinementNextRetryAt: Date.now() - 10_000,
+      }];
+      const listPending = require('../pendingSyncStore').listPending as jest.Mock;
+      await expect(drainPending()).resolves.toMatchObject({ attempted: 0, skipped: 1 });
+      const readsAfterDrain = listPending.mock.calls.length;
+      await jest.advanceTimersByTimeAsync(250);
+      expect(listPending).toHaveBeenCalledTimes(readsAfterDrain);
+      expect(mockSaveHikeAtomic).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(40_000);
+      expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
+    } finally {
+      mockOnline = false;
+      jest.useRealTimers();
+    }
+  });
+
+  test.each(['auth_required', 'action_required'] as const)(
+    'a due ready-road deadline never auto-wakes a %s upload disposition',
+    async failureKind => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-10-29T00:00:00.000Z'));
+      try {
+        mockOnline = true;
+        mockPendingRows = [{
+          ...pending,
+          uploadState: 'ready',
+          failureKind,
+          failureStatus: failureKind === 'auth_required' ? 401 : 409,
+          lastAttemptAt: Date.now(),
+          attemptCount: 1,
+          roadRefinementState: 'pending-retry',
+          roadRefinementNextRetryAt: Date.now() - 10_000,
+        }];
+        const listPending = require('../pendingSyncStore').listPending as jest.Mock;
+        await expect(drainPending({ wakeReason: 'network_online' })).resolves.toMatchObject({
+          attempted: 0,
+          skipped: 1,
+        });
+        const readsAfterDrain = listPending.mock.calls.length;
+        await jest.advanceTimersByTimeAsync(60_000);
+        expect(listPending).toHaveBeenCalledTimes(readsAfterDrain);
+        expect(mockSaveHikeAtomic).not.toHaveBeenCalled();
+      } finally {
+        mockOnline = false;
+        jest.useRealTimers();
+      }
+    },
+  );
 
   test('an explicit owner retry may re-attempt an action-required row', async () => {
     mockPendingRows = [{ ...pending, failureKind: 'action_required', lastAttemptAt: Date.now(), attemptCount: 1 }];

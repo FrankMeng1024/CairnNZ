@@ -369,6 +369,7 @@ async function getFs(): Promise<any | null> {
     const docDir = PREFIX;
     const appendCountKey = (path: string) => `${path}::__append_count__`;
     const appendChunkKey = (path: string, index: number) => `${path}::__append__:${index}`;
+    const storedSizeKey = (path: string) => `${path}::__size__`;
     const appendCount = (path: string) => Number(window.localStorage.getItem(appendCountKey(path)) ?? '0') || 0;
     const clearAppendChunks = (path: string) => {
       const count = appendCount(path);
@@ -376,6 +377,7 @@ async function getFs(): Promise<any | null> {
         window.localStorage.removeItem(appendChunkKey(path, index));
       }
       window.localStorage.removeItem(appendCountKey(path));
+      window.localStorage.removeItem(storedSizeKey(path));
     };
     const trackParentFile = (path: string) => {
       const parent = path.substring(0, path.lastIndexOf('/') + 1);
@@ -398,9 +400,18 @@ async function getFs(): Promise<any | null> {
           return { exists: !!dirEntry, isDirectory: true, uri: path };
         }
         const count = appendCount(path);
-        let size = raw?.length ?? 0;
-        for (let index = 0; index < count; index += 1) {
-          size += window.localStorage.getItem(appendChunkKey(path, index))?.length ?? 0;
+        const storedSizeRaw = window.localStorage.getItem(storedSizeKey(path));
+        const storedSize = storedSizeRaw === null ? Number.NaN : Number(storedSizeRaw);
+        let size = Number.isFinite(storedSize) && storedSize >= 0
+          ? storedSize
+          : raw?.length ?? 0;
+        // Old web journals predate the aggregate size marker. Pay the linear
+        // migration cost once; all later bounded tail reads remain O(suffix).
+        if (!(Number.isFinite(storedSize) && storedSize >= 0)) {
+          for (let index = 0; index < count; index += 1) {
+            size += window.localStorage.getItem(appendChunkKey(path, index))?.length ?? 0;
+          }
+          if (raw !== null || count > 0) window.localStorage.setItem(storedSizeKey(path), String(size));
         }
         return { exists: raw !== null || count > 0, isDirectory: false, uri: path, size };
       },
@@ -411,6 +422,7 @@ async function getFs(): Promise<any | null> {
       async writeAsStringAsync(path: string, content: string) {
         clearAppendChunks(path);
         window.localStorage.setItem(path, content);
+        window.localStorage.setItem(storedSizeKey(path), String(content.length));
         // Track parent directory listing so readDirectoryAsync works.
         trackParentFile(path);
       },
@@ -432,12 +444,21 @@ async function getFs(): Promise<any | null> {
         // prefix. Ordinary web crash/race probes retain the inspectable prefix
         // behavior below; native storage is unaffected.
         if (!snapLabJournal && count === 0 && (base?.length ?? 0) + content.length <= 32 * 1024) {
-          window.localStorage.setItem(path, (base ?? '') + content);
+          const next = (base ?? '') + content;
+          window.localStorage.setItem(path, next);
+          window.localStorage.setItem(storedSizeKey(path), String(next.length));
           trackParentFile(path);
           return;
         }
         window.localStorage.setItem(appendChunkKey(path, count), content);
         window.localStorage.setItem(appendCountKey(path), String(count + 1));
+        const previousSizeRaw = window.localStorage.getItem(storedSizeKey(path));
+        const previousSize = previousSizeRaw === null ? Number.NaN : Number(previousSizeRaw);
+        window.localStorage.setItem(storedSizeKey(path), String(
+          (Number.isFinite(previousSize) && previousSize >= 0
+            ? previousSize
+            : base?.length ?? 0) + content.length,
+        ));
         trackParentFile(path);
       },
       async readAsStringAsync(path: string): Promise<string> {
@@ -617,6 +638,14 @@ function utf8Bytes(value: string): Uint8Array {
   const bytes = new Uint8Array(encoded.length);
   for (let index = 0; index < encoded.length; index += 1) bytes[index] = encoded.charCodeAt(index);
   return bytes;
+}
+
+function utf8Prefix(value: string, maximumBytes: number): string {
+  const encoded = unescape(encodeURIComponent(value));
+  if (encoded.length < maximumBytes) throw new Error('activity_journal_prefix_missing');
+  // The captured offset is an earlier committed EOF, so it always lands on a
+  // UTF-8 and JSONL record boundary rather than inside a code point.
+  return decodeURIComponent(escape(encoded.slice(0, maximumBytes)));
 }
 
 async function readBestSnapshot(fs: any, basePath: string): Promise<string> {
@@ -1750,31 +1779,43 @@ export async function appendBackgroundHikePoints(points: HikePoint[], expectedUs
   }
   const activePath = activePathFor(fs, sessionId);
   const lines = points.map(encodeJournalPoint).join('\n') + '\n';
-  // Capture the verified prefix before committing. If a separate runtime's
-  // terminal marker wins during the append, the crash-safe truncation marker
-  // below can linearize this callback as rejected without losing history.
-  const prefixBeforeAppend = await readBestSnapshot(fs, activePath);
-  const prefixLineCount = prefixBeforeAppend
-    ? prefixBeforeAppend.split('\n').filter(line => line.trim()).length
-    : 0;
+  // Capture only the committed EOF. Reading/parsing the complete journal on
+  // every headless callback made a long Activity quadratic. If Finish wins
+  // the race below, that exceptional path reads once and restores this exact
+  // byte frontier; ordinary callbacks remain O(new batch).
+  const prefixInfo = await fs.getInfoAsync(activePath);
+  if (!prefixInfo.exists || !Number.isFinite(prefixInfo.size)) {
+    throw new Error('background_activity_journal_unavailable');
+  }
+  const prefixByteLength = Math.max(0, Math.floor(prefixInfo.size));
   await appendSnapshot(fs, activePath, lines);
   // Re-check after the append. If the terminal marker won the race, this
   // callback is rejected and must never rewrite its stale pre-Finish meta.
   // When Finish already moved the historical file, remove only the newly
   // resurrected active remnant. Otherwise leave it for Finish's full drain.
   if (await readTerminalMarker(fs, sessionId)) {
-    await replaceSnapshotWithPrefix(fs, activePath, prefixBeforeAppend, prefixLineCount);
     const completedPath = completedPathFor(fs, sessionId);
-    if ((await fs.getInfoAsync(completedPath)).exists) {
+    const completedExists = (await fs.getInfoAsync(completedPath)).exists;
+    const repairCapturedPrefix = async (path: string): Promise<void> => {
+      const snapshot = await readBestSnapshot(fs, path);
+      const prefix = utf8Prefix(snapshot, prefixByteLength);
+      const prefixLineCount = prefix ? prefix.split('\n').filter(line => line.trim()).length : 0;
+      if (snapshot !== prefix) {
+        await replaceSnapshotWithPrefix(fs, path, prefix, prefixLineCount);
+      }
+    };
+    if (completedExists) {
       // Finish may have moved the just-appended P+L snapshot before this
       // runtime observed the terminal marker. Repair the completed copy to
       // the same pre-append prefix before deleting the active remnant; merely
       // truncating active would leave the rejected late tail in product data.
-      await replaceSnapshotWithPrefix(fs, completedPath, prefixBeforeAppend, prefixLineCount);
+      await repairCapturedPrefix(completedPath);
       for (const candidate of activeCandidates(activePath)) {
         await fs.deleteAsync(candidate, { idempotent: true });
       }
       await fs.deleteAsync(truncationPath(activePath), { idempotent: true });
+    } else {
+      await repairCapturedPrefix(activePath);
     }
     throw new Error('background_activity_finalizing');
   }

@@ -106,6 +106,10 @@ export interface FinalRouteSection {
   canonicalDisplacementMaxM: number;
   seam: IslandSeamQuality | null;
   promotionUtility: CandidatePromotionUtility | null;
+  /** Exact inclusive output range in the assembled display geometry. These
+   * indices are presentation provenance, not canonical source indices. */
+  displayStart?: number;
+  displayEnd?: number;
 }
 
 export interface CandidatePromotionUtility {
@@ -3491,10 +3495,12 @@ function assembleFinal(
 ): { points: SnappedPoint[]; sections: FinalRouteSection[] } {
   const output: SnappedPoint[] = [];
   const sections: FinalRouteSection[] = [];
-  const append = (piece: SnappedPoint[]) => {
-    if (piece.length === 0) return;
+  const append = (piece: SnappedPoint[]): { start: number; end: number } | null => {
+    if (piece.length === 0) return null;
     const start = output.length > 0 && hav(output[output.length - 1], piece[0]) <= 0.05 ? 1 : 0;
+    const displayStart = Math.max(0, output.length - (start === 1 ? 1 : 0));
     for (let index = start; index < piece.length; index += 1) output.push(piece[index]);
+    return { start: displayStart, end: output.length - 1 };
   };
   let cursor = 0;
   for (const [index, candidate] of candidates.entries()) {
@@ -3508,18 +3514,27 @@ function assembleFinal(
         true,
       );
       for (const fallback of fallbacks) {
-        append(fallback.points);
-        sections.push(fallback.section);
+        const range = append(fallback.points);
+        sections.push({
+          ...fallback.section,
+          ...(range ? { displayStart: range.start, displayEnd: range.end } : {}),
+        });
       }
     }
-    append(candidate.points);
-    sections.push(candidateSection(candidate));
+    const candidateRange = append(candidate.points);
+    sections.push({
+      ...candidateSection(candidate),
+      ...(candidateRange ? { displayStart: candidateRange.start, displayEnd: candidateRange.end } : {}),
+    });
     cursor = candidate.sourceEnd;
   }
   if (cursor < canonical.length - 1) {
     const fallback = fallbackSection(canonical, cursor, canonical.length - 1, false);
-    append(fallback.points);
-    sections.push(fallback.section);
+    const range = append(fallback.points);
+    sections.push({
+      ...fallback.section,
+      ...(range ? { displayStart: range.start, displayEnd: range.end } : {}),
+    });
   }
   if (output.length === 0) {
     const fallback = fallbackSection(canonical, 0, canonical.length - 1, false);

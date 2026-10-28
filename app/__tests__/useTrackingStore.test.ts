@@ -23,6 +23,8 @@ const mockSecureStore = {
   setItemAsync: jest.fn(async () => undefined),
 };
 let mockAppStateChangeListener: ((state: string) => void) | null = null;
+let mockTaskProjectionWake: ((owner: any) => void) | null = null;
+let mockBackgroundLocations: any[] = [];
 const mockAsyncStorageValues = new Map<string, string>();
 const mockHikeJournalPoints: any[] = [];
 
@@ -97,12 +99,15 @@ jest.mock('../src/services/telemetryUploader', () => ({
 jest.mock('../src/services/backgroundLocationTask', () => ({
   BACKGROUND_LOCATION_TASK: 'cairn-bg',
   registerBackgroundTask: jest.fn(async () => true),
-  drainBackgroundLocations: jest.fn(() => []),
+  drainBackgroundLocations: jest.fn(() => mockBackgroundLocations.splice(0)),
   settleBackgroundLocationWrites: jest.fn(async () => undefined),
   readDurableActivityContext: jest.fn(async () => null),
   persistBackgroundContext: jest.fn(async () => true),
   detectDurableSilenceGapAfterResume: jest.fn(async () => null),
-  setActivityTaskForegroundProjectionWake: jest.fn(),
+  persistDurableSilenceGapEvent: jest.fn(async () => true),
+  setActivityTaskForegroundProjectionWake: jest.fn((wake: (owner: any) => void) => {
+    mockTaskProjectionWake = wake;
+  }),
 }));
 jest.mock('../src/services/hikeTrackWriter', () => ({
   appendHikePoint: jest.fn(async (point: any) => { mockHikeJournalPoints.push(point); }),
@@ -170,7 +175,14 @@ jest.mock('../src/services/autoPauseMonitor', () => ({
   stopAutoPauseMonitor: jest.fn(),
 }));
 
-const { useTrackingStore } = require('../src/store/useTrackingStore');
+const {
+  useTrackingStore,
+  activateRealBackgroundSourceForVerification,
+  stopRealBackgroundSourceForVerification,
+  settleBackgroundTaskReconciliationForVerification,
+  settleRealLocationTransitionsForVerification,
+  resetRealLocationSourcesForVerification,
+} = require('../src/store/useTrackingStore');
 const {
   resetActivityMemoryProjectionForTests,
   waitForAllActivityMemoryProjections,
@@ -672,6 +684,7 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
     mockAsyncStorageValues.clear();
     mockHikeJournalPoints.length = 0;
     mockAppStateChangeListener = null;
+    mockBackgroundLocations = [];
     require('react-native').AppState.currentState = 'active';
     require('../src/store/useAppStore').useAppStore.getState.mockReturnValue({
       isLoggedIn: true,
@@ -1004,7 +1017,8 @@ describe('useTrackingStore — Simulator uses the canonical acceptance boundary'
 });
 
 describe('useTrackingStore — P0 operation guards', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await settleRealLocationTransitionsForVerification();
     jest.clearAllMocks();
     mockAppStateChangeListener = null;
     require('react-native').AppState.currentState = 'active';
@@ -1012,6 +1026,8 @@ describe('useTrackingStore — P0 operation guards', () => {
     mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: true } as any);
     mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: true } as any);
     mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(false);
+    mockLocation.startLocationUpdatesAsync.mockResolvedValue(undefined);
+    mockLocation.stopLocationUpdatesAsync.mockResolvedValue(undefined);
     mockSecureStore.getItemAsync.mockResolvedValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getCurrentLevel.mockReturnValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getIsCharging.mockReturnValue(false);
@@ -1020,10 +1036,17 @@ describe('useTrackingStore — P0 operation guards', () => {
       user: { id: 'tracking-test-user' },
     });
     useTrackingStore.setState(useTrackingStore.getInitialState(), true);
+    // Prior cases may deliberately leave a recoverable Activity source alive.
+    // Reconcile that native boundary before measuring the next isolated case.
+    await resetRealLocationSourcesForVerification();
+    await settleRealLocationTransitionsForVerification();
+    await resetRealLocationSourcesForVerification();
+    jest.clearAllMocks();
   });
 
   afterEach(async () => {
     await useTrackingStore.getState().discardCurrentSession();
+    await settleRealLocationTransitionsForVerification();
     jest.useRealTimers();
   });
 
@@ -1134,11 +1157,14 @@ describe('useTrackingStore — P0 operation guards', () => {
 
     const { readActiveHikeTail } = require('../src/services/hikeTrackWriter');
     let releaseJournal: ((points: any[]) => void) | undefined;
+    let deferredFullRead = false;
     readActiveHikeTail
-      .mockImplementationOnce((_: string, limit?: number) => new Promise<any[]>(resolve => {
-        expect(limit).toBeUndefined();
-        releaseJournal = resolve;
-      }));
+      .mockImplementation((_: string, limit?: number) => {
+        if (limit === 2 || deferredFullRead) return Promise.resolve([]);
+        expect(limit).toBe(512);
+        deferredFullRead = true;
+        return new Promise<any[]>(resolve => { releaseJournal = resolve; });
+      });
     const watcherCallsBeforeForeground = mockLocation.watchPositionAsync.mock.calls.length;
     require('react-native').AppState.currentState = 'active';
     mockAppStateChangeListener?.('active');
@@ -1152,7 +1178,7 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(releaseJournal).toBeDefined();
     expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
 
-    releaseJournal?.([prefix, {
+    releaseJournal?.([{
       ...prefix,
       lat: -40.9998,
       t: 2_000,
@@ -1175,12 +1201,391 @@ describe('useTrackingStore — P0 operation guards', () => {
           qualifiedPuckPublished: true,
           liveRoutePublished: true,
           visibleRenderTime: 'NOT_MEASURED',
-          projectionAuthority: 'foreground',
+          projectionAuthority: 'foreground-live',
           journalPointCount: 2,
           appendedFromJournal: 1,
         }),
       }),
     ]));
+  });
+
+  it('R01 projects fresh non-ACCEPT Task evidence despite a trailing old-owner event', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    const owner = useTrackingStore.getState();
+    const initialTimestamp = Date.now() + 1_000;
+    await useTrackingStore.getState().addTrackPoint({
+      lat: -41, lng: 174, alt: 5, accuracy: 5, verticalAccuracy: 5,
+      speed: 1, speedAccuracy: null, course: 0, courseAccuracy: null,
+      source: 'foreground',
+    }, initialTimestamp);
+    const canonicalCount = useTrackingStore.getState().trackPoints.length;
+    const freshTimestamp = initialTimestamp + 40_000;
+    mockBackgroundLocations.push({
+      latitude: -40.99995,
+      longitude: 174.00005,
+      altitude: 5,
+      accuracy: 8,
+      altitudeAccuracy: 8,
+      speed: 0,
+      heading: 0,
+      timestamp: freshTimestamp,
+      receiptWallTimeMs: Date.now(),
+      clientActivityId: owner.sessionId,
+      ownerGeneration: owner.liveOwnerGeneration,
+      segmentId: owner.currentSegmentId,
+      rawOrdinal: 2,
+      continuityPreclassified: true,
+      canonicalDecision: 'REFINE',
+      decisionReason: 'stationary-evidence-refining',
+      continuityStateAfter: {
+        motionState: 'probably-stationary',
+        positionEstimate: { lat: -40.99997, lng: 174.00003, t: freshTimestamp },
+      } as any,
+      diagnosticObservationRecorded: true,
+      diagnosticDecisionRecorded: true,
+    }, {
+      latitude: -42,
+      longitude: 175,
+      altitude: 5,
+      accuracy: 5,
+      altitudeAccuracy: 5,
+      speed: 1,
+      heading: 0,
+      timestamp: freshTimestamp + 1_000,
+      receiptWallTimeMs: Date.now() + 1,
+      clientActivityId: 'old-activity',
+      ownerGeneration: 'old-generation',
+      segmentId: 'old-segment',
+      rawOrdinal: 99,
+      continuityPreclassified: true,
+      canonicalDecision: 'REJECT',
+      decisionReason: 'old-owner',
+    });
+    expect(mockTaskProjectionWake).not.toBeNull();
+    mockTaskProjectionWake?.({
+      ownerUserId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      ownerGeneration: owner.liveOwnerGeneration,
+      receiptWallTimeMs: Date.now(),
+    });
+    for (let turn = 0; turn < 50 && useTrackingStore.getState().latestSourceLocationTime !== freshTimestamp; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    const projected = useTrackingStore.getState();
+    expect(projected.latestSourceLocationTime).toBe(freshTimestamp);
+    expect(projected.latestSourceCoordinate).toMatchObject({
+      lat: -40.99997, lng: 174.00003, t: freshTimestamp,
+    });
+    expect(projected.realMotionState).toBe('probably-stationary');
+    expect(projected.realCanonicalDecisionReason).toBe('stationary-evidence-refining');
+    expect(projected.trackPoints).toHaveLength(canonicalCount);
+    expect(projected.trackPointsRaw).toEqual(expect.arrayContaining([
+      expect.objectContaining({ t: freshTimestamp, source: 'background' }),
+    ]));
+    expect(projected.trackPointsRaw).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ t: freshTimestamp + 1_000 }),
+    ]));
+    expect(require('../src/services/hikeTrackWriter').readActiveHikeTail)
+      .toHaveBeenCalledWith(owner.sessionId, 512);
+    for (let turn = 0; turn < 10; turn += 1) await new Promise(resolve => setTimeout(resolve, 0));
+  });
+
+  it('R02 rechecks the lifecycle lease after a delayed native hasStarted probe', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    mockLocation.startLocationUpdatesAsync.mockClear();
+    let resolveProbe!: (started: boolean) => void;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementationOnce(() => (
+      new Promise<boolean>(resolve => { resolveProbe = resolve; })
+    ));
+    const staleActivation = activateRealBackgroundSourceForVerification();
+    for (let turn = 0; turn < 50 && !resolveProbe; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(resolveProbe).toBeDefined();
+    const pause = useTrackingStore.getState().pauseTracking();
+    resolveProbe(false);
+    await expect(staleActivation).resolves.toBe(false);
+    await pause;
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+    expect(mockLocation.startLocationUpdatesAsync).not.toHaveBeenCalled();
+    expect(useTrackingStore.getState().status).toBe('paused');
+  });
+
+  it('R03 a late old start error cannot clear the resumed owner', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    mockLocation.startLocationUpdatesAsync.mockClear();
+    let rejectOldStart!: (error: Error) => void;
+    let oldStartEntered = false;
+    let hasCall = 0;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => {
+      hasCall += 1;
+      // old activation probe, resumed activation probe, resumed verification
+      return hasCall >= 3;
+    });
+    mockLocation.startLocationUpdatesAsync
+      .mockImplementationOnce(() => {
+        oldStartEntered = true;
+        return new Promise<void>((_resolve, reject) => { rejectOldStart = reject; });
+      })
+      .mockResolvedValueOnce(undefined);
+    const staleActivation = activateRealBackgroundSourceForVerification();
+    for (let turn = 0; turn < 50 && !oldStartEntered; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(oldStartEntered).toBe(true);
+    await useTrackingStore.getState().pauseTracking();
+    await expect(useTrackingStore.getState().resumeTracking()).resolves.toBe(true);
+    expect(useTrackingStore.getState()).toMatchObject({ status: 'tracking', locationAvailable: true });
+    rejectOldStart(new Error('late-old-start-error'));
+    await expect(staleActivation).resolves.toBe(false);
+    for (let turn = 0; turn < 20; turn += 1) await Promise.resolve();
+    expect(useTrackingStore.getState()).toMatchObject({ status: 'tracking', locationAvailable: true });
+    expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('R03 a late old start success reconciles without stopping the resumed owner', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    mockLocation.startLocationUpdatesAsync.mockClear();
+    let resolveOldStart!: () => void;
+    let oldStartEntered = false;
+    let hasCall = 0;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => {
+      hasCall += 1;
+      return hasCall >= 3;
+    });
+    mockLocation.startLocationUpdatesAsync
+      .mockImplementationOnce(() => {
+        oldStartEntered = true;
+        return new Promise<void>(resolve => { resolveOldStart = resolve; });
+      })
+      .mockResolvedValueOnce(undefined);
+    const staleActivation = activateRealBackgroundSourceForVerification();
+    for (let turn = 0; turn < 50 && !oldStartEntered; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(oldStartEntered).toBe(true);
+    await useTrackingStore.getState().pauseTracking();
+    await expect(useTrackingStore.getState().resumeTracking()).resolves.toBe(true);
+    resolveOldStart();
+    await expect(staleActivation).resolves.toBe(false);
+    await settleBackgroundTaskReconciliationForVerification();
+    expect(useTrackingStore.getState()).toMatchObject({ status: 'tracking', locationAvailable: true });
+    expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(2);
+    expect(mockLocation.stopLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('R03 a late old stop success re-establishes the current owner', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    let nativeRunning = true;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => nativeRunning);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    mockLocation.startLocationUpdatesAsync.mockClear();
+    mockLocation.startLocationUpdatesAsync.mockImplementation(async () => { nativeRunning = true; });
+
+    let releaseOldStop!: () => void;
+    let oldStopEntered = false;
+    mockLocation.stopLocationUpdatesAsync.mockImplementationOnce(() => new Promise<void>(resolve => {
+      oldStopEntered = true;
+      releaseOldStop = () => {
+        nativeRunning = false;
+        resolve();
+      };
+    }));
+    let oldOperationCurrent = true;
+    const staleStop = stopRealBackgroundSourceForVerification(() => oldOperationCurrent);
+    for (let turn = 0; turn < 50 && !oldStopEntered; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(oldStopEntered).toBe(true);
+    oldOperationCurrent = false;
+    releaseOldStop();
+    await staleStop;
+    for (let turn = 0; turn < 100 && mockLocation.startLocationUpdatesAsync.mock.calls.length < 1; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    await settleBackgroundTaskReconciliationForVerification();
+    expect(nativeRunning).toBe(true);
+    expect(mockLocation.stopLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    expect(useTrackingStore.getState()).toMatchObject({ status: 'tracking', locationAvailable: true });
+  });
+
+  it('a successful Task stop clears native ownership and permits a clean restart', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    let nativeRunning = false;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => nativeRunning);
+    mockLocation.startLocationUpdatesAsync.mockImplementation(async () => { nativeRunning = true; });
+    mockLocation.stopLocationUpdatesAsync.mockImplementation(async () => { nativeRunning = false; });
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    mockLocation.startLocationUpdatesAsync.mockClear();
+
+    await stopRealBackgroundSourceForVerification(() => true);
+    expect(nativeRunning).toBe(false);
+    await expect(activateRealBackgroundSourceForVerification()).resolves.toBe(true);
+    expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    expect(nativeRunning).toBe(true);
+  });
+
+  it('a rejected Task stop preserves the known live source instead of claiming shutdown', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    let nativeRunning = false;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => nativeRunning);
+    mockLocation.startLocationUpdatesAsync.mockImplementation(async () => { nativeRunning = true; });
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    mockLocation.startLocationUpdatesAsync.mockClear();
+    mockLocation.stopLocationUpdatesAsync.mockRejectedValueOnce(new Error('native-stop-rejected'));
+
+    await stopRealBackgroundSourceForVerification(() => true);
+    await expect(activateRealBackgroundSourceForVerification()).resolves.toBe(true);
+    expect(mockLocation.startLocationUpdatesAsync).not.toHaveBeenCalled();
+    expect(nativeRunning).toBe(true);
+  });
+
+  it('serializes immediate Resume behind a delayed Pause durable fence', async () => {
+    const { persistBackgroundContext } = require('../src/services/backgroundLocationTask');
+    const { updateHikeMetaStrict } = require('../src/services/hikeTrackWriter');
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    updateHikeMetaStrict.mockClear();
+    let releasePauseFence!: (value: boolean) => void;
+    let pauseFenceEntered = false;
+    persistBackgroundContext.mockImplementationOnce(() => new Promise<boolean>(resolve => {
+      pauseFenceEntered = true;
+      releasePauseFence = resolve;
+    }));
+
+    const pause = useTrackingStore.getState().pauseTracking();
+    for (let turn = 0; turn < 50 && !pauseFenceEntered; turn += 1) await Promise.resolve();
+    expect(pauseFenceEntered).toBe(true);
+    const resume = useTrackingStore.getState().resumeTracking();
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+    expect(updateHikeMetaStrict).not.toHaveBeenCalled();
+
+    releasePauseFence(true);
+    await pause;
+    await expect(resume).resolves.toBe(true);
+    expect(updateHikeMetaStrict).toHaveBeenCalledTimes(1);
+    expect(persistBackgroundContext).toHaveBeenLastCalledWith(
+      expect.any(String),
+      true,
+      expect.objectContaining({ ownerGeneration: expect.any(String) }),
+    );
+    expect(useTrackingStore.getState()).toMatchObject({ status: 'tracking', locationAvailable: true });
+  });
+
+  it('a late failed Start for owner A cannot tear down owner B', async () => {
+    const registry = require('../src/features/activity/activityRegistry');
+    const appStore = require('../src/store/useAppStore').useAppStore;
+    let rejectOwnerA!: (error: Error) => void;
+    let ownerAUpdateEntered = false;
+    registry.updateUnfinishedActivity
+      .mockImplementationOnce(() => new Promise<boolean>((_resolve: (value: boolean) => void, reject: (error: Error) => void) => {
+        ownerAUpdateEntered = true;
+        rejectOwnerA = reject;
+      }))
+      .mockResolvedValue(true);
+
+    const ownerAStart = useTrackingStore.getState().startTracking('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    for (let turn = 0; turn < 100 && !ownerAUpdateEntered; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(ownerAUpdateEntered).toBe(true);
+    await useTrackingStore.getState().suspendForUserSwitch();
+    appStore.getState.mockReturnValue({ isLoggedIn: true, user: { id: 'owner-b' } });
+    await expect(useTrackingStore.getState().startTracking('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'))
+      .resolves.toBe(true);
+    const ownerBBefore = useTrackingStore.getState();
+    expect(ownerBBefore).toMatchObject({
+      status: 'tracking',
+      sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      ownerUserId: 'owner-b',
+      locationAvailable: true,
+    });
+
+    rejectOwnerA(new Error('late-owner-a-update-failure'));
+    await expect(ownerAStart).resolves.toBe(false);
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'tracking',
+      sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      ownerUserId: 'owner-b',
+      locationAvailable: true,
+    });
+  });
+
+  it('rechecks owner A after its failed Start rollback stop yields to owner B', async () => {
+    const registry = require('../src/features/activity/activityRegistry');
+    const appStore = require('../src/store/useAppStore').useAppStore;
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    let nativeRunning = false;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => nativeRunning);
+    mockLocation.startLocationUpdatesAsync.mockImplementation(async () => { nativeRunning = true; });
+    let rejectOwnerA!: (error: Error) => void;
+    let ownerAUpdateEntered = false;
+    registry.updateUnfinishedActivity
+      .mockImplementationOnce(() => new Promise<boolean>((_resolve: (value: boolean) => void, reject: (error: Error) => void) => {
+        ownerAUpdateEntered = true;
+        rejectOwnerA = reject;
+      }))
+      .mockResolvedValue(true);
+
+    let releaseOwnerAStop!: () => void;
+    let ownerAStopEntered = false;
+    let stopCall = 0;
+    mockLocation.stopLocationUpdatesAsync.mockImplementation(async () => {
+      stopCall += 1;
+      if (stopCall === 1) {
+        await new Promise<void>(resolve => {
+          ownerAStopEntered = true;
+          releaseOwnerAStop = resolve;
+        });
+      }
+      nativeRunning = false;
+    });
+
+    const ownerAStart = useTrackingStore.getState().startTracking('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    for (let turn = 0; turn < 100 && !ownerAUpdateEntered; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(ownerAUpdateEntered).toBe(true);
+    rejectOwnerA(new Error('late-owner-a-update-failure'));
+    for (let turn = 0; turn < 100 && !ownerAStopEntered; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(ownerAStopEntered).toBe(true);
+
+    await useTrackingStore.getState().suspendForUserSwitch();
+    appStore.getState.mockReturnValue({ isLoggedIn: true, user: { id: 'owner-b' } });
+    await expect(useTrackingStore.getState().startTracking('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'))
+      .resolves.toBe(true);
+    expect(nativeRunning).toBe(true);
+
+    releaseOwnerAStop();
+    await expect(ownerAStart).resolves.toBe(false);
+    await settleBackgroundTaskReconciliationForVerification();
+    await settleRealLocationTransitionsForVerification();
+    expect(nativeRunning).toBe(true);
+    expect(mockLocation.startLocationUpdatesAsync.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'tracking',
+      sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      ownerUserId: 'owner-b',
+      locationAvailable: true,
+    });
   });
 
   it('locks synchronously during a real start and rolls back a failed location dependency', async () => {

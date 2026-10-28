@@ -56,7 +56,7 @@ describe('saved Final road corner rounding', () => {
 
   test('does not mutate source GPS objects or invent cross-segment points', () => {
     const source = [
-      { ...meters(0, 0, 0), segmentStartReason: 'activity-start' as const },
+      { ...meters(0, 0, 0), segmentStartReason: 'start' as const },
       meters(10, 0, 1),
       meters(10, 10, 2),
     ];
@@ -64,8 +64,57 @@ describe('saved Final road corner rounding', () => {
     const result = roundSavedFinalRoadCorners(source);
     expect(source).toEqual(snapshot);
     expect(result.points.every(point => point.segmentId === 'road-a')).toBe(true);
-    expect(result.points.filter(point => point.segmentStartReason === 'activity-start')).toEqual([
+    expect(result.points.filter(point => point.segmentStartReason === 'start')).toEqual([
       source[0],
     ]);
+  });
+
+  test('R11 rejects a new crossing introduced only by the rounded candidate', () => {
+    // Contract fixture is stated in local metres and converted here with the
+    // same small-area equirectangular approximation used by the other cases.
+    const source = [
+      meters(-10, 0, 0),
+      meters(0, 0, 1),
+      meters(0, 10, 2),
+      meters(-0.15, 0.15, 3),
+    ];
+    const result = roundSavedFinalRoadCorners(source, {
+      eligibleCorners: [false, true, false, false],
+    });
+    expect(result.diagnostics.postRoundRejected).toBe(true);
+    expect(result.diagnostics.postRoundRejectReason).toBe('new-non-adjacent-intersection');
+    expect(result.points).toEqual(source);
+  });
+
+  test('rounds only a corner with explicit local high-confidence road provenance', () => {
+    const source = [
+      meters(0, 0, 0),
+      meters(10, 0, 1),
+      meters(10, 10, 2),
+      meters(20, 10, 3),
+    ];
+    const result = roundSavedFinalRoadCorners(source, {
+      eligibleCorners: [false, true, false, false],
+    });
+    expect(result.diagnostics.roundedCorners).toBe(1);
+    expect(result.diagnostics.skippedProvenanceGuard).toBe(1);
+    expect(result.points).toContainEqual(source[2]);
+  });
+
+  test('falls back when a short source time span would duplicate rounded timestamps', () => {
+    const source = [
+      meters(0, 0, 0),
+      { ...meters(10, 0, 1), t: 1_001 },
+      { ...meters(10, 10, 2), t: 1_002 },
+    ].map((point, index) => ({ ...point, t: 1_000 + index }));
+    const result = roundSavedFinalRoadCorners(source, {
+      eligibleCorners: [false, true, false],
+    });
+    expect(result.diagnostics).toMatchObject({
+      roundedCorners: 0,
+      postRoundRejected: true,
+      postRoundRejectReason: 'timestamp-order',
+    });
+    expect(result.points).toEqual(source);
   });
 });

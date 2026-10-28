@@ -312,7 +312,8 @@ describe('Free Activity integration contracts', () => {
     expect(foreground).toContain('if (backgroundTaskActive || !intentIsCurrent()) return');
     expect(transition).toContain('await activateBackgroundSource(expectedIntentEpoch, operationIsCurrent)');
     expect(source).toContain('setActivityTaskForegroundProjectionWake((wakeOwner) =>');
-    expect(source).toContain("await drainCommittedBackgroundLocations('foreground')");
+    expect(source).toContain("await drainCommittedBackgroundLocations('foreground-live')");
+    expect(transition).toContain("drainCommittedBackgroundLocations('foreground')");
   });
 
   test('temporary background provider unavailability defers truth segmentation to the next observation', () => {

@@ -10,6 +10,7 @@ import {
 import {
   reconstructPedestrianFinalRoute,
   type PedestrianFinalRequestResult,
+  type PedestrianFinalStats,
 } from '../../services/routing/pedestrianFinalRoute';
 import { createActivityMapboxRequestGovernor } from '../../services/routing/activityRequestGovernor';
 import { networkMonitor } from '../../services/networkMonitor';
@@ -80,6 +81,34 @@ const controllers = new Map<string, AbortController>();
 const jobWriteTails = new Map<string, Promise<void>>();
 const MAX_NETWORK_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [5_000, 30_000] as const;
+
+export function confidentRoadCornerMask(
+  pointCount: number,
+  stats: PedestrianFinalStats,
+): boolean[] {
+  const mask = Array.from({ length: pointCount }, () => false);
+  const sections = Array.isArray(stats.sections) ? stats.sections : [];
+  for (let index = 1; index < pointCount - 1; index += 1) {
+    const section = sections.find(candidate => (
+      candidate.displayStart != null
+      && candidate.displayEnd != null
+      && index - 1 >= candidate.displayStart
+      && index + 1 <= candidate.displayEnd
+    ));
+    if (!section) continue;
+    const strongLocalRoadAuthority = section.decision === 'refined'
+      && section.networkSource === 'map-matching'
+      && (section.geometryMode === 'A_PEDESTRIAN_NETWORK'
+        || section.geometryMode === 'B_ROAD_OFFSET')
+      && section.confidence >= 0.75
+      && section.corridorEvidence?.accepted === true
+      && section.seam?.accepted === true
+      && section.promotionUtility?.accepted === true
+      && section.promotionUtility.networkAuthority === 'strong';
+    mask[index] = strongLocalRoadAuthority;
+  }
+  return mask;
+}
 
 const jobKey = (ownerUserId: string, clientActivityId: string) => `${ROOT}${ownerUserId}:${clientActivityId}`;
 const indexKey = (ownerUserId: string) => `${INDEX}${ownerUserId}`;
@@ -590,7 +619,11 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       segmentId: first.segmentId,
       ...(index === 0 && first.segmentStartReason ? { segmentStartReason: first.segmentStartReason } : {}),
     }));
-    const networkMatched = result.stats.acceptedMatchedDistanceM > 0.5;
+    const networkMatched = Array.isArray(result.stats.sections)
+      ? result.stats.sections.some(section => (
+          section.decision === 'refined' && section.networkSource === 'map-matching'
+        ))
+      : result.stats.acceptedMatchedDistanceM > 0.5;
     // This queue starts from the already-selected Local/Trend artifact. A
     // provider failure can reconstruct a different canonical/Base geometry,
     // but a different fingerprint is not evidence of improvement. Only an
@@ -604,7 +637,9 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     });
     if (!promotion.accepted) continue;
     const rounded = networkMatched
-      ? roundSavedFinalRoadCorners(candidateSegment)
+      ? roundSavedFinalRoadCorners(candidateSegment, {
+          eligibleCorners: confidentRoadCornerMask(candidateSegment.length, result.stats),
+        })
       : { points: candidateSegment, diagnostics: null };
     baseSegments[segmentIndex] = rounded.points.map(point => ({
       ...point,

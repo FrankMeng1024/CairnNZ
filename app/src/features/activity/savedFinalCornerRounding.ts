@@ -1,4 +1,8 @@
 import type { TrackPoint } from '../../store/useSessionStore';
+import {
+  evaluateTopologyQuality,
+  evaluateWholeRouteQuality,
+} from '../../services/routing/snapTrack';
 
 const EARTH_RADIUS_M = 6_371_000;
 const MIN_ARM_M = 5;
@@ -17,7 +21,10 @@ export interface SavedFinalCornerRoundingDiagnostics {
   skippedShortArm: number;
   skippedTurnShape: number;
   skippedTopologyGuard: number;
+  skippedProvenanceGuard: number;
   maximumTangentM: number;
+  postRoundRejected: boolean;
+  postRoundRejectReason: string | null;
 }
 
 function project(point: Pick<TrackPoint, 'lat' | 'lng'>, originLat: number): XY {
@@ -81,13 +88,55 @@ function hasNearbyNonAdjacentEdge(points: XY[], cornerIndex: number): boolean {
   return false;
 }
 
+function orientation(a: XY, b: XY, c: XY): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+function strictSegmentsIntersect(a: XY, b: XY, c: XY, d: XY): boolean {
+  const abC = orientation(a, b, c);
+  const abD = orientation(a, b, d);
+  const cdA = orientation(c, d, a);
+  const cdB = orientation(c, d, b);
+  const epsilon = 1e-7;
+  return Math.abs(abC) > epsilon && Math.abs(abD) > epsilon
+    && Math.abs(cdA) > epsilon && Math.abs(cdB) > epsilon
+    && Math.sign(abC) !== Math.sign(abD)
+    && Math.sign(cdA) !== Math.sign(cdB);
+}
+
+function nonAdjacentIntersectionCount(points: XY[]): number {
+  let count = 0;
+  for (let left = 0; left < points.length - 1; left += 1) {
+    for (let right = left + 2; right < points.length - 1; right += 1) {
+      if (right === left + 1) continue;
+      if (strictSegmentsIntersect(points[left], points[left + 1], points[right], points[right + 1])) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+function maximumDistanceFromSourceCorridor(candidate: XY[], source: XY[]): number {
+  return candidate.reduce((maximum, point) => {
+    let nearest = Number.POSITIVE_INFINITY;
+    for (let edge = 0; edge < source.length - 1; edge += 1) {
+      nearest = Math.min(nearest, pointToSegmentDistance(point, source[edge], source[edge + 1]));
+    }
+    return Math.max(maximum, nearest);
+  }, 0);
+}
+
 /**
  * Applies a sub-metre quadratic fillet only to an already accepted road-match
  * segment. Endpoints, segment identity, canonical GPS, stats and Memory are
  * outside this display-only transform. Hairpins, short arms and crossings are
  * intentionally retained verbatim.
  */
-export function roundSavedFinalRoadCorners(points: TrackPoint[]): {
+export function roundSavedFinalRoadCorners(
+  points: TrackPoint[],
+  options: { eligibleCorners?: ReadonlyArray<boolean> } = {},
+): {
   points: TrackPoint[];
   diagnostics: SavedFinalCornerRoundingDiagnostics;
 } {
@@ -97,7 +146,10 @@ export function roundSavedFinalRoadCorners(points: TrackPoint[]): {
     skippedShortArm: 0,
     skippedTurnShape: 0,
     skippedTopologyGuard: 0,
+    skippedProvenanceGuard: 0,
     maximumTangentM: 0,
+    postRoundRejected: false,
+    postRoundRejectReason: null,
   };
   if (points.length < 3) return { points: points.map(point => ({ ...point })), diagnostics };
   const originLat = points.reduce((sum, point) => sum + point.lat, 0) / points.length;
@@ -105,6 +157,11 @@ export function roundSavedFinalRoadCorners(points: TrackPoint[]): {
   const output: TrackPoint[] = [{ ...points[0] }];
 
   for (let index = 1; index < points.length - 1; index += 1) {
+    if (options.eligibleCorners && options.eligibleCorners[index] !== true) {
+      diagnostics.skippedProvenanceGuard += 1;
+      output.push({ ...points[index] });
+      continue;
+    }
     const previous = planar[index - 1];
     const corner = planar[index];
     const next = planar[index + 1];
@@ -176,5 +233,38 @@ export function roundSavedFinalRoadCorners(points: TrackPoint[]): {
     diagnostics.maximumTangentM = Math.max(diagnostics.maximumTangentM, tangentM);
   }
   output.push({ ...points[points.length - 1] });
+  if (diagnostics.roundedCorners > 0) {
+    const roundedPlanar = output.map(point => project(point, originLat));
+    const wholeRoute = evaluateWholeRouteQuality(points, output);
+    const topology = evaluateTopologyQuality(points, output);
+    const timestampsMonotonic = output.every((point, index) => (
+      index === 0 || point.t > output[index - 1].t
+    ));
+    const segmentIdentityPreserved = output.every(point => (
+      point.segmentId === points[0].segmentId
+    ));
+    const sourceIntersections = nonAdjacentIntersectionCount(planar);
+    const roundedIntersections = nonAdjacentIntersectionCount(roundedPlanar);
+    const maximumCorridorDeviationM = maximumDistanceFromSourceCorridor(roundedPlanar, planar);
+    const rejectReason = !wholeRoute.accepted
+      ? `whole-route:${wholeRoute.reason}`
+      : !topology.accepted
+        ? `topology:${topology.reason}`
+        : !timestampsMonotonic
+          ? 'timestamp-order'
+          : !segmentIdentityPreserved
+            ? 'segment-identity'
+            : roundedIntersections > sourceIntersections
+              ? 'new-non-adjacent-intersection'
+              : maximumCorridorDeviationM > 0.8
+                ? 'source-corridor-exceeded'
+                : null;
+    if (rejectReason) {
+      diagnostics.postRoundRejected = true;
+      diagnostics.postRoundRejectReason = rejectReason;
+      diagnostics.roundedCorners = 0;
+      return { points: points.map(point => ({ ...point })), diagnostics };
+    }
+  }
   return { points: output, diagnostics };
 }

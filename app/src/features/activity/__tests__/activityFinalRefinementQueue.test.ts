@@ -48,6 +48,7 @@ jest.mock('../../../services/routing/pedestrianFinalRoute', () => ({
   reconstructPedestrianFinalRoute: (...args: any[]) => mockReconstruct(...args),
 }));
 jest.mock('../../../services/routing/snapTrack', () => ({
+  ...jest.requireActual('../../../services/routing/snapTrack'),
   analyzeTrustedEndpointCoverage: jest.fn(() => ({ eligibleForAnchoring: true })),
   preserveTrustedRouteEndpoints: jest.fn((_canonical: any, points: any) => points),
   evaluateMatchedGeometryQuality: jest.fn(() => ({ accepted: true })),
@@ -58,11 +59,13 @@ jest.mock('../../../services/syncDaemon', () => ({ drainPending: jest.fn(async (
 import {
   cancelAllActivityFinalRefinementsForOwner,
   cancelActivityFinalRefinement,
+  confidentRoadCornerMask,
   enqueueActivityFinalRefinement,
   readActivityFinalRefinementJob,
   resumeActivityFinalRefinement,
 } from '../activityFinalRefinementQueue';
 import { exportLatestActivityStageLedger, flushActivityStageLedger } from '../activityStageLedger';
+import { roundSavedFinalRoadCorners } from '../savedFinalCornerRounding';
 
 const pendingMocks = jest.requireMock('../../../services/pendingSyncStore') as {
   savePending: jest.Mock;
@@ -121,6 +124,40 @@ async function waitForNetworkDispatch(): Promise<void> {
 }
 
 describe('durable Activity Final refinement queue', () => {
+  test('hybrid Final rounding eligibility is confined to one strongly proven road section', () => {
+    const strong = {
+      displayStart: 0,
+      displayEnd: 3,
+      decision: 'refined',
+      networkSource: 'map-matching',
+      geometryMode: 'A_PEDESTRIAN_NETWORK',
+      confidence: 0.91,
+      corridorEvidence: { accepted: true },
+      seam: { accepted: true },
+      promotionUtility: { accepted: true, networkAuthority: 'strong' },
+    };
+    const local = {
+      ...strong,
+      displayStart: 3,
+      displayEnd: 6,
+      decision: 'canonical-derived',
+      networkSource: 'none',
+      geometryMode: 'C_CANONICAL_DERIVED',
+      confidence: 1,
+      promotionUtility: { accepted: false, networkAuthority: 'none' },
+    };
+
+    expect(confidentRoadCornerMask(7, { sections: [strong, local] } as any)).toEqual([
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
   afterAll(() => {
     if (!process.env.CAIRN_FIELD03_ROAD_RECEIPTS_OUTPUT) return;
     require('node:fs').writeFileSync(
@@ -185,6 +222,85 @@ describe('durable Activity Final refinement queue', () => {
       lastAttemptAt: null,
       attemptCount: 0,
     };
+  });
+
+  test('queue rounds only the proven road corner in a mixed road/local Final', async () => {
+    mockToken = 'token';
+    mockNetworkState = 'online';
+    const points = [
+      { lat: -41, lng: 174, t: 1_000, segmentId: 's' },
+      { lat: -40.99991, lng: 174, t: 11_000, segmentId: 's' },
+      { lat: -40.99991, lng: 174.000119, t: 21_000, segmentId: 's' },
+      { lat: -40.99991, lng: 174.000238, t: 31_000, segmentId: 's' },
+    ];
+    mockArtifact = { ...baseArtifact(), points };
+    mockPending.payload.route_points_canonical = points.map(point => ({
+      lat: point.lat, lng: point.lng, t: point.t, segment_id: point.segmentId,
+    }));
+    const strongRoad = {
+      displayStart: 0,
+      displayEnd: 2,
+      decision: 'refined',
+      networkSource: 'map-matching',
+      geometryMode: 'A_PEDESTRIAN_NETWORK',
+      confidence: 0.92,
+      corridorEvidence: { accepted: true },
+      seam: { accepted: true },
+      promotionUtility: { accepted: true, networkAuthority: 'strong' },
+    };
+    const localTail = {
+      ...strongRoad,
+      displayStart: 2,
+      displayEnd: 3,
+      decision: 'canonical-derived',
+      networkSource: 'none',
+      geometryMode: 'C_CANONICAL_DERIVED',
+      promotionUtility: { accepted: false, networkAuthority: 'none' },
+    };
+    mockReconstruct.mockResolvedValue({
+      ok: true,
+      points,
+      stats: {
+        sections: [strongRoad, localTail],
+        requestResults: [requestResult({ acceptedCandidateCount: 1 })],
+        acceptedMatchedDistanceM: 20,
+        canonicalDerivedSectionCount: 1,
+        displayRefined: true,
+        wholeRouteValidation: { accepted: true },
+      },
+    });
+    mockCommitArtifact.mockImplementation(async (input: any) => ({
+      committed: true,
+      artifact: {
+        ...mockArtifact,
+        revision: 2,
+        parentRevision: 1,
+        source: 'hybrid',
+        displayFingerprint: 'mixed-rounded-display',
+        points: input.displayPoints,
+      },
+    }));
+    expect(roundSavedFinalRoadCorners(points, {
+      eligibleCorners: confidentRoadCornerMask(points.length, { sections: [strongRoad, localTail] } as any),
+    }).points.length).toBeGreaterThan(points.length);
+
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: mockArtifact,
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockReconstruct).toHaveBeenCalledTimes(1);
+    const finishedJob = await readActivityFinalRefinementJob('owner-a', 'activity-a');
+    expect(finishedJob?.lastError).toBeNull();
+    expect(finishedJob).toMatchObject({
+      candidateDecision: 'accepted',
+      technicalOutcome: 'matched-success',
+    });
+    expect(mockCommitArtifact).toHaveBeenCalledTimes(1);
+    const committed = mockCommitArtifact.mock.calls[0][0];
+    expect(committed.source).toBe('hybrid');
+    expect(committed.displayPoints.length).toBeGreaterThan(points.length);
+    expect(committed.displayPoints).toContainEqual(points[2]);
+    expect(committed.canonicalPoints).toEqual(points);
   });
 
   test('restartable queued work retains validated Base and releases exactly one payload when road refinement is unavailable', async () => {

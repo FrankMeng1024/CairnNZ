@@ -46,6 +46,7 @@ export interface ActivityObservabilitySummary {
   pipelineFindings: {
     nativeCallbacksWithoutJsDelivery: number;
     jsReceiptsWithoutDecision: number;
+    jsReceiptDecisionCorrelation: 'complete' | 'missing-decision' | 'unknown-retention-truncated';
     rejectedByFiltering: number;
     canonicalAcceptsWithoutWal: number;
     walCommitsWithoutStorePublication: number;
@@ -728,6 +729,15 @@ function evidenceIds(events: ActivityStageLedgerEvent[], stage: ActivityStage): 
   const result = new Set<string>();
   events.filter(event => event.stage === stage).forEach(event => {
     if (event.evidenceId) result.add(event.evidenceId);
+    // A continuity decision has its own stable observation id, while the
+    // JavaScript receipt it answers is carried as an explicit bridge. Treating
+    // only the decision id as downstream evidence creates a phantom missing
+    // decision for every ACCEPT/REFINE/QUARANTINE/REJECT classification.
+    if (stage === 'observation-decision'
+      && typeof event.details.receiptEvidenceId === 'string'
+      && event.details.receiptEvidenceId.length > 0) {
+      result.add(event.details.receiptEvidenceId);
+    }
     const batch = event.details.evidenceIds;
     if (Array.isArray(batch)) {
       batch.filter(identity => typeof identity === 'string').forEach(identity => result.add(identity));
@@ -1040,7 +1050,14 @@ export function summarizeActivityObservability(
     },
     pipelineFindings: {
       nativeCallbacksWithoutJsDelivery: 0,
-      jsReceiptsWithoutDecision: [...received].filter(identity => !decisions.has(identity)).length,
+      jsReceiptsWithoutDecision: options.retentionTruncated === true
+        ? 0
+        : [...received].filter(identity => !decisions.has(identity)).length,
+      jsReceiptDecisionCorrelation: options.retentionTruncated === true
+        ? 'unknown-retention-truncated'
+        : [...received].every(identity => decisions.has(identity))
+          ? 'complete'
+          : 'missing-decision',
       rejectedByFiltering,
       canonicalAcceptsWithoutWal: [...canonical]
         .filter(identity => !stageCoversEvidence(ordered, 'wal-committed', identity)).length,
@@ -1083,7 +1100,7 @@ export function summarizeActivityObservability(
  * Persist one privacy-safe stage fact without joining the GPS ingest mutex.
  * Coordinates and credential-shaped fields are removed at this boundary.
  */
-interface RecordActivityStageInput {
+export interface RecordActivityStageInput {
   ownerUserId: string;
   clientActivityId: string;
   stage: ActivityStage;
@@ -1305,6 +1322,34 @@ export function recordActivityStageEvent(input: RecordActivityStageInput): Promi
   summarizeRoutineNumbers(bucket, bucket.latestDetails);
   if (bucket.count >= ROUTINE_WINDOW_SIZE) flushRoutineBucket(bucket);
   return Promise.resolve();
+}
+
+/**
+ * Crash-sensitive diagnostic boundary. This is deliberately reserved for
+ * sparse facts such as SILENCE_GAP: enqueue the exact event, settle the owner
+ * writer, then prove the same evidence id can be read from strict storage.
+ * A false result leaves the caller's durable pending marker replayable.
+ */
+export async function recordActivityStageEventDurably(
+  input: RecordActivityStageInput,
+): Promise<boolean> {
+  if (!input.ownerUserId || !input.clientActivityId || !input.evidenceId) return false;
+  try {
+    await recordActivityStageEvent(input);
+    await flushActivityStageLedger(input.ownerUserId);
+    const realm = realmForActivity(input.clientActivityId);
+    const prefix = activityPrefix(input.ownerUserId, input.clientActivityId, realm);
+    const keys = (await strictKeys(realm)).filter(key => key.startsWith(prefix));
+    for (const key of keys) {
+      const raw = await ledgerGetItem(key, realm);
+      if (!raw) continue;
+      const event = JSON.parse(raw) as ActivityStageLedgerEvent;
+      if (event.clientActivityId === input.clientActivityId
+        && event.stage === input.stage
+        && event.evidenceId === input.evidenceId) return true;
+    }
+  } catch { /* caller retains the replayable pending marker */ }
+  return false;
 }
 
 /** Test/privacy boundary. Production ingest and Finish deliberately do not await this. */

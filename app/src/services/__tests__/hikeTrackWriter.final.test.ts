@@ -29,10 +29,15 @@ let blockedRemoval: string | null = null;
 let blockedWrite: string | null = null;
 let blockedRead: string | null = null;
 let afterSetItem: ((key: string, value: string) => void) | null = null;
+let storageReadCalls = 0;
+let storageReadCharacters = 0;
 const localStorageMock = {
   getItem: (key: string) => {
     if (key === blockedRead) throw new Error('simulated-read-interruption');
-    return mockWebStorage.get(key) ?? null;
+    const value = mockWebStorage.get(key) ?? null;
+    storageReadCalls += 1;
+    storageReadCharacters += value?.length ?? 0;
+    return value;
   },
   setItem: (key: string, value: string) => {
     if (key === blockedWrite) throw new Error('simulated-write-interruption');
@@ -51,6 +56,8 @@ describe('crash-safe Activity journal', () => {
     blockedWrite = null;
     blockedRead = null;
     afterSetItem = null;
+    storageReadCalls = 0;
+    storageReadCharacters = 0;
     resetJournalEfficiencyMetrics();
     await discardActiveHike(activityId);
   });
@@ -677,6 +684,63 @@ describe('crash-safe Activity journal', () => {
     ]);
     expect(getJournalEfficiencyMetrics().checkpointCount).toBe(1);
   });
+
+  test.each([1_000, 10_000, 30_000])(
+    'bounded foreground projection reads an O(512) suffix from a %i-observation journal',
+    async pointCount => {
+      await startHikeTrack(activityId, {
+        started_at: 1_000,
+        activity_mode: 'hiking',
+        user_id: 'synthetic-owner',
+        owner_generation: owner,
+      });
+      const batchSize = 250;
+      for (let start = 0; start < pointCount; start += batchSize) {
+        const batch = Array.from({ length: Math.min(batchSize, pointCount - start) }, (_, offset) => {
+          const index = start + offset;
+          return {
+            t: 2_000 + index * 1_000,
+            lat: -41 + index * 0.000001,
+            lng: 174 + index * 0.000001,
+            acc: 6,
+            src: 'bg' as const,
+            rawOrdinal: index + 1,
+            clientActivityId: activityId,
+            ownerGeneration: owner,
+            segmentId: 'synthetic-segment',
+          };
+        });
+        await appendBackgroundHikePoints(batch);
+      }
+
+      storageReadCalls = 0;
+      storageReadCharacters = 0;
+      const heapBefore = process.memoryUsage().heapUsed;
+      const startedAt = performance.now();
+      const tail = await readActiveHikeTail(activityId, 512);
+      const elapsedMs = performance.now() - startedAt;
+      const heapDeltaBytes = Math.max(0, process.memoryUsage().heapUsed - heapBefore);
+      const returnedBytes = Buffer.byteLength(JSON.stringify(tail));
+      console.info(JSON.stringify({
+        case: 'R-PERF-BOUNDED-WAL',
+        pointCount,
+        returnedPoints: tail.length,
+        storageReadCalls,
+        storageReadCharacters,
+        returnedBytes,
+        elapsedMs: Number(elapsedMs.toFixed(3)),
+        heapDeltaBytes,
+      }));
+
+      expect(tail).toHaveLength(512);
+      expect(tail[0].rawOrdinal).toBe(pointCount - 511);
+      expect(tail[511].rawOrdinal).toBe(pointCount);
+      expect(storageReadCharacters).toBeLessThanOrEqual(1_200_000);
+      expect(returnedBytes).toBeLessThan(250_000);
+      expect(elapsedMs).toBeLessThan(5_000);
+    },
+    30_000,
+  );
 
   test('a process death during rollback cannot resurrect the removed journal tail', async () => {
     await startHikeTrack(activityId, {

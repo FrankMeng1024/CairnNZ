@@ -16,7 +16,10 @@ import { useSettingsStore } from './src/store/useSettingsStore';
 import { useTrackingStore } from './src/store/useTrackingStore';
 import { initMapbox } from './src/config/mapbox';
 import { debugLogger } from './src/services/debugLogger';
-import { registerBackgroundTask } from './src/services/backgroundLocationTask';
+import {
+  reconcileActivityBackgroundTaskOnStartup,
+  registerBackgroundTask,
+} from './src/services/backgroundLocationTask';
 import { registerPassiveMemoryBackgroundTask } from './src/services/passiveMemoryBackgroundTask';
 import { telemetryUploader } from './src/services/telemetryUploader';
 import { networkMonitor } from './src/services/networkMonitor';
@@ -77,26 +80,10 @@ try {
   markBootPhase('register_bg_task_threw', { msg: String(e?.message ?? e).slice(0, 200) });
 }
 
-// Best-effort: clean up any orphaned background location task left over from
-// a previous app instance that was killed mid-session. Without this, a user
-// who killed the app mid-tramp would have iOS continuing to deliver fixes
-// to the JS task forever, draining battery.
-(async () => {
-  try {
-    const Location = await import('expo-location');
-    const TaskManager = await import('expo-task-manager');
-    const { BACKGROUND_LOCATION_TASK } = await import('./src/services/backgroundLocationTask');
-    if (TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK)) {
-      const running = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
-      if (running) {
-        // Will be re-started by useTrackingStore.startTracking when user begins.
-        await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
-      }
-    }
-  } catch {
-    // expo-location/task-manager unavailable (web/Expo Go). Ignore.
-  }
-})();
+// Reconcile orphan cleanup with the same durable ownership boundary used by
+// Start/Finish. A legitimate cold-recovery Activity keeps its native source;
+// a new Start cannot race a slow orphan probe.
+void reconcileActivityBackgroundTaskOnStartup();
 
 // On web: the React Navigation native stack renders a wrapper div with
 // background-color: rgb(242,242,242). During screen transitions this wrapper
