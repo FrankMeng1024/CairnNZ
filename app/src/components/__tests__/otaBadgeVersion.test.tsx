@@ -9,12 +9,12 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 describe('OTA candidate marker', () => {
-  it('exports O95 and renders only the discreet release marker', () => {
-    expect(OTA_VERSION).toBe('O95');
+  it('exports O96 and renders only the discreet release marker', () => {
+    expect(OTA_VERSION).toBe('O96');
 
     const screen = render(<OtaReleaseMarker />);
 
-    expect(screen.getAllByText('O95')).toHaveLength(1);
+    expect(screen.getAllByText('O96')).toHaveLength(1);
     expect(screen.queryByText(/Checking|Up to date|update/i)).toBeNull();
     screen.unmount();
   });
