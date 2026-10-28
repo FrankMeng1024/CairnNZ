@@ -123,7 +123,7 @@ export interface PendingHike {
     displayFingerprint: string;
     canonicalFingerprint: string;
     source: 'base' | 'matched' | 'hybrid' | 'limited' | 'server-restored';
-    algorithmVersion: 'pedestrian-final-v2-base';
+    algorithmVersion: 'pedestrian-final-v2-base' | 'pedestrian-final-v3-trend';
   };
 }
 

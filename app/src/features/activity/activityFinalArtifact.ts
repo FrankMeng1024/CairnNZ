@@ -3,10 +3,11 @@ import type { TrackPoint } from '../../store/useSessionStore';
 import { segmentTrace } from './activityContracts';
 import {
   buildBaseFinalGeometry,
-  buildEvidenceSupportedLocalFinalGeometry,
+  buildEvidenceSupportedTrendFinalGeometry,
 } from '../../services/routing/pedestrianFinalRoute';
 
 export type ActivityFinalSource = 'base' | 'matched' | 'hybrid' | 'limited' | 'server-restored';
+export type ActivityFinalDisplayMode = 'base' | 'local' | 'trend' | 'road';
 
 export interface ActivityFinalArtifact {
   format: 'cairn-activity-final';
@@ -15,8 +16,10 @@ export interface ActivityFinalArtifact {
   clientActivityId: string;
   revision: number;
   parentRevision: number | null;
-  algorithmVersion: 'pedestrian-final-v2-base';
+  algorithmVersion: 'pedestrian-final-v2-base' | 'pedestrian-final-v3-trend';
   source: ActivityFinalSource;
+  /** Traceable consumer representation; optional for pre-upgrade artifacts. */
+  displayMode?: ActivityFinalDisplayMode;
   canonicalFingerprint: string;
   displayFingerprint: string;
   points: TrackPoint[];
@@ -86,23 +89,30 @@ export function buildBaseFinalTrackPoints(points: TrackPoint[]): TrackPoint[] {
 }
 
 /** Stable offline-capable Final selected before optional road-aware work. */
-export function buildLocalFinalTrackPoints(points: TrackPoint[]): TrackPoint[] {
-  return segmentTrace(points).segments.flatMap(segment => {
+export function buildLocalFinalTrackPointsWithDecision(points: TrackPoint[]): {
+  points: TrackPoint[];
+  displayMode: 'local' | 'trend';
+  segmentModes: Array<'local' | 'trend'>;
+} {
+  const segmentModes: Array<'local' | 'trend'> = [];
+  const selectedPoints = segmentTrace(points).segments.flatMap(segment => {
     const first = segment[0];
     const last = segment[segment.length - 1];
-    const local = buildEvidenceSupportedLocalFinalGeometry(segment.map(point => ({
+    const canonical = segment.map(point => ({
       lat: point.lat,
       lng: point.lng,
       alt: point.alt,
       t: point.t,
       accuracy: point.accuracy,
-    })));
-    return local.points.map((point, index) => ({
+    }));
+    const trend = buildEvidenceSupportedTrendFinalGeometry(canonical);
+    segmentModes.push(trend.diagnostics.accepted ? 'trend' : 'local');
+    return trend.points.map((point, index) => ({
       lat: point.lat,
       lng: point.lng,
       alt: point.alt,
       t: point.t ?? first.t + Math.round(
-        ((last.t - first.t) * index) / Math.max(1, local.points.length - 1),
+        ((last.t - first.t) * index) / Math.max(1, trend.points.length - 1),
       ),
       segmentId: first.segmentId,
       ...(index === 0 && first.segmentStartReason
@@ -110,6 +120,15 @@ export function buildLocalFinalTrackPoints(points: TrackPoint[]): TrackPoint[] {
         : {}),
     }));
   });
+  return {
+    points: selectedPoints,
+    displayMode: segmentModes.includes('trend') ? 'trend' : 'local',
+    segmentModes,
+  };
+}
+
+export function buildLocalFinalTrackPoints(points: TrackPoint[]): TrackPoint[] {
+  return buildLocalFinalTrackPointsWithDecision(points).points;
 }
 
 function validArtifact(value: any, ownerUserId: string, clientActivityId: string): value is ActivityFinalArtifact {
@@ -144,6 +163,7 @@ export async function commitActivityFinalArtifact(input: {
   canonicalPoints: TrackPoint[];
   displayPoints: TrackPoint[];
   source: ActivityFinalSource;
+  displayMode?: ActivityFinalDisplayMode;
   expectedRevision?: number | null;
 }): Promise<{ committed: boolean; artifact: ActivityFinalArtifact }> {
   if (!input.ownerUserId || input.ownerUserId === 'guest' || !input.clientActivityId) {
@@ -178,6 +198,10 @@ export async function commitActivityFinalArtifact(input: {
       result = { committed: false, artifact: current };
       return;
     }
+    const displayMode = input.displayMode ?? (
+      input.source === 'matched' || input.source === 'hybrid' ? 'road'
+        : input.source === 'limited' ? 'local' : 'base'
+    );
     const artifact: ActivityFinalArtifact = {
       format: 'cairn-activity-final',
       version: 1,
@@ -185,8 +209,11 @@ export async function commitActivityFinalArtifact(input: {
       clientActivityId: input.clientActivityId,
       revision: (current?.revision ?? 0) + 1,
       parentRevision: current?.revision ?? null,
-      algorithmVersion: 'pedestrian-final-v2-base',
+      algorithmVersion: displayMode === 'trend'
+        ? 'pedestrian-final-v3-trend'
+        : 'pedestrian-final-v2-base',
       source: input.source,
+      displayMode,
       canonicalFingerprint,
       displayFingerprint,
       points: input.displayPoints.map(point => ({ ...point })),

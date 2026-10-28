@@ -243,6 +243,16 @@ describe('durable Activity Final refinement queue', () => {
   });
 
   test('offline stable route remains durable, then reconnect performs exactly one accepted upgrade', async () => {
+    const canonical = [
+      { lat: -41, lng: 174, t: 1_000, segment_id: 's' },
+      { lat: -41.0005, lng: 174.00001, t: 1_500, segment_id: 's' },
+      { lat: -41.001, lng: 174, t: 2_000, segment_id: 's' },
+    ];
+    mockPending.payload.route_points_canonical = canonical;
+    mockArtifact = {
+      ...baseArtifact(),
+      points: canonical.map(point => ({ ...point, segmentId: point.segment_id })),
+    };
     mockToken = 'token-that-must-not-be-used';
     mockNetworkState = 'offline';
     await enqueueActivityFinalRefinement({
@@ -272,7 +282,9 @@ describe('durable Activity Final refinement queue', () => {
     mockNetworkState = 'online';
     mockReconstruct.mockResolvedValue({
       ok: true,
-      points: baseArtifact().points.map((point, index) => index === 1 ? { ...point, lng: point.lng + 0.000004 } : point),
+      points: mockArtifact.points.map((point: any, index: number) => (
+        index === 1 ? { ...point, lng: point.lng - 0.00001 } : point
+      )),
       stats: {
         requestResults: [requestResult({ acceptedCandidateCount: 1 })],
         acceptedMatchedDistanceM: 100,
@@ -281,7 +293,7 @@ describe('durable Activity Final refinement queue', () => {
         wholeRouteValidation: { accepted: true },
       },
     });
-    const refined = { ...baseArtifact(), revision: 2, source: 'matched', displayFingerprint: 'reconnected-refined' };
+    const refined = { ...mockArtifact, revision: 2, source: 'matched', displayFingerprint: 'reconnected-refined' };
     mockCommitArtifact.mockResolvedValue({ committed: true, artifact: refined });
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
     expect(mockReconstruct).toHaveBeenCalledTimes(1);
@@ -367,7 +379,7 @@ describe('durable Activity Final refinement queue', () => {
     expect(pendingMocks.savePending).not.toHaveBeenCalled();
   });
 
-  test('a valid production local improvement can replace Base even with zero matched distance', async () => {
+  test('a provider fallback cannot overwrite a stronger current Local Final merely because its fingerprint differs', async () => {
     mockToken = 'token';
     const canonical = [
       { lat: -41, lng: 174, t: 1_000, segment_id: 's' },
@@ -389,15 +401,13 @@ describe('durable Activity Final refinement queue', () => {
         wholeRouteValidation: { accepted: true },
       },
     });
-    const limited = { ...mockArtifact, revision: 2, source: 'limited', displayFingerprint: 'local-improved' };
-    mockCommitArtifact.mockResolvedValue({ committed: true, artifact: limited });
     await enqueueActivityFinalRefinement({
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: mockArtifact,
     });
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
-    expect(mockCommitArtifact).toHaveBeenCalledWith(expect.objectContaining({ source: 'limited' }));
+    expect(mockCommitArtifact).not.toHaveBeenCalled();
     expect(pendingMocks.savePending).toHaveBeenCalledWith(expect.objectContaining({
-      finalArtifact: expect.objectContaining({ source: 'limited', revision: 2 }),
+      finalArtifact: expect.objectContaining({ source: mockArtifact.source, revision: 1 }),
     }));
   });
 

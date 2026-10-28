@@ -59,6 +59,7 @@ import {
   activityGeometryFingerprint,
   buildBaseFinalTrackPoints,
   buildLocalFinalTrackPoints,
+  buildLocalFinalTrackPointsWithDecision,
   commitActivityFinalArtifact,
   type ActivityFinalArtifact,
 } from '../features/activity/activityFinalArtifact';
@@ -2791,7 +2792,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         s.trackPoints[s.trackPoints.length - 1]?.t ?? s.startedAt,
       );
       const canonicalSegments = segmentTrace(s.trackPoints).segments;
-      const baseFinalTrackPoints = buildLocalFinalTrackPoints(s.trackPoints);
+      const localFinalSelection = buildLocalFinalTrackPointsWithDecision(s.trackPoints);
+      const baseFinalTrackPoints = localFinalSelection.points;
       const rawRoutePayload = (s.trackPointsRaw.length > 0 ? s.trackPointsRaw : s.trackPoints)
         .map(point => toServerPoint(point));
       const baseMemoryUnsynced = useMemoryStore.getState().points
@@ -3189,6 +3191,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           canonicalPoints: s.trackPoints,
           displayPoints: baseFinalTrackPoints,
           source: 'base',
+          displayMode: localFinalSelection.displayMode,
         });
         finalArtifact = baseCommit.artifact;
         const basePayload = {
@@ -3283,6 +3286,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           details: {
             phase: 'local-artifact-durable',
             selectedSource: finalArtifact.source,
+            selectedDisplayMode: finalArtifact.displayMode ?? 'base',
             selectedRevision: finalArtifact.revision,
             selectedFingerprint: finalArtifact.displayFingerprint,
           },

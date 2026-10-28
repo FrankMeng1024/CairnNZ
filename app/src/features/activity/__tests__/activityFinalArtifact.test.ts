@@ -71,4 +71,17 @@ describe('versioned Activity Final artifact', () => {
     )).toBe(false);
     expect(activityFinalPointsMatchExpected(base, second.artifact.displayFingerprint)).toBe(false);
   });
+
+  test('records the selected chronological trend algorithm without changing artifact schema version', async () => {
+    const display = buildBaseFinalTrackPoints(canonical);
+    const committed = await commitActivityFinalArtifact({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-trend', canonicalPoints: canonical,
+      displayPoints: display, source: 'base', displayMode: 'trend', expectedRevision: null,
+    });
+    expect(committed.artifact).toMatchObject({
+      version: 1,
+      displayMode: 'trend',
+      algorithmVersion: 'pedestrian-final-v3-trend',
+    });
+  });
 });

@@ -1,5 +1,134 @@
 import type { PedestrianFinalRequestResult } from '../../services/routing/pedestrianFinalRoute';
 
+type FinalPoint = { lat: number; lng: number };
+
+export interface FinalCandidatePromotionDecision {
+  accepted: boolean;
+  reason:
+    | 'accepted-network-improvement'
+    | 'no-network-authority'
+    | 'endpoint-change'
+    | 'length-regression'
+    | 'edge-spike'
+    | 'lost-reversal'
+    | 'invented-reversal'
+    | 'invented-crossing';
+  canonicalReversals: number;
+  currentReversals: number;
+  candidateReversals: number;
+  canonicalCrossings: number;
+  currentCrossings: number;
+  candidateCrossings: number;
+  currentLengthRatio: number;
+  candidateLengthRatio: number;
+}
+
+const EARTH_R = 6_371_000;
+const toRad = (value: number) => value * Math.PI / 180;
+const distanceM = (left: FinalPoint, right: FinalPoint) => {
+  const dLat = toRad(right.lat - left.lat);
+  const dLng = toRad(right.lng - left.lng);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(left.lat)) * Math.cos(toRad(right.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_R * Math.asin(Math.sqrt(h));
+};
+const lengthM = (points: FinalPoint[]) => points.slice(1)
+  .reduce((sum, point, index) => sum + distanceM(points[index], point), 0);
+const bearing = (from: FinalPoint, to: FinalPoint) => {
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const dLng = toRad(to.lng - from.lng);
+  return (Math.atan2(
+    Math.sin(dLng) * Math.cos(lat2),
+    Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng),
+  ) * 180 / Math.PI + 360) % 360;
+};
+const angleDelta = (left: number, right: number) => {
+  const delta = Math.abs(left - right) % 360;
+  return delta > 180 ? 360 - delta : delta;
+};
+const reversalCount = (points: FinalPoint[]) => {
+  const headings: number[] = [];
+  let anchor = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    if (distanceM(points[anchor], points[index]) < 3) continue;
+    headings.push(bearing(points[anchor], points[index]));
+    anchor = index;
+  }
+  return headings.slice(1).filter((value, index) => angleDelta(headings[index], value) >= 120).length;
+};
+const properCrossings = (points: FinalPoint[]) => {
+  const cross = (a: FinalPoint, b: FinalPoint, c: FinalPoint) => (
+    (b.lng - a.lng) * (c.lat - a.lat) - (b.lat - a.lat) * (c.lng - a.lng)
+  );
+  let count = 0;
+  for (let left = 1; left < points.length; left += 1) {
+    for (let right = left + 2; right < points.length; right += 1) {
+      if (left === 1 && right === points.length - 1
+        && distanceM(points[0], points[points.length - 1]) < 0.1) continue;
+      const [a, b, c, d] = [points[left - 1], points[left], points[right - 1], points[right]];
+      if (cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0) count += 1;
+    }
+  }
+  return count;
+};
+
+/**
+ * Compare a provider-backed candidate with both canonical truth and the
+ * currently selected Local/Trend artifact. This is deliberately independent
+ * from fingerprints: different geometry is not automatically better.
+ */
+export function decideActivityFinalCandidatePromotion(input: {
+  canonical: FinalPoint[];
+  current: FinalPoint[];
+  candidate: FinalPoint[];
+  networkMatched: boolean;
+}): FinalCandidatePromotionDecision {
+  const canonicalLength = lengthM(input.canonical);
+  const currentLengthRatio = canonicalLength > 1 ? lengthM(input.current) / canonicalLength : 1;
+  const candidateLengthRatio = canonicalLength > 1 ? lengthM(input.candidate) / canonicalLength : 1;
+  const canonicalReversals = reversalCount(input.canonical);
+  const currentReversals = reversalCount(input.current);
+  const candidateReversals = reversalCount(input.candidate);
+  const canonicalCrossings = properCrossings(input.canonical);
+  const currentCrossings = properCrossings(input.current);
+  const candidateCrossings = properCrossings(input.candidate);
+  const result = (reason: FinalCandidatePromotionDecision['reason']): FinalCandidatePromotionDecision => ({
+    accepted: reason === 'accepted-network-improvement',
+    reason,
+    canonicalReversals,
+    currentReversals,
+    candidateReversals,
+    canonicalCrossings,
+    currentCrossings,
+    candidateCrossings,
+    currentLengthRatio,
+    candidateLengthRatio,
+  });
+  if (!input.networkMatched) return result('no-network-authority');
+  if (input.canonical.length < 2 || input.current.length < 2 || input.candidate.length < 2
+    || distanceM(input.canonical[0], input.candidate[0]) > 0.1
+    || distanceM(input.canonical.at(-1)!, input.candidate.at(-1)!) > 0.1) return result('endpoint-change');
+  const currentLengthError = Math.abs(1 - currentLengthRatio);
+  const candidateLengthError = Math.abs(1 - candidateLengthRatio);
+  if (candidateLengthRatio < 0.67 || candidateLengthRatio > 1.5
+    || candidateLengthError > currentLengthError + 0.12) return result('length-regression');
+  const canonicalMaxEdge = Math.max(0, ...input.canonical.slice(1)
+    .map((point, index) => distanceM(input.canonical[index], point)));
+  const currentMaxEdge = Math.max(0, ...input.current.slice(1)
+    .map((point, index) => distanceM(input.current[index], point)));
+  const candidateMaxEdge = Math.max(0, ...input.candidate.slice(1)
+    .map((point, index) => distanceM(input.candidate[index], point)));
+  if (candidateMaxEdge > Math.max(30, canonicalMaxEdge * 4, currentMaxEdge * 2)) return result('edge-spike');
+  if (candidateReversals < Math.min(canonicalReversals, currentReversals)) return result('lost-reversal');
+  if (candidateReversals > Math.max(canonicalReversals, currentReversals) + 1) return result('invented-reversal');
+  // The provider candidate is compared with the artifact the user already
+  // has, not merely with noisier canonical evidence. Never trade a cleaner
+  // Local/Trend Final for a road candidate with more proper crossings.
+  if (candidateCrossings > currentCrossings) return result('invented-crossing');
+  return result('accepted-network-improvement');
+}
+
 export type ActivityFinalRefinementRequestCategory =
   | 'not-attempted'
   | 'success'

@@ -30,6 +30,7 @@ import {
 import { recordActivityStageEvent } from './activityStageLedger';
 import {
   activityFinalRefinementRequestCategory,
+  decideActivityFinalCandidatePromotion,
   decideRetainedLocalRefinement,
 } from './activityFinalRefinementDecision';
 import { recordActivityDiagnosticProviderExchange } from './activityDiagnosticReplay';
@@ -274,6 +275,7 @@ async function publishStableLocalPending(
       requestHttpCategory: currentJob.requestHttpCategory ?? 'not-attempted',
       candidateDecision: currentJob.candidateDecision ?? null,
       selectedSource: artifact.source,
+      selectedDisplayMode: artifact.displayMode ?? null,
       selectedRevision: artifact.revision,
       selectedFingerprint: artifact.displayFingerprint,
       nextRetryAt,
@@ -396,6 +398,7 @@ async function publishArtifactAndRelease(
       selectionErrorCategory: currentJob.selectionErrorCategory ?? null,
       roadEnhancementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
       selectedSource: artifact.source,
+      selectedDisplayMode: artifact.displayMode ?? null,
       selectedRevision: artifact.revision,
       selectedFingerprint: artifact.displayFingerprint,
     },
@@ -519,7 +522,6 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   // and governor setup. Mandatory WAL/artifact writes are never truncated.
   const deadlineMs = Date.now() + 4_500;
   let matchedSegments = 0;
-  let locallyImprovedSegments = 0;
   let hybrid = false;
   const requestResults: PedestrianFinalRequestResult[] = [];
   const resultReasons: string[] = [];
@@ -577,19 +579,25 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       ...(index === 0 && first.segmentStartReason ? { segmentStartReason: first.segmentStartReason } : {}),
     }));
     const networkMatched = result.stats.acceptedMatchedDistanceM > 0.5;
-    const localImprovement = !networkMatched
-      && result.stats.displayRefined
-      && result.stats.wholeRouteValidation.accepted
-      && activityGeometryFingerprint(candidateSegment) !== activityGeometryFingerprint(baseSegments[segmentIndex]);
-    if (!networkMatched && !localImprovement) continue;
+    // This queue starts from the already-selected Local/Trend artifact. A
+    // provider failure can reconstruct a different canonical/Base geometry,
+    // but a different fingerprint is not evidence of improvement. Only an
+    // accepted provider-backed match may replace the stable current segment.
+    // Offline/local trend selection happens once before the queue is created.
+    const promotion = decideActivityFinalCandidatePromotion({
+      canonical: segment,
+      current: baseSegments[segmentIndex],
+      candidate: candidateSegment,
+      networkMatched,
+    });
+    if (!promotion.accepted) continue;
     baseSegments[segmentIndex] = candidateSegment;
     if (networkMatched) matchedSegments += 1;
-    else locallyImprovedSegments += 1;
     hybrid = hybrid || result.stats.canonicalDerivedSectionCount > 0;
   }
   const stoppedAfterSegments = await stoppedRunResult(running, signal);
   if (stoppedAfterSegments) return stoppedAfterSegments;
-  if (matchedSegments === 0 && locallyImprovedSegments === 0) {
+  if (matchedSegments === 0) {
     const deadlineReached = Date.now() >= deadlineMs;
     const snapshot = await governor.snapshot().catch(() => null);
     const retained = decideRetainedLocalRefinement({
@@ -619,9 +627,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   }
 
   const eligibleCount = priority.length;
-  const source = matchedSegments === 0
-    ? 'limited' as const
-    : hybrid || matchedSegments < eligibleCount ? 'hybrid' as const : 'matched' as const;
+  const source = hybrid || matchedSegments < eligibleCount ? 'hybrid' as const : 'matched' as const;
   const stoppedBeforeCommit = await stoppedRunResult(running, signal);
   if (stoppedBeforeCommit) return stoppedBeforeCommit;
   // Serialize the artifact commit with durable job cancellation. Whichever
@@ -639,6 +645,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       canonicalPoints: canonical,
       displayPoints: baseSegments.flat(),
       source,
+      displayMode: 'road',
       expectedRevision: baseArtifact.revision,
     });
   });

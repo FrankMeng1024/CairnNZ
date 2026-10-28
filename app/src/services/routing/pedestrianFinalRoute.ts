@@ -312,6 +312,17 @@ export interface LocalFinalDiagnostics extends BaseFinalDiagnostics {
   rejectionReason: string | null;
 }
 
+export interface TrendFinalDiagnostics extends LocalFinalDiagnostics {
+  trendAlgorithm: 'chronological-corridor-v1';
+  passCount: number;
+  explainedVariance: number;
+  longitudinalSpanM: number;
+  transverseP95M: number;
+  transverseSpanM: number;
+  maximumPassCentreSeparationM: number;
+  longitudinalRangeRatio: number;
+}
+
 export interface PedestrianFinalOptions {
   mapboxToken: string;
   /** HTTP boundary injection for the isolated Snap Lab. Production callers
@@ -1219,6 +1230,192 @@ export function buildEvidenceSupportedLocalFinalGeometry(points: RawPoint[]): {
       pathLengthRatio,
       accepted: true,
       rejectionReason: null,
+    },
+  };
+}
+
+/**
+ * Final-only, bounded trend representation for repeated traversal of one
+ * narrow corridor. Spatial fit is only the eligibility gate: chronological
+ * progress establishes sustained passes and reversal anchors. This prevents
+ * a whole-route straight-line prior from flattening corners, loops, parallel
+ * streets or a single ordinary walk. Canonical evidence and metrics remain
+ * untouched; a rejected trend returns the already-validated Local Final.
+ */
+export function buildEvidenceSupportedTrendFinalGeometry(points: RawPoint[]): {
+  points: SnappedPoint[];
+  diagnostics: TrendFinalDiagnostics;
+} {
+  const local = buildEvidenceSupportedLocalFinalGeometry(points);
+  const baseDiagnostics = local.diagnostics;
+  const rejected = (
+    reason: string,
+    partial: Partial<Pick<TrendFinalDiagnostics,
+      'passCount' | 'explainedVariance' | 'longitudinalSpanM' | 'transverseP95M'
+      | 'transverseSpanM' | 'maximumPassCentreSeparationM' | 'longitudinalRangeRatio'>> = {},
+  ) => ({
+    points: local.points,
+    diagnostics: {
+      ...baseDiagnostics,
+      accepted: false,
+      rejectionReason: `trend:${reason}`,
+      trendAlgorithm: 'chronological-corridor-v1' as const,
+      passCount: partial.passCount ?? 0,
+      explainedVariance: partial.explainedVariance ?? 0,
+      longitudinalSpanM: partial.longitudinalSpanM ?? 0,
+      transverseP95M: partial.transverseP95M ?? 0,
+      transverseSpanM: partial.transverseSpanM ?? 0,
+      maximumPassCentreSeparationM: partial.maximumPassCentreSeparationM ?? 0,
+      longitudinalRangeRatio: partial.longitudinalRangeRatio ?? 1,
+    },
+  });
+  if (points.length < 12 || baseDiagnostics.stationaryCloudCollapsed) {
+    return rejected(points.length < 12 ? 'insufficient-evidence' : 'stationary-cloud');
+  }
+
+  const projector = localProjector(points[0]);
+  const xy = points.map(projector.toXY);
+  const mean = xy.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 });
+  mean.x /= xy.length;
+  mean.y /= xy.length;
+  let covarianceXX = 0;
+  let covarianceXY = 0;
+  let covarianceYY = 0;
+  for (const point of xy) {
+    const x = point.x - mean.x;
+    const y = point.y - mean.y;
+    covarianceXX += x * x;
+    covarianceXY += x * y;
+    covarianceYY += y * y;
+  }
+  const angle = 0.5 * Math.atan2(2 * covarianceXY, covarianceXX - covarianceYY);
+  const axis = { x: Math.cos(angle), y: Math.sin(angle) };
+  const normal = { x: -axis.y, y: axis.x };
+  const longitudinal = xy.map(point => (
+    (point.x - mean.x) * axis.x + (point.y - mean.y) * axis.y
+  ));
+  const transverse = xy.map(point => (
+    (point.x - mean.x) * normal.x + (point.y - mean.y) * normal.y
+  ));
+  const totalVariance = covarianceXX + covarianceYY;
+  const difference = Math.hypot(covarianceXX - covarianceYY, 2 * covarianceXY);
+  const majorVariance = (totalVariance + difference) / 2;
+  const explainedVariance = totalVariance > 0 ? majorVariance / totalVariance : 0;
+  const minimumLongitudinal = Math.min(...longitudinal);
+  const maximumLongitudinal = Math.max(...longitudinal);
+  const longitudinalSpanM = maximumLongitudinal - minimumLongitudinal;
+  const transverseCentre = median(transverse);
+  const transverseResiduals = transverse.map(value => Math.abs(value - transverseCentre));
+  const transverseP95M = percentile(transverseResiduals, 0.95);
+  const transverseSpanM = Math.max(...transverse) - Math.min(...transverse);
+  const spatial = { explainedVariance, longitudinalSpanM, transverseP95M, transverseSpanM };
+  if (explainedVariance < 0.985 || longitudinalSpanM < 30
+    || transverseP95M > 3.5 || transverseSpanM > 7) {
+    return rejected('not-one-stable-corridor', spatial);
+  }
+
+  // Hysteresis rejects one-fix reversals and records only a sustained change
+  // of direction. The anchors therefore describe traversal order, not point
+  // density or alternating GPS noise.
+  const reversalThresholdM = clamp(longitudinalSpanM * 0.16, 7, 14);
+  const anchors = [0];
+  let direction = 0;
+  let extremeIndex = 0;
+  let extremeValue = longitudinal[0];
+  for (let index = 1; index < longitudinal.length; index += 1) {
+    const value = longitudinal[index];
+    if (direction === 0) {
+      if (Math.abs(value - longitudinal[0]) >= reversalThresholdM) {
+        direction = Math.sign(value - longitudinal[0]);
+        extremeIndex = index;
+        extremeValue = value;
+      }
+      continue;
+    }
+    if ((direction > 0 && value > extremeValue) || (direction < 0 && value < extremeValue)) {
+      extremeIndex = index;
+      extremeValue = value;
+      continue;
+    }
+    const retreat = direction > 0 ? extremeValue - value : value - extremeValue;
+    if (retreat >= reversalThresholdM) {
+      anchors.push(extremeIndex);
+      direction *= -1;
+      extremeIndex = index;
+      extremeValue = value;
+    }
+  }
+  if (anchors[anchors.length - 1] !== points.length - 1) anchors.push(points.length - 1);
+  const passes = anchors.slice(1).map((end, offset) => ({ start: anchors[offset], end }));
+  if (passes.length < 2 || passes.length > 4) return rejected('unsupported-pass-count', {
+    ...spatial,
+    passCount: passes.length,
+  });
+  if (passes.some(pass => (
+    pass.end - pass.start < 3
+    || Math.abs(longitudinal[pass.end] - longitudinal[pass.start]) < Math.max(18, longitudinalSpanM * 0.48)
+  ))) return rejected('unsupported-short-pass', { ...spatial, passCount: passes.length });
+
+  const passCentres = passes.map(pass => median(transverse.slice(pass.start, pass.end + 1)));
+  const maximumPassCentreSeparationM = Math.max(...passCentres) - Math.min(...passCentres);
+  if (maximumPassCentreSeparationM > 3.5) return rejected('distinct-parallel-corridors', {
+    ...spatial,
+    passCount: passes.length,
+    maximumPassCentreSeparationM,
+  });
+
+  const pointOnTrend = (sourceIndex: number): SnappedPoint => {
+    const along = longitudinal[sourceIndex];
+    const projected = projector.toLngLat({
+      x: mean.x + axis.x * along + normal.x * transverseCentre,
+      y: mean.y + axis.y * along + normal.y * transverseCentre,
+    });
+    return { ...projected, ...(points[sourceIndex].t != null ? { t: points[sourceIndex].t } : {}) };
+  };
+  const sparseCandidate = [
+    canonicalPoint(points[0]),
+    ...anchors.slice(1, -1).map(pointOnTrend),
+    canonicalPoint(points[points.length - 1]),
+  ];
+  const candidate = densifyGeometry(sparseCandidate, 16);
+  const topology = evaluateTopologyQuality(points, candidate);
+  const wholeRoute = evaluateWholeRouteQuality(points, candidate);
+  const maximumCanonicalDisplacementM = Math.max(...points.map(point => (
+    projectPointToPath(point, candidate).distanceM
+  )));
+  const pathLengthRatio = pathLength(points) > 0 ? pathLength(candidate) / pathLength(points) : 1;
+  const candidateLongitudinal = candidate.map(point => {
+    const projected = projector.toXY(point);
+    return (projected.x - mean.x) * axis.x + (projected.y - mean.y) * axis.y;
+  });
+  const longitudinalRangeRatio = longitudinalSpanM > 0
+    ? (Math.max(...candidateLongitudinal) - Math.min(...candidateLongitudinal)) / longitudinalSpanM
+    : 1;
+  const common = {
+    ...spatial,
+    passCount: passes.length,
+    maximumPassCentreSeparationM,
+    longitudinalRangeRatio,
+  };
+  if (!topology.accepted) return rejected(`topology:${topology.reason}`, common);
+  if (!wholeRoute.accepted) return rejected(`whole-route:${wholeRoute.reason}`, common);
+  if (maximumCanonicalDisplacementM > 5) return rejected('canonical-corridor', common);
+  if (pathLengthRatio < 0.80 || pathLengthRatio > 1.03) return rejected('path-length-sanity', common);
+  if (longitudinalRangeRatio < 0.94) return rejected('longitudinal-range', common);
+
+  const display = attachDisplayMetadata(candidate, points);
+  return {
+    points: display,
+    diagnostics: {
+      ...baseDiagnostics,
+      outputPointCount: display.length,
+      localCandidatePointCount: display.length,
+      maximumCanonicalDisplacementM,
+      pathLengthRatio,
+      accepted: true,
+      rejectionReason: null,
+      trendAlgorithm: 'chronological-corridor-v1',
+      ...common,
     },
   };
 }
