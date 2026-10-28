@@ -1260,6 +1260,36 @@ describe('production-path Start to immediate background handoff', () => {
     },
   );
 
+  test('active-to-background keeps the foreground source until native background ownership is verified', async () => {
+    const location = require('expo-location');
+    const foregroundRemove = jest.fn();
+    location.watchPositionAsync.mockImplementationOnce(async () => ({ remove: foregroundRemove }));
+    const clientActivityId = '92000000-0000-4000-8000-000000000023';
+    useTrackingStore.getState().setActivityMode('hiking');
+    await expect(useTrackingStore.getState().startTracking(clientActivityId)).resolves.toBe(true);
+    await settleUntil(() => location.watchPositionAsync.mock.calls.length === 1, 160, 'foreground-active');
+
+    const backgroundStart = deferredValue<void>();
+    let backgroundStartEntered = false;
+    location.startLocationUpdatesAsync.mockImplementationOnce(async () => {
+      backgroundStartEntered = true;
+      await backgroundStart.promise;
+      mockNativeBackgroundStarted = true;
+    });
+    mockAppStateCurrent = 'background';
+    mockAppStateListener?.('background');
+    await settleUntil(() => backgroundStartEntered, 160, 'background-start-held-after-foreground');
+
+    expect(foregroundRemove).not.toHaveBeenCalled();
+    backgroundStart.resolve();
+    await settleUntil(
+      () => mockNativeBackgroundStarted && foregroundRemove.mock.calls.length === 1,
+      160,
+      'background-owner-verified-before-foreground-stop',
+    );
+    expect(location.hasStartedLocationUpdatesAsync).toHaveBeenCalled();
+  });
+
   test.each(['hiking', 'running'] as const)(
     '%s foreground re-entry before native background start resolves converges to one foreground owner',
     async (mode) => {

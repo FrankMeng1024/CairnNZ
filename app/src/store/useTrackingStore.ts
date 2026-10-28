@@ -7198,13 +7198,21 @@ function enqueueRealLocationLifecycleTransition(nextState: AppStateStatus): Prom
     if (plan.action === 'transition-to-foreground') {
       await transitionToForegroundSource(intentEpoch);
     } else if (plan.action === 'transition-to-background') {
-      deactivateForegroundSource();
       const active = await activateBackgroundSource(intentEpoch);
       if (
         intentEpoch === realLocationLifecycleIntentEpoch
         && AppState.currentState === 'background'
-        && !active
-      ) await markRecordingContinuityUncertain('background-provider-unavailable');
+      ) {
+        // Keep the currently verified foreground owner until CoreLocation has
+        // confirmed the background task. Stopping it before the asynchronous
+        // registration completed created an app-owned delivery gap whenever
+        // iOS delayed or rejected the takeover. A short same-generation
+        // overlap is safe: the durable observation identity/dedupe boundary
+        // remains authoritative, while a failed or stale activation can no
+        // longer leave the Activity with no source at all.
+        if (active) deactivateForegroundSource();
+        else await markRecordingContinuityUncertain('background-provider-unavailable');
+      }
     }
   });
 }

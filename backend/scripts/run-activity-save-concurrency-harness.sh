@@ -3,6 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SOURCE_BACKEND_DIR="${TARGET_BACKEND_DIR:-$BACKEND_DIR}"
+HARNESS_SCRIPT="${ACTIVITY_SAVE_HARNESS_SCRIPT:-$SCRIPT_DIR/activity-save-concurrency-harness.js}"
 OUTPUT_FILE="${EVIDENCE_FILE:-${TMPDIR:-/tmp}/cairn-activity-save-concurrency.json}"
 RUN_ID="${HARNESS_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 SAFE_RUN_ID="$(printf '%s' "$RUN_ID" | tr -cd 'A-Za-z0-9_')"
@@ -81,7 +83,7 @@ while nc -z 127.0.0.1 "$API_PORT" >/dev/null 2>&1; do API_PORT=$((API_PORT + 1))
     JWT_SECRET="$JWT_SECRET" NONCE_SECRET="$JWT_SECRET" PORT="$API_PORT" \
     CAIRN_REALM=isolated_review ALLOW_ISOLATED_QA_SOURCE_CONTRACT=1 \
     NODE_ENV=test TRUST_PROXY=false DISABLE_CRON=1 \
-    node src/index.js
+    NODE_PATH="${NODE_PATH:-$BACKEND_DIR/node_modules}" node "$SOURCE_BACKEND_DIR/src/index.js"
 ) >"$TEMP_DIR/backend.log" 2>&1 &
 API_PID=$!
 
@@ -93,11 +95,11 @@ done
 
 DB_HOST=127.0.0.1 DB_PORT="$DB_PORT" DB_USER=root DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" \
 JWT_SECRET="$JWT_SECRET" HARNESS_API_URL="http://127.0.0.1:$API_PORT" HARNESS_RUN_ID="$RUN_ID" \
-node "$SCRIPT_DIR/activity-save-concurrency-harness.js" > "$OUTPUT_FILE"
+NODE_PATH="${NODE_PATH:-$BACKEND_DIR/node_modules}" node "$HARNESS_SCRIPT" > "$OUTPUT_FILE"
 
 node -e '
   const fs=require("fs");
   const result=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
   if(!result.passed)process.exit(1);
-  process.stdout.write(JSON.stringify({passed:result.passed,assertions:result.assertions.length,timings:result.timings,final:result.final},null,2)+"\n");
+  process.stdout.write(JSON.stringify({passed:result.passed,assertions:Array.isArray(result.assertions)?result.assertions.length:null,timings:result.timings,final:result.final},null,2)+"\n");
 ' "$OUTPUT_FILE"

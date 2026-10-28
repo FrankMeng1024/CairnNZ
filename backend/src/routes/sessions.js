@@ -385,7 +385,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
   let attributionRange = null;
   const serverTiming = {
     guard_wait_ms: guard.waitMs,
-    pool_wait_ms: 0,
+    pool_wait_ms: guard.poolWaitMs,
     session_lock_wait_ms: 0,
     memory_write_ms: 0,
     coverage_sync_ms: 0,
@@ -393,9 +393,7 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     total_ms: 0,
   };
   try {
-    const poolWaitStartedAt = Date.now();
-    conn = await pool.getConnection();
-    serverTiming.pool_wait_ms = Math.max(0, Date.now() - poolWaitStartedAt);
+    conn = guard.connection;
     await conn.beginTransaction();
 
     // 1. FOR UPDATE 锁行, 校验归属 + 未 finalize
@@ -590,7 +588,6 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     }
     return res.status(500).json({ error: 'Server error.' });
   } finally {
-    if (conn) conn.release();
     await guard.release().catch(error => {
       console.error('[sessions/save:guard-release]', { sessionId: id, code: error?.code || 'UNKNOWN' });
     });
