@@ -133,6 +133,21 @@ function fromPrivacyRelative(sample) {
     segmentId: sample.segmentId || 'legacy-0',
   };
 }
+function contiguousSegmentCount(points) {
+  return points.reduce((count, point, index) => (
+    index === 0 || point.segment !== points[index - 1].segment ? count + 1 : count
+  ), 0);
+}
+function segmentedPathData(points, project) {
+  return points.map((point, index) => {
+    const command = index === 0 || point.segment !== points[index - 1].segment ? 'M' : 'L';
+    const [x, y] = project(point);
+    return `${command}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+}
+function subpathCount(pathData) {
+  return (pathData.match(/(?:^|\s)M/g) || []).length;
+}
 function loadCases() {
   if (fixture.schema === 'cairn-activity-trend-relative-v1') {
     return fixture.cases.map(entry => ({
@@ -154,21 +169,20 @@ function svg(caseId, canonical, before, after) {
   const minX = Math.min(...all.map(p => p.eastM)), maxX = Math.max(...all.map(p => p.eastM));
   const minY = Math.min(...all.map(p => p.northM)), maxY = Math.max(...all.map(p => p.northM));
   const scale = Math.min(360 / Math.max(1, maxX - minX), 320 / Math.max(1, maxY - minY));
-  const pathData = (points, panel) => points.map((p, index) => {
+  const pathData = (points, panel) => segmentedPathData(points, p => {
     const x = panel * 440 + 40 + (p.eastM - minX) * scale;
     const y = 390 - (p.northM - minY) * scale;
-    return `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+    return [x, y];
+  });
   return `<svg xmlns="http://www.w3.org/2000/svg" width="880" height="440"><rect width="100%" height="100%" fill="#f7f3ea"/><text x="24" y="28" font-family="sans-serif" font-size="16" fill="#20382d">${caseId} · relative metres · offline reconstruction</text><text x="40" y="54" font-family="sans-serif" font-size="13">O95 saved Final</text><text x="480" y="54" font-family="sans-serif" font-size="13">candidate Local/Trend Final</text><path d="${pathData(canonical, 0)}" fill="none" stroke="#b5afa5" stroke-width="1"/><path d="${pathData(before, 0)}" fill="none" stroke="#a96947" stroke-width="3" stroke-linejoin="round"/><path d="${pathData(canonical, 1)}" fill="none" stroke="#b5afa5" stroke-width="1"/><path d="${pathData(after, 1)}" fill="none" stroke="#355f4a" stroke-width="3" stroke-linejoin="round"/><text x="24" y="428" font-family="sans-serif" font-size="10" fill="#716d65">Grey = accepted canonical evidence; no absolute coordinates; not a device screenshot or hosted Mapbox capture.</text></svg>`;
 }
 function sharedScaleSvg(cases) {
   const columns = [
     ['Canonical evidence', item => item.canonical],
     ['O95 saved Final', item => item.saved],
-    ['New Local/Trend', item => item.selected],
-    ['Production-selected', item => item.selected],
+    ['Candidate Local/Trend (module replay)', item => item.selected],
   ];
-  const width = 1_120;
+  const width = 860;
   const columnWidth = 260;
   const rowHeight = 145;
   const header = 58;
@@ -189,11 +203,12 @@ function sharedScaleSvg(cases) {
     const centreY = (Math.min(...ys) + Math.max(...ys)) / 2;
     const panelX = 80 + column * columnWidth + columnWidth / 2;
     const panelY = header + row * rowHeight + rowHeight / 2;
-    return points.map((value, index) => (
-      `${index ? 'L' : 'M'}${(panelX + (value.eastM - centreX) * scale).toFixed(1)},${(panelY - (value.northM - centreY) * scale).toFixed(1)}`
-    )).join(' ');
+    return segmentedPathData(points, value => ([
+      panelX + (value.eastM - centreX) * scale,
+      panelY - (value.northM - centreY) * scale,
+    ]));
   };
-  const colours = ['#8a857c', '#a96947', '#355f4a', '#214d3a'];
+  const colours = ['#8a857c', '#a96947', '#355f4a'];
   const body = cases.map((item, row) => (
     `<text x="8" y="${header + row * rowHeight + 18}" font-family="sans-serif" font-size="12" fill="#20382d">${item.id} ${item.name}</text>`
     + columns.map(([_label, select], column) => (
@@ -216,8 +231,10 @@ function sharedScaleSvg(cases) {
     fixtureSha256: crypto.createHash('sha256').update(fixtureBytes).digest('hex'),
     sourceRootIdentity: path.basename(sourceRoot),
     networkRequests: 0,
+    selectedEvidenceTier: 'IN_MEMORY_PRODUCTION_MODULE_REPLAY_NOT_PERSISTED_OR_DEVICE_RENDERED',
     cases: [],
     assertions: [],
+    plotEvidence: [],
   };
   const loadedCases = loadCases();
   const visualCases = [];
@@ -279,6 +296,29 @@ function sharedScaleSvg(cases) {
       relative(canonical, origin), relative(saved, origin), relative(trend.points, origin),
     ));
   }
+  report.plotEvidence = visualCases.map(item => {
+    const paths = {
+      canonical: segmentedPathData(item.canonical, value => [value.eastM, value.northM]),
+      saved: segmentedPathData(item.saved, value => [value.eastM, value.northM]),
+      selected: segmentedPathData(item.selected, value => [value.eastM, value.northM]),
+    };
+    return {
+      id: item.id,
+      expectedSubpaths: {
+        canonical: contiguousSegmentCount(item.canonical),
+        saved: contiguousSegmentCount(item.saved),
+        selected: contiguousSegmentCount(item.selected),
+      },
+      actualMoveCommands: {
+        canonical: subpathCount(paths.canonical),
+        saved: subpathCount(paths.saved),
+        selected: subpathCount(paths.selected),
+      },
+      noCrossSegmentConnector: Object.keys(paths).every(key => (
+        subpathCount(paths[key]) === contiguousSegmentCount(item[key])
+      )),
+    };
+  });
   fs.writeFileSync(path.join(outputDir, 'six_activity_shared_scale.svg'), sharedScaleSvg(visualCases));
   if (fixture.schema !== 'cairn-activity-trend-relative-v1') {
     const relativeFixture = {
@@ -306,6 +346,7 @@ function sharedScaleSvg(cases) {
     ['OK remains byte-identical to established Local', byId(2146).selectedTrend.fingerprint === byId(2146).local.fingerprint],
     ['Sharp retains segment boundaries', byId(2147).selectedTrend.segmentCount === byId(2147).canonical.segmentCount],
     ['Bad Bad Run retains segment boundaries', byId(2149).selectedTrend.segmentCount === byId(2149).canonical.segmentCount],
+    ['Every offline plot starts a new SVG subpath at each real segment boundary', report.plotEvidence.every(item => item.noCrossSegmentConnector)],
     ['401/NoMatch cannot replace stable Final', [2150, 2151].every(id => byId(id).fallbackPromotions.every(item => item.decision.accepted === false))],
   ];
   report.assertions = checks.map(([name, passed]) => ({ name, passed }));

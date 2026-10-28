@@ -463,6 +463,35 @@ function pathLength(points: Array<{ lat: number; lng: number }>): number {
   return points.slice(1).reduce((sum, point, index) => sum + hav(points[index], point), 0);
 }
 
+/**
+ * Counts strict, interior polyline intersections. Endpoint touches and
+ * adjacent edges are not crossings; the closing edge of a genuine loop is
+ * also not compared with its first edge. This is intentionally a one-way
+ * Final-selection guard, not a route simplifier: a Trend candidate may keep
+ * an incumbent Local crossing, but it may never introduce another one.
+ */
+function properSelfCrossingCount(points: Array<{ lat: number; lng: number }>): number {
+  const orientation = (
+    a: { lat: number; lng: number },
+    b: { lat: number; lng: number },
+    c: { lat: number; lng: number },
+  ) => (b.lng - a.lng) * (c.lat - a.lat) - (b.lat - a.lat) * (c.lng - a.lng);
+  let crossings = 0;
+  for (let left = 1; left < points.length; left += 1) {
+    for (let right = left + 2; right < points.length; right += 1) {
+      if (left === 1 && right === points.length - 1 && hav(points[0], points[points.length - 1]) < 0.1) {
+        continue;
+      }
+      const [a, b, c, d] = [points[left - 1], points[left], points[right - 1], points[right]];
+      if (orientation(a, b, c) * orientation(a, b, d) < 0
+        && orientation(c, d, a) * orientation(c, d, b) < 0) {
+        crossings += 1;
+      }
+    }
+  }
+  return crossings;
+}
+
 function maximumEdge(points: Array<{ lat: number; lng: number }>): number {
   const edges = points.slice(1).map((point, index) => hav(points[index], point));
   return edges.length > 0 ? Math.max(...edges) : 0;
@@ -1402,6 +1431,9 @@ export function buildEvidenceSupportedTrendFinalGeometry(points: RawPoint[]): {
   if (maximumCanonicalDisplacementM > 5) return rejected('canonical-corridor', common);
   if (pathLengthRatio < 0.80 || pathLengthRatio > 1.03) return rejected('path-length-sanity', common);
   if (longitudinalRangeRatio < 0.94) return rejected('longitudinal-range', common);
+  if (properSelfCrossingCount(candidate) > properSelfCrossingCount(local.points)) {
+    return rejected('crossing-regression', common);
+  }
 
   const display = attachDisplayMetadata(candidate, points);
   return {

@@ -12,6 +12,7 @@ import {
   activityFinalPointsMatchExpected,
   activityGeometryFingerprint,
   buildBaseFinalTrackPoints,
+  buildLocalFinalTrackPointsWithDecision,
   commitActivityFinalArtifact,
   loadActivityFinalArtifact,
 } from '../activityFinalArtifact';
@@ -82,6 +83,22 @@ describe('versioned Activity Final artifact', () => {
       version: 1,
       displayMode: 'trend',
       algorithmVersion: 'pedestrian-final-v3-trend',
+    });
+    const reopened = await loadActivityFinalArtifact('owner-a', 'activity-trend');
+    expect(reopened).toEqual(committed.artifact);
+    expect(reopened?.points).toEqual(display);
+    expect(reopened?.displayFingerprint).toBe(activityGeometryFingerprint(display));
+  });
+
+  test('selects each true GPS segment independently and never invents a bridge across the gap', () => {
+    const selected = buildLocalFinalTrackPointsWithDecision(canonical);
+    expect(new Set(selected.points.map(point => point.segmentId))).toEqual(new Set(['a', 'b']));
+    expect(selected.points.findIndex(point => point.segmentId === 'b')).toBeGreaterThan(0);
+    const firstB = selected.points.find(point => point.segmentId === 'b');
+    expect(firstB).toMatchObject({
+      lat: canonical[2].lat,
+      lng: canonical[2].lng,
+      segmentStartReason: 'gps-reacquired',
     });
   });
 });
