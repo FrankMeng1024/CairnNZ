@@ -13,6 +13,8 @@ const MAX_BATCH_BYTES = 64 * 1024;
 const MAX_OWNER_BYTES_24H = 5 * 1024 * 1024;
 const TIER_A_RETENTION_DAYS = 30;
 const TIER_B_RETENTION_DAYS = 14;
+const SELF_SERVICE_CONSENT_VERSION = 'activity-precise-v1';
+const SELF_SERVICE_CONSENT_DAYS = 30;
 // Retention is anchored to server receipt, not client eventAt. eventAt is
 // useful forensic context but is client-controlled and may arrive after an
 // offline delay; every accepted batch receives its full stated server TTL.
@@ -440,6 +442,35 @@ async function setAutomaticDiagnosticEnrollment(pool, input) {
   }
 }
 
+async function setSelfServiceAutomaticDiagnosticConsent(pool, ownerUserId, input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)
+    || typeof input.enabled !== 'boolean'
+    || input.consentVersion !== SELF_SERVICE_CONSENT_VERSION) {
+    throw diagnosticError(
+      400,
+      'DIAGNOSTIC_CONSENT_INVALID',
+      'A current explicit diagnostic consent decision is required.',
+    );
+  }
+  const enabled = input.enabled === true;
+  const expiresAt = enabled
+    ? new Date(Date.now() + SELF_SERVICE_CONSENT_DAYS * 24 * 60 * 60 * 1_000)
+    : null;
+  const result = await setAutomaticDiagnosticEnrollment(pool, {
+    ownerUserId,
+    enabled,
+    tier: 'tier_b',
+    consentVersion: SELF_SERVICE_CONSENT_VERSION,
+    expiresAt,
+  });
+  const policy = await getAutomaticDiagnosticPolicy(pool, ownerUserId);
+  return {
+    ...policy,
+    deletedStreams: result.deletedStreams,
+    serverTime: new Date().toISOString(),
+  };
+}
+
 async function purgeExpiredAutomaticDiagnostics(pool, limit = 500) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2_000));
   const conn = await pool.getConnection();
@@ -593,6 +624,8 @@ module.exports = {
   ingestAutomaticDiagnosticBatch,
   getAutomaticDiagnosticPolicy,
   setAutomaticDiagnosticEnrollment,
+  setSelfServiceAutomaticDiagnosticConsent,
+  SELF_SERVICE_CONSENT_VERSION,
   purgeExpiredAutomaticDiagnostics,
   queryAutomaticDiagnostics,
 };

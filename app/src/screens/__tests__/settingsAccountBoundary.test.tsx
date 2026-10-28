@@ -29,6 +29,8 @@ const mockSubmitFeedback = jest.fn();
 const mockFetchExportHistory = jest.fn();
 const mockRequestDataExport = jest.fn();
 const mockNotification = jest.fn();
+const mockGetAutomaticDiagnosticConsent = jest.fn();
+const mockSetAutomaticDiagnosticConsent = jest.fn();
 let mockUuidSequence = 0;
 
 function deferred<T>() {
@@ -212,6 +214,10 @@ jest.mock('../../services/memorySync', () => ({
 jest.mock('../../services/hapticService', () => ({
   haptic: { selection: jest.fn(), notification: (...args: unknown[]) => mockNotification(...args) },
 }));
+jest.mock('../../services/automaticDiagnosticConsent', () => ({
+  getAutomaticDiagnosticConsent: (...args: unknown[]) => mockGetAutomaticDiagnosticConsent(...args),
+  setAutomaticDiagnosticConsent: (...args: unknown[]) => mockSetAutomaticDiagnosticConsent(...args),
+}));
 jest.mock('../../config/api', () => ({ PRIVACY_URL: 'https://example.test/privacy' }));
 
 import { SettingsScreen } from '../SettingsScreen';
@@ -238,10 +244,73 @@ describe('Settings normal-handler account and action boundaries', () => {
     mockFetchExportHistory.mockResolvedValue({ exports: [] });
     mockRequestDataExport.mockReset();
     mockRequestDataExport.mockResolvedValue({});
+    mockGetAutomaticDiagnosticConsent.mockReset();
+    mockGetAutomaticDiagnosticConsent.mockResolvedValue({
+      enabled: false,
+      tier: 'disabled',
+      consentVersion: null,
+      enrolledAt: null,
+      expiresAt: null,
+    });
+    mockSetAutomaticDiagnosticConsent.mockReset();
+    mockSetAutomaticDiagnosticConsent.mockResolvedValue({
+      enabled: true,
+      tier: 'tier_b',
+      consentVersion: 'activity-precise-v1',
+      enrolledAt: '2026-10-28T00:00:00.000Z',
+      expiresAt: '2026-11-27T00:00:00.000Z',
+    });
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  test('SET/DIAGNOSTICS-CONSENT-01 requires explicit confirmation before enabling precise diagnostics', async () => {
+    const screen = render(<SettingsScreen />);
+    await waitFor(() => expect(mockGetMe).toHaveBeenCalled());
+    fireEvent.press(screen.getByTestId('settings-privacy-row'));
+    await waitFor(() => expect(mockGetAutomaticDiagnosticConsent).toHaveBeenCalledWith('owner-a'));
+    const consent = await screen.findByTestId('settings-activity-diagnostics-consent');
+    expect(consent.props.value).toBe(false);
+
+    fireEvent(consent, 'valueChange', true);
+    expect(mockSetAutomaticDiagnosticConsent).not.toHaveBeenCalled();
+    const confirmation = (Alert.alert as jest.Mock).mock.calls.find(
+      call => call[0] === 'Allow Activity diagnostics?',
+    );
+    expect(confirmation).toBeDefined();
+    await act(async () => {
+      confirmation[2][1].onPress();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockSetAutomaticDiagnosticConsent).toHaveBeenCalledWith('owner-a', true));
+    expect(screen.getByTestId('settings-activity-diagnostics-consent').props.value).toBe(true);
+  }, 15_000);
+
+  test('SET/DIAGNOSTICS-CONSENT-02 keeps the last authenticated policy when a mutation fails', async () => {
+    mockGetAutomaticDiagnosticConsent.mockResolvedValueOnce({
+      enabled: true,
+      tier: 'tier_b',
+      consentVersion: 'activity-precise-v1',
+      enrolledAt: '2026-10-28T00:00:00.000Z',
+      expiresAt: '2026-11-27T00:00:00.000Z',
+    });
+    mockSetAutomaticDiagnosticConsent.mockRejectedValueOnce(new Error('temporary service failure'));
+    const screen = render(<SettingsScreen />);
+    await waitFor(() => expect(mockGetMe).toHaveBeenCalled());
+    fireEvent.press(screen.getByTestId('settings-privacy-row'));
+    await waitFor(() => expect(mockGetAutomaticDiagnosticConsent).toHaveBeenCalledWith('owner-a'));
+    const consent = await screen.findByTestId('settings-activity-diagnostics-consent');
+    expect(consent.props.value).toBe(true);
+
+    fireEvent(consent, 'valueChange', false);
+    await waitFor(() => expect(mockSetAutomaticDiagnosticConsent).toHaveBeenCalledWith('owner-a', false));
+    expect(screen.getByTestId('settings-activity-diagnostics-consent').props.value).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Activity diagnostics unavailable',
+      'Your diagnostic permission was not changed. Connect and try again.',
+    );
+  }, 15_000);
 
   test('SET-ACCOUNT-01 drops a delayed account-A profile refresh after B becomes current', async () => {
     const oldProfile = deferred<any>();

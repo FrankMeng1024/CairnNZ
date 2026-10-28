@@ -95,6 +95,14 @@ interface OwnerMeta {
   streams: Record<string, StreamStatus>;
 }
 
+export interface AutomaticDiagnosticPolicySnapshot {
+  enabled: boolean;
+  tier: 'tier_a' | 'tier_b' | 'disabled';
+  consentVersion: string | null;
+  enrolledAt: string | null;
+  expiresAt: string | null;
+}
+
 export interface AutomaticDiagnosticStatus extends StreamStatus {
   pendingCount: number;
   pendingBytes: number;
@@ -611,6 +619,39 @@ async function refreshPolicy(ownerUserId: string, meta: OwnerMeta): Promise<bool
   await purgeTierBEventsAfterPolicyDowngrade(ownerUserId, meta);
   await writeMeta(ownerUserId, meta);
   return true;
+}
+
+export async function applyAutomaticDiagnosticPolicySnapshot(
+  ownerUserId: string,
+  policy: AutomaticDiagnosticPolicySnapshot,
+): Promise<void> {
+  await serializeOwnerWork(ownerUserId, async () => {
+    if (!await currentOwnerMatches(ownerUserId)) {
+      const error = new Error('automatic_diagnostic_policy_account_changed');
+      (error as Error & { code?: string }).code = 'ACCOUNT_CHANGED';
+      throw error;
+    }
+    const now = Date.now();
+    const parsedExpiry = policy.expiresAt == null ? null : Date.parse(policy.expiresAt);
+    const enabled = policy.enabled === true
+      && (policy.tier === 'tier_a' || policy.tier === 'tier_b')
+      && (parsedExpiry == null || (Number.isFinite(parsedExpiry) && parsedExpiry > now));
+    const meta = await readMeta(ownerUserId);
+    meta.policyCheckedAt = now;
+    meta.policyExpiresAt = enabled ? parsedExpiry : null;
+    meta.policy = enabled ? policy.tier as 'tier_a' | 'tier_b' : 'disabled';
+    if (!enabled) {
+      const keys = (await storage.getAllKeysStrict()).filter(key => key.startsWith(eventPrefix(ownerUserId)));
+      await storage.removeItemsStrict(keys);
+      meta.pendingCount = 0;
+      meta.pendingBytes = 0;
+      meta.streams = {};
+      await writeMeta(ownerUserId, meta);
+      return;
+    }
+    await purgeTierBEventsAfterPolicyDowngrade(ownerUserId, meta);
+    await writeMeta(ownerUserId, meta);
+  });
 }
 
 export async function drainAutomaticDiagnosticOutbox(

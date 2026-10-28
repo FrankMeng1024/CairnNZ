@@ -76,10 +76,15 @@ import {
   type EncounterNotificationState,
 } from '../features/cairns/cairnEncounterNotifications';
 import { cairnText, formatCairnDate } from '../i18n/runtime';
+import {
+  getAutomaticDiagnosticConsent,
+  setAutomaticDiagnosticConsent,
+} from '../services/automaticDiagnosticConsent';
 
 type Page = 'root' | 'account' | 'privacy' | 'content-review' | 'help';
 type FeedbackKind = 'feedback' | 'bug';
 type AsyncState = 'idle' | 'sending' | 'sent' | 'failed';
+type DiagnosticConsentState = 'checking' | 'enabled' | 'disabled' | 'unavailable';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 interface MyReviewCase {
@@ -316,6 +321,8 @@ export function SettingsScreen() {
     detail: cairnText('settings-screen.checking-this-installed-app'),
   });
   const [encounterNotificationsBusy, setEncounterNotificationsBusy] = useState(false);
+  const [diagnosticConsentState, setDiagnosticConsentState] = useState<DiagnosticConsentState>('checking');
+  const [diagnosticConsentBusy, setDiagnosticConsentBusy] = useState(false);
 
   const [nameOpen, setNameOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -374,6 +381,7 @@ export function SettingsScreen() {
   const priorRenderedOwnerId = useRef(renderedOwnerId);
   const profileRefreshGeneration = useRef(0);
   const reviewGeneration = useRef(0);
+  const diagnosticConsentGeneration = useRef(0);
 
   useEffect(() => {
     settingsMounted.current = true;
@@ -386,6 +394,7 @@ export function SettingsScreen() {
       deleteGeneration.current += 1;
       exportGeneration.current += 1;
       reviewGeneration.current += 1;
+      diagnosticConsentGeneration.current += 1;
       exportFlight.current = false;
       feedbackGeneration.current += 1;
       feedbackFlight.current = false;
@@ -449,6 +458,9 @@ export function SettingsScreen() {
     setFeedbackSubmissionId(Crypto.randomUUID());
     setEncounterNotifications({ supported: false, enabled: false, permission: 'unavailable', detail: cairnText('settings-screen.checking-this-installed-app') });
     setEncounterNotificationsBusy(false);
+    diagnosticConsentGeneration.current += 1;
+    setDiagnosticConsentState('checking');
+    setDiagnosticConsentBusy(false);
   }, [renderedOwnerId]);
 
   const refreshPermission = useCallback(async () => {
@@ -534,6 +546,26 @@ export function SettingsScreen() {
     }
   }, []);
 
+  const refreshDiagnosticConsent = useCallback(async () => {
+    const ownerId = currentOwnerId();
+    if (!settingsMounted.current || !ownerId) return;
+    const generation = ++diagnosticConsentGeneration.current;
+    setDiagnosticConsentState('checking');
+    try {
+      const policy = await getAutomaticDiagnosticConsent(ownerId);
+      if (!settingsMounted.current
+        || generation !== diagnosticConsentGeneration.current
+        || currentOwnerId() !== ownerId) return;
+      setDiagnosticConsentState(policy.enabled && policy.tier === 'tier_b' ? 'enabled' : 'disabled');
+    } catch (error) {
+      if (!settingsMounted.current
+        || generation !== diagnosticConsentGeneration.current
+        || currentOwnerId() !== ownerId
+        || (error as { code?: string })?.code === 'ACCOUNT_CHANGED') return;
+      setDiagnosticConsentState('unavailable');
+    }
+  }, []);
+
   useEffect(() => {
     void refreshPermission();
     void refreshEncounterNotifications();
@@ -550,7 +582,8 @@ export function SettingsScreen() {
   useEffect(() => {
     if (page !== 'privacy') return;
     void refreshExports();
-  }, [page, refreshExports, renderedOwnerId]);
+    void refreshDiagnosticConsent();
+  }, [page, refreshDiagnosticConsent, refreshExports, renderedOwnerId]);
 
   useEffect(() => {
     if (page !== 'content-review') return;
@@ -572,6 +605,57 @@ export function SettingsScreen() {
   const openPage = (next: Page) => {
     setPage(next);
     if (next === 'account') void refreshProfile();
+  };
+
+  const commitDiagnosticConsent = async (enabled: boolean) => {
+    const ownerId = currentOwnerId();
+    if (!settingsMounted.current || !ownerId || diagnosticConsentBusy) return;
+    const previousState = diagnosticConsentState;
+    const generation = ++diagnosticConsentGeneration.current;
+    setDiagnosticConsentBusy(true);
+    try {
+      const policy = await setAutomaticDiagnosticConsent(ownerId, enabled);
+      if (!settingsMounted.current
+        || generation !== diagnosticConsentGeneration.current
+        || currentOwnerId() !== ownerId) return;
+      setDiagnosticConsentState(policy.enabled && policy.tier === 'tier_b' ? 'enabled' : 'disabled');
+      haptic.selection();
+    } catch (error) {
+      if (!settingsMounted.current
+        || generation !== diagnosticConsentGeneration.current
+        || currentOwnerId() !== ownerId
+        || (error as { code?: string })?.code === 'ACCOUNT_CHANGED') return;
+      // A failed mutation is not evidence that the server-side policy changed.
+      // Keep the last authenticated state rather than presenting a failed
+      // opt-out as disabled (or a failed opt-in as enabled).
+      setDiagnosticConsentState(previousState);
+      Alert.alert(
+        cairnText('settings-screen.activity-diagnostics-unavailable'),
+        cairnText('settings-screen.activity-diagnostics-were-not-changed'),
+      );
+    } finally {
+      if (settingsMounted.current
+        && generation === diagnosticConsentGeneration.current
+        && currentOwnerId() === ownerId) setDiagnosticConsentBusy(false);
+    }
+  };
+
+  const requestDiagnosticConsentChange = (enabled: boolean) => {
+    if (!enabled) {
+      void commitDiagnosticConsent(false);
+      return;
+    }
+    Alert.alert(
+      cairnText('settings-screen.allow-activity-diagnostics'),
+      cairnText('settings-screen.activity-diagnostics-consent-explanation'),
+      [
+        { text: cairnText('settings-screen.not-now'), style: 'cancel' },
+        {
+          text: cairnText('settings-screen.allow-for-30-days'),
+          onPress: () => void commitDiagnosticConsent(true),
+        },
+      ],
+    );
   };
 
   const enableAutomaticExplorationAndEncounters = async () => {
@@ -1149,6 +1233,25 @@ export function SettingsScreen() {
           />
           {memoryDeleting ? <ActivityIndicator style={styles.inlineLoader} color={theme.destructive} /> : null}
           {memoryDeleteResult ? <Text accessibilityLiveRegion="polite" style={[styles.deleteResult, { color: memoryDeleteResult.startsWith('Deleted') ? theme.textSecondary : theme.destructive }]}>{memoryDeleteResult}</Text> : null}
+        </ContentSurface>
+
+        <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.activity-diagnostics')}</SectionTitle>
+        <ContentSurface style={[styles.surface, surfaceStyle]}>
+          <ToggleRow
+            icon="TrendingUp"
+            title={cairnText('settings-screen.activity-diagnostics')}
+            detail={diagnosticConsentBusy || diagnosticConsentState === 'checking'
+              ? cairnText('settings-screen.checking-activity-diagnostics')
+              : diagnosticConsentState === 'enabled'
+                ? cairnText('settings-screen.activity-diagnostics-on-detail')
+                : diagnosticConsentState === 'unavailable'
+                  ? cairnText('settings-screen.connect-to-check-activity-diagnostics')
+                  : cairnText('settings-screen.activity-diagnostics-off-detail')}
+            value={diagnosticConsentState === 'enabled'}
+            disabled={diagnosticConsentBusy || diagnosticConsentState === 'checking'}
+            onChange={requestDiagnosticConsentChange}
+            testID="settings-activity-diagnostics-consent"
+          />
         </ContentSurface>
 
         <SectionTitle color={theme.foreground} shadowColor={theme.surfaceElevated}>{cairnText('settings-screen.privacy')}</SectionTitle>
