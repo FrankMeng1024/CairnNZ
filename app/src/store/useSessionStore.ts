@@ -72,7 +72,10 @@ export interface TrackingSession {
   /** Display-only Final lifecycle. Independent from server sync and from the
    *  immutable canonical evidence used for Activity metrics and Memory. */
   finalGeometryState?: 'base_ready' | 'refining' | 'enhanced' | 'limited_evidence';
-  finalGeometryVersion?: 'pedestrian-final-v2-base' | 'pedestrian-final-v3-trend';
+  finalGeometryVersion?:
+    | 'pedestrian-final-v2-base'
+    | 'pedestrian-final-v3-trend'
+    | 'pedestrian-final-v4-road-fillet';
   finalGeometryRevision?: number;
   finalGeometryFingerprint?: string;
   /** Stable local route is usable while one optional online refinement is queued. */

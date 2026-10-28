@@ -130,6 +130,8 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
   settleBackgroundLocationWrites: jest.fn(async () => undefined),
   persistBackgroundContext: jest.fn(async () => true),
   readDurableActivityContext: jest.fn(() => mockDurableActivityContextReader()),
+  detectDurableSilenceGapAfterResume: jest.fn(async () => null),
+  setActivityTaskForegroundProjectionWake: jest.fn(),
 }));
 jest.mock('../../../services/debugLogger', () => ({
   debugLogger: { startSession: jest.fn(), endSession: jest.fn(async () => null), log: jest.fn(), logError: jest.fn(), isEnabled: jest.fn(() => false) },

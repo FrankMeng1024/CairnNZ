@@ -123,7 +123,10 @@ export interface PendingHike {
     displayFingerprint: string;
     canonicalFingerprint: string;
     source: 'base' | 'matched' | 'hybrid' | 'limited' | 'server-restored';
-    algorithmVersion: 'pedestrian-final-v2-base' | 'pedestrian-final-v3-trend';
+    algorithmVersion:
+      | 'pedestrian-final-v2-base'
+      | 'pedestrian-final-v3-trend'
+      | 'pedestrian-final-v4-road-fillet';
   };
 }
 
@@ -410,8 +413,6 @@ export async function savePending(hike: PendingHike): Promise<void> {
  */
 export async function ensurePendingUploadReady(hike: PendingHike): Promise<boolean> {
   if (hike.uploadState !== 'preparing') return true;
-  if (hike.roadRefinementState === 'pending-network'
-    || hike.roadRefinementState === 'pending-retry') return false;
   if (isPendingPreparationActive(hike.localId)) return false;
   if (hike.preparationPhase !== 'registry_committed') return false;
   await mutatePending(hike.localId, (pending) => {

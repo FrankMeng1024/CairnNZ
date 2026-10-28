@@ -34,6 +34,7 @@ import {
   decideRetainedLocalRefinement,
 } from './activityFinalRefinementDecision';
 import { recordActivityDiagnosticProviderExchange } from './activityDiagnosticReplay';
+import { roundSavedFinalRoadCorners } from './savedFinalCornerRounding';
 
 export interface ActivityFinalRefinementJob {
   format: 'cairn-activity-final-refinement';
@@ -207,7 +208,13 @@ async function publishStableLocalPending(
   }
   await savePending({
     ...pending,
-    uploadState: 'preparing',
+    // The local artifact, Activity list, and lifecycle registry are already
+    // durable at this boundary. Optional road work must not hold the required
+    // Base/Local Final upload hostage. This also freezes the exact request
+    // semantics for the existing idempotency key before the writer lease is
+    // released; a later road-only display revision never mutates that request.
+    uploadState: 'ready',
+    preparationPhase: 'registry_committed',
     roadRefinementState: roadState,
     roadRefinementNextRetryAt: nextRetryAt,
     payload: {
@@ -316,20 +323,23 @@ async function publishArtifactAndRelease(
     ...pending.payload,
     route_points: artifact.points.map(point => toServerPoint(point)),
   };
-  await savePending({
-    ...pending,
-    uploadState: 'preparing',
-    roadRefinementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
-    roadRefinementNextRetryAt: null,
-    payload,
-    finalArtifact: {
-      revision: artifact.revision,
-      displayFingerprint: artifact.displayFingerprint,
-      canonicalFingerprint: artifact.canonicalFingerprint,
-      source: artifact.source,
-      algorithmVersion: artifact.algorithmVersion,
-    },
-  });
+  const uploadSnapshotFrozen = pending.uploadState === 'ready';
+  if (!uploadSnapshotFrozen) {
+    await savePending({
+      ...pending,
+      uploadState: 'preparing',
+      roadRefinementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
+      roadRefinementNextRetryAt: null,
+      payload,
+      finalArtifact: {
+        revision: artifact.revision,
+        displayFingerprint: artifact.displayFingerprint,
+        canonicalFingerprint: artifact.canonicalFingerprint,
+        source: artifact.source,
+        algorithmVersion: artifact.algorithmVersion,
+      },
+    });
+  }
   if (signal) {
     const stopped = await stoppedRunResult(job, signal);
     if (stopped) return stopped;
@@ -366,7 +376,7 @@ async function publishArtifactAndRelease(
     const stopped = await stoppedRunResult(job, signal);
     if (stopped) return stopped;
   }
-  await markPendingUploadReady(job.clientActivityId);
+  if (!uploadSnapshotFrozen) await markPendingUploadReady(job.clientActivityId);
   if (signal) {
     const stopped = await stoppedRunResult(job, signal);
     if (stopped) return stopped;
@@ -523,6 +533,8 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   const deadlineMs = Date.now() + 4_500;
   let matchedSegments = 0;
   let hybrid = false;
+  let roundedCornerCount = 0;
+  let cornerTopologyGuardCount = 0;
   const requestResults: PedestrianFinalRequestResult[] = [];
   const resultReasons: string[] = [];
   const priority = canonicalSegments
@@ -591,7 +603,15 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       networkMatched,
     });
     if (!promotion.accepted) continue;
-    baseSegments[segmentIndex] = candidateSegment;
+    const rounded = networkMatched
+      ? roundSavedFinalRoadCorners(candidateSegment)
+      : { points: candidateSegment, diagnostics: null };
+    baseSegments[segmentIndex] = rounded.points.map(point => ({
+      ...point,
+      segmentId: first.segmentId,
+    }));
+    roundedCornerCount += rounded.diagnostics?.roundedCorners ?? 0;
+    cornerTopologyGuardCount += rounded.diagnostics?.skippedTopologyGuard ?? 0;
     if (networkMatched) matchedSegments += 1;
     hybrid = hybrid || result.stats.canonicalDerivedSectionCount > 0;
   }
@@ -658,6 +678,15 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   running.candidateDecision = 'accepted';
   running.requestHttpCategory = activityFinalRefinementRequestCategory(requestResults, running.technicalOutcome);
   await writeJob(running);
+  appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_final_corner_rounding_v1', {
+    displayOnly: true,
+    appliedAfterAcceptedRoadMatch: true,
+    roundedCornerCount,
+    cornerTopologyGuardCount,
+    canonicalGeometryChanged: false,
+    activityDistanceChanged: false,
+    memoryChanged: false,
+  }, { userId: job.ownerUserId, clientActivityId: job.clientActivityId, coordinateSource: 'none' });
   const stoppedAfterCommit = await stoppedRunResult(running, signal);
   if (stoppedAfterCommit) return stoppedAfterCommit;
   if (acceptedArtifact.canonicalFingerprint !== job.canonicalFingerprint) {

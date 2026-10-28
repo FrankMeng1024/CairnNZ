@@ -16,34 +16,51 @@ describe('real Activity location lifecycle', () => {
     }).action).toBe('keep-current-owner');
   });
 
-  test('confirmed background and foreground transitions follow actual ownership', () => {
+  test('persistent TaskManager ownership survives confirmed background and foreground transitions', () => {
     expect(planRealLocationLifecycleTransition({
       appState: 'background', foregroundWatcherActive: true, backgroundTaskActive: false,
-    }).action).toBe('transition-to-background');
+    }).action).toBe('keep-current-owner');
     expect(planRealLocationLifecycleTransition({
       appState: 'background', foregroundWatcherActive: false, backgroundTaskActive: true,
     }).action).toBe('keep-current-owner');
     expect(planRealLocationLifecycleTransition({
       appState: 'active', foregroundWatcherActive: false, backgroundTaskActive: true,
-    }).action).toBe('transition-to-foreground');
+    })).toEqual({
+      action: 'keep-current-owner', reason: 'persistent-task-owner-already-active',
+    });
   });
 
-  test('active → inactive → background waits for confirmed background before handoff', () => {
+  test('active → inactive → background does not tear down a foreground-only fallback', () => {
     expect(planRealLocationLifecycleTransition({
       appState: 'inactive', foregroundWatcherActive: true, backgroundTaskActive: false,
     }).action).toBe('hold-transient-inactive');
     expect(planRealLocationLifecycleTransition({
       appState: 'background', foregroundWatcherActive: true, backgroundTaskActive: false,
-    }).action).toBe('transition-to-background');
+    })).toEqual({
+      action: 'keep-current-owner', reason: 'foreground-only-owner-retained',
+    });
   });
 
-  test('background → inactive → active retains background until foreground is confirmed', () => {
+  test('background → inactive → active retains the same persistent task', () => {
     expect(planRealLocationLifecycleTransition({
       appState: 'inactive', foregroundWatcherActive: false, backgroundTaskActive: true,
-    }).action).toBe('hold-transient-inactive');
+    })).toEqual({
+      action: 'keep-current-owner', reason: 'persistent-task-owner-already-active',
+    });
     expect(planRealLocationLifecycleTransition({
       appState: 'active', foregroundWatcherActive: false, backgroundTaskActive: true,
-    }).action).toBe('transition-to-foreground');
+    }).action).toBe('keep-current-owner');
+  });
+
+  test('foreground-only fallback keeps one watcher handle without claiming background delivery', () => {
+    expect(planRealLocationLifecycleTransition({
+      appState: 'background', foregroundWatcherActive: true, backgroundTaskActive: false,
+    })).toEqual({
+      action: 'keep-current-owner', reason: 'foreground-only-owner-retained',
+    });
+    expect(planRealLocationLifecycleTransition({
+      appState: 'active', foregroundWatcherActive: true, backgroundTaskActive: false,
+    }).action).toBe('keep-current-owner');
   });
 
   test('FOREGROUND_TAKEOVER_OWNERSHIP: clustered events become ownership no-ops', () => {

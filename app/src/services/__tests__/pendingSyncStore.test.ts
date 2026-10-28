@@ -121,16 +121,16 @@ describe('verified pending Activity snapshots', () => {
     expect((await listPending())[0].uploadState).toBe('ready');
   });
 
-  test('a durable optional-road fence cannot be promoted by generic crash recovery', async () => {
+  test('a durable optional-road state cannot block a registry-complete Base Final upload', async () => {
     const item = pending('activity-road-pending');
     item.uploadState = 'preparing';
     item.preparationPhase = 'registry_committed';
     item.roadRefinementState = 'pending-network';
     item.roadRefinementNextRetryAt = null;
     await savePending(item);
-    await expect(ensurePendingUploadReady(item)).resolves.toBe(false);
+    await expect(ensurePendingUploadReady(item)).resolves.toBe(true);
     expect((await listPending())[0]).toMatchObject({
-      uploadState: 'preparing',
+      uploadState: 'ready',
       roadRefinementState: 'pending-network',
     });
   });

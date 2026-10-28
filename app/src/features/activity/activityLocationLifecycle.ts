@@ -8,6 +8,8 @@ export interface RealLocationLifecyclePlan {
   action: RealLocationLifecycleAction;
   reason:
     | 'ios-inactive-is-not-background'
+    | 'persistent-task-owner-already-active'
+    | 'foreground-only-owner-retained'
     | 'foreground-owner-already-active'
     | 'background-owner-already-active'
     | 'foreground-ownership-required'
@@ -26,6 +28,12 @@ export function planRealLocationLifecycleTransition(args: {
   foregroundWatcherActive: boolean;
   backgroundTaskActive: boolean;
 }): RealLocationLifecyclePlan {
+  // A verified Expo TaskManager location source is deliberately kept from
+  // Activity Start until Pause/Finish. AppState changes consumers, not native
+  // recording ownership, so there is no foreground takeover window.
+  if (args.backgroundTaskActive) {
+    return { action: 'keep-current-owner', reason: 'persistent-task-owner-already-active' };
+  }
   if (args.appState === 'inactive') {
     return { action: 'hold-transient-inactive', reason: 'ios-inactive-is-not-background' };
   }
@@ -35,8 +43,11 @@ export function planRealLocationLifecycleTransition(args: {
       : { action: 'transition-to-foreground', reason: 'foreground-ownership-required' };
   }
   if (args.appState === 'background') {
-    return args.backgroundTaskActive && !args.foregroundWatcherActive
-      ? { action: 'keep-current-owner', reason: 'background-owner-already-active' }
+    // Foreground-only permission is an explicit degraded capability. Preserve
+    // the same watcher handle so it can resume; do not manufacture an app-owned
+    // stop/start gap while pretending background delivery is guaranteed.
+    return args.foregroundWatcherActive
+      ? { action: 'keep-current-owner', reason: 'foreground-only-owner-retained' }
       : { action: 'transition-to-background', reason: 'background-ownership-required' };
   }
   return { action: 'keep-current-owner', reason: 'unknown-app-state' };

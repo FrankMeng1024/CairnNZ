@@ -82,6 +82,12 @@ export interface DurableActivityContext {
    * Foreground recovery may restore source health only from this evidence; an
    * accepted-point timestamp alone does not prove that a callback was received. */
   latestSourceReceipt?: DurableSourceReceipt | null;
+  /** Wall clock at which this owner first expected the persistent source to
+   * deliver. This is the fallback anchor before the first real callback. */
+  sourceExpectedSinceMs?: number;
+  /** Dedupe frontier for resume-time SILENCE_GAP facts. It identifies the
+   * latest real receipt (or start anchor) already classified, never a fix. */
+  silenceGapReportedForReceiptWallTimeMs?: number | null;
 }
 
 export interface DurableSourceReceipt {
@@ -107,6 +113,75 @@ async function withOwnershipBoundary<T>(operation: () => Promise<T>): Promise<T>
   }
 }
 
+export interface DurableSilenceGap {
+  clientActivityId: string;
+  ownerGeneration: string;
+  detectedAtMs: number;
+  anchorReceiptWallTimeMs: number;
+  lastObservationTimeMs: number | null;
+  durationMs: number;
+  source: DurableSourceReceipt['source'] | 'awaiting-first-callback';
+  classification: 'SILENCE_GAP';
+  upstreamCause: 'UPSTREAM_UNKNOWN';
+  nativeVisibility: 'NATIVE_UNOBSERVABLE';
+}
+
+/**
+ * Classify a callback-free interval only after JavaScript resumes. The
+ * checkpoint is serialized with native receipt/WAL ownership, so a concurrent
+ * TaskManager delivery either advances the anchor first or follows this fact.
+ * No timer or synthetic location is created while JavaScript is suspended.
+ */
+export async function detectDurableSilenceGapAfterResume(input: {
+  ownerUserId: string;
+  clientActivityId: string;
+  ownerGeneration: string;
+  nowMs?: number;
+  thresholdMs?: number;
+}): Promise<DurableSilenceGap | null> {
+  return withOwnershipBoundary(async () => {
+    try {
+      if ((await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) !== '1') return null;
+      const encoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+      if (!encoded) return null;
+      const context = JSON.parse(encoded) as DurableActivityContext;
+      if (context.userId !== input.ownerUserId
+        || context.clientActivityId !== input.clientActivityId
+        || context.ownerGeneration !== input.ownerGeneration) return null;
+      const nowMs = Math.floor(input.nowMs ?? Date.now());
+      const receipt = context.latestSourceReceipt;
+      const anchorReceiptWallTimeMs = Math.floor(
+        receipt?.receiptWallTimeMs
+          ?? context.sourceExpectedSinceMs
+          ?? context.acceptAfterMs,
+      );
+      const thresholdMs = Math.max(60_000, Math.floor(input.thresholdMs ?? 90_000));
+      const durationMs = Math.max(0, nowMs - anchorReceiptWallTimeMs);
+      if (!Number.isFinite(anchorReceiptWallTimeMs)
+        || durationMs < thresholdMs
+        || context.silenceGapReportedForReceiptWallTimeMs === anchorReceiptWallTimeMs) return null;
+      context.silenceGapReportedForReceiptWallTimeMs = anchorReceiptWallTimeMs;
+      await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
+      return {
+        clientActivityId: context.clientActivityId,
+        ownerGeneration: context.ownerGeneration,
+        detectedAtMs: nowMs,
+        anchorReceiptWallTimeMs,
+        lastObservationTimeMs: Number.isFinite(receipt?.observationTimeMs)
+          ? Math.floor(receipt!.observationTimeMs)
+          : null,
+        durationMs,
+        source: receipt?.source ?? 'awaiting-first-callback',
+        classification: 'SILENCE_GAP',
+        upstreamCause: 'UPSTREAM_UNKNOWN',
+        nativeVisibility: 'NATIVE_UNOBSERVABLE',
+      };
+    } catch {
+      return null;
+    }
+  });
+}
+
 /**
  * Persist current session_id + hike-active flag for the background task
  * to read even after the app process is killed.
@@ -126,6 +201,33 @@ export async function persistBackgroundContext(
     if (options.shouldContinue && !options.shouldContinue()) return false;
     if (hikeActive) {
       if (!sessionId || !context) return false;
+      // A foreground refresh must not erase a newer headless callback receipt
+      // or a silence-report frontier already committed by this generation.
+      try {
+        const priorEncoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+        const prior = priorEncoded ? JSON.parse(priorEncoded) as DurableActivityContext : null;
+        if (prior?.clientActivityId === context.clientActivityId
+          && prior.ownerGeneration === context.ownerGeneration) {
+          const priorReceipt = prior.latestSourceReceipt;
+          const nextReceipt = context.latestSourceReceipt;
+          const preservePriorReceipt = !!priorReceipt && (!nextReceipt
+            || priorReceipt.observationTimeMs > nextReceipt.observationTimeMs
+            || (priorReceipt.observationTimeMs === nextReceipt.observationTimeMs
+              && priorReceipt.receiptWallTimeMs > nextReceipt.receiptWallTimeMs));
+          context = {
+            ...context,
+            sourceExpectedSinceMs: prior.sourceExpectedSinceMs
+              ?? context.sourceExpectedSinceMs
+              ?? context.acceptAfterMs,
+            silenceGapReportedForReceiptWallTimeMs:
+              prior.silenceGapReportedForReceiptWallTimeMs
+              ?? context.silenceGapReportedForReceiptWallTimeMs
+              ?? null,
+            latestSourceReceipt: preservePriorReceipt ? priorReceipt : nextReceipt,
+          };
+        }
+      } catch { /* a valid replacement below remains authoritative */ }
+      context.sourceExpectedSinceMs ??= context.acceptAfterMs;
       await AsyncStorage.setItem(STORAGE_KEY_SESSION, sessionId);
       if (options.shouldContinue && !options.shouldContinue()) return false;
       await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
@@ -200,6 +302,20 @@ export type LocationCoords = {
 };
 
 const pendingBackgroundLocations: LocationCoords[] = [];
+type ForegroundProjectionWake = (owner: {
+  ownerUserId: string;
+  clientActivityId: string;
+  ownerGeneration: string;
+  receiptWallTimeMs: number;
+}) => void;
+let foregroundProjectionWake: ForegroundProjectionWake | null = null;
+
+/** UI latency hint only. The accepted WAL remains the projection authority. */
+export function setActivityTaskForegroundProjectionWake(
+  wake: ForegroundProjectionWake | null,
+): void {
+  foregroundProjectionWake = wake;
+}
 
 export function drainBackgroundLocations(): LocationCoords[] {
   if (pendingBackgroundLocations.length === 0) return [];
@@ -941,6 +1057,7 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   // headless batch must join its own recovery/appends before the handler can
   // return (including an all-rejected batch with no canonical events).
   const diagnosticWrites: Promise<void>[] = [];
+  let projectionWakeOwner: Parameters<ForegroundProjectionWake>[0] | null = null;
   const result = await withOwnershipBoundary(async () => {
   crashLogger.breadcrumb(
     `k10:task_fire loc_count=${data?.locations?.length ?? 0} err=${error ? String(error).slice(0, 40) : 'none'} elapsed_ms=${Date.now() - moduleLoadTs}`
@@ -1189,6 +1306,12 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
         diagnosticDecisionRecorded: point.diagnosticDecisionRecorded === true,
       });
     }
+    projectionWakeOwner = {
+      ownerUserId: context.userId,
+      clientActivityId: context.clientActivityId,
+      ownerGeneration: context.ownerGeneration,
+      receiptWallTimeMs: batchReceiptWallTimeMs,
+    };
     crashLogger.breadcrumb(`k10:path_b_write n=${accepted.length}`);
     // QA diagnostics must never extend the Activity ownership boundary. The
     // logger owns its bounded/write-serialized best effort independently;
@@ -1208,6 +1331,9 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
       diagnosticTarget.current.ownerUserId,
       diagnosticTarget.current.clientActivityId,
     ).catch(() => undefined);
+  }
+  if (projectionWakeOwner && (AppState as any)?.currentState === 'active') {
+    try { foregroundProjectionWake?.(projectionWakeOwner); } catch { /* latency hint only */ }
   }
   return result;
 };

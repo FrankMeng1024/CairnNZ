@@ -140,14 +140,24 @@ await page.evaluate(() => {
         markerIds: [],
         name: 'QA walked route',
         memoryNewCells: 4,
-        syncState: 'pending',
+        syncState: 'syncing',
         finalGeometryState: 'refining',
-        finalGeometryVersion: 'pedestrian-final-v2-base',
+        finalGeometryVersion: 'pedestrian-final-v3-trend',
         finalGeometryRevision: 1,
         finalGeometryFingerprint: 'qa-base-v1',
       };
       stores.useSessionStore.setState({ currentUserId: 'tracking-memory-v2-qa', sessions: [session] });
-      tracking.setState({ status: 'idle', isFinishing: false, lastStopReason: null });
+      tracking.setState({
+        status: 'idle',
+        isFinishing: false,
+        lastStopReason: null,
+        finishProgress: {
+          hike: 'saved',
+          route: 'ready',
+          sync: 'syncing',
+          roadRefinementPending: false,
+        },
+      });
       onLocalCommitted?.(session.clientActivityId);
       return {
         status: 'saved-local', localCommit: 'committed',
@@ -158,7 +168,7 @@ await page.evaluate(() => {
         distanceM: session.distanceM,
         elevationGainM: session.elevationGainM,
         trackPoints: session.trackPoints,
-        syncState: 'pending',
+        syncState: 'syncing',
         finalGeometryState: 'refining',
         finalGeometryRevision: 1,
         finalGeometryFingerprint: 'qa-base-v1',
@@ -174,7 +184,8 @@ await settle();
 await page.screenshot({ path: path.join(outputDir, '01-walked-route-before-save-390x844.png'), fullPage: false });
 
 await page.getByRole('button', { name: 'Finish hike and view activity' }).click();
-await page.getByText('Local final saved · Refining road context…', { exact: true }).waitFor();
+await page.getByText('Hike complete', { exact: true }).waitFor();
+await page.getByText('Syncing', { exact: true }).waitFor();
 await settle();
 await page.screenshot({ path: path.join(outputDir, '02-local-final-after-save-390x844.png'), fullPage: false });
 
@@ -198,11 +209,12 @@ await page.evaluate(() => {
     ...session,
     trackPoints: finalPoints,
     finalGeometryState: 'enhanced',
+    finalGeometryVersion: 'pedestrian-final-v4-road-fillet',
     finalGeometryRevision: 2,
     finalGeometryFingerprint: 'qa-final-v2',
   })) });
 });
-await page.getByText('Validated final route saved on this device', { exact: true }).waitFor();
+await page.getByText('Route refined', { exact: true }).waitFor();
 await settle();
 await page.screenshot({ path: path.join(outputDir, '03-validated-final-after-refinement-390x844.png'), fullPage: false });
 
@@ -212,7 +224,7 @@ await page.evaluate(() => {
   settings.setState({ passiveExplorationEnabled: true, passiveBackgroundConsent: 'not-asked' });
 });
 await page.getByTestId('settings-privacy-row').click();
-await page.getByText(/background Memory requires a newer native build/).waitFor();
+await page.getByText(/background walking needs a newer native build/).waitFor();
 await settle();
 await page.screenshot({ path: path.join(outputDir, '04-passive-memory-native-boundary-390x844.png'), fullPage: false });
 

@@ -252,6 +252,51 @@ describe('Activity ACK ownership and cleanup phases', () => {
     ]);
   });
 
+  test('two consecutive first-sync Activities upload once with independent identities', async () => {
+    const second = {
+      ...pending,
+      localId: 'activity-b',
+      remoteId: 78,
+      idempotencyKey: '88888888-8888-4888-8888-888888888888',
+      startedAt: 6_000,
+      createdAt: 10_000,
+      payload: {
+        ...pending.payload,
+        end_time: new Date(10_000).toISOString(),
+        route_points: [
+          { lat: -42, lng: 173, t: 6_000 },
+          { lat: -42.001, lng: 173.001, t: 10_000 },
+        ],
+      },
+    };
+    mockPendingRows = [{ ...pending }, second];
+
+    await expect(drainPending({ wakeReason: 'manual', force: true })).resolves.toMatchObject({
+      attempted: 2, succeeded: 2, failed: 0,
+    });
+    expect(mockSaveHikeAtomic.mock.calls.map((call: any[]) => ({
+      remoteId: call[0], idempotencyKey: call[2], localId: call[3], userId: call[4],
+    }))).toEqual([
+      {
+        remoteId: 77,
+        idempotencyKey: pending.idempotencyKey,
+        localId: 'activity-a',
+        userId: 'account-a',
+      },
+      {
+        remoteId: 78,
+        idempotencyKey: second.idempotencyKey,
+        localId: 'activity-b',
+        userId: 'account-a',
+      },
+    ]);
+    expect(mockPendingRows).toEqual([]);
+    await expect(drainPending({ wakeReason: 'foreground' })).resolves.toMatchObject({
+      attempted: 0, succeeded: 0,
+    });
+    expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(2);
+  });
+
   test('acknowledged cleanup retains the Activity WAL when projection completion cannot be proved', async () => {
     mockRegistry = {
       unfinished: null,

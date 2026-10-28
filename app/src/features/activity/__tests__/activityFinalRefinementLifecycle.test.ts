@@ -160,7 +160,7 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
   });
 
   test.each(['hiking', 'running'] as const)(
-    '%s cold reconnect upgrades once before the original idempotency key uploads',
+    '%s cold reconnect uploads the frozen Base snapshot while road display upgrades independently',
     async (activityMode) => {
     const activityId = `activity-${activityMode}`;
     const artifactApi = require('../activityFinalArtifact');
@@ -208,7 +208,7 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
     expect(mockReconstruct).not.toHaveBeenCalled();
     expect(mockSaveHikeAtomic).not.toHaveBeenCalled();
     expect(await pendingStore.readPendingReadonly(activityId)).toMatchObject({
-      uploadState: 'preparing', roadRefinementState: 'pending-network',
+      uploadState: 'ready', roadRefinementState: 'pending-network',
       idempotencyKey: 'unchanged-operation-key',
     });
     expect(mockSessions[0]).toMatchObject({
@@ -233,21 +233,22 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
     await expect(onlineDaemon.drainPending({ wakeReason: 'network_online' })).resolves.toMatchObject({
       attempted: 1, succeeded: 1, failed: 0,
     });
-    expect(mockReconstruct).toHaveBeenCalledTimes(1);
+    // Sync does not wait for optional Mapbox work on the first online wake.
+    expect(mockReconstruct).not.toHaveBeenCalled();
     expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
     const uploadCall = mockSaveHikeAtomic.mock.calls[0] as any[];
     expect(uploadCall[2]).toBe('unchanged-operation-key');
-    expect(uploadCall[1].route_points).toEqual(
-      expect.arrayContaining([expect.objectContaining({ lng: points[1].lng + 0.000004 })]),
-    );
+    expect(uploadCall[1].route_points.map((point: any) => ({
+      lat: point.lat, lng: point.lng, t: point.t,
+    }))).toEqual(points.map(point => ({ lat: point.lat, lng: point.lng, t: point.t })));
     expect(mockSessions[0]).toMatchObject({
-      finalGeometryRevision: 2, roadRefinementPending: false, syncState: 'synced',
+      finalGeometryRevision: 1, roadRefinementPending: true, syncState: 'synced',
     });
     await expect(require('../../../services/pendingSyncStore').readPendingReadonly(activityId))
       .resolves.toBeNull();
 
     await onlineDaemon.drainPending({ wakeReason: 'foreground' });
-    expect(mockReconstruct).toHaveBeenCalledTimes(1);
+    expect(mockReconstruct).not.toHaveBeenCalled();
     expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
   });
 });

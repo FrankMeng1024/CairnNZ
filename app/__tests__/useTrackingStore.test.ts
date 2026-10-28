@@ -101,6 +101,8 @@ jest.mock('../src/services/backgroundLocationTask', () => ({
   settleBackgroundLocationWrites: jest.fn(async () => undefined),
   readDurableActivityContext: jest.fn(async () => null),
   persistBackgroundContext: jest.fn(async () => true),
+  detectDurableSilenceGapAfterResume: jest.fn(async () => null),
+  setActivityTaskForegroundProjectionWake: jest.fn(),
 }));
 jest.mock('../src/services/hikeTrackWriter', () => ({
   appendHikePoint: jest.fn(async (point: any) => { mockHikeJournalPoints.push(point); }),
@@ -1009,6 +1011,7 @@ describe('useTrackingStore — P0 operation guards', () => {
     mockLocation.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
     mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: true } as any);
     mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(false);
     mockSecureStore.getItemAsync.mockResolvedValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getCurrentLevel.mockReturnValue(null);
     require('../src/services/batteryMonitor').batteryMonitor.getIsCharging.mockReturnValue(false);
@@ -1088,13 +1091,12 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(mockLocation.watchPositionAsync).toHaveBeenCalledTimes(callsAfterStart);
   });
 
-  it('FOREGROUND_TAKEOVER_LIVENESS: starts the watcher before a slow full-journal replay', async () => {
+  it('PERSISTENT_TASK_FOREGROUND_LIVENESS: retains one source while a slow WAL projection completes', async () => {
     mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
     mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
     mockLocation.hasStartedLocationUpdatesAsync
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+      .mockResolvedValue(true)
+      .mockResolvedValueOnce(false);
     await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
     const started = useTrackingStore.getState();
     expect(started).toMatchObject({
@@ -1133,22 +1135,20 @@ describe('useTrackingStore — P0 operation guards', () => {
     const { readActiveHikeTail } = require('../src/services/hikeTrackWriter');
     let releaseJournal: ((points: any[]) => void) | undefined;
     readActiveHikeTail
-      .mockImplementationOnce(async (_: string, limit?: number) => {
-        expect(limit).toBe(2);
-        return [prefix];
-      })
-      .mockImplementationOnce(() => new Promise<any[]>(resolve => {
+      .mockImplementationOnce((_: string, limit?: number) => new Promise<any[]>(resolve => {
+        expect(limit).toBeUndefined();
         releaseJournal = resolve;
       }));
     const watcherCallsBeforeForeground = mockLocation.watchPositionAsync.mock.calls.length;
     require('react-native').AppState.currentState = 'active';
     mockAppStateChangeListener?.('active');
-    for (let tick = 0; tick < 30
-      && mockLocation.watchPositionAsync.mock.calls.length === watcherCallsBeforeForeground; tick += 1) {
+    for (let tick = 0; tick < 30 && !releaseJournal; tick += 1) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
 
-    expect(mockLocation.watchPositionAsync.mock.calls.length).toBe(watcherCallsBeforeForeground + 1);
+    expect(mockLocation.watchPositionAsync.mock.calls.length).toBe(watcherCallsBeforeForeground);
+    expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    expect(mockLocation.stopLocationUpdatesAsync).not.toHaveBeenCalled();
     expect(releaseJournal).toBeDefined();
     expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
 

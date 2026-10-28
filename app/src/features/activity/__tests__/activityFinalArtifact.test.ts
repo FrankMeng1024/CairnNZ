@@ -90,6 +90,35 @@ describe('versioned Activity Final artifact', () => {
     expect(reopened?.displayFingerprint).toBe(activityGeometryFingerprint(display));
   });
 
+  test('versions accepted road display geometry independently from old Final artifacts', async () => {
+    const display = buildBaseFinalTrackPoints(canonical);
+    const legacyBase = await commitActivityFinalArtifact({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-base', canonicalPoints: canonical,
+      displayPoints: display, source: 'base', displayMode: 'base', expectedRevision: null,
+    });
+    const legacyTrend = await commitActivityFinalArtifact({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-trend', canonicalPoints: canonical,
+      displayPoints: display, source: 'base', displayMode: 'trend', expectedRevision: null,
+    });
+    const legacyBaseRaw = mockStorage.get('@cairn:activity_final:v1:owner-a:activity-base');
+    const legacyTrendRaw = mockStorage.get('@cairn:activity_final:v1:owner-a:activity-trend');
+    const committed = await commitActivityFinalArtifact({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-road', canonicalPoints: canonical,
+      displayPoints: display, source: 'matched', displayMode: 'road', expectedRevision: null,
+    });
+    expect(committed.artifact).toMatchObject({
+      version: 1,
+      displayMode: 'road',
+      algorithmVersion: 'pedestrian-final-v4-road-fillet',
+    });
+    // Existing v2/v3 records remain schema-v1 compatible and are not migrated
+    // or rewritten merely because this display-only algorithm exists.
+    await expect(loadActivityFinalArtifact('owner-a', 'activity-base')).resolves.toEqual(legacyBase.artifact);
+    await expect(loadActivityFinalArtifact('owner-a', 'activity-trend')).resolves.toEqual(legacyTrend.artifact);
+    expect(mockStorage.get('@cairn:activity_final:v1:owner-a:activity-base')).toBe(legacyBaseRaw);
+    expect(mockStorage.get('@cairn:activity_final:v1:owner-a:activity-trend')).toBe(legacyTrendRaw);
+  });
+
   test('selects each true GPS segment independently and never invents a bridge across the gap', () => {
     const selected = buildLocalFinalTrackPointsWithDecision(canonical);
     expect(new Set(selected.points.map(point => point.segmentId))).toEqual(new Set(['a', 'b']));

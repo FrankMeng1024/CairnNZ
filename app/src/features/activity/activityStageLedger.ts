@@ -961,6 +961,35 @@ export function summarizeActivityObservability(
 
   const observationEvents = ordered.filter(event => event.stage === 'observation-received');
   const longObservationGaps: ActivityObservabilitySummary['longObservationGaps'] = [];
+  // A resume-time durable checkpoint can prove that JavaScript observed no
+  // callback for an interval even when there is no later GPS receipt to close
+  // a traditional receipt-to-receipt pair. It still cannot identify anything
+  // upstream of Expo's JavaScript delivery boundary.
+  for (const event of ordered.filter(candidate => (
+    candidate.stage === 'provider-state'
+    && candidate.details.eventCode === 'ACTIVITY_SILENCE_GAP'
+  ))) {
+    const durationMs = finiteDetail(event, 'durationMs');
+    if (durationMs === null || durationMs <= 0) continue;
+    const explicitAnchor = finiteDetail(event, 'receiptAnchorWallTimeMs');
+    const fromWallTimeMs = explicitAnchor ?? Math.max(0, event.wallTimeMs - durationMs);
+    const inside = ordered.filter(candidate => (
+      candidate.wallTimeMs > fromWallTimeMs && candidate.wallTimeMs < event.wallTimeMs
+    ));
+    const pauseEvidence = pauseEvidenceForGap(ordered, fromWallTimeMs, event.wallTimeMs);
+    longObservationGaps.push({
+      durationMs,
+      receiptGapDurationMs: durationMs,
+      observationTimestampGapMs: null,
+      fromWallTimeMs,
+      toWallTimeMs: event.wallTimeMs,
+      heartbeatCount: inside.filter(candidate => candidate.stage === 'health-heartbeat').length,
+      ...pauseEvidence,
+      conclusion: pauseEvidence.pauseEvidenceCompleteness === 'complete'
+        ? 'recording-source-intentionally-inactive'
+        : 'no-js-callback-native-cause-unknown',
+    });
+  }
   for (let index = 1; index < observationEvents.length; index += 1) {
     const from = observationEvents[index - 1];
     const to = observationEvents[index];
@@ -1032,7 +1061,7 @@ export function summarizeActivityObservability(
         .map(event => finiteDetail(event, 'walToStoreLatencyMs'))),
       longestJsReceiptGapMs: maximum(observationEvents.slice(1).map((event, index) => (
         event.wallTimeMs - observationEvents[index].wallTimeMs
-      ))),
+      )).concat(longObservationGaps.map(gap => gap.receiptGapDurationMs))),
       longestObservationTimestampGapMs: maximum(observationEvents.slice(1).map((event, index) => {
         const previous = finiteDetail(observationEvents[index], 'observationTimeMs');
         const current = finiteDetail(event, 'observationTimeMs');

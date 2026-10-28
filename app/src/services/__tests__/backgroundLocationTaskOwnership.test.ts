@@ -29,7 +29,10 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     recordActivityDiagnosticCanonicalPromotion = jest.fn(async () => undefined);
     breadcrumb = jest.fn();
 
-    jest.doMock('react-native', () => ({ Platform: { OS: 'ios' } }));
+    jest.doMock('react-native', () => ({
+      Platform: { OS: 'ios' },
+      AppState: { currentState: 'active' },
+    }));
     jest.doMock('@react-native-async-storage/async-storage', () => ({
       getItem: jest.fn(async (key: string) => values[key] ?? null),
       setItem: jest.fn(async (key: string, value: string) => { values[key] = value; }),
@@ -310,6 +313,31 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       .toEqual([1_000, 5_000, 9_000]);
   });
 
+  it('wakes foreground projection only after the Task batch is durable', async () => {
+    const task = require('../backgroundLocationTask');
+    const wake = jest.fn();
+    task.setActivityTaskForegroundProjectionWake(wake);
+    await task.persistBackgroundContext('activity-visible', true, {
+      clientActivityId: 'activity-visible',
+      userId: 'user-a',
+      ownerGeneration: 'generation-visible',
+      segmentId: 'segment-visible',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+    });
+
+    await handler({ data: { locations: [point(2_000)] }, error: null });
+
+    expect(appendBackgroundHikePoints).toHaveBeenCalledTimes(1);
+    expect(wake).toHaveBeenCalledWith({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-visible',
+      ownerGeneration: 'generation-visible',
+      receiptWallTimeMs: expect.any(Number),
+    });
+    expect(task.drainBackgroundLocations()).toHaveLength(1);
+  });
+
   it('commits durable Memory responsibility after WAL without a mounted React screen', async () => {
     const task = require('../backgroundLocationTask');
     await task.persistBackgroundContext('activity-a', true, {
@@ -332,5 +360,66 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     }));
     expect(recordMemoryEvidence).not.toHaveBeenCalled();
     expect(flushRecordedMemoryEvidence).not.toHaveBeenCalled();
+  });
+
+  it('persists and deduplicates a privacy-safe SILENCE_GAP after JavaScript resumes', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-silent', true, {
+      clientActivityId: 'activity-silent',
+      userId: 'user-a',
+      ownerGeneration: 'generation-silent',
+      segmentId: 'segment-silent',
+      activityMode: 'hiking',
+      acceptAfterMs: 1_000,
+      sourceExpectedSinceMs: 1_000,
+    });
+
+    await expect(task.detectDurableSilenceGapAfterResume({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-silent',
+      ownerGeneration: 'generation-silent',
+      nowMs: 121_000,
+      thresholdMs: 60_000,
+    })).resolves.toEqual({
+      clientActivityId: 'activity-silent',
+      ownerGeneration: 'generation-silent',
+      detectedAtMs: 121_000,
+      anchorReceiptWallTimeMs: 1_000,
+      lastObservationTimeMs: null,
+      durationMs: 120_000,
+      source: 'awaiting-first-callback',
+      classification: 'SILENCE_GAP',
+      upstreamCause: 'UPSTREAM_UNKNOWN',
+      nativeVisibility: 'NATIVE_UNOBSERVABLE',
+    });
+    await expect(task.detectDurableSilenceGapAfterResume({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-silent',
+      ownerGeneration: 'generation-silent',
+      nowMs: 181_000,
+      thresholdMs: 60_000,
+    })).resolves.toBeNull();
+
+    const persisted = values[task.STORAGE_KEY_ACTIVITY_CONTEXT];
+    expect(persisted).toContain('silenceGapReportedForReceiptWallTimeMs');
+    expect(persisted).not.toMatch(/latitude|longitude|coordinates|\"lat\"|\"lng\"/i);
+  });
+
+  it('never attributes a silence interval to a stale Activity owner', async () => {
+    const task = require('../backgroundLocationTask');
+    await task.persistBackgroundContext('activity-current', true, {
+      clientActivityId: 'activity-current',
+      userId: 'user-a',
+      ownerGeneration: 'generation-current',
+      segmentId: 'segment-current',
+      activityMode: 'running',
+      acceptAfterMs: 1_000,
+    });
+    await expect(task.detectDurableSilenceGapAfterResume({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-old',
+      ownerGeneration: 'generation-old',
+      nowMs: 200_000,
+    })).resolves.toBeNull();
   });
 });

@@ -16,7 +16,10 @@ export interface ActivityFinalArtifact {
   clientActivityId: string;
   revision: number;
   parentRevision: number | null;
-  algorithmVersion: 'pedestrian-final-v2-base' | 'pedestrian-final-v3-trend';
+  algorithmVersion:
+    | 'pedestrian-final-v2-base'
+    | 'pedestrian-final-v3-trend'
+    | 'pedestrian-final-v4-road-fillet';
   source: ActivityFinalSource;
   /** Traceable consumer representation; optional for pre-upgrade artifacts. */
   displayMode?: ActivityFinalDisplayMode;
@@ -209,9 +212,11 @@ export async function commitActivityFinalArtifact(input: {
       clientActivityId: input.clientActivityId,
       revision: (current?.revision ?? 0) + 1,
       parentRevision: current?.revision ?? null,
-      algorithmVersion: displayMode === 'trend'
-        ? 'pedestrian-final-v3-trend'
-        : 'pedestrian-final-v2-base',
+      algorithmVersion: displayMode === 'road'
+        ? 'pedestrian-final-v4-road-fillet'
+        : displayMode === 'trend'
+          ? 'pedestrian-final-v3-trend'
+          : 'pedestrian-final-v2-base',
       source: input.source,
       displayMode,
       canonicalFingerprint,

@@ -242,7 +242,7 @@ describe('Free Activity integration contracts', () => {
       source.indexOf('async function activateBackgroundSource'),
     );
     expect(source).not.toContain('drainInterval');
-    const foregroundActivation = handoff.indexOf('await activateForegroundSource(expectedIntentEpoch)');
+    const foregroundActivation = handoff.indexOf('await activateForegroundSource(expectedIntentEpoch, operationIsCurrent)');
     const deferredDrain = handoff.indexOf("? drainCommittedBackgroundLocations('foreground')");
     expect(foregroundActivation).toBeGreaterThan(0);
     expect(deferredDrain).toBeGreaterThan(0);
@@ -279,19 +279,15 @@ describe('Free Activity integration contracts', () => {
     expect(tracking).not.toContain("markRecordingContinuityUnavailable('inactive'");
   });
 
-  test('a timed-out lifecycle acknowledgement never releases the actual native transition queue', () => {
+  test('a timed-out native activation releases recovery behind a generation fence', () => {
     const source = read('src/store/useTrackingStore.ts');
-    const queue = source.slice(
-      source.indexOf('let activationChain:'),
-      source.indexOf('function enqueueRealLocationLifecycleTransition'),
-    );
-    expect(queue).toContain('const actualSettlement = activationChain.then(task)');
-    expect(queue).toContain('activationChain = actualSettlement');
-    expect(queue).toContain('const timeout = setTimeout(() =>');
-    expect(queue).toContain('clearTimeout(timeout)');
-    expect(queue).toContain('void actualSettlement.then(() =>');
-    expect(queue.indexOf('activationChain = actualSettlement')).toBeLessThan(queue.indexOf('return new Promise<void>'));
-    expect(queue.indexOf('activationChain = actualSettlement')).toBeLessThan(queue.indexOf('const timeout = setTimeout'));
+    const queue = read('src/features/activity/activityActivationQueue.ts');
+    expect(source).toContain('createActivityActivationQueue({');
+    expect(source).toContain("eventCode: 'ACTIVITY_ACTIVATION_TIMEOUT'");
+    expect(queue).toContain('const boundedSettlement = Promise.race([');
+    expect(queue).toContain('chain = boundedSettlement');
+    expect(queue).toContain('isCurrent: () => operationGeneration === generation');
+    expect(queue).toContain('void actualSettlement');
   });
 
   test('foreground and background request one fixed precision policy without a sampling state machine', () => {
@@ -302,21 +298,21 @@ describe('Free Activity integration contracts', () => {
     expect(tracking).not.toContain('samplingEvaluationInterval');
   });
 
-  test('foreground recovery stops any native-owned background stream before starting its watcher', () => {
+  test('foreground presentation retains a verified persistent native Task source', () => {
     const source = read('src/store/useTrackingStore.ts');
     const foreground = source.slice(
       source.indexOf('async function activateForegroundSource'),
       source.indexOf('function deactivateForegroundSource'),
     );
-    const handoff = source.slice(
-      source.indexOf('async function stopRealBackgroundSourceForHandoff'),
+    const transition = source.slice(
       source.indexOf('async function transitionToForegroundSource'),
+      source.indexOf('async function activateBackgroundSource'),
     );
-    expect(foreground.indexOf('await stopRealBackgroundSourceForHandoff()')).toBeLessThan(
-      foreground.indexOf('nativeRealLocationSupervisor.setConsumer'),
-    );
-    expect(handoff).toContain('Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)');
-    expect(handoff).toContain('await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)');
+    expect(foreground).not.toContain('stopRealBackgroundSourceForHandoff');
+    expect(foreground).toContain('if (backgroundTaskActive || !intentIsCurrent()) return');
+    expect(transition).toContain('await activateBackgroundSource(expectedIntentEpoch, operationIsCurrent)');
+    expect(source).toContain('setActivityTaskForegroundProjectionWake((wakeOwner) =>');
+    expect(source).toContain("await drainCommittedBackgroundLocations('foreground')");
   });
 
   test('temporary background provider unavailability defers truth segmentation to the next observation', () => {
@@ -344,6 +340,8 @@ describe('Free Activity integration contracts', () => {
     expect(source).toContain('finalGeometryRevision: finalArtifact.revision');
     expect(source).toContain('displayFingerprint: finalArtifact.displayFingerprint');
     expect(source).toContain("algorithmVersion: 'pedestrian-final-v2-base'");
+    expect(read('src/features/activity/activityFinalArtifact.ts'))
+      .toContain("'pedestrian-final-v4-road-fillet'");
     // A safe validated local/canonical result may replace Base even when no
     // network candidate refined the display; displayRefined is descriptive,
     // not a veto on the chosen fallback.

@@ -33,9 +33,11 @@ jest.mock('../../../store/useSessionStore', () => ({
 }));
 jest.mock('../../../services/pendingSyncStore', () => ({
   finishPendingPreparation: jest.fn(),
-  markPendingUploadReady: jest.fn(async () => undefined),
+  markPendingUploadReady: jest.fn(async () => {
+    if (mockPending) mockPending = { ...mockPending, uploadState: 'ready' };
+  }),
   readPendingReadonly: jest.fn(async () => mockPending),
-  savePending: jest.fn(async () => undefined),
+  savePending: jest.fn(async (next: any) => { mockPending = { ...next }; }),
 }));
 jest.mock('../activityFinalArtifact', () => ({
   loadActivityFinalArtifact: jest.fn(async () => mockArtifact),
@@ -273,6 +275,11 @@ describe('durable Activity Final refinement queue', () => {
       roadEnhancementState: 'pending-network',
       requestHttpCategory: 'not-attempted',
     });
+    expect(pendingMocks.savePending).toHaveBeenLastCalledWith(expect.objectContaining({
+      uploadState: 'ready',
+      preparationPhase: 'registry_committed',
+      roadRefinementState: 'pending-network',
+    }));
     expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
     expect(mockAddSession).toHaveBeenLastCalledWith(expect.objectContaining({
       finalGeometryState: 'base_ready',
@@ -297,7 +304,10 @@ describe('durable Activity Final refinement queue', () => {
     mockCommitArtifact.mockResolvedValue({ committed: true, artifact: refined });
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
     expect(mockReconstruct).toHaveBeenCalledTimes(1);
-    expect(pendingMocks.markPendingUploadReady).toHaveBeenCalledTimes(1);
+    // Once Base became uploadable offline, the idempotency-key payload was
+    // frozen. The accepted reconnect refinement updates only local display.
+    expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
+    expect(pendingMocks.savePending).toHaveBeenCalledTimes(1);
     expect(await readActivityFinalRefinementJob('owner-a', 'activity-a')).toMatchObject({
       status: 'complete',
       roadEnhancementState: 'accepted',
@@ -467,7 +477,7 @@ describe('durable Activity Final refinement queue', () => {
         technicalOutcome: 'network-failure',
       });
       expect(mockReconstruct).toHaveBeenCalledTimes(3);
-      expect(pendingMocks.markPendingUploadReady).toHaveBeenCalledTimes(1);
+      expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
       reviewReceipts.push({ scenario: 'bounded network retry exhaustion', ...job });
     } finally {
       nowSpy.mockRestore();

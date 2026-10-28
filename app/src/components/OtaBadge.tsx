@@ -380,7 +380,7 @@ import { cairnText } from '../i18n/runtime';
 // GPS source health, and faster foreground publication of durable history.
 // O90 (2026-10-23): integrated automatic diagnostics and production backend
 // compatibility candidate on the unchanged Build 65 / 0.2.6-o66 runtime.
-export const OTA_VERSION = 'O96';
+export const OTA_VERSION = 'O97';
 
 /** Home's intentionally quiet build receipt. Update transport state belongs
  * to Expo Updates and diagnostics; it is not a user-facing success banner. */

@@ -443,6 +443,37 @@ describe('local owner-exportable Activity stage ledger', () => {
     expect(summary.interpretationLimits.join(' ')).toContain('do not prove');
   });
 
+  test('a durable SILENCE_GAP remains visible without a closing JS callback', () => {
+    const event = {
+      schema: 'cairn-activity-stage-ledger', version: 1, eventId: 'silence-1',
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', stage: 'provider-state',
+      wallTimeMs: 601_000, monotonicTimeMs: null, processOriginWallTimeMs: null,
+      processId: 'process-b', evidenceId: null,
+      details: {
+        eventCode: 'ACTIVITY_SILENCE_GAP',
+        durationMs: 600_000,
+        receiptAnchorWallTimeMs: 1_000,
+        classification: 'SILENCE_GAP',
+        upstreamCause: 'UPSTREAM_UNKNOWN',
+        nativeVisibility: 'NATIVE_UNOBSERVABLE',
+        movementDuringInterval: 'UNKNOWN',
+        syntheticLocationCreated: false,
+      },
+    };
+    const summary = summarizeActivityObservability([event] as any);
+    expect(summary.longObservationGaps).toEqual([
+      expect.objectContaining({
+        durationMs: 600_000,
+        fromWallTimeMs: 1_000,
+        toWallTimeMs: 601_000,
+        observationTimestampGapMs: null,
+        conclusion: 'no-js-callback-native-cause-unknown',
+      }),
+    ]);
+    expect(summary.timing.longestJsReceiptGapMs).toBe(600_000);
+    expect(JSON.stringify(event.details)).not.toMatch(/latitude|longitude|coordinates|\"lat\"|\"lng\"/i);
+  });
+
   test('a short Pause inside a 471-second gap cannot explain the resumed active interval', () => {
     const base = {
       schema: 'cairn-activity-stage-ledger', version: 1, ownerUserId: 'owner-a',
