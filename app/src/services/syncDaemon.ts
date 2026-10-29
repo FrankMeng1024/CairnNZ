@@ -21,8 +21,6 @@ import {
   listPending,
   markPendingPreparationPhase,
   markPendingUploadReady,
-  readPendingReadonly,
-  savePending,
   removePending,
   markAttempt,
   updateRemoteId,
@@ -48,7 +46,6 @@ import {
 } from '../features/activity/activityDiagnosticReplay';
 import { deleteAcknowledgedHikeTrackArtifacts } from './hikeTrackWriter';
 import networkMonitor from './networkMonitor';
-import { toServerPoint } from '../features/activity/activityContracts';
 import {
   reconcileActivityMemoryProjection,
   retireActivityMemoryProjection,
@@ -60,6 +57,7 @@ import {
 } from '../features/activity/activityRemoteConflictStore';
 import { flushWalkingEncounterEvidence } from '../features/public/services/walkingEncounterEvidence';
 import { cairnText } from '../i18n/runtime';
+import { activityGeometryFingerprint } from '../features/activity/activityFinalArtifact';
 
 let isDraining = false;
 let pendingSignal = false;
@@ -147,6 +145,30 @@ function isCurrentActivityOwner(userId: string): boolean {
   }
 }
 
+function initialFinalUploadMetadata(hike: PendingHike): Record<string, unknown> {
+  if (!hike.finalArtifact) return {};
+  const displayPoints = hike.payload.route_points.map(point => ({
+    ...point,
+    segmentId: point.segment_id,
+  }));
+  const canonicalPoints = (hike.payload.route_points_canonical ?? []).map(point => ({
+    ...point,
+    segmentId: point.segment_id,
+  }));
+  // `/save` creates the immutable server Base and therefore always starts at
+  // revision 1. O97 could persist a ready outbox after replacing its display
+  // payload with a local revision-2 refinement. Preserve those exact points
+  // and the original idempotency key, but derive the initial server identity
+  // from the frozen wire payload instead of replaying the local revision
+  // number/fingerprints into a contract that correctly rejects revision > 1.
+  return {
+    final_geometry_revision: 1,
+    final_geometry_fingerprint: activityGeometryFingerprint(displayPoints),
+    final_geometry_canonical_fingerprint: activityGeometryFingerprint(canonicalPoints),
+    final_geometry_algorithm: hike.finalArtifact.algorithmVersion,
+  };
+}
+
 /**
  * Finish recovery is a local transaction before it is a network retry. A
  * process may die after the verified payload but before the Activity list or
@@ -156,60 +178,27 @@ function isCurrentActivityOwner(userId: string): boolean {
 export async function recoverPreparingActivityCompletion(hike: PendingHike): Promise<boolean> {
   if (hike.uploadState !== 'preparing') return true;
   if (!isCurrentActivityOwner(hike.userId)) return false;
-  // A durable Final job owns the preparation fence across process death.
-  // Resume it before generic Base recovery; otherwise a restart could upload
-  // Base under the same idempotency key while a newer artifact is pending.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const refinement = require('../features/activity/activityFinalRefinementQueue');
-    const result = await refinement.resumeActivityFinalRefinement(hike.userId, hike.localId);
-    if (result !== 'absent') {
-      if (result !== 'complete') return false;
-      const refreshed = await readPendingReadonly(hike.localId);
-      if (!refreshed || refreshed.userId !== hike.userId) return false;
-      Object.assign(hike, refreshed);
-      return refreshed.uploadState === 'ready';
-    }
-  } catch (refinementError) {
-    crashLogger.breadcrumb(`activity:finish_refinement_resume_failed ${String(refinementError).slice(0, 80)}`);
-    return false;
-  }
   if (isPendingPreparationActive(hike.localId)) return false;
+  // registry_committed is the stable local transaction boundary. Optional
+  // Mapbox work and its artifact are a separate lifecycle and can never hold
+  // the frozen Base upload hostage. This also repairs an old missing/corrupt
+  // artifact without repeatedly waking the upload daemon.
+  if (hike.preparationPhase === 'registry_committed') {
+    await markPendingUploadReady(hike.localId);
+    hike.uploadState = 'ready';
+    return true;
+  }
   if (!hike.summary || !hike.finalArtifact) return false;
-  // Lazy import keeps headless/unit startup free of the full AsyncStorage
-  // adapter until an interrupted Finish actually needs reconstruction.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { loadActivityFinalArtifact } = require('../features/activity/activityFinalArtifact');
-  const artifact = await loadActivityFinalArtifact(hike.userId, hike.localId);
-  if (!artifact || artifact.canonicalFingerprint !== hike.finalArtifact.canonicalFingerprint) return false;
   try {
-    const exactArtifact = artifact.revision === hike.finalArtifact.revision
-      && artifact.displayFingerprint === hike.finalArtifact.displayFingerprint;
-    if (!exactArtifact) {
-      // A process can die after the refined artifact is verified but before
-      // the outbox generation is replaced. The canonical fingerprint proves
-      // this is a presentation revision of the same recorded truth. Roll the
-      // outbox forward to that newest durable revision; never strand a
-      // completed Activity on an obsolete Base pointer.
-      if (artifact.revision < hike.finalArtifact.revision) return false;
-      const payload = {
-        ...hike.payload,
-        route_points: artifact.points.map(toServerPoint),
-      };
-      const finalArtifact = {
-        revision: artifact.revision,
-        displayFingerprint: artifact.displayFingerprint,
-        canonicalFingerprint: artifact.canonicalFingerprint,
-        source: artifact.source,
-        algorithmVersion: artifact.algorithmVersion,
-      };
-      await savePending({ ...hike, payload, finalArtifact, uploadState: 'preparing' });
-      hike.payload = payload;
-      hike.finalArtifact = finalArtifact;
-      crashLogger.breadcrumb(
-        `activity:finish_outbox_rolled_forward localId=${hike.localId.slice(0, 8)} rev=${artifact.revision}`,
-      );
-    }
+    const projectionPoints = hike.payload.route_points.map((point: any) => ({
+      lat: Number(point.lat), lng: Number(point.lng), t: Math.floor(Number(point.t)),
+      ...(Number.isFinite(Number(point.alt)) ? { alt: Number(point.alt) } : {}),
+      ...(Number.isFinite(Number(point.acc)) ? { accuracy: Number(point.acc) } : {}),
+      ...(typeof point.segment_id === 'string' ? { segmentId: point.segment_id } : {}),
+      ...(typeof point.segment_start_reason === 'string'
+        ? { segmentStartReason: point.segment_start_reason } : {}),
+    }));
+    if (projectionPoints.length < 2) return false;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useSessionStore } = require('../store/useSessionStore');
     const existing = useSessionStore.getState().sessions.find((item: any) => (
@@ -227,16 +216,16 @@ export async function recoverPreparingActivityCompletion(hike: PendingHike): Pro
       durationS: hike.summary.durationS,
       distanceM: hike.summary.distanceM,
       elevationGainM: hike.summary.elevationGainM,
-      trackPoints: artifact.points,
+      trackPoints: projectionPoints,
       markerIds: hike.summary.markerIds,
       name: hike.summary.name,
       syncState: 'pending',
-      finalGeometryState: artifact.source === 'matched' || artifact.source === 'hybrid'
+      finalGeometryState: hike.finalArtifact.source === 'matched' || hike.finalArtifact.source === 'hybrid'
         ? 'enhanced'
-        : artifact.source === 'base' ? 'base_ready' : 'limited_evidence',
-      finalGeometryVersion: artifact.algorithmVersion,
-      finalGeometryRevision: artifact.revision,
-      finalGeometryFingerprint: artifact.displayFingerprint,
+        : hike.finalArtifact.source === 'base' ? 'base_ready' : 'limited_evidence',
+      finalGeometryVersion: hike.finalArtifact.algorithmVersion,
+      finalGeometryRevision: hike.finalArtifact.revision,
+      finalGeometryFingerprint: hike.finalArtifact.displayFingerprint,
       roadRefinementPending: hike.roadRefinementState === 'pending-network'
         || hike.roadRefinementState === 'pending-retry',
     }, hike.userId);
@@ -390,6 +379,14 @@ export async function drainPending(opts?: {
       }
       if (list.length === 0) {
         clearRetryTimer();
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const refinement = require('../features/activity/activityFinalRefinementQueue');
+          const ownerId = String(require('../store/useSessionStore').useSessionStore.getState().currentUserId ?? '');
+          if (ownerId && networkMonitor.isOnline()) {
+            void refinement.resumeAllActivityFinalRefinementsForOwner(ownerId).catch(() => undefined);
+          }
+        } catch { /* optional job wake */ }
         return result;
       }
       crashLogger.breadcrumb(`v412:sync_drain start count=${list.length}`);
@@ -429,6 +426,14 @@ export async function drainPending(opts?: {
       }
     } while (pendingSignal);
     schedulePendingRetry(await listPending());
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const refinement = require('../features/activity/activityFinalRefinementQueue');
+      const ownerId = String(require('../store/useSessionStore').useSessionStore.getState().currentUserId ?? '');
+      if (ownerId && networkMonitor.isOnline()) {
+        void refinement.resumeAllActivityFinalRefinementsForOwner(ownerId).catch(() => undefined);
+      }
+    } catch { /* optional job wake */ }
   } finally {
     isDraining = false;
   }
@@ -766,7 +771,10 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     if (!mappedRemoteId) throw new Error('activity_remote_mapping_missing_after_start');
     const result = await saveHikeAtomic(
       mappedRemoteId,
-      hike.payload,
+      {
+        ...hike.payload,
+        ...initialFinalUploadMetadata(hike),
+      },
       hike.idempotencyKey,
       hike.localId,
       hike.userId,
@@ -912,6 +920,14 @@ async function uploadOne(hike: PendingHike): Promise<'succeeded' | 'failed' | 's
     // Handoff is complete even if cleanup is not. The synced registry state
     // prevents a later launch from re-uploading after a local delete failure.
     await cleanupAcknowledgedActivityArtifacts(hike.userId, hike.localId);
+    try {
+      // The frozen Base has a server ACK and outbox cleanup no longer owns the
+      // optional road job. Resume by durable client identity; failures remain
+      // queued and never change the successful Activity Save disposition.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const refinement = require('../features/activity/activityFinalRefinementQueue');
+      void refinement.resumeActivityFinalRefinement(hike.userId, hike.localId).catch(() => undefined);
+    } catch { /* foreground/network wakes remain durable fallbacks */ }
     return 'succeeded';
   } catch (err: any) {
     if (simulatorActivity) {

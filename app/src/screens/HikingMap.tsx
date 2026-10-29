@@ -53,10 +53,12 @@ import { CairnPinV10 } from '../features/memory/components/CairnPinV10';
 import {
   ACTIVITY_ROAD_CONTEXT_QUERY_RADIUS_PX,
   buildActivityRoadContext,
-  deriveRoadAwareLiveTrack,
+  createStableRoadAwareLivePresentation,
+  updateStableRoadAwareLivePresentation,
   type ActivityRoadContext,
 } from '../features/activity/activityRoadContext';
 import { recordActivityStageEvent } from '../features/activity/activityStageLedger';
+import { activityLedgerEvidenceId } from '../features/activity/activityEvidenceIdentity';
 import { cairnText } from '../i18n/runtime';
 
 // Session-local readiness memory: cold entry keeps the intentional Cairn
@@ -649,17 +651,26 @@ export function HikingMap({
     && mapFirstRender
     ? roadContext
     : null;
-  const roadAwareTrackPoints = useMemo(
-    () => simulatorEnabled && !roadContextQaAdapter
-      ? trackPoints
-      : deriveRoadAwareLiveTrack(trackPoints, effectiveRoadContext),
-    [effectiveRoadContext, roadContextQaAdapter, simulatorEnabled, trackPoints],
-  );
+  const stableRoadPresentationRef = useRef(createStableRoadAwareLivePresentation<typeof trackPoints[number]>());
+  const roadAwareTrackPoints = useMemo(() => {
+    if (simulatorEnabled && !roadContextQaAdapter) {
+      stableRoadPresentationRef.current = createStableRoadAwareLivePresentation();
+      return trackPoints;
+    }
+    stableRoadPresentationRef.current = updateStableRoadAwareLivePresentation(
+      stableRoadPresentationRef.current,
+      trackPoints,
+      effectiveRoadContext,
+    );
+    return stableRoadPresentationRef.current.points;
+  }, [effectiveRoadContext, roadContextQaAdapter, simulatorEnabled, trackPoints]);
   useEffect(() => {
     if (!roadContextQaAdapter) return;
     roadContextQaEvidenceRef.current.canonicalPointCount = trackPoints.length;
     roadContextQaEvidenceRef.current.presentedPointCount = roadAwareTrackPoints.length;
-    roadContextQaEvidenceRef.current.presentationChanged = roadAwareTrackPoints !== trackPoints;
+    roadContextQaEvidenceRef.current.presentationChanged = roadAwareTrackPoints.some((point, index) => (
+      point.lat !== trackPoints[index]?.lat || point.lng !== trackPoints[index]?.lng
+    ));
   }, [roadAwareTrackPoints, roadContextQaAdapter, trackPoints]);
   const routePresentationRef = useRef(createIncrementalRoutePresentation());
   const routePresentation = useMemo(() => {
@@ -673,46 +684,72 @@ export function HikingMap({
   }, [roadAwareTrackPoints]);
   const presentedFrontierRef = useRef<{
     clientActivityId: string;
-    lastRawOrdinal: number;
+    sourceCount: number;
+    lastSourcePoint: (typeof trackPoints)[number] | null;
+    evidenceIds: Set<string>;
   } | null>(null);
-  const presentedTailRawOrdinal = trackPoints[trackPoints.length - 1]?.rawOrdinal;
+  const presentedTailIdentity = trackPoints.length > 0
+    ? activityLedgerEvidenceId(trackPoints[trackPoints.length - 1], trackPoints.length - 1)
+    : null;
   useEffect(() => {
     if ((simulatorEnabled && !roadContextQaAdapter) || !isFocused || trackPoints.length === 0
-      || typeof presentedTailRawOrdinal !== 'number') return;
+      || !presentedTailIdentity) return;
     const owner = useTrackingStore.getState();
     if (!owner.ownerUserId || !owner.sessionId || owner.status === 'idle') return;
-    const previous = presentedFrontierRef.current?.clientActivityId === owner.sessionId
-      ? presentedFrontierRef.current.lastRawOrdinal
-      : null;
-    const firstRawOrdinal = previous === null
-      ? trackPoints.find(point => typeof point.rawOrdinal === 'number')?.rawOrdinal
-      : previous + 1;
-    if (firstRawOrdinal == null || presentedTailRawOrdinal <= (previous ?? -1)) return;
-    presentedFrontierRef.current = {
-      clientActivityId: owner.sessionId,
-      lastRawOrdinal: presentedTailRawOrdinal,
-    };
+    if (presentedFrontierRef.current?.clientActivityId !== owner.sessionId) {
+      presentedFrontierRef.current = {
+        clientActivityId: owner.sessionId,
+        sourceCount: 0,
+        lastSourcePoint: null,
+        evidenceIds: new Set(),
+      };
+    }
+    const frontier = presentedFrontierRef.current;
+    const appendOnly = frontier.sourceCount === 0 || (
+      trackPoints.length >= frontier.sourceCount
+      && trackPoints[frontier.sourceCount - 1] === frontier.lastSourcePoint
+    );
+    if (!appendOnly) {
+      frontier.sourceCount = 0;
+      frontier.lastSourcePoint = null;
+      frontier.evidenceIds.clear();
+    }
+    const startIndex = frontier.sourceCount;
+    const unseen = trackPoints.slice(startIndex).map((point, offset) => ({
+      point,
+      evidenceId: activityLedgerEvidenceId(point, startIndex + offset),
+    })).filter(item => !frontier.evidenceIds.has(item.evidenceId));
+    if (unseen.length === 0) return;
+    unseen.forEach(item => frontier.evidenceIds.add(item.evidenceId));
+    frontier.sourceCount = trackPoints.length;
+    frontier.lastSourcePoint = trackPoints[trackPoints.length - 1];
     const committedAtMs = Date.now();
-    void recordActivityStageEvent({
-      ownerUserId: owner.ownerUserId,
-      clientActivityId: owner.sessionId,
-      stage: 'presentation',
-      evidenceId: `${owner.sessionId.slice(-8)}:${presentedTailRawOrdinal}`,
-      wallTimeMs: committedAtMs,
-      details: {
-        consumer: 'activity-map-react-commit',
-        firstRawOrdinal,
-        lastRawOrdinal: presentedTailRawOrdinal,
-        presentedPointCount: trackPoints.length,
-        observationTimeMs: trackPoints[trackPoints.length - 1]?.t ?? null,
-        receiptToPresentationLagMs: trackPoints[trackPoints.length - 1]?.t == null
-          ? null
-          : Math.max(0, committedAtMs - trackPoints[trackPoints.length - 1]!.t!),
-        nativeMapFrameMeasured: false,
-        qaRoadContextAdapter: roadContextQaAdapter,
-      },
-    });
-  }, [isFocused, presentedTailRawOrdinal, roadContextQaAdapter, simulatorEnabled, trackPoints]);
+    for (let offset = 0; offset < unseen.length; offset += 128) {
+      const batch = unseen.slice(offset, offset + 128);
+      const first = batch[0].point;
+      const last = batch[batch.length - 1].point;
+      void recordActivityStageEvent({
+        ownerUserId: owner.ownerUserId,
+        clientActivityId: owner.sessionId,
+        stage: 'presentation',
+        evidenceId: batch[batch.length - 1].evidenceId,
+        wallTimeMs: committedAtMs,
+        details: {
+          consumer: 'activity-map-react-commit',
+          evidenceIds: batch.map(item => item.evidenceId),
+          firstRawOrdinal: first.rawOrdinal ?? null,
+          lastRawOrdinal: last.rawOrdinal ?? null,
+          presentedPointCount: trackPoints.length,
+          observationTimeMs: last.t ?? null,
+          receiptToPresentationLagMs: last.t == null
+            ? null
+            : Math.max(0, committedAtMs - last.t),
+          nativeMapFrameMeasured: false,
+          qaRoadContextAdapter: roadContextQaAdapter,
+        },
+      });
+    }
+  }, [isFocused, presentedTailIdentity, roadContextQaAdapter, simulatorEnabled, trackPoints]);
   const activeConfirmedSegment = routePresentation.activeHead;
   const trackingStatus = useTrackingStore(s => s.status);
   const trackingIsFinishing = useTrackingStore(s => s.isFinishing);

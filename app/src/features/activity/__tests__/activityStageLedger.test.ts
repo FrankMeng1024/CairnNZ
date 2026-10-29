@@ -750,7 +750,15 @@ describe('local owner-exportable Activity stage ledger', () => {
       ...base, eventId: 'presented', stage: 'presentation', wallTimeMs: 9,
       evidenceId: 'activity:8', details: { firstRawOrdinal: 7, lastRawOrdinal: 8 },
     };
-    const complete = summarizeActivityObservability([...stores, presentation] as any);
+    const rangeOnly = summarizeActivityObservability([...stores, presentation] as any);
+    expect(rangeOnly.evidenceCompleteness.livePublication).toBe('partial');
+    expect(rangeOnly.pipelineFindings.storePublicationsWithoutPresentationEvidence).toBe(1);
+    const exactPresentation = {
+      ...presentation,
+      eventId: 'presented-exact',
+      details: { ...presentation.details, evidenceIds: ['activity:7', 'activity:8'] },
+    };
+    const complete = summarizeActivityObservability([...stores, exactPresentation] as any);
     expect(complete.evidenceCompleteness.livePublication).toBe('complete');
     expect(complete.pipelineFindings.storePublicationsWithoutPresentationEvidence).toBe(0);
   });

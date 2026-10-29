@@ -134,6 +134,26 @@ describe('Activity source and canonical health', () => {
     });
   });
 
+  test('fresh retained source and canonical evidence cancel a timer-only foreground warning', () => {
+    expect(deriveActivityLocationHealth({
+      nowMs: 121_000,
+      sourceActive: true,
+      latestSourceTimestamp: 120_500,
+      latestCanonicalTimestamp: 120_000,
+      latestSourceKind: 'background',
+      foregroundRecoveryUntilMs: 130_000,
+      pendingCandidate: false,
+      latestCanonicalDecisionReason: 'accepted',
+      continuityGapOpen: false,
+      motionState: 'moving',
+    })).toMatchObject({
+      sourceHealth: 'fresh',
+      canonicalHealth: 'fresh',
+      foregroundRecoveryActive: false,
+      userFacingIssue: 'none',
+    });
+  });
+
   test('expired recovery grace and true sparse loss still warn', () => {
     expect(deriveActivityLocationHealth({
       nowMs: 140_001,

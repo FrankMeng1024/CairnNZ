@@ -27,6 +27,7 @@ const {
   upsertActivityMemoryRows,
 } = require('../services/activityMemoryIngestion');
 const { acquireActivitySaveGuard } = require('../services/activitySaveGuard');
+const { activityGeometryFingerprint } = require('../lib/activityGeometryFingerprint');
 
 const router = express.Router();
 
@@ -303,6 +304,10 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     route_points,
     route_points_raw,
     route_points_canonical,
+    final_geometry_revision,
+    final_geometry_fingerprint,
+    final_geometry_canonical_fingerprint,
+    final_geometry_algorithm,
     memory_points,
   } = req.body;
 
@@ -346,6 +351,19 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
   }
   if (!Array.isArray(route_points_canonical) || route_points_canonical.length < 2) {
     return res.status(400).json({ error: 'route_points_canonical must contain at least two accepted points.' });
+  }
+  const authoritativeDisplayFingerprint = activityGeometryFingerprint(route_points);
+  const authoritativeCanonicalFingerprint = activityGeometryFingerprint(route_points_canonical);
+  if (final_geometry_revision != null && final_geometry_revision !== 1) {
+    return res.status(400).json({ error: 'Initial Final geometry revision must be 1.' });
+  }
+  if (final_geometry_fingerprint != null
+    && final_geometry_fingerprint !== authoritativeDisplayFingerprint) {
+    return res.status(400).json({ error: 'Final display fingerprint does not match route_points.' });
+  }
+  if (final_geometry_canonical_fingerprint != null
+    && final_geometry_canonical_fingerprint !== authoritativeCanonicalFingerprint) {
+    return res.status(400).json({ error: 'Final canonical fingerprint does not match route_points_canonical.' });
   }
   for (let i = 0; i < route_points_canonical.length; i++) {
     const p = route_points_canonical[i];
@@ -400,7 +418,9 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     const sessionLockStartedAt = Date.now();
     const [rows] = await conn.execute(
       `SELECT id, client_activity_id, source_provenance, start_time, end_time,
-              finalized_at, route_points_raw, route_points_canonical
+              finalized_at, route_points_raw, route_points_canonical,
+              final_geometry_revision, final_geometry_fingerprint,
+              final_geometry_canonical_fingerprint, final_geometry_algorithm
          FROM sessions
        WHERE id=? AND user_id=? FOR UPDATE`,
       [id, userId]
@@ -493,6 +513,10 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
         memory: { accepted: replayAccepted, rejected: 0 },
         server_timing: serverTiming,
         idempotent_replay: true,
+        final_geometry_revision: rows[0].final_geometry_revision ?? null,
+        final_geometry_fingerprint: rows[0].final_geometry_fingerprint ?? null,
+        final_geometry_canonical_fingerprint: rows[0].final_geometry_canonical_fingerprint ?? null,
+        final_geometry_algorithm: rows[0].final_geometry_algorithm ?? null,
       });
     }
 
@@ -501,7 +525,10 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
     await conn.execute(
       `UPDATE sessions SET
          end_time=?, distance_m=?, duration_s=?, name=?,
-         route_points=?, route_points_raw=?, route_points_canonical=?, finalized_at=?
+         route_points=?, route_points_raw=?, route_points_canonical=?, finalized_at=?,
+         final_geometry_revision=?, final_geometry_fingerprint=?,
+         final_geometry_canonical_fingerprint=?, final_geometry_algorithm=?,
+         final_geometry_updated_at=?
        WHERE id=? AND user_id=?`,
       [
         new Date(end_time),
@@ -513,6 +540,11 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
           ? JSON.stringify(route_points_raw)
           : null,
         JSON.stringify(route_points_canonical),
+        finalizedAtDate,
+        1,
+        authoritativeDisplayFingerprint,
+        authoritativeCanonicalFingerprint,
+        final_geometry_algorithm ?? 'legacy-base-v1',
         finalizedAtDate,
         id,
         userId,
@@ -569,6 +601,10 @@ router.patch('/:id/save', authenticate, validateBody(schemas.session.save), idem
       finalized_at: finalizedAtDate.toISOString(),
       memory: { accepted, rejected },
       server_timing: serverTiming,
+      final_geometry_revision: 1,
+      final_geometry_fingerprint: authoritativeDisplayFingerprint,
+      final_geometry_canonical_fingerprint: authoritativeCanonicalFingerprint,
+      final_geometry_algorithm: final_geometry_algorithm ?? 'legacy-base-v1',
     });
   } catch (err) {
     try {
@@ -639,6 +675,69 @@ router.delete('/client/:clientActivityId', authenticate, async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   } finally {
     conn.release();
+  }
+});
+
+// Display-only Final refinement. The immutable client identity and owner row
+// are the authority; CAS prevents delayed/lost-ACK retries from overwriting a
+// newer presentation revision. Canonical GPS, distance and Memory are never
+// part of this update.
+router.patch('/client/:clientActivityId/final-geometry', authenticate,
+  validateBody(schemas.session.reviseFinalGeometry), idempotency, async (req, res) => {
+    const clientActivityId = String(req.params.clientActivityId || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(clientActivityId)) {
+      return res.status(400).json({ error: 'Invalid client Activity ID.' });
+    }
+    try {
+      const authoritativeDisplayFingerprint = activityGeometryFingerprint(req.body.route_points);
+      if (authoritativeDisplayFingerprint !== req.body.display_fingerprint) {
+        return res.status(400).json({
+          error: 'Final display fingerprint does not match route_points.',
+          code: 'FINAL_GEOMETRY_FINGERPRINT_MISMATCH',
+        });
+      }
+      const result = await Session.reviseFinalGeometry({
+        userId: req.user.userId,
+        clientActivityId,
+        expectedRevision: req.body.expected_revision,
+        expectedFingerprint: req.body.expected_fingerprint,
+        revision: req.body.revision,
+        displayFingerprint: req.body.display_fingerprint,
+        canonicalFingerprint: req.body.canonical_fingerprint,
+        algorithmVersion: req.body.algorithm_version,
+        routePoints: req.body.route_points,
+      });
+      if (result.kind === 'not-found') {
+        return res.status(404).json({ error: 'Completed Activity not found.', code: 'ACTIVITY_BASE_NOT_READY' });
+      }
+      if (result.kind === 'conflict') {
+        return res.status(409).json({ error: 'Final geometry revision conflict.', code: 'FINAL_GEOMETRY_CAS_CONFLICT', ...result });
+      }
+      schedulePublicAfterActivityCommit(req.user.userId, clientActivityId);
+      return res.status(200).json({ ok: true, idempotent_replay: result.kind === 'replay', ...result });
+    } catch (err) {
+      console.error('[sessions/final-geometry]', err);
+      return res.status(500).json({ error: 'Server error.' });
+    }
+  });
+
+router.get('/client/:clientActivityId/final-geometry', authenticate, async (req, res) => {
+  const clientActivityId = String(req.params.clientActivityId || '');
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(clientActivityId)) {
+    return res.status(400).json({ error: 'Invalid client Activity ID.' });
+  }
+  try {
+    const finalGeometry = await Session.findFinalGeometryByClientActivity(
+      clientActivityId,
+      req.user.userId,
+    );
+    if (!finalGeometry) {
+      return res.status(404).json({ error: 'Completed Activity not found.', code: 'ACTIVITY_BASE_NOT_READY' });
+    }
+    return res.status(200).json({ final_geometry: finalGeometry });
+  } catch (err) {
+    console.error('[sessions/final-geometry:get]', err);
+    return res.status(500).json({ error: 'Server error.' });
   }
 });
 

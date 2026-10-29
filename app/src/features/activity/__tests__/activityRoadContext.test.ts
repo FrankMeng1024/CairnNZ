@@ -1,6 +1,8 @@
 import {
   buildActivityRoadContext,
+  createStableRoadAwareLivePresentation,
   deriveRoadAwareLiveTrack,
+  updateStableRoadAwareLivePresentation,
 } from '../activityRoadContext';
 
 const base = {
@@ -189,5 +191,42 @@ describe('Activity RoadContext presentation boundary', () => {
       features: { features: [feature('only', -41)] },
     });
     expect(deriveRoadAwareLiveTrack(canonical, supported)).not.toBe(canonical);
+  });
+
+  test('freezes confirmed road-aware history while a bounded provisional tail changes', () => {
+    const canonical = [0, 8, 16].map((eastM, index) => ({
+      lat: -41.00004,
+      lng: 174 + eastM / (111_320 * Math.cos(41 * Math.PI / 180)),
+      t: 1_000 + index * 1_000,
+      segmentId: 'a',
+      accuracy: 15,
+    }));
+    const context = buildActivityRoadContext({
+      ...base,
+      observedThroughTimestamp: canonical.at(-1)!.t,
+      center: canonical.at(-1)!,
+      features: { features: [{
+        id: 'stable-road',
+        layer: { id: 'road-path', sourceLayer: 'transportation' },
+        properties: { class: 'footway' },
+        geometry: { type: 'LineString', coordinates: [[173.999, -41], [174.002, -41]] },
+      }] },
+    });
+    let presentation = updateStableRoadAwareLivePresentation(
+      createStableRoadAwareLivePresentation<typeof canonical[number]>(),
+      canonical,
+      context,
+    );
+    expect(presentation.points[1].lat).toBeCloseTo(-41, 6);
+    const confirmedCoordinate = presentation.points[1];
+    const extended = [...canonical, {
+      ...canonical.at(-1)!,
+      lng: canonical.at(-1)!.lng + 8 / (111_320 * Math.cos(41 * Math.PI / 180)),
+      t: 4_000,
+    }];
+    presentation = updateStableRoadAwareLivePresentation(presentation, extended, null);
+    expect(presentation.points[1]).toBe(confirmedCoordinate);
+    expect(presentation.points[1].lat).toBeCloseTo(-41, 6);
+    expect(presentation.points.at(-1)).toBe(extended.at(-1));
   });
 });

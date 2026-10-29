@@ -104,7 +104,11 @@ jest.mock('../src/services/backgroundLocationTask', () => ({
   readDurableActivityContext: jest.fn(async () => null),
   persistBackgroundContext: jest.fn(async () => true),
   detectDurableSilenceGapAfterResume: jest.fn(async () => null),
+  detectDurableSilenceGapsAfterResume: jest.fn(async () => []),
   persistDurableSilenceGapEvent: jest.fn(async () => true),
+  persistPendingDurableSilenceGapEvents: jest.fn(async () => 0),
+  persistDurableJournalProjectionFrontier: jest.fn(async () => true),
+  setActivityStartupOrphanMutationWake: jest.fn(),
   setActivityTaskForegroundProjectionWake: jest.fn((wake: (owner: any) => void) => {
     mockTaskProjectionWake = wake;
   }),
@@ -121,6 +125,11 @@ jest.mock('../src/services/hikeTrackWriter', () => ({
   completeSnapLabHikeTrack: jest.fn(async () => [...mockHikeJournalPoints]),
   discardActiveHike: jest.fn(async () => {}),
   readActiveHikeTail: jest.fn(async () => []),
+  readHikeTrackProjectionPage: jest.fn(async () => ({
+    points: [],
+    nextCursor: null,
+    done: true,
+  })),
   readActiveHikeTerminalSnapshot: jest.fn(async (_sessionId: string, options?: {
     expectedOwnerGeneration?: string; expectedCutoffAt?: number;
   }) => ({
@@ -180,6 +189,7 @@ const {
   activateRealBackgroundSourceForVerification,
   stopRealBackgroundSourceForVerification,
   settleBackgroundTaskReconciliationForVerification,
+  scheduleBackgroundTaskReconciliationForVerification,
   settleRealLocationTransitionsForVerification,
   resetRealLocationSourcesForVerification,
 } = require('../src/store/useTrackingStore');
@@ -307,8 +317,9 @@ describe('useTrackingStore.addTrackPoint — timestamp dedupe', () => {
       },
     });
     const decision = exported.events.find((event: any) => event.stage === 'observation-decision');
-    expect(decision.evidenceId).toBe(receipt.evidenceId);
+    expect(decision.evidenceId).not.toBe(receipt.evidenceId);
     expect(decision.details).toMatchObject({
+      receiptEvidenceId: receipt.evidenceId,
       prefilterDecision: 'PASS', decision: 'ACCEPT', rawOrdinal: 1,
     });
     expect(JSON.stringify(exported)).not.toMatch(/-45\.0312|168\.6626|token/i);
@@ -1155,16 +1166,18 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(mockLocation.hasStartedLocationUpdatesAsync).toHaveBeenCalled();
     expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
 
-    const { readActiveHikeTail } = require('../src/services/hikeTrackWriter');
-    let releaseJournal: ((points: any[]) => void) | undefined;
-    let deferredFullRead = false;
-    readActiveHikeTail
-      .mockImplementation((_: string, limit?: number) => {
-        if (limit === 2 || deferredFullRead) return Promise.resolve([]);
-        expect(limit).toBe(512);
-        deferredFullRead = true;
-        return new Promise<any[]>(resolve => { releaseJournal = resolve; });
-      });
+    const { readActiveHikeTail, readHikeTrackProjectionPage } = require('../src/services/hikeTrackWriter');
+    readActiveHikeTail.mockImplementation(() => Promise.resolve([]));
+    let releaseJournal: ((page: any) => void) | undefined;
+    readHikeTrackProjectionPage.mockImplementationOnce((_: string, cursor: any, limit: number) => {
+      expect(cursor).toBeNull();
+      expect(limit).toBe(256);
+      return new Promise<any>(resolve => { releaseJournal = resolve; });
+    });
+    let releasePermissionProbe: ((value: any) => void) | undefined;
+    mockLocation.getBackgroundPermissionsAsync.mockImplementationOnce(() => (
+      new Promise(resolve => { releasePermissionProbe = resolve; })
+    ));
     const watcherCallsBeforeForeground = mockLocation.watchPositionAsync.mock.calls.length;
     require('react-native').AppState.currentState = 'active';
     mockAppStateChangeListener?.('active');
@@ -1176,15 +1189,27 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
     expect(mockLocation.stopLocationUpdatesAsync).not.toHaveBeenCalled();
     expect(releaseJournal).toBeDefined();
+    expect(releasePermissionProbe).toBeDefined();
     expect(useTrackingStore.getState().trackPoints).toHaveLength(1);
 
-    releaseJournal?.([{
-      ...prefix,
-      lat: -40.9998,
-      t: 2_000,
-      source: 'background',
-      segmentStartReason: undefined,
-    }]);
+    releaseJournal?.({
+      points: [{
+        ...prefix,
+        lat: -40.9998,
+        t: 2_000,
+        source: 'background',
+        segmentStartReason: undefined,
+      }],
+      nextCursor: {
+        version: 1,
+        byteOffset: 100,
+        recordIndex: 1,
+        lastRecordByteLength: 100,
+        lastRecordChecksum: 'foreground-live',
+      },
+      done: true,
+    });
+    releasePermissionProbe?.({ status: 'granted', canAskAgain: true });
     for (let tick = 0; tick < 30 && useTrackingStore.getState().trackPoints.length < 2; tick += 1) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
@@ -1194,7 +1219,7 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(exported.events).toEqual(expect.arrayContaining([
       expect.objectContaining({
         stage: 'store-published',
-        evidenceId: `${segmentId}:journal-tail`,
+        evidenceId: `${segmentId}:legacy-index:1`,
         details: expect.objectContaining({
           source: 'background-wal-replay',
           canonicalStorePublished: true,
@@ -1202,7 +1227,7 @@ describe('useTrackingStore — P0 operation guards', () => {
           liveRoutePublished: true,
           visibleRenderTime: 'NOT_MEASURED',
           projectionAuthority: 'foreground-live',
-          journalPointCount: 2,
+          journalPointCount: 1,
           appendedFromJournal: 1,
         }),
       }),
@@ -1236,7 +1261,7 @@ describe('useTrackingStore — P0 operation guards', () => {
       clientActivityId: owner.sessionId,
       ownerGeneration: owner.liveOwnerGeneration,
       segmentId: owner.currentSegmentId,
-      rawOrdinal: 2,
+      rawOrdinal: 37,
       continuityPreclassified: true,
       canonicalDecision: 'REFINE',
       decisionReason: 'stationary-evidence-refining',
@@ -1283,14 +1308,266 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(projected.realCanonicalDecisionReason).toBe('stationary-evidence-refining');
     expect(projected.trackPoints).toHaveLength(canonicalCount);
     expect(projected.trackPointsRaw).toEqual(expect.arrayContaining([
-      expect.objectContaining({ t: freshTimestamp, source: 'background' }),
+      expect.objectContaining({ t: freshTimestamp, source: 'background', rawOrdinal: 37 }),
     ]));
     expect(projected.trackPointsRaw).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ t: freshTimestamp + 1_000 }),
     ]));
-    expect(require('../src/services/hikeTrackWriter').readActiveHikeTail)
-      .toHaveBeenCalledWith(owner.sessionId, 512);
+    expect(require('../src/services/hikeTrackWriter').readHikeTrackProjectionPage)
+      .toHaveBeenCalledWith(owner.sessionId, null, 256);
+    const quarantinedTimestamp = freshTimestamp + 2_000;
+    await useTrackingStore.getState().addTrackPoint({
+      lat: -40.99992,
+      lng: 174.00008,
+      accuracy: 7,
+      speed: 1,
+      source: 'background',
+      clientActivityId: owner.sessionId!,
+      ownerGeneration: owner.liveOwnerGeneration!,
+      observationId: `activity-observation-v1:${owner.sessionId}:${owner.liveOwnerGeneration}:38`,
+      rawOrdinal: 38,
+      segmentId: owner.currentSegmentId!,
+      continuityPreclassified: true,
+      canonicalDecision: 'QUARANTINE',
+      decisionReason: 'candidate-awaiting-corroboration',
+      continuityStateAfter: {
+        motionState: 'uncertain',
+        pending: { id: 'candidate-38', observation: { rawOrdinal: 38 } },
+      } as any,
+      diagnosticObservationRecorded: true,
+      diagnosticDecisionRecorded: true,
+    }, quarantinedTimestamp);
+    expect(useTrackingStore.getState()).toMatchObject({
+      realMotionState: 'uncertain',
+      realCandidatePending: true,
+      realCanonicalDecisionReason: 'candidate-awaiting-corroboration',
+    });
+    const acceptedTimestamp = freshTimestamp + 3_000;
+    await useTrackingStore.getState().addTrackPoint({
+      lat: -40.9999,
+      lng: 174.0001,
+      alt: 5,
+      accuracy: 6,
+      verticalAccuracy: 6,
+      speed: 1.2,
+      course: 20,
+      source: 'background',
+      clientActivityId: owner.sessionId!,
+      ownerGeneration: owner.liveOwnerGeneration!,
+      observationId: `activity-observation-v1:${owner.sessionId}:${owner.liveOwnerGeneration}:39`,
+      rawOrdinal: 39,
+      segmentId: owner.currentSegmentId!,
+      continuityPreclassified: true,
+      canonicalDecision: 'ACCEPT',
+      decisionReason: 'moving-evidence',
+      continuityStateAfter: {
+        motionState: 'moving',
+        liveCoordinate: { lat: -40.9999, lng: 174.0001, t: acceptedTimestamp },
+        pending: null,
+      } as any,
+      diagnosticObservationRecorded: true,
+      diagnosticDecisionRecorded: true,
+    }, acceptedTimestamp);
+    expect(useTrackingStore.getState()).toMatchObject({
+      realMotionState: 'moving',
+      realCandidatePending: false,
+      realCanonicalDecisionReason: 'moving-evidence',
+    });
+    expect(useTrackingStore.getState().trackPointsRaw).toEqual(expect.arrayContaining([
+      expect.objectContaining({ t: quarantinedTimestamp, rawOrdinal: 38 }),
+      expect.objectContaining({ t: acceptedTimestamp, rawOrdinal: 39 }),
+    ]));
     for (let turn = 0; turn < 10; turn += 1) await new Promise(resolve => setTimeout(resolve, 0));
+  });
+
+  it('catches up every WAL page beyond 512 across sparse ordinals and prior owner generations', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    const owner = useTrackingStore.getState();
+    const prefix = {
+      lat: -41,
+      lng: 174,
+      t: 1_000,
+      rawOrdinal: 2,
+      source: 'background' as const,
+      segmentId: 'segment-old',
+      segmentStartReason: 'start' as const,
+    };
+    useTrackingStore.setState({
+      trackPoints: [prefix],
+      trackPointsSmoothed: [prefix],
+      trackPointsRaw: [prefix],
+    });
+    const firstCursor = {
+      version: 1,
+      byteOffset: 100,
+      recordIndex: 1,
+      lastRecordByteLength: 100,
+      lastRecordChecksum: 'cursor-prefix',
+    };
+    const durableTask = require('../src/services/backgroundLocationTask');
+    durableTask.readDurableActivityContext.mockResolvedValue({
+      clientActivityId: owner.sessionId,
+      userId: owner.ownerUserId,
+      ownerGeneration: owner.liveOwnerGeneration,
+      segmentId: owner.currentSegmentId,
+      activityMode: owner.activityMode,
+      acceptAfterMs: owner.liveOwnerAcceptAfterMs,
+      journalProjectionFrontier: {
+        clientActivityId: owner.sessionId,
+        cursor: firstCursor,
+        lastPointKey: 'segment-old:raw:2',
+      },
+    });
+    const unseen = Array.from({ length: 1_100 }, (_, index) => ({
+      t: 2_000 + index * 1_000,
+      lat: -41 + (index + 1) * 0.000001,
+      lng: 174,
+      alt: null,
+      accuracy: 6,
+      verticalAccuracy: 6,
+      speed: 1,
+      speedAccuracy: null,
+      course: 0,
+      courseAccuracy: null,
+      rawOrdinal: index < 549 ? (index + 2) * 2 : (index - 548) * 3,
+      source: 'background' as const,
+      clientActivityId: owner.sessionId,
+      ownerGeneration: index < 549 ? 'prior-resume-generation' : owner.liveOwnerGeneration,
+      segmentId: index < 549 ? 'segment-old' : String(owner.currentSegmentId),
+      ...(index === 549 ? { segmentStartReason: 'resume' as const } : {}),
+    }));
+    const pages = [unseen.slice(0, 400), unseen.slice(400, 800), unseen.slice(800)];
+    const writer = require('../src/services/hikeTrackWriter');
+    writer.readHikeTrackForProjection.mockResolvedValue([
+      {
+        ...prefix,
+        clientActivityId: owner.sessionId,
+        ownerGeneration: 'prior-resume-generation',
+      },
+      ...unseen,
+    ]);
+    writer.readHikeTrackProjectionPage.mockImplementation(async (_sessionId: string, cursor: any) => {
+      const pageIndex = cursor?.recordIndex === 1 ? 0 : cursor?.recordIndex === 401 ? 1 : 2;
+      const points = pages[pageIndex];
+      const nextCursor = {
+        version: 1,
+        byteOffset: 100 + (pageIndex + 1) * 40_000,
+        recordIndex: 1 + pages.slice(0, pageIndex + 1).reduce((sum, page) => sum + page.length, 0),
+        lastRecordByteLength: 100,
+        lastRecordChecksum: `cursor-${pageIndex}`,
+      };
+      return { points, nextCursor, done: pageIndex === pages.length - 1 };
+    });
+
+    expect(mockTaskProjectionWake).not.toBeNull();
+    mockTaskProjectionWake?.({
+      ownerUserId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      ownerGeneration: owner.liveOwnerGeneration,
+      receiptWallTimeMs: Date.now(),
+    });
+    for (let turn = 0; turn < 200 && useTrackingStore.getState().trackPoints.length < 1_101; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    expect(useTrackingStore.getState().trackPoints).toHaveLength(1_101);
+    expect(writer.readHikeTrackProjectionPage).toHaveBeenCalledTimes(3);
+    expect(writer.readActiveHikeTail).not.toHaveBeenCalledWith(owner.sessionId, 512);
+    expect(useTrackingStore.getState().trackPoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ t: unseen[0].t, rawOrdinal: unseen[0].rawOrdinal }),
+      expect.objectContaining({ t: unseen[1_099].t, rawOrdinal: unseen[1_099].rawOrdinal }),
+    ]));
+    expect(durableTask.persistDurableJournalProjectionFrontier).toHaveBeenCalledWith(expect.objectContaining({
+      ownerUserId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      ownerGeneration: owner.liveOwnerGeneration,
+      cursor: expect.objectContaining({ recordIndex: 1_101 }),
+    }));
+    await waitForAllActivityMemoryProjections();
+    const memoryCalls = require('../src/features/memory/services/recordMemoryEvidence').recordMemoryEvidence.mock.calls
+      .map((call: any[]) => call[0])
+      .filter((input: any) => input.sourceActivityClientId === owner.sessionId);
+    expect(memoryCalls).toHaveLength(1_101);
+    expect(memoryCalls[0]).toMatchObject({ atMs: prefix.t, sourceSegmentId: prefix.segmentId });
+    expect(memoryCalls.at(-1)).toMatchObject({
+      atMs: unseen.at(-1)!.t,
+      sourceSegmentId: unseen.at(-1)!.segmentId,
+    });
+  }, 30_000);
+
+  it('restarts strict WAL projection from byte zero when a recovered journal invalidates its durable cursor', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    const owner = useTrackingStore.getState();
+    const first = {
+      lat: -41, lng: 174, t: 1_000, rawOrdinal: 2,
+      source: 'background' as const, segmentId: 'segment-a', segmentStartReason: 'start' as const,
+      clientActivityId: owner.sessionId, ownerGeneration: 'generation-before-recovery',
+    };
+    const second = {
+      ...first,
+      lat: -40.9999,
+      t: 2_000,
+      rawOrdinal: 5,
+      segmentId: String(owner.currentSegmentId),
+      ownerGeneration: owner.liveOwnerGeneration,
+      segmentStartReason: 'process-recovery' as const,
+    };
+    useTrackingStore.setState({
+      trackPoints: [first], trackPointsSmoothed: [first], trackPointsRaw: [first],
+    });
+    const durableTask = require('../src/services/backgroundLocationTask');
+    durableTask.readDurableActivityContext.mockResolvedValue({
+      clientActivityId: owner.sessionId,
+      userId: owner.ownerUserId,
+      ownerGeneration: owner.liveOwnerGeneration,
+      segmentId: owner.currentSegmentId,
+      activityMode: owner.activityMode,
+      acceptAfterMs: owner.liveOwnerAcceptAfterMs,
+      journalProjectionFrontier: {
+        clientActivityId: owner.sessionId,
+        cursor: {
+          version: 1, byteOffset: 100, recordIndex: 1,
+          lastRecordByteLength: 100, lastRecordChecksum: 'stale-before-rollback',
+        },
+        lastPointKey: 'segment-a:raw:2',
+      },
+    });
+    const recoveredCursor = {
+      version: 1, byteOffset: 220, recordIndex: 2,
+      lastRecordByteLength: 110, lastRecordChecksum: 'recovered-tail',
+    };
+    const writer = require('../src/services/hikeTrackWriter');
+    writer.readHikeTrackProjectionPage
+      .mockRejectedValueOnce(new Error('activity_projection_cursor_mismatch'))
+      .mockResolvedValueOnce({ points: [first, second], nextCursor: recoveredCursor, done: true });
+
+    mockTaskProjectionWake?.({
+      ownerUserId: owner.ownerUserId,
+      clientActivityId: owner.sessionId,
+      ownerGeneration: owner.liveOwnerGeneration,
+      receiptWallTimeMs: Date.now(),
+    });
+    for (let turn = 0; turn < 100 && useTrackingStore.getState().trackPoints.length < 2; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    expect(writer.readHikeTrackProjectionPage.mock.calls.slice(-2)).toEqual([
+      [owner.sessionId, expect.objectContaining({ recordIndex: 1 }), 256],
+      [owner.sessionId, null, 256],
+    ]);
+    expect(useTrackingStore.getState().trackPoints.map((point: any) => point.t)).toEqual([1_000, 2_000]);
+    expect(durableTask.persistDurableJournalProjectionFrontier).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cursor: recoveredCursor,
+        lastPointKey: expect.stringContaining(':5'),
+      }),
+    );
   });
 
   it('R02 rechecks the lifecycle lease after a delayed native hasStarted probe', async () => {
@@ -1421,6 +1698,71 @@ describe('useTrackingStore — P0 operation guards', () => {
     expect(mockLocation.stopLocationUpdatesAsync).toHaveBeenCalledTimes(1);
     expect(mockLocation.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
     expect(useTrackingStore.getState()).toMatchObject({ status: 'tracking', locationAvailable: true });
+  });
+
+  it('reconciles a native stop that yields after owner A was replaced by tracking owner B', async () => {
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    let nativeRunning = false;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => nativeRunning);
+    mockLocation.startLocationUpdatesAsync.mockImplementation(async () => { nativeRunning = true; });
+    await expect(useTrackingStore.getState().startTracking('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'))
+      .resolves.toBe(true);
+
+    useTrackingStore.setState({ status: 'paused' });
+    let releaseStop!: () => void;
+    let stopEntered = false;
+    mockLocation.stopLocationUpdatesAsync.mockImplementationOnce(() => new Promise<void>(resolve => {
+      stopEntered = true;
+      releaseStop = () => {
+        nativeRunning = false;
+        resolve();
+      };
+    }));
+    const staleReconciliation = scheduleBackgroundTaskReconciliationForVerification('late-stop');
+    for (let turn = 0; turn < 50 && !stopEntered; turn += 1) await Promise.resolve();
+    expect(stopEntered).toBe(true);
+
+    useTrackingStore.setState({
+      status: 'tracking',
+      sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      ownerUserId: 'tracking-test-user',
+      liveOwnerGeneration: 'owner-b-generation',
+      liveOwnerAcceptAfterMs: Date.now(),
+      currentSegmentId: 'owner-b-segment',
+      locationProviderSource: 'real',
+      isFinishing: false,
+    });
+    releaseStop();
+    await staleReconciliation;
+    await settleRealLocationTransitionsForVerification();
+    expect(nativeRunning).toBe(true);
+    expect(useTrackingStore.getState()).toMatchObject({
+      status: 'tracking',
+      sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      liveOwnerGeneration: 'owner-b-generation',
+      locationAvailable: true,
+    });
+  });
+
+  it('bounds a hung native reconciliation probe so a later owner command can recover', async () => {
+    jest.useFakeTimers();
+    mockLocation.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.requestBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true } as any);
+    mockLocation.hasStartedLocationUpdatesAsync.mockResolvedValue(true);
+    await expect(useTrackingStore.getState().startTracking()).resolves.toBe(true);
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementationOnce(() => new Promise<boolean>(() => undefined));
+
+    const hung = scheduleBackgroundTaskReconciliationForVerification('late-start');
+    await jest.advanceTimersByTimeAsync(2_100);
+    await expect(hung).resolves.toBeUndefined();
+
+    let nativeRunning = false;
+    mockLocation.hasStartedLocationUpdatesAsync.mockImplementation(async () => nativeRunning);
+    mockLocation.startLocationUpdatesAsync.mockImplementation(async () => { nativeRunning = true; });
+    await scheduleBackgroundTaskReconciliationForVerification('late-start');
+    await settleRealLocationTransitionsForVerification();
+    expect(nativeRunning).toBe(true);
   });
 
   it('a successful Task stop clears native ownership and permits a clean restart', async () => {

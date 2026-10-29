@@ -55,6 +55,7 @@ import {
   renamePendingActivity,
   resetForResync,
   savePending,
+  updatePendingRoadRefinementIfPresent,
   updateRemoteId,
   type PendingHike,
 } from '../pendingSyncStore';
@@ -171,6 +172,54 @@ describe('verified pending Activity snapshots', () => {
     expect((await listPending()).map((item) => item.localId)).toEqual(['activity-one']);
     await expect(removePending('activity-one', 'account-a')).resolves.toBeUndefined();
     await expect(listPending()).resolves.toEqual([]);
+  });
+
+  test('a late optional refinement cannot recreate an ACK-removed upload outbox', async () => {
+    const item = pending('activity-acked');
+    item.uploadState = 'ready';
+    item.preparationPhase = 'registry_committed';
+    await savePending(item);
+    await removePending(item.localId, item.userId);
+
+    await expect(updatePendingRoadRefinementIfPresent({
+      localId: item.localId,
+      expectedUserId: item.userId,
+      state: 'pending-retry',
+      nextRetryAt: 99_000,
+    })).resolves.toBe(false);
+    await expect(listPending()).resolves.toEqual([]);
+  });
+
+  test('optional refinement state never mutates the frozen initial upload identity or payload', async () => {
+    const item = pending('activity-frozen-upload');
+    item.uploadState = 'ready';
+    item.preparationPhase = 'registry_committed';
+    item.finalArtifact = {
+      revision: 1,
+      displayFingerprint: 'base-display',
+      canonicalFingerprint: 'base-canonical',
+      source: 'base',
+      algorithmVersion: 'pedestrian-final-v2-base',
+    };
+    const snapshot = JSON.parse(JSON.stringify({
+      idempotencyKey: item.idempotencyKey,
+      payload: item.payload,
+      finalArtifact: item.finalArtifact,
+    }));
+    await savePending(item);
+
+    await expect(updatePendingRoadRefinementIfPresent({
+      localId: item.localId,
+      expectedUserId: item.userId,
+      state: 'pending-network',
+      nextRetryAt: null,
+    })).resolves.toBe(true);
+    const [stored] = await listPending();
+    expect({
+      idempotencyKey: stored.idempotencyKey,
+      payload: stored.payload,
+      finalArtifact: stored.finalArtifact,
+    }).toEqual(snapshot);
   });
 
   test('pending rename atomically updates both upload payload and Detail summary', async () => {

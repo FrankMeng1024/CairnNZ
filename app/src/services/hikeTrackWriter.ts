@@ -73,6 +73,7 @@ export interface HikePoint {
   course?: number | null;
   courseAccuracy?: number | null;
   rawOrdinal?: number;
+  observationId?: string;
   src?: 'fg' | 'bg' | 'slc' | 'sim';
   conf?: number; // 1=high (GPS), 0.5=low (cell/WiFi), 0=gap fill only
   clientActivityId: string;
@@ -97,11 +98,29 @@ export interface CanonicalJournalPoint {
   course: number | null;
   courseAccuracy: number | null;
   rawOrdinal?: number;
+  observationId?: string;
   source: 'foreground' | 'background' | 'significant-change' | 'simulator';
   clientActivityId: string;
   ownerGeneration: string;
   segmentId: string;
   segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
+}
+
+/** Privacy-safe, crash-serializable cursor for complete WAL projection. Byte
+ * position is the authority; ordinals may be sparse or restart on Resume. The
+ * checksum validates the exact preceding record without persisting a GPS fix. */
+export interface HikeTrackProjectionCursor {
+  version: 1;
+  byteOffset: number;
+  recordIndex: number;
+  lastRecordByteLength: number;
+  lastRecordChecksum: string;
+}
+
+export interface HikeTrackProjectionPage {
+  points: CanonicalJournalPoint[];
+  nextCursor: HikeTrackProjectionCursor | null;
+  done: boolean;
 }
 
 export type HikeTerminalSnapshotUncertainReason =
@@ -482,6 +501,31 @@ async function getFs(): Promise<any | null> {
         }
         return value.slice(-maximumBytes);
       },
+      async readRangeAsStringAsync(path: string, offset: number, maximumBytes: number): Promise<string> {
+        const count = appendCount(path);
+        const chunks = [
+          window.localStorage.getItem(path) ?? '',
+          ...Array.from({ length: count }, (_, index) => (
+            window.localStorage.getItem(appendChunkKey(path, index)) ?? ''
+          )),
+        ];
+        const start = Math.max(0, Math.floor(offset));
+        const end = start + Math.max(0, Math.floor(maximumBytes));
+        let consumed = 0;
+        const selected: number[] = [];
+        for (const chunk of chunks) {
+          const bytes = utf8Bytes(chunk);
+          const chunkStart = consumed;
+          const chunkEnd = chunkStart + bytes.length;
+          consumed = chunkEnd;
+          if (chunkEnd <= start) continue;
+          if (chunkStart >= end) break;
+          const from = Math.max(0, start - chunkStart);
+          const to = Math.min(bytes.length, end - chunkStart);
+          for (let index = from; index < to; index += 1) selected.push(bytes[index]);
+        }
+        return decodeUtf8Bytes(new Uint8Array(selected));
+      },
       async readDirectoryAsync(path: string): Promise<string[]> {
         if (!path.endsWith('/')) path = path + '/';
         const raw = window.localStorage.getItem(path + '__files__');
@@ -591,6 +635,7 @@ function toStoredPoint(point: HikePoint | CanonicalJournalPoint): HikePoint {
       course: canonical.course,
       courseAccuracy: canonical.courseAccuracy,
       rawOrdinal: canonical.rawOrdinal,
+      observationId: canonical.observationId,
       src: canonical.source === 'simulator'
         ? 'sim'
         : canonical.source === 'background'
@@ -620,6 +665,7 @@ export function toCanonicalJournalPoint(point: HikePoint, sessionId: string): Ca
     course: point.course ?? null,
     courseAccuracy: point.courseAccuracy ?? null,
     rawOrdinal: point.rawOrdinal,
+    observationId: point.observationId,
     source: point.src === 'sim'
       ? 'simulator'
       : point.src === 'bg' ? 'background' : point.src === 'slc' ? 'significant-change' : 'foreground',
@@ -755,6 +801,34 @@ async function readJournalSuffix(
     }
   } catch {
     return { value: '', beginsMidFile: false };
+  }
+}
+
+async function readJournalRange(
+  fs: any,
+  basePath: string,
+  offset: number,
+  maximumBytes: number,
+): Promise<string> {
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const safeMaximum = Math.max(0, Math.floor(maximumBytes));
+  if (safeMaximum === 0) return '';
+  if (typeof fs.readRangeAsStringAsync === 'function') {
+    return fs.readRangeAsStringAsync(basePath, safeOffset, safeMaximum);
+  }
+  if (typeof fs.appendAsStringAsync === 'function') {
+    const value = await fs.readAsStringAsync(basePath);
+    return decodeUtf8Bytes(utf8Bytes(value).slice(safeOffset, safeOffset + safeMaximum));
+  }
+  const modern = await import('expo-file-system');
+  const handle = new modern.File(basePath).open();
+  try {
+    const size = handle.size ?? 0;
+    if (safeOffset >= size) return '';
+    handle.offset = safeOffset;
+    return decodeUtf8Bytes(handle.readBytes(Math.min(safeMaximum, size - safeOffset)));
+  } finally {
+    handle.close();
   }
 }
 
@@ -1227,6 +1301,141 @@ export async function readActiveHikeTail(
   } catch {
     return [];
   }
+}
+
+async function projectionJournalPath(fs: any, sessionId: string): Promise<{ path: string; size: number }> {
+  for (const path of [activePathFor(fs, sessionId), completedPathFor(fs, sessionId)]) {
+    let info: any;
+    try { info = await fs.getInfoAsync(path); } catch {
+      throw new Error('activity_projection_journal_stat_failed');
+    }
+    if (info.exists) {
+      try {
+        if ((await fs.getInfoAsync(truncationPath(path))).exists) {
+          throw new Error('activity_projection_cursor_recovery_required');
+        }
+      } catch (error) {
+        if (String(error).includes('cursor_recovery_required')) throw error;
+        throw new Error('activity_projection_journal_stat_failed');
+      }
+      if (!Number.isFinite(info.size) || info.size < 0) {
+        throw new Error('activity_projection_journal_size_unavailable');
+      }
+      return { path, size: Math.floor(info.size) };
+    }
+    // A staged/backup-only file requires the exceptional full recovery reader;
+    // a byte cursor must never guess which crash candidate owns its offset.
+    for (const candidate of activeCandidates(path).slice(1)) {
+      try {
+        if ((await fs.getInfoAsync(candidate)).exists) {
+          throw new Error('activity_projection_cursor_recovery_required');
+        }
+      } catch (error) {
+        if (String(error).includes('cursor_recovery_required')) throw error;
+        throw new Error('activity_projection_journal_stat_failed');
+      }
+    }
+  }
+  throw new Error('activity_projection_journal_missing');
+}
+
+/** Complete, bounded forward WAL reader. It validates a durable byte cursor
+ * against the exact preceding record, so process recovery cannot silently skip
+ * a rewritten/truncated prefix. Pages follow file order and never infer progress
+ * from rawOrdinal (which is permitted to be sparse and generation-local). */
+export async function readHikeTrackProjectionPage(
+  sessionId: string,
+  cursor: HikeTrackProjectionCursor | null = null,
+  limit = 256,
+): Promise<HikeTrackProjectionPage> {
+  const fs = await getFs();
+  if (!fs) throw new Error('activity_projection_journal_unavailable');
+  await durableWriteTail.catch(() => {});
+  // Finish an interrupted, marker-bounded rollback before resolving byte
+  // authority. An older cursor is still verified below and will fail closed
+  // when its preceding record no longer exists in the recovered prefix.
+  await completePendingTruncation(fs, activePathFor(fs, sessionId));
+  await completePendingTruncation(fs, completedPathFor(fs, sessionId));
+  const pageLimit = Math.max(1, Math.min(2_048, Math.floor(limit)));
+  const journal = await projectionJournalPath(fs, sessionId);
+  let byteOffset = 0;
+  let recordIndex = 0;
+  let nextCursor: HikeTrackProjectionCursor | null = null;
+  if (cursor) {
+    if (cursor.version !== 1
+      || !Number.isInteger(cursor.byteOffset)
+      || !Number.isInteger(cursor.recordIndex)
+      || !Number.isInteger(cursor.lastRecordByteLength)
+      || cursor.byteOffset <= 0
+      || cursor.byteOffset > journal.size
+      || cursor.recordIndex <= 0
+      || cursor.lastRecordByteLength <= 1
+      || cursor.lastRecordByteLength > cursor.byteOffset
+      || typeof cursor.lastRecordChecksum !== 'string') {
+      throw new Error('activity_projection_cursor_invalid');
+    }
+    const previous = await readJournalRange(
+      fs,
+      journal.path,
+      cursor.byteOffset - cursor.lastRecordByteLength,
+      cursor.lastRecordByteLength,
+    );
+    if (utf8Bytes(previous).length !== cursor.lastRecordByteLength
+      || !previous.endsWith('\n')
+      || checksum(previous.slice(0, -1)) !== cursor.lastRecordChecksum) {
+      throw new Error('activity_projection_cursor_mismatch');
+    }
+    byteOffset = cursor.byteOffset;
+    recordIndex = cursor.recordIndex;
+    nextCursor = { ...cursor };
+  }
+  if (byteOffset === journal.size) return { points: [], nextCursor, done: true };
+
+  // A normal record is below 2 KiB. Read enough for one complete bounded page,
+  // expanding only for an exceptional long but valid legacy row.
+  let readBudget = Math.min(journal.size - byteOffset, Math.max(64 * 1024, pageLimit * 2 * 1024));
+  let content = await readJournalRange(fs, journal.path, byteOffset, readBudget);
+  while (!content.includes('\n') && byteOffset + readBudget < journal.size && readBudget < 8 * 1024 * 1024) {
+    readBudget = Math.min(journal.size - byteOffset, readBudget * 2);
+    content = await readJournalRange(fs, journal.path, byteOffset, readBudget);
+  }
+
+  const points: CanonicalJournalPoint[] = [];
+  let consumedCharacters = 0;
+  while (points.length < pageLimit) {
+    const newline = content.indexOf('\n', consumedCharacters);
+    if (newline < 0) break;
+    const line = content.slice(consumedCharacters, newline);
+    const record = `${line}\n`;
+    consumedCharacters = newline + 1;
+    if (!line.trim()) throw new Error('activity_projection_journal_corrupt_or_partial');
+    const stored = decodeJournalLine(line);
+    if (!stored) throw new Error('activity_projection_journal_corrupt_or_partial');
+    if (typeof stored.clientActivityId === 'string' && stored.clientActivityId !== sessionId) {
+      throw new Error('activity_projection_journal_session_mismatch');
+    }
+    const recordByteLength = utf8Bytes(record).length;
+    byteOffset += recordByteLength;
+    recordIndex += 1;
+    nextCursor = {
+      version: 1,
+      byteOffset,
+      recordIndex,
+      lastRecordByteLength: recordByteLength,
+      lastRecordChecksum: checksum(line),
+    };
+    const canonical = toCanonicalJournalPoint(stored, sessionId);
+    points.push(recordIndex === 1 && !canonical.segmentStartReason
+      ? { ...canonical, segmentStartReason: 'legacy' }
+      : canonical);
+  }
+  if (points.length === 0 && byteOffset < journal.size) {
+    throw new Error('activity_projection_record_exceeds_page');
+  }
+  if (byteOffset === journal.size && !content.endsWith('\n')) {
+    throw new Error('activity_projection_journal_corrupt_or_partial');
+  }
+  return { points, nextCursor, done: byteOffset >= journal.size };
 }
 
 /** Strict projection reader spanning the unfinished and completed WAL

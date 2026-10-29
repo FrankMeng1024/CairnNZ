@@ -21,6 +21,7 @@ export interface SavedFinalCornerRoundingDiagnostics {
   skippedShortArm: number;
   skippedTurnShape: number;
   skippedTopologyGuard: number;
+  skippedOverlapGuard: number;
   skippedProvenanceGuard: number;
   maximumTangentM: number;
   postRoundRejected: boolean;
@@ -146,6 +147,7 @@ export function roundSavedFinalRoadCorners(
     skippedShortArm: 0,
     skippedTurnShape: 0,
     skippedTopologyGuard: 0,
+    skippedOverlapGuard: 0,
     skippedProvenanceGuard: 0,
     maximumTangentM: 0,
     postRoundRejected: false,
@@ -154,25 +156,67 @@ export function roundSavedFinalRoadCorners(
   if (points.length < 3) return { points: points.map(point => ({ ...point })), diagnostics };
   const originLat = points.reduce((sum, point) => sum + point.lat, 0) / points.length;
   const planar = points.map(point => project(point, originLat));
-  const output: TrackPoint[] = [{ ...points[0] }];
+  interface CornerCandidate {
+    cornerIndex: number;
+    contextStart: number;
+    contextEnd: number;
+    entryEdgeStart: number;
+    exitEdgeStart: number;
+    tangentIn: TrackPoint;
+    tangentOut: TrackPoint;
+    turnDeg: number;
+    tangentM: number;
+  }
+  const candidates: CornerCandidate[] = [];
+
+  const accumulatedArm = (cornerIndex: number, direction: -1 | 1) => {
+    let cursor = cornerIndex;
+    let armM = 0;
+    while (armM < MIN_ARM_M) {
+      const next = cursor + direction;
+      if (next < 0 || next >= points.length
+        || points[next].segmentId !== points[cornerIndex].segmentId) return null;
+      armM += distance(planar[cursor], planar[next]);
+      cursor = next;
+      if (armM > MAX_ARM_M) return null;
+    }
+    return { anchorIndex: cursor, armM };
+  };
+  const tangentAlongTrace = (cornerIndex: number, direction: -1 | 1, tangentM: number) => {
+    let cursor = cornerIndex;
+    let remainingM = tangentM;
+    while (remainingM > 1e-6) {
+      const next = cursor + direction;
+      if (next < 0 || next >= points.length) return null;
+      const edgeM = distance(planar[cursor], planar[next]);
+      if (edgeM >= remainingM && edgeM > 1e-9) {
+        return {
+          point: interpolatePoint(points[cursor], points[next], remainingM / edgeM),
+          edgeStart: direction < 0 ? next : cursor,
+        };
+      }
+      remainingM -= edgeM;
+      cursor = next;
+    }
+    return null;
+  };
 
   for (let index = 1; index < points.length - 1; index += 1) {
     if (options.eligibleCorners && options.eligibleCorners[index] !== true) {
       diagnostics.skippedProvenanceGuard += 1;
-      output.push({ ...points[index] });
       continue;
     }
-    const previous = planar[index - 1];
+    const incomingArm = accumulatedArm(index, -1);
+    const outgoingArm = accumulatedArm(index, 1);
     const corner = planar[index];
-    const next = planar[index + 1];
-    const incomingArmM = distance(previous, corner);
-    const outgoingArmM = distance(corner, next);
-    if (incomingArmM < MIN_ARM_M || outgoingArmM < MIN_ARM_M
-      || incomingArmM > MAX_ARM_M || outgoingArmM > MAX_ARM_M) {
+    if (!incomingArm || !outgoingArm) {
       diagnostics.skippedShortArm += 1;
-      output.push({ ...points[index] });
       continue;
     }
+    const previous = planar[incomingArm.anchorIndex];
+    const next = planar[outgoingArm.anchorIndex];
+    const incomingArmM = incomingArm.armM;
+    const outgoingArmM = outgoingArm.armM;
     const incoming = {
       x: (corner.x - previous.x) / incomingArmM,
       y: (corner.y - previous.y) / incomingArmM,
@@ -186,14 +230,12 @@ export function roundSavedFinalRoadCorners(
     ))) * 180 / Math.PI;
     if (turnDeg < MIN_TURN_DEG || turnDeg > MAX_TURN_DEG) {
       diagnostics.skippedTurnShape += 1;
-      output.push({ ...points[index] });
       continue;
     }
     if (points[index - 1].segmentId !== points[index].segmentId
       || points[index].segmentId !== points[index + 1].segmentId
       || hasNearbyNonAdjacentEdge(planar, index)) {
       diagnostics.skippedTopologyGuard += 1;
-      output.push({ ...points[index] });
       continue;
     }
 
@@ -202,37 +244,80 @@ export function roundSavedFinalRoadCorners(
       incomingArmM * MAX_TANGENT_ARM_RATIO,
       outgoingArmM * MAX_TANGENT_ARM_RATIO,
     );
-    const tangentIn = interpolatePoint(points[index - 1], points[index],
-      (incomingArmM - tangentM) / incomingArmM);
-    const tangentOut = interpolatePoint(points[index], points[index + 1],
-      tangentM / outgoingArmM);
-    const tangentInXY = project(tangentIn, originLat);
-    const tangentOutXY = project(tangentOut, originLat);
-    output.push(tangentIn);
+    const tangentIn = tangentAlongTrace(index, -1, tangentM);
+    const tangentOut = tangentAlongTrace(index, 1, tangentM);
+    if (!tangentIn || !tangentOut) {
+      diagnostics.skippedShortArm += 1;
+      continue;
+    }
+    candidates.push({
+      cornerIndex: index,
+      contextStart: incomingArm.anchorIndex,
+      contextEnd: outgoingArm.anchorIndex,
+      entryEdgeStart: tangentIn.edgeStart,
+      exitEdgeStart: tangentOut.edgeStart,
+      tangentIn: tangentIn.point,
+      tangentOut: tangentOut.point,
+      turnDeg,
+      tangentM,
+    });
+  }
+
+  // Dense provider polylines often place several vertices around one physical
+  // turn. Select the sharpest non-overlapping fillet for that local turn so a
+  // road corner is rounded once without repeatedly consuming the same trace.
+  const selected: CornerCandidate[] = [];
+  for (const candidate of [...candidates].sort((left, right) => (
+    right.turnDeg - left.turnDeg || left.cornerIndex - right.cornerIndex
+  ))) {
+    const overlaps = selected.some(existing => (
+      candidate.contextStart < existing.contextEnd
+      && existing.contextStart < candidate.contextEnd
+    ));
+    if (overlaps) diagnostics.skippedOverlapGuard += 1;
+    else selected.push(candidate);
+  }
+  selected.sort((left, right) => left.cornerIndex - right.cornerIndex);
+
+  const output: TrackPoint[] = [];
+  let sourceCursor = 0;
+  for (const candidate of selected) {
+    while (sourceCursor <= candidate.entryEdgeStart) {
+      output.push({ ...points[sourceCursor] });
+      sourceCursor += 1;
+    }
+    const tangentInXY = project(candidate.tangentIn, originLat);
+    const tangentOutXY = project(candidate.tangentOut, originLat);
+    output.push(candidate.tangentIn);
     for (const fraction of [0.25, 0.5, 0.75]) {
       const inverse = 1 - fraction;
       const curved = unproject({
         x: inverse * inverse * tangentInXY.x
-          + 2 * inverse * fraction * corner.x
+          + 2 * inverse * fraction * planar[candidate.cornerIndex].x
           + fraction * fraction * tangentOutXY.x,
         y: inverse * inverse * tangentInXY.y
-          + 2 * inverse * fraction * corner.y
+          + 2 * inverse * fraction * planar[candidate.cornerIndex].y
           + fraction * fraction * tangentOutXY.y,
       }, originLat);
-      const time = Math.round(tangentIn.t + (tangentOut.t - tangentIn.t) * fraction);
+      const time = Math.round(candidate.tangentIn.t
+        + (candidate.tangentOut.t - candidate.tangentIn.t) * fraction);
       output.push({
-        ...points[index],
+        ...points[candidate.cornerIndex],
         ...curved,
         t: time,
-        segmentId: points[index].segmentId,
+        segmentId: points[candidate.cornerIndex].segmentId,
         segmentStartReason: undefined,
       });
     }
-    output.push(tangentOut);
-    diagnostics.roundedCorners += 1;
-    diagnostics.maximumTangentM = Math.max(diagnostics.maximumTangentM, tangentM);
+    output.push(candidate.tangentOut);
+    sourceCursor = candidate.exitEdgeStart + 1;
+    diagnostics.maximumTangentM = Math.max(diagnostics.maximumTangentM, candidate.tangentM);
   }
-  output.push({ ...points[points.length - 1] });
+  while (sourceCursor < points.length) {
+    output.push({ ...points[sourceCursor] });
+    sourceCursor += 1;
+  }
+  diagnostics.roundedCorners = selected.length;
   if (diagnostics.roundedCorners > 0) {
     const roundedPlanar = output.map(point => project(point, originLat));
     const wholeRoute = evaluateWholeRouteQuality(points, output);

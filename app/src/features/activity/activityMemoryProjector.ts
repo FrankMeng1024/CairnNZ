@@ -2,6 +2,7 @@ import type { TrackPoint } from '../../store/useSessionStore';
 import { storage } from '../../store/storage';
 import { readHikeTrackForProjection } from '../../services/hikeTrackWriter';
 import { recordActivityStageEvent } from './activityStageLedger';
+import { activityEvidencePointKey, activityLedgerEvidenceId } from './activityEvidenceIdentity';
 
 const INTENT_PREFIX = 'cairn:activity-memory-projection:v2:';
 const PURGE_PREFIX = 'cairn:activity-memory-projection-purged:v1:';
@@ -106,26 +107,12 @@ function ownerAdmissionIsCurrent(ownerUserId: string, generation: number): boole
   return !authority.purging && authority.generation === generation;
 }
 
-function pointId(point: Pick<TrackPoint, 't' | 'lat' | 'lng' | 'rawOrdinal' | 'segmentId'>): string {
-  return Number.isFinite(point.rawOrdinal)
-    ? `${point.segmentId ?? 'legacy'}:raw:${point.rawOrdinal}`
-    : `${point.segmentId ?? 'legacy'}:${Math.floor(point.t)}:${point.lat.toFixed(7)}:${point.lng.toFixed(7)}`;
+function pointId(point: TrackPoint): string {
+  return activityEvidencePointKey(point);
 }
 
 function pointRawOrdinal(point: Pick<TrackPoint, 'rawOrdinal'>): number | null {
   return Number.isFinite(point.rawOrdinal) ? Number(point.rawOrdinal) : null;
-}
-
-/** Export-safe correlation identity. Legacy checkpoint IDs include coordinates
- * so they can distinguish same-timestamp WAL records; that storage-only key
- * must never cross into the owner-exportable timing ledger. */
-function ledgerEvidenceId(
-  point: Pick<TrackPoint, 'rawOrdinal' | 'segmentId'>,
-  journalIndex: number,
-): string {
-  return Number.isFinite(point.rawOrdinal)
-    ? `${point.segmentId ?? 'legacy'}:raw:${point.rawOrdinal}`
-    : `${point.segmentId ?? 'legacy'}:legacy-index:${journalIndex}`;
 }
 
 function parseIntent(raw: string | null): ActivityMemoryProjectionIntent | null {
@@ -386,7 +373,7 @@ async function projectOnce(request: RuntimeRequest): Promise<void> {
       ownerUserId: request.ownerUserId,
       clientActivityId: request.clientActivityId,
       stage: 'memory-local-commit',
-      evidenceId: ledgerEvidenceId(point, index),
+      evidenceId: activityLedgerEvidenceId(point, index),
       details: {
         observationTimeMs: point.t,
         rawOrdinal: pointRawOrdinal(point),

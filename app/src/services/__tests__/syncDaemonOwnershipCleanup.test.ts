@@ -84,6 +84,9 @@ jest.mock('../../features/activity/activityRemoteConflictStore', () => ({
 }));
 jest.mock('../../features/activity/activityFinalArtifact', () => ({
   loadActivityFinalArtifact: jest.fn(async () => mockArtifact),
+  activityGeometryFingerprint: jest.fn((points: any[]) => JSON.stringify(
+    points.map(point => [point.lat, point.lng, point.segmentId ?? '']),
+  )),
 }));
 jest.mock('../../features/activity/activityMemoryProjector', () => ({
   reconcileActivityMemoryProjection: jest.fn(async () => true),
@@ -168,7 +171,7 @@ describe('Activity ACK ownership and cleanup phases', () => {
     });
   });
 
-  test('a crash after refined artifact commit rolls the Base outbox forward before upload', async () => {
+  test('a committed frozen Base upload is released without depending on a missing or newer local artifact', async () => {
     const preparing: any = {
       ...pending,
       uploadState: 'preparing',
@@ -207,28 +210,52 @@ describe('Activity ACK ownership and cleanup phases', () => {
     };
 
     await expect(recoverPreparingActivityCompletion(preparing)).resolves.toBe(true);
-    expect(mockSavedPending).toHaveLength(1);
-    expect(mockSavedPending[0]).toMatchObject({
-      uploadState: 'preparing',
-      finalArtifact: { revision: 2, displayFingerprint: 'refined-display' },
+    // The first request identity remains the exact Base snapshot. Optional
+    // refinement has its own versioned server operation after the Base ACK.
+    expect(mockSavedPending).toHaveLength(0);
+    expect(mockAddedSessions).toHaveLength(0);
+    expect(preparing.uploadState).toBe('ready');
+    expect(preparing.finalArtifact.revision).toBe(1);
+    expect(preparing.payload.route_points[0].lat).toBe(-41);
+  });
+
+  test('an O97 ready revision-2 outbox is normalized to the server initial revision contract', async () => {
+    const legacyReady = {
+      ...pending,
+      uploadState: 'ready',
+      preparationPhase: 'registry_committed',
       payload: {
+        ...pending.payload,
         route_points: [
-          {
-            lat: -41, lng: 174, t: 1_000, alt: 88, acc: 6, v_acc: 9,
-            speed_mps: 1.2, course_deg: 45, raw_ordinal: 3,
-            segment_id: 'segment-a', segment_start_reason: 'start',
-          },
-          { lat: -41.002, lng: 174.002, t: 5_000, alt: 92, segment_id: 'segment-a' },
+          { lat: -41, lng: 174, t: 1_000, segment_id: 'segment-a' },
+          { lat: -41.001, lng: 174.001, t: 5_000, segment_id: 'segment-a' },
+        ],
+        route_points_canonical: [
+          { lat: -41, lng: 174, t: 1_000, segment_id: 'segment-a' },
+          { lat: -41.001, lng: 174.001, t: 5_000, segment_id: 'segment-a' },
         ],
       },
+      finalArtifact: {
+        revision: 2,
+        displayFingerprint: 'legacy-refined-display',
+        canonicalFingerprint: 'legacy-canonical',
+        source: 'matched',
+        algorithmVersion: 'pedestrian-final-v4-road-fillet',
+      },
+    };
+    mockPendingRows = [legacyReady];
+
+    await expect(drainPending({ wakeReason: 'hydrate', force: true })).resolves.toMatchObject({
+      attempted: 1, succeeded: 1, failed: 0,
     });
-    expect(mockAddedSessions[0]).toMatchObject({
-      finalGeometryRevision: 2,
-      finalGeometryFingerprint: 'refined-display',
-      trackPoints: mockArtifact.points,
+
+    const uploaded = mockSaveHikeAtomic.mock.calls[0][1];
+    expect(uploaded).toMatchObject({
+      final_geometry_revision: 1,
+      final_geometry_algorithm: 'pedestrian-final-v4-road-fillet',
     });
-    expect(preparing.uploadState).toBe('ready');
-    expect(preparing.finalArtifact.revision).toBe(2);
+    expect(uploaded.final_geometry_fingerprint).not.toBe('legacy-refined-display');
+    expect(uploaded.final_geometry_canonical_fingerprint).not.toBe('legacy-canonical');
   });
 
   test('a cleanup delete failure after durable ACK never causes a second upload', async () => {
@@ -484,6 +511,44 @@ describe('Activity ACK ownership and cleanup phases', () => {
       expect(mockSaveHikeAtomic).not.toHaveBeenCalled();
       await jest.advanceTimersByTimeAsync(40_000);
       expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
+    } finally {
+      mockOnline = false;
+      jest.useRealTimers();
+    }
+  });
+
+  test('an actual 429 Save failure persists one retry row, never 50ms-spins, then succeeds when due', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-29T00:00:00.000Z'));
+    try {
+      mockOnline = true;
+      mockSaveHikeAtomic
+        .mockRejectedValueOnce(Object.assign(new Error('rate limited'), {
+          status: 429,
+          body: { code: 'RATE_LIMITED' },
+        }))
+        .mockResolvedValueOnce({ session_id: 77, client_activity_id: pending.localId });
+      const listPending = require('../pendingSyncStore').listPending as jest.Mock;
+      await expect(drainPending({ wakeReason: 'manual', force: true })).resolves.toMatchObject({
+        attempted: 1, failed: 1, succeeded: 0,
+      });
+      expect(mockPendingRows).toHaveLength(1);
+      expect(mockPendingRows[0]).toMatchObject({
+        failureKind: 'retryable', failureStatus: 429, failureCode: 'RATE_LIMITED',
+        attemptCount: 1, lastAttemptAt: Date.now(),
+      });
+      expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
+      const readsAfterFailure = listPending.mock.calls.length;
+
+      await jest.advanceTimersByTimeAsync(250);
+      expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
+      expect(listPending.mock.calls.length - readsAfterFailure).toBeLessThanOrEqual(1);
+
+      await jest.advanceTimersByTimeAsync(4_749);
+      expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(2);
+      expect(mockPendingRows).toHaveLength(0);
     } finally {
       mockOnline = false;
       jest.useRealTimers();

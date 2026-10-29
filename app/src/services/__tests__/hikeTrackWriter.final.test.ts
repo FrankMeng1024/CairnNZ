@@ -11,6 +11,7 @@ import {
   listActiveHikes,
   readActiveHikeTail,
   readActiveHikeTerminalSnapshot,
+  readHikeTrackProjectionPage,
   releaseHikeTrackFinishSeal,
   resumeHikeTrack,
   sealHikeTrackForFinish,
@@ -740,6 +741,132 @@ describe('crash-safe Activity journal', () => {
       expect(elapsedMs).toBeLessThan(5_000);
     },
     30_000,
+  );
+
+  test('pages every WAL record beyond 512 without assuming contiguous ordinals or one owner generation', async () => {
+    await startHikeTrack(activityId, {
+      started_at: 1_000,
+      activity_mode: 'hiking',
+      user_id: 'synthetic-owner',
+      owner_generation: 'generation-a',
+    });
+    const points = Array.from({ length: 1_205 }, (_, index) => ({
+      t: 2_000 + index * 1_000,
+      lat: -41 + index * 0.000001,
+      lng: 174 + index * 0.000001,
+      acc: 6,
+      src: 'bg' as const,
+      // Deliberately sparse and reset after Resume. A projection cursor must
+      // identify committed WAL records, not infer record count from ordinals.
+      rawOrdinal: index < 603 ? (index + 1) * 2 : (index - 602) * 3,
+      clientActivityId: activityId,
+      ownerGeneration: index < 603 ? 'generation-a' : 'generation-b',
+      segmentId: index < 603 ? 'segment-a' : 'segment-b',
+      ...(index === 603 ? { segmentStartReason: 'resume' as const } : {}),
+    }));
+    for (let offset = 0; offset < 603; offset += 137) {
+      await appendBackgroundHikePoints(points.slice(offset, Math.min(603, offset + 137)));
+    }
+    await updateHikeMetaStrict(activityId, { owner_generation: 'generation-b' });
+    for (let offset = 603; offset < points.length; offset += 137) {
+      await appendBackgroundHikePoints(points.slice(offset, offset + 137));
+    }
+
+    let cursor: Awaited<ReturnType<typeof readHikeTrackProjectionPage>>['nextCursor'] = null;
+    const replayed = [] as Awaited<ReturnType<typeof readHikeTrackProjectionPage>>['points'];
+    const pageSizes: number[] = [];
+    do {
+      // JSON round-trip models a process restart between pages and proves the
+      // cursor contains only durable scalar authority.
+      const durableCursor = cursor == null ? null : JSON.parse(JSON.stringify(cursor));
+      const page = await readHikeTrackProjectionPage(activityId, durableCursor, 127);
+      replayed.push(...page.points);
+      pageSizes.push(page.points.length);
+      cursor = page.nextCursor;
+      if (page.done) break;
+    } while (true);
+
+    expect(pageSizes.slice(0, -1).every(size => size === 127)).toBe(true);
+    expect(replayed).toHaveLength(points.length);
+    expect(replayed.map(point => point.t)).toEqual(points.map(point => point.t));
+    expect(replayed[602]).toMatchObject({ ownerGeneration: 'generation-a', rawOrdinal: 1_206 });
+    expect(replayed[603]).toMatchObject({ ownerGeneration: 'generation-b', rawOrdinal: 3 });
+    expect(cursor).toMatchObject({ recordIndex: points.length });
+    expect(JSON.stringify(cursor)).not.toMatch(/latitude|longitude|"lat"|"lng"/i);
+  });
+
+  test.each([1, 512, 513, 514, 1_025, 4_097])(
+    'strict projection paging reproduces the complete %i-record WAL across lifecycle boundaries',
+    async (pointCount) => {
+      await startHikeTrack(activityId, {
+        started_at: 1_000,
+        activity_mode: 'hiking',
+        user_id: 'synthetic-owner',
+        owner_generation: 'generation-a',
+      });
+      const generationBoundary = Math.max(1, Math.floor(pointCount / 2));
+      const segmentLength = Math.max(1, Math.floor(pointCount / 4));
+      const points = Array.from({ length: pointCount }, (_, index) => {
+        const generationIndex = index < generationBoundary ? index : index - generationBoundary;
+        const segmentIndex = Math.min(3, Math.floor(index / segmentLength));
+        // Closed-loop/out-and-back evidence makes ordering errors observable
+        // without using real GPS coordinates. Segment ids preserve genuine
+        // loss/Resume boundaries instead of inventing connectors.
+        const phase = pointCount <= 1 ? 0 : index / (pointCount - 1);
+        const triangle = phase <= 0.5 ? phase * 2 : (1 - phase) * 2;
+        return {
+          t: 2_000 + index * 1_000,
+          lat: -41 + triangle * 0.001 + Math.sin(phase * Math.PI * 2) * 0.0001,
+          lng: 174 + Math.sin(phase * Math.PI * 2) * 0.001,
+          acc: 6,
+          src: index % 3 === 0 ? 'fg' as const : 'bg' as const,
+          rawOrdinal: (generationIndex + 1) * 4 + (index % 2),
+          clientActivityId: activityId,
+          ownerGeneration: index < generationBoundary ? 'generation-a' : 'generation-b',
+          segmentId: `segment-${segmentIndex}`,
+          ...(index === 0
+            ? { segmentStartReason: 'start' as const }
+            : index % segmentLength === 0
+              ? { segmentStartReason: index < generationBoundary
+                ? 'gps-reacquired' as const
+                : 'resume' as const }
+              : {}),
+        };
+      });
+      for (let offset = 0; offset < generationBoundary; offset += 173) {
+        await appendBackgroundHikePoints(points.slice(offset, Math.min(generationBoundary, offset + 173)));
+      }
+      if (generationBoundary < pointCount) {
+        await updateHikeMetaStrict(activityId, { owner_generation: 'generation-b' });
+        for (let offset = generationBoundary; offset < pointCount; offset += 173) {
+          await appendBackgroundHikePoints(points.slice(offset, Math.min(pointCount, offset + 173)));
+        }
+      }
+
+      let cursor: Awaited<ReturnType<typeof readHikeTrackProjectionPage>>['nextCursor'] = null;
+      const replayed: Awaited<ReturnType<typeof readHikeTrackProjectionPage>>['points'] = [];
+      do {
+        const page = await readHikeTrackProjectionPage(
+          activityId,
+          cursor == null ? null : JSON.parse(JSON.stringify(cursor)),
+          257,
+        );
+        replayed.push(...page.points);
+        cursor = page.nextCursor;
+        if (page.done) break;
+      } while (true);
+
+      const uninterrupted = await readActiveHikeTail(activityId);
+      expect(replayed).toEqual(uninterrupted);
+      expect(replayed).toHaveLength(pointCount);
+      expect(replayed.map(point => point.t)).toEqual(points.map(point => point.t));
+      expect(cursor).toMatchObject({ recordIndex: pointCount });
+      expect(new Set(replayed.map(point => point.segmentId))).toEqual(
+        new Set(points.map(point => point.segmentId)),
+      );
+      await discardActiveHike(activityId);
+    },
+    60_000,
   );
 
   test('a process death during rollback cannot resurrect the removed journal tail', async () => {

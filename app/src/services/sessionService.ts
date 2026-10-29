@@ -186,6 +186,11 @@ export interface RemoteSession {
   route_points?: TrackPointLike[];
   /** v77: full audit track. Detail endpoint returns it; list omits. */
   route_points_raw?: TrackPointLike[] | null;
+  route_points_canonical?: TrackPointLike[] | null;
+  final_geometry_revision?: number | null;
+  final_geometry_fingerprint?: string | null;
+  final_geometry_canonical_fingerprint?: string | null;
+  final_geometry_algorithm?: string | null;
   flags?: any[] | null;
   created_at: string;
 }
@@ -493,6 +498,10 @@ interface SaveHikeAtomicPayload {
     horizontal_accuracy_m?: number;
     continuity_state?: 'accepted' | 'gap' | 'unknown';
   }>;
+  final_geometry_revision?: number;
+  final_geometry_fingerprint?: string;
+  final_geometry_canonical_fingerprint?: string;
+  final_geometry_algorithm?: string;
 }
 
 interface SaveHikeAtomicResult {
@@ -510,6 +519,112 @@ interface SaveHikeAtomicResult {
     coverage_sync_ms?: number;
     commit_ms?: number;
     total_ms?: number;
+  };
+  final_geometry_revision?: number | null;
+  final_geometry_fingerprint?: string | null;
+  final_geometry_canonical_fingerprint?: string | null;
+  final_geometry_algorithm?: string | null;
+}
+
+export interface ReviseHikeFinalGeometryInput {
+  ownerUserId: string;
+  clientActivityId: string;
+  idempotencyKey: string;
+  expectedRevision: number;
+  expectedFingerprint: string;
+  revision: number;
+  displayFingerprint: string;
+  canonicalFingerprint: string;
+  algorithmVersion: string;
+  routePoints: TrackPointLike[];
+}
+
+export interface ReviseHikeFinalGeometryResult {
+  ok: true;
+  sessionId: number;
+  revision: number;
+  displayFingerprint: string;
+  canonicalFingerprint: string;
+  algorithmVersion: string;
+  idempotentReplay: boolean;
+}
+
+export async function fetchHikeFinalGeometryByClientId(
+  clientActivityId: string,
+  ownerUserId: string,
+): Promise<{
+  revision: number;
+  displayFingerprint: string;
+  canonicalFingerprint: string;
+  algorithmVersion: string;
+} | null> {
+  try {
+    const { response, body } = await authenticatedJsonWithDeadline(
+      `/api/sessions/client/${clientActivityId}/final-geometry`,
+      { expectedUserId: ownerUserId },
+    );
+    const value = body?.final_geometry;
+    if (!response.ok || !value || !Number.isInteger(value.final_geometry_revision)
+      || typeof value.final_geometry_fingerprint !== 'string'
+      || typeof value.final_geometry_canonical_fingerprint !== 'string'
+      || typeof value.final_geometry_algorithm !== 'string') return null;
+    return {
+      revision: value.final_geometry_revision,
+      displayFingerprint: value.final_geometry_fingerprint,
+      canonicalFingerprint: value.final_geometry_canonical_fingerprint,
+      algorithmVersion: value.final_geometry_algorithm,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Publish one immutable display-only revision after the Base Save ACK. */
+export async function reviseHikeFinalGeometry(
+  input: ReviseHikeFinalGeometryInput,
+): Promise<ReviseHikeFinalGeometryResult> {
+  const { response, body } = await authenticatedJsonWithDeadline(
+    `/api/sessions/client/${input.clientActivityId}/final-geometry`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': input.idempotencyKey,
+      },
+      expectedUserId: input.ownerUserId,
+      body: JSON.stringify({
+        expected_revision: input.expectedRevision,
+        expected_fingerprint: input.expectedFingerprint,
+        revision: input.revision,
+        display_fingerprint: input.displayFingerprint,
+        canonical_fingerprint: input.canonicalFingerprint,
+        algorithm_version: input.algorithmVersion,
+        route_points: normalizeActivityPointTimestamps(input.routePoints),
+      }),
+    },
+  );
+  if (!response.ok) {
+    const error: any = new Error(`reviseHikeFinalGeometry HTTP ${response.status}: ${body?.error || 'unknown'}`);
+    error.status = response.status;
+    error.body = body;
+    throw error;
+  }
+  if (!body || body.ok !== true || !Number.isInteger(body.sessionId)
+    || body.revision !== input.revision
+    || body.displayFingerprint !== input.displayFingerprint
+    || body.canonicalFingerprint !== input.canonicalFingerprint) {
+    const error: any = new Error('reviseHikeFinalGeometry malformed response');
+    error.code = 'ACTIVITY_RESPONSE_PARSE_FAILED';
+    throw error;
+  }
+  return {
+    ok: true,
+    sessionId: body.sessionId,
+    revision: body.revision,
+    displayFingerprint: body.displayFingerprint,
+    canonicalFingerprint: body.canonicalFingerprint,
+    algorithmVersion: body.algorithmVersion,
+    idempotentReplay: body.idempotent_replay === true,
   };
 }
 

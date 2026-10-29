@@ -175,6 +175,10 @@ const sessionSave = Joi.object({
   // deliberately distinct from route_points, which may contain a cleaned
   // display path.
   route_points_canonical: Joi.array().items(pointObj).min(2).required(),
+  final_geometry_revision: Joi.number().integer().min(1),
+  final_geometry_fingerprint: Joi.string().pattern(/^[0-9a-f]{8,64}$/i),
+  final_geometry_canonical_fingerprint: Joi.string().pattern(/^[0-9a-f]{8,64}$/i),
+  final_geometry_algorithm: Joi.string().max(80),
   flags: Joi.object().allow(null),
   route_id: Joi.number().integer().min(1).allow(null),
   name: Joi.string().max(100).allow(null, ''),
@@ -184,6 +188,16 @@ const sessionSave = Joi.object({
   // pendingSyncStore 无限重试 → 用户 hike memory 永远丢。backend 事务里
   // 有 CHUNK=1000 分批 INSERT,10000 上界足够所有真实 hike。
   memory_points: Joi.array().items(memoryPointObjInline).max(10000).allow(null),
+});
+
+const sessionFinalGeometryRevision = Joi.object({
+  expected_revision: Joi.number().integer().min(1).required(),
+  expected_fingerprint: Joi.string().pattern(/^[0-9a-f]{8,64}$/i).required(),
+  revision: Joi.number().integer().min(2).required(),
+  display_fingerprint: Joi.string().pattern(/^[0-9a-f]{8,64}$/i).required(),
+  canonical_fingerprint: Joi.string().pattern(/^[0-9a-f]{8,64}$/i).required(),
+  algorithm_version: Joi.string().max(80).required(),
+  route_points: Joi.array().items(pointObj).min(2).required(),
 });
 
 const sessionUpdate = Joi.object({
@@ -439,6 +453,7 @@ module.exports = {
     start: sessionStart,
     appendPoints: sessionAppendPoints,
     save: sessionSave,
+    reviseFinalGeometry: sessionFinalGeometryRevision,
     update: sessionUpdate,
     rename: sessionRename,
   },

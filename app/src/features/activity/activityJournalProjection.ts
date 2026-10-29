@@ -20,12 +20,10 @@ import {
   elevationQualityGain,
   reduceElevationObservation,
 } from './elevationQuality';
+import { activityEvidencePointKey } from './activityEvidenceIdentity';
 
 function pointKey(point: TrackPoint): string {
-  const rawOrdinal = point.rawOrdinal;
-  return rawOrdinal != null
-    ? `${point.segmentId ?? 'legacy'}:ordinal:${rawOrdinal}`
-    : `${point.segmentId ?? 'legacy'}:${point.t}:${point.lat.toFixed(7)}:${point.lng.toFixed(7)}`;
+  return activityEvidencePointKey(point);
 }
 
 function asTrackPoint(point: CanonicalJournalPoint | TrackPoint): TrackPoint {
@@ -41,6 +39,9 @@ function asTrackPoint(point: CanonicalJournalPoint | TrackPoint): TrackPoint {
     courseAccuracy: point.courseAccuracy ?? null,
     t: Math.floor(point.t),
     rawOrdinal: point.rawOrdinal,
+    observationId: point.observationId,
+    clientActivityId: point.clientActivityId,
+    ownerGeneration: point.ownerGeneration,
     segmentId: point.segmentId,
     segmentStartReason: point.segmentStartReason,
   };

@@ -1,4 +1,13 @@
 import type { PedestrianFinalRequestResult } from '../../services/routing/pedestrianFinalRoute';
+import {
+  evaluateMatchedGeometryQuality,
+  type MatchedGeometryQuality,
+} from '../../services/routing/snapTrack';
+import type { TrackPoint } from '../../store/useSessionStore';
+import {
+  roundSavedFinalRoadCorners,
+  type SavedFinalCornerRoundingDiagnostics,
+} from './savedFinalCornerRounding';
 
 type FinalPoint = { lat: number; lng: number };
 
@@ -127,6 +136,83 @@ export function decideActivityFinalCandidatePromotion(input: {
   // Local/Trend Final for a road candidate with more proper crossings.
   if (candidateCrossings > currentCrossings) return result('invented-crossing');
   return result('accepted-network-improvement');
+}
+
+export interface RoundedActivityFinalCandidateSelection {
+  points: TrackPoint[];
+  usedRoundedCandidate: boolean;
+  fellBackToApprovedUnrounded: boolean;
+  fallbackReason: string | null;
+  roundingDiagnostics: SavedFinalCornerRoundingDiagnostics;
+  roundedCanonicalQuality: MatchedGeometryQuality | null;
+  roundedPromotion: FinalCandidatePromotionDecision | null;
+}
+
+/**
+ * A road candidate reaches this boundary only after the caller has accepted
+ * its unrounded geometry. Rounding is display-only and is strictly weaker
+ * authority: the rounded output must pass the same canonical quality and
+ * current-Final promotion gates, otherwise the approved unrounded road
+ * candidate is retained verbatim.
+ */
+export function selectRoundedActivityFinalCandidate(input: {
+  canonical: TrackPoint[];
+  current: TrackPoint[];
+  approvedUnrounded: TrackPoint[];
+  eligibleCorners: ReadonlyArray<boolean>;
+}): RoundedActivityFinalCandidateSelection {
+  const rounded = roundSavedFinalRoadCorners(input.approvedUnrounded, {
+    eligibleCorners: input.eligibleCorners,
+  });
+  if (rounded.diagnostics.roundedCorners === 0) {
+    return {
+      points: input.approvedUnrounded.map(point => ({ ...point })),
+      usedRoundedCandidate: false,
+      fellBackToApprovedUnrounded: rounded.diagnostics.postRoundRejected,
+      fallbackReason: rounded.diagnostics.postRoundRejected
+        ? `rounding-local:${rounded.diagnostics.postRoundRejectReason ?? 'rejected'}`
+        : null,
+      roundingDiagnostics: rounded.diagnostics,
+      roundedCanonicalQuality: null,
+      roundedPromotion: null,
+    };
+  }
+
+  const roundedCanonicalQuality = evaluateMatchedGeometryQuality(
+    input.canonical,
+    rounded.points,
+  );
+  const roundedPromotion = decideActivityFinalCandidatePromotion({
+    canonical: input.canonical,
+    current: input.current,
+    candidate: rounded.points,
+    networkMatched: true,
+  });
+  const fallbackReason = !roundedCanonicalQuality.accepted
+    ? `canonical-quality:${roundedCanonicalQuality.reason}`
+    : !roundedPromotion.accepted
+      ? `current-final:${roundedPromotion.reason}`
+      : null;
+  if (fallbackReason) {
+    return {
+      points: input.approvedUnrounded.map(point => ({ ...point })),
+      usedRoundedCandidate: false,
+      fellBackToApprovedUnrounded: true,
+      fallbackReason,
+      roundingDiagnostics: rounded.diagnostics,
+      roundedCanonicalQuality,
+      roundedPromotion,
+    };
+  }
+  return {
+    points: rounded.points,
+    usedRoundedCandidate: true,
+    fellBackToApprovedUnrounded: false,
+    fallbackReason: null,
+    roundingDiagnostics: rounded.diagnostics,
+    roundedCanonicalQuality,
+    roundedPromotion,
+  };
 }
 
 export type ActivityFinalRefinementRequestCategory =

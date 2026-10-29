@@ -16,9 +16,8 @@ import { createActivityMapboxRequestGovernor } from '../../services/routing/acti
 import { networkMonitor } from '../../services/networkMonitor';
 import {
   finishPendingPreparation,
-  markPendingUploadReady,
   readPendingReadonly,
-  savePending,
+  updatePendingRoadRefinementIfPresent,
 } from '../../services/pendingSyncStore';
 import { appendSimulatorLog } from '../activitySimulator/simulatorLog';
 import { segmentTrace, toServerPoint } from './activityContracts';
@@ -33,19 +32,19 @@ import {
   activityFinalRefinementRequestCategory,
   decideActivityFinalCandidatePromotion,
   decideRetainedLocalRefinement,
+  selectRoundedActivityFinalCandidate,
 } from './activityFinalRefinementDecision';
 import { recordActivityDiagnosticProviderExchange } from './activityDiagnosticReplay';
-import { roundSavedFinalRoadCorners } from './savedFinalCornerRounding';
 
 export interface ActivityFinalRefinementJob {
   format: 'cairn-activity-final-refinement';
-  version: 1;
+  version: 1 | 2;
   ownerUserId: string;
   clientActivityId: string;
   expectedBaseRevision: number;
   canonicalFingerprint: string;
   status: 'queued' | 'running' | 'complete' | 'cancelled';
-  outcome: 'pending' | 'enhanced' | 'limited' | 'base-retained' | 'deleted' | 'owner-deferred';
+  outcome: 'pending' | 'enhanced' | 'limited' | 'base-retained' | 'action-required' | 'deleted' | 'owner-deferred';
   attemptCount: number;
   createdAt: number;
   updatedAt: number;
@@ -64,6 +63,17 @@ export interface ActivityFinalRefinementJob {
   roadEnhancementState?: 'pending-network' | 'pending-retry' | 'running' | 'terminal-local' | 'accepted';
   networkAttemptCount?: number;
   nextRetryAt?: number | null;
+  /** v2 owns all immutable refinement inputs after upload outbox cleanup. */
+  input?: {
+    canonicalPoints: TrackPoint[];
+    basePoints: TrackPoint[];
+    activityMode: 'hiking' | 'running';
+    startedAt: number;
+    durationS: number;
+  };
+  revisionOperationId?: string;
+  serverRevisionState?: 'not-required' | 'pending-base' | 'pending-retry' | 'publishing' | 'ack' | 'conflict';
+  serverRevisionAttemptCount?: number;
 }
 
 export type ActivityFinalRefinementRunResult =
@@ -79,8 +89,24 @@ const INDEX = '@cairn:activity_final_refinement:index:v1:';
 const flights = new Map<string, Promise<ActivityFinalRefinementRunResult>>();
 const controllers = new Map<string, AbortController>();
 const jobWriteTails = new Map<string, Promise<void>>();
+const indexWriteTails = new Map<string, Promise<void>>();
+const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const MAX_NETWORK_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [5_000, 30_000] as const;
+
+function scheduleRetryWake(job: ActivityFinalRefinementJob): void {
+  const key = jobKey(job.ownerUserId, job.clientActivityId);
+  const existingTimer = retryTimers.get(key);
+  if (existingTimer) clearTimeout(existingTimer);
+  retryTimers.delete(key);
+  if (job.status !== 'queued' || job.nextRetryAt == null) return;
+  const timer = setTimeout(() => {
+    retryTimers.delete(key);
+    void resumeActivityFinalRefinement(job.ownerUserId, job.clientActivityId).catch(() => undefined);
+  }, Math.max(50, job.nextRetryAt - Date.now()));
+  (timer as any)?.unref?.();
+  retryTimers.set(key, timer);
+}
 
 export function confidentRoadCornerMask(
   pointCount: number,
@@ -115,11 +141,49 @@ const indexKey = (ownerUserId: string) => `${INDEX}${ownerUserId}`;
 
 function validJob(value: any, ownerUserId: string, clientActivityId: string): value is ActivityFinalRefinementJob {
   return value?.format === 'cairn-activity-final-refinement'
-    && value.version === 1
+    && (value.version === 1 || value.version === 2)
     && value.ownerUserId === ownerUserId
     && value.clientActivityId === clientActivityId
     && Number.isInteger(value.expectedBaseRevision)
     && typeof value.canonicalFingerprint === 'string';
+}
+
+function jobInputFromPending(
+  pending: Awaited<ReturnType<typeof readPendingReadonly>>,
+  baseArtifact: ActivityFinalArtifact,
+): NonNullable<ActivityFinalRefinementJob['input']> | null {
+  if (!pending || !Array.isArray(pending.payload.route_points_canonical)) return null;
+  const canonicalPoints = pending.payload.route_points_canonical.map(fromPendingPoint);
+  if (canonicalPoints.length < 2 || baseArtifact.points.length < 2) return null;
+  return {
+    canonicalPoints,
+    basePoints: baseArtifact.points.map(point => ({ ...point })),
+    activityMode: pending.activityMode,
+    startedAt: pending.summary?.startedAt ?? pending.startedAt ?? pending.createdAt,
+    durationS: pending.summary?.durationS ?? pending.payload.duration_s,
+  };
+}
+
+async function ensureJobInput(
+  job: ActivityFinalRefinementJob,
+  baseArtifact: ActivityFinalArtifact,
+): Promise<ActivityFinalRefinementJob | null> {
+  if (job.input && job.input.canonicalPoints.length >= 2 && job.input.basePoints.length >= 2) return job;
+  const pending = await readPendingReadonly(job.clientActivityId);
+  if (!pending || pending.userId !== job.ownerUserId) return null;
+  const input = jobInputFromPending(pending, baseArtifact);
+  if (!input) return null;
+  const upgraded: ActivityFinalRefinementJob = {
+    ...job,
+    version: 2,
+    input,
+    revisionOperationId: job.revisionOperationId ?? require('../../services/offlineQueue').uuidv4(),
+    serverRevisionState: job.serverRevisionState ?? 'not-required',
+    serverRevisionAttemptCount: job.serverRevisionAttemptCount ?? 0,
+    updatedAt: Date.now(),
+  };
+  await writeJob(upgraded);
+  return upgraded;
 }
 
 async function readJob(ownerUserId: string, clientActivityId: string): Promise<ActivityFinalRefinementJob | null> {
@@ -163,6 +227,7 @@ async function writeJob(job: ActivityFinalRefinementJob): Promise<void> {
     await storage.setItem(key, encoded, { strict: true });
     if (await storage.getItem(key) !== encoded) throw new Error('activity_refinement_job_verify_failed');
   });
+  scheduleRetryWake(job);
 }
 
 async function stoppedRunResult(
@@ -189,14 +254,75 @@ async function stoppedRunResult(
     : 'deferred-owner';
 }
 
-async function addToIndex(ownerUserId: string, clientActivityId: string): Promise<void> {
-  let ids: string[] = [];
+async function withIndexMutation(ownerUserId: string, operation: () => Promise<void>): Promise<void> {
+  const key = indexKey(ownerUserId);
+  const previous = indexWriteTails.get(key)?.catch(() => undefined) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>(resolve => { release = resolve; });
+  indexWriteTails.set(key, next);
+  await previous;
+  try {
+    await operation();
+  } finally {
+    release();
+    if (indexWriteTails.get(key) === next) indexWriteTails.delete(key);
+  }
+}
+
+async function readIndex(ownerUserId: string): Promise<string[]> {
   try {
     const raw = await storage.getItem(indexKey(ownerUserId));
-    if (raw) ids = JSON.parse(raw);
-  } catch { /* replace malformed local index */ }
-  if (!ids.includes(clientActivityId)) ids.push(clientActivityId);
-  await storage.setItem(indexKey(ownerUserId), JSON.stringify(ids.slice(-128)), { strict: true });
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.filter(id => typeof id === 'string' && id.length > 0))]
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeVerifiedIndex(ownerUserId: string, ids: string[]): Promise<void> {
+  const encoded = JSON.stringify(ids);
+  const key = indexKey(ownerUserId);
+  await storage.setItem(key, encoded, { strict: true });
+  if (await storage.getItem(key) !== encoded) throw new Error('activity_refinement_index_verify_failed');
+}
+
+async function addToIndex(ownerUserId: string, clientActivityId: string): Promise<void> {
+  await withIndexMutation(ownerUserId, async () => {
+    const ids = await readIndex(ownerUserId);
+    if (!ids.includes(clientActivityId)) ids.push(clientActivityId);
+    if (ids.length <= 128) {
+      await writeVerifiedIndex(ownerUserId, ids);
+      return;
+    }
+
+    // Never strand a queued/running user operation merely to meet a retention
+    // cap. Keep every active job, then fill the remaining 128-slot budget with
+    // the newest terminal records. Every evicted terminal key is deleted in the
+    // same serialized index mutation, so exact GPS cannot become an unlisted
+    // orphan when the index rolls over.
+    const jobs = await Promise.all(ids.map(id => readJob(ownerUserId, id)));
+    const keep = new Set<string>();
+    ids.forEach((id, index) => {
+      if (jobs[index]?.status === 'queued' || jobs[index]?.status === 'running') keep.add(id);
+    });
+    for (let index = ids.length - 1; index >= 0 && keep.size < 128; index -= 1) {
+      keep.add(ids[index]);
+    }
+    const evicted = ids.filter(id => !keep.has(id));
+    if (evicted.length > 0) {
+      await storage.removeItemsStrict(evicted.map(id => jobKey(ownerUserId, id)));
+    }
+    await writeVerifiedIndex(ownerUserId, ids.filter(id => keep.has(id)));
+  });
+}
+
+async function removeFromIndex(ownerUserId: string, clientActivityId: string): Promise<void> {
+  await withIndexMutation(ownerUserId, async () => {
+    const ids = await readIndex(ownerUserId);
+    await writeVerifiedIndex(ownerUserId, ids.filter(id => id !== clientActivityId));
+  });
 }
 
 function fromPendingPoint(point: any): TrackPoint {
@@ -209,8 +335,14 @@ function fromPendingPoint(point: any): TrackPoint {
     ...(Number.isFinite(Number(point.v_acc)) ? { verticalAccuracy: Number(point.v_acc) } : {}),
     ...(Number.isFinite(Number(point.speed_mps)) ? { speed: Number(point.speed_mps) } : {}),
     ...(Number.isFinite(Number(point.course_deg)) ? { course: Number(point.course_deg) } : {}),
-    ...(typeof point.segment_id === 'string' ? { segmentId: point.segment_id } : {}),
-    ...(typeof point.segment_start_reason === 'string' ? { segmentStartReason: point.segment_start_reason } : {}),
+    ...(typeof point.segment_id === 'string'
+      ? { segmentId: point.segment_id }
+      : typeof point.segmentId === 'string' ? { segmentId: point.segmentId } : {}),
+    ...(typeof point.segment_start_reason === 'string'
+      ? { segmentStartReason: point.segment_start_reason }
+      : typeof point.segmentStartReason === 'string'
+        ? { segmentStartReason: point.segmentStartReason }
+        : {}),
   } as TrackPoint;
 }
 
@@ -231,61 +363,36 @@ async function publishStableLocalPending(
   if (stopped) return stopped;
   const pending = await readPendingReadonly(job.clientActivityId);
   const currentJob = await readJob(job.ownerUserId, job.clientActivityId);
-  if (!pending || pending.userId !== job.ownerUserId || !currentJob || currentJob.status === 'cancelled') {
+  if (!currentJob || currentJob.status === 'cancelled') {
     finishPendingPreparation(job.clientActivityId);
     return 'cancelled';
   }
-  await savePending({
-    ...pending,
-    // The local artifact, Activity list, and lifecycle registry are already
-    // durable at this boundary. Optional road work must not hold the required
-    // Base/Local Final upload hostage. This also freezes the exact request
-    // semantics for the existing idempotency key before the writer lease is
-    // released; a later road-only display revision never mutates that request.
-    uploadState: 'ready',
-    preparationPhase: 'registry_committed',
-    roadRefinementState: roadState,
-    roadRefinementNextRetryAt: nextRetryAt,
-    payload: {
-      ...pending.payload,
-      route_points: artifact.points.map(point => toServerPoint(point)),
-    },
-    finalArtifact: {
-      revision: artifact.revision,
-      displayFingerprint: artifact.displayFingerprint,
-      canonicalFingerprint: artifact.canonicalFingerprint,
-      source: artifact.source,
-      algorithmVersion: artifact.algorithmVersion,
-    },
-  });
-  if (pending.summary) {
-    const existing = useSessionStore.getState().sessions.find(session => (
-      session.clientActivityId === job.clientActivityId || session.id === job.clientActivityId
-    ));
-    await useSessionStore.getState().addSession({
-      id: job.clientActivityId,
-      clientActivityId: job.clientActivityId,
-      remoteId: pending.remoteId ?? undefined,
-      serverActivityId: pending.remoteId ?? undefined,
-      activityMode: pending.activityMode,
-      regionCode: existing?.regionCode ?? 'nz',
-      startedAt: pending.summary.startedAt,
-      endedAt: pending.summary.endedAt,
-      durationS: pending.summary.durationS,
-      distanceM: pending.summary.distanceM,
-      elevationGainM: pending.summary.elevationGainM,
-      trackPoints: artifact.points,
-      markerIds: pending.summary.markerIds,
-      name: pending.summary.name,
-      memoryNewCells: existing?.memoryNewCells ?? 0,
-      syncState: 'pending',
-      finalGeometryState: stateForArtifact(artifact),
-      finalGeometryVersion: artifact.algorithmVersion,
-      finalGeometryRevision: artifact.revision,
-      finalGeometryFingerprint: artifact.displayFingerprint,
-      roadRefinementPending: true,
-    }, job.ownerUserId);
+  if (!pending) {
+    await writeJob({
+      ...currentJob,
+      status: 'queued',
+      outcome: 'pending',
+      selectedSource: artifact.source,
+      selectedFingerprint: artifact.displayFingerprint,
+      roadEnhancementState: roadState,
+      nextRetryAt,
+      updatedAt: Date.now(),
+    });
+    finishPendingPreparation(job.clientActivityId);
+    return roadState;
   }
+  if (pending.userId !== job.ownerUserId) return 'deferred-owner';
+  // This operation is atomic with ACK cleanup. A stale Mapbox completion may
+  // update the outbox only while it still exists; it cannot recreate an
+  // acknowledged upload or regress an already-synced Activity card. The
+  // initial payload/identity remains frozen and the durable job below owns any
+  // eventual display-only server revision.
+  await updatePendingRoadRefinementIfPresent({
+    localId: job.clientActivityId,
+    expectedUserId: job.ownerUserId,
+    state: roadState,
+    nextRetryAt,
+  });
   await writeJob({
     ...currentJob,
     status: 'queued',
@@ -332,48 +439,21 @@ async function publishArtifactAndRelease(
     if (stopped) return stopped;
   }
   const pending = await readPendingReadonly(job.clientActivityId);
-  if (!pending || pending.userId !== job.ownerUserId) {
-    await writeJob({
-      ...job,
-      status: 'cancelled',
-      outcome: 'deleted',
-      updatedAt: Date.now(),
-      lastError: null,
-    });
-    finishPendingPreparation(job.clientActivityId);
-    return 'cancelled';
-  }
+  if (pending && pending.userId !== job.ownerUserId) return 'deferred-owner';
   const currentJob = await readJob(job.ownerUserId, job.clientActivityId);
   if (!currentJob || currentJob.status === 'cancelled') {
     finishPendingPreparation(job.clientActivityId);
     return 'cancelled';
   }
-  const payload = {
-    ...pending.payload,
-    route_points: artifact.points.map(point => toServerPoint(point)),
-  };
-  const uploadSnapshotFrozen = pending.uploadState === 'ready';
-  if (!uploadSnapshotFrozen) {
-    await savePending({
-      ...pending,
-      uploadState: 'preparing',
-      roadRefinementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
-      roadRefinementNextRetryAt: null,
-      payload,
-      finalArtifact: {
-        revision: artifact.revision,
-        displayFingerprint: artifact.displayFingerprint,
-        canonicalFingerprint: artifact.canonicalFingerprint,
-        source: artifact.source,
-        algorithmVersion: artifact.algorithmVersion,
-      },
-    });
-  }
+  // The initial Base upload is an immutable snapshot owned exclusively by
+  // Finish/syncDaemon. Optional refinement owns its durable artifact and job;
+  // it must never rewrite (or recreate after ACK) the upload outbox. This is
+  // also true if process recovery observes the old preparation window.
   if (signal) {
     const stopped = await stoppedRunResult(job, signal);
     if (stopped) return stopped;
   }
-  if (pending.summary) {
+  if (pending?.summary) {
     const existing = useSessionStore.getState().sessions.find(session => (
       session.clientActivityId === job.clientActivityId || session.id === job.clientActivityId
     ));
@@ -393,7 +473,11 @@ async function publishArtifactAndRelease(
       markerIds: pending.summary.markerIds,
       name: pending.summary.name,
       memoryNewCells: existing?.memoryNewCells ?? 0,
-      syncState: 'pending',
+      // Geometry publication and cloud acknowledgement are independent.
+      // Preserve the strongest state observed before entering addSession's
+      // serialized mutation boundary; addSession additionally fences a
+      // concurrent ACK that lands after this snapshot.
+      syncState: existing?.syncState ?? 'pending',
       finalGeometryState: stateForArtifact(artifact),
       finalGeometryVersion: artifact.algorithmVersion,
       finalGeometryRevision: artifact.revision,
@@ -405,20 +489,20 @@ async function publishArtifactAndRelease(
     const stopped = await stoppedRunResult(job, signal);
     if (stopped) return stopped;
   }
-  if (!uploadSnapshotFrozen) await markPendingUploadReady(job.clientActivityId);
-  if (signal) {
-    const stopped = await stoppedRunResult(job, signal);
-    if (stopped) return stopped;
-  }
+  const needsServerRevision = currentJob.candidateDecision === 'accepted'
+    && artifact.revision > currentJob.expectedBaseRevision;
   await writeJob({
     ...currentJob,
-    status: 'complete',
+    status: needsServerRevision ? 'queued' : 'complete',
     outcome,
     completedRevision: artifact.revision,
     selectedSource: artifact.source,
     selectedFingerprint: artifact.displayFingerprint,
     roadEnhancementState: currentJob.candidateDecision === 'accepted' ? 'accepted' : 'terminal-local',
-    nextRetryAt: null,
+    serverRevisionState: needsServerRevision
+      ? (pending ? 'pending-base' : 'pending-retry')
+      : 'not-required',
+    nextRetryAt: needsServerRevision && pending ? null : null,
     updatedAt: Date.now(),
     lastError: currentJob.lastError ?? null,
   });
@@ -449,6 +533,9 @@ async function publishArtifactAndRelease(
     source: artifact.source,
     displayFingerprint: artifact.displayFingerprint,
   }, { userId: job.ownerUserId, clientActivityId: job.clientActivityId, coordinateSource: 'none' });
+  if (needsServerRevision && !pending) {
+    return publishAcceptedServerRevision(currentJob, artifact, signal);
+  }
   try {
     // Lazy wake avoids a static cycle through pendingSyncStore. Upload sees
     // exactly one ready payload revision and retains its original idempotency
@@ -460,6 +547,105 @@ async function publishArtifactAndRelease(
   return 'complete';
 }
 
+async function publishAcceptedServerRevision(
+  job: ActivityFinalRefinementJob,
+  artifact: ActivityFinalArtifact,
+  signal?: AbortSignal,
+): Promise<ActivityFinalRefinementRunResult> {
+  if (signal) {
+    const stopped = await stoppedRunResult(job, signal);
+    if (stopped) return stopped;
+  }
+  const latest = await readJob(job.ownerUserId, job.clientActivityId);
+  if (!latest || latest.status === 'cancelled') return 'cancelled';
+  const input = latest.input;
+  if (!input || !latest.revisionOperationId) {
+    await writeJob({
+      ...latest,
+      status: 'complete',
+      outcome: 'action-required',
+      lastError: 'legacy-input-unavailable',
+      roadEnhancementState: 'terminal-local',
+      serverRevisionState: 'conflict',
+      updatedAt: Date.now(),
+    });
+    return 'complete';
+  }
+  const attempt = (latest.serverRevisionAttemptCount ?? 0) + 1;
+  await writeJob({
+    ...latest,
+    status: 'running',
+    serverRevisionState: 'publishing',
+    serverRevisionAttemptCount: attempt,
+    nextRetryAt: null,
+    updatedAt: Date.now(),
+  });
+  try {
+    // Lazy import keeps normal Finish and Base upload free of this optional
+    // network path, and makes lost-ACK replay use one durable operation UUID.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { reviseHikeFinalGeometry } = require('../../services/sessionService');
+    await reviseHikeFinalGeometry({
+      ownerUserId: latest.ownerUserId,
+      clientActivityId: latest.clientActivityId,
+      idempotencyKey: latest.revisionOperationId,
+      expectedRevision: latest.expectedBaseRevision,
+      expectedFingerprint: activityGeometryFingerprint(input.basePoints),
+      revision: artifact.revision,
+      displayFingerprint: artifact.displayFingerprint,
+      canonicalFingerprint: artifact.canonicalFingerprint,
+      algorithmVersion: artifact.algorithmVersion,
+      routePoints: artifact.points.map(point => toServerPoint(point)),
+    });
+    const after = await readJob(latest.ownerUserId, latest.clientActivityId);
+    if (!after || after.status === 'cancelled') return 'cancelled';
+    await writeJob({
+      ...after,
+      status: 'complete',
+      outcome: artifact.source === 'matched' || artifact.source === 'hybrid' ? 'enhanced' : 'limited',
+      completedRevision: artifact.revision,
+      selectedSource: artifact.source,
+      selectedFingerprint: artifact.displayFingerprint,
+      serverRevisionState: 'ack',
+      nextRetryAt: null,
+      lastError: null,
+      updatedAt: Date.now(),
+    });
+    return 'complete';
+  } catch (error: any) {
+    const after = await readJob(latest.ownerUserId, latest.clientActivityId);
+    if (!after || after.status === 'cancelled') return 'cancelled';
+    const status = Number.isFinite(Number(error?.status)) ? Number(error.status) : 0;
+    const conflict = status === 409;
+    const basePending = status === 404;
+    let conflictEvidence = 'server-cas-conflict';
+    if (conflict) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { fetchHikeFinalGeometryByClientId } = require('../../services/sessionService');
+        const remote = await fetchHikeFinalGeometryByClientId(
+          latest.clientActivityId,
+          latest.ownerUserId,
+        );
+        if (remote) {
+          conflictEvidence = `server-cas-conflict:r${remote.revision}:${remote.displayFingerprint.slice(0, 16)}`;
+        }
+      } catch { /* the explicit conflict remains durable without readback */ }
+    }
+    const delay = Math.min(5_000 * Math.pow(2, Math.max(0, attempt - 1)), 30 * 60_000);
+    await writeJob({
+      ...after,
+      status: conflict ? 'complete' : 'queued',
+      outcome: conflict ? 'action-required' : after.outcome,
+      serverRevisionState: conflict ? 'conflict' : basePending ? 'pending-base' : 'pending-retry',
+      nextRetryAt: conflict ? null : Date.now() + delay,
+      lastError: conflict ? conflictEvidence : basePending ? 'server-base-not-ready' : 'server-revision-retryable',
+      updatedAt: Date.now(),
+    });
+    return conflict ? 'complete' : 'pending-retry';
+  }
+}
+
 async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal): Promise<ActivityFinalRefinementRunResult> {
   const currentOwner = useAppStore.getState().user?.id;
   if (!useAppStore.getState().isLoggedIn || String(currentOwner ?? '') !== job.ownerUserId) {
@@ -467,8 +653,36 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     finishPendingPreparation(job.clientActivityId);
     return 'deferred-owner';
   }
+  const loadedArtifact = await loadActivityFinalArtifact(job.ownerUserId, job.clientActivityId);
+  if (!loadedArtifact) {
+    await writeJob({
+      ...job,
+      status: 'complete',
+      outcome: 'base-retained',
+      lastError: 'artifact-unavailable',
+      roadEnhancementState: 'terminal-local',
+      serverRevisionState: 'not-required',
+      nextRetryAt: null,
+      updatedAt: Date.now(),
+    });
+    return 'complete';
+  }
+  const durableJob = await ensureJobInput(job, loadedArtifact);
+  if (!durableJob) {
+    await writeJob({
+      ...job,
+      status: 'complete',
+      outcome: 'base-retained',
+      lastError: 'legacy-input-unavailable',
+      roadEnhancementState: 'terminal-local',
+      serverRevisionState: 'not-required',
+      nextRetryAt: null,
+      updatedAt: Date.now(),
+    });
+    return 'complete';
+  }
   const running: ActivityFinalRefinementJob = {
-    ...job,
+    ...durableJob,
     status: 'running',
     outcome: 'pending',
     attemptCount: job.attemptCount + 1,
@@ -490,19 +704,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   await writeJob(running);
   const stoppedBeforeRead = await stoppedRunResult(running, signal);
   if (stoppedBeforeRead) return stoppedBeforeRead;
-  const pending = await readPendingReadonly(job.clientActivityId);
-  const baseArtifact = await loadActivityFinalArtifact(job.ownerUserId, job.clientActivityId);
-  if (!pending || pending.userId !== job.ownerUserId || !baseArtifact) {
-    await writeJob({
-      ...running,
-      status: 'cancelled',
-      outcome: 'deleted',
-      updatedAt: Date.now(),
-      lastError: null,
-    });
-    finishPendingPreparation(job.clientActivityId);
-    return 'cancelled';
-  }
+  const baseArtifact = loadedArtifact;
   if (baseArtifact.canonicalFingerprint !== job.canonicalFingerprint) {
     throw new Error('activity_refinement_canonical_mismatch');
   }
@@ -515,7 +717,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       baseArtifact.source === 'matched' || baseArtifact.source === 'hybrid' ? 'enhanced' : 'limited', signal);
   }
 
-  const canonical = pending.payload.route_points_canonical.map(fromPendingPoint);
+  const canonical = durableJob.input!.canonicalPoints.map(point => ({ ...point }));
   if (canonical.length < 2) {
     running.technicalOutcome = 'insufficient-evidence';
     running.candidateDecision = 'local-retained';
@@ -554,8 +756,8 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   const governor = createActivityMapboxRequestGovernor({
     ownerUserId: job.ownerUserId,
     clientActivityId: job.clientActivityId,
-    startedAtMs: pending.summary?.startedAt ?? pending.startedAt ?? pending.createdAt,
-    recordedDurationMs: (pending.summary?.durationS ?? pending.payload.duration_s) * 1_000,
+    startedAtMs: durableJob.input!.startedAt,
+    recordedDurationMs: durableJob.input!.durationS * 1_000,
   });
   // The optional road-aware budget begins only after local safety, authority,
   // and governor setup. Mandatory WAL/artifact writes are never truncated.
@@ -564,6 +766,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
   let hybrid = false;
   let roundedCornerCount = 0;
   let cornerTopologyGuardCount = 0;
+  let postRoundGlobalRejectCount = 0;
   const requestResults: PedestrianFinalRequestResult[] = [];
   const resultReasons: string[] = [];
   const priority = canonicalSegments
@@ -636,17 +839,24 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
       networkMatched,
     });
     if (!promotion.accepted) continue;
-    const rounded = networkMatched
-      ? roundSavedFinalRoadCorners(candidateSegment, {
+    const displaySelection = networkMatched
+      ? selectRoundedActivityFinalCandidate({
+          canonical: segment,
+          current: baseSegments[segmentIndex],
+          approvedUnrounded: candidateSegment,
           eligibleCorners: confidentRoadCornerMask(candidateSegment.length, result.stats),
         })
-      : { points: candidateSegment, diagnostics: null };
-    baseSegments[segmentIndex] = rounded.points.map(point => ({
+      : null;
+    const selectedPoints = displaySelection?.points ?? candidateSegment;
+    baseSegments[segmentIndex] = selectedPoints.map(point => ({
       ...point,
       segmentId: first.segmentId,
     }));
-    roundedCornerCount += rounded.diagnostics?.roundedCorners ?? 0;
-    cornerTopologyGuardCount += rounded.diagnostics?.skippedTopologyGuard ?? 0;
+    roundedCornerCount += displaySelection?.usedRoundedCandidate
+      ? displaySelection.roundingDiagnostics.roundedCorners
+      : 0;
+    cornerTopologyGuardCount += displaySelection?.roundingDiagnostics.skippedTopologyGuard ?? 0;
+    postRoundGlobalRejectCount += displaySelection?.fellBackToApprovedUnrounded ? 1 : 0;
     if (networkMatched) matchedSegments += 1;
     hybrid = hybrid || result.stats.canonicalDerivedSectionCount > 0;
   }
@@ -718,6 +928,7 @@ async function executeJob(job: ActivityFinalRefinementJob, signal: AbortSignal):
     appliedAfterAcceptedRoadMatch: true,
     roundedCornerCount,
     cornerTopologyGuardCount,
+    postRoundGlobalRejectCount,
     canonicalGeometryChanged: false,
     activityDistanceChanged: false,
     memoryChanged: false,
@@ -739,10 +950,16 @@ export async function enqueueActivityFinalRefinement(input: {
   const existing = await readJob(input.ownerUserId, input.clientActivityId);
   if (existing && existing.canonicalFingerprint === input.baseArtifact.canonicalFingerprint
     && existing.status !== 'cancelled') return existing;
+  const pending = await readPendingReadonly(input.clientActivityId);
+  if (!pending || pending.userId !== input.ownerUserId) {
+    throw new Error('activity_refinement_input_not_durable');
+  }
+  const durableInput = jobInputFromPending(pending, input.baseArtifact);
+  if (!durableInput) throw new Error('activity_refinement_input_invalid');
   const now = Date.now();
   const job: ActivityFinalRefinementJob = {
     format: 'cairn-activity-final-refinement',
-    version: 1,
+    version: 2,
     ownerUserId: input.ownerUserId,
     clientActivityId: input.clientActivityId,
     expectedBaseRevision: input.baseArtifact.revision,
@@ -766,6 +983,10 @@ export async function enqueueActivityFinalRefinement(input: {
     roadEnhancementState: 'pending-network',
     networkAttemptCount: 0,
     nextRetryAt: null,
+    input: durableInput,
+    revisionOperationId: require('../../services/offlineQueue').uuidv4(),
+    serverRevisionState: 'not-required',
+    serverRevisionAttemptCount: 0,
   };
   await writeJob(job);
   await addToIndex(input.ownerUserId, input.clientActivityId);
@@ -786,9 +1007,14 @@ export async function resumeActivityFinalRefinement(
     if (!job) return 'absent' as const;
     if (job.status === 'cancelled') return 'cancelled' as const;
     if (job.status === 'complete') return 'complete' as const;
-    if (job.roadEnhancementState === 'pending-retry'
+    if ((job.roadEnhancementState === 'pending-retry' || job.serverRevisionState === 'pending-retry')
       && job.nextRetryAt != null
-      && job.nextRetryAt > Date.now()) return 'pending-retry' as const;
+      && job.nextRetryAt > Date.now()) {
+      // A process restart loses in-memory timers. Re-register the persisted
+      // deadline on every hydrate/network/foreground bootstrap wake.
+      scheduleRetryWake(job);
+      return 'pending-retry' as const;
+    }
     try {
       return await executeJob(job, controller.signal);
     } catch (error) {
@@ -833,6 +1059,23 @@ export async function resumeActivityFinalRefinement(
   }
 }
 
+/** Resume every durable refinement for the signed-in owner. Each job retains
+ * its own single-flight and retry deadline, so duplicate lifecycle wakes are
+ * harmless and two Activities cannot overwrite one another. */
+export async function resumeAllActivityFinalRefinementsForOwner(
+  ownerUserId: string,
+): Promise<ActivityFinalRefinementRunResult[]> {
+  let ids: string[] = [];
+  try {
+    const raw = await storage.getItem(indexKey(ownerUserId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) ids = parsed.filter(id => typeof id === 'string');
+  } catch { /* malformed index yields no unsafe cross-owner scan */ }
+  return Promise.all(ids.map(clientActivityId => (
+    resumeActivityFinalRefinement(ownerUserId, clientActivityId)
+  )));
+}
+
 export async function cancelActivityFinalRefinement(
   ownerUserId: string,
   clientActivityId: string,
@@ -846,12 +1089,18 @@ export async function cancelActivityFinalRefinement(
       outcome: 'deleted',
       updatedAt: Date.now(),
       lastError: null,
+      // The coordinate-free tombstone is the stale-completion fence. Deleting
+      // the key immediately would let an already-running async completion
+      // recreate it; retaining the full input would violate single-Activity
+      // deletion privacy.
+      input: undefined,
     });
   }
   // Abort only after durable cancellation. In-flight fetches stop and bounded
   // workers cannot dispatch a subsequent request. Cleanup does not wait on a
   // potentially slow network promise.
   controllers.get(key)?.abort();
+  await removeFromIndex(ownerUserId, clientActivityId);
   finishPendingPreparation(clientActivityId);
 }
 

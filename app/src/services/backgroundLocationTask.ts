@@ -43,6 +43,8 @@ import {
   recordActivityDiagnosticDecision,
   recordActivityDiagnosticObservation,
 } from '../features/activity/activityDiagnosticReplay';
+import type { HikeTrackProjectionCursor } from './hikeTrackWriter';
+import { activityObservationEvidenceId } from '../features/activity/activityEvidenceIdentity';
 
 export const BACKGROUND_LOCATION_TASK = 'cairn-background-location';
 
@@ -96,6 +98,23 @@ export interface DurableActivityContext {
   /** Two-phase crash-safe SILENCE_GAP fact. It is cleared only after the
    * coordinate-free stage event has been strictly persisted and read back. */
   pendingSilenceGap?: DurableSilenceGap | null;
+  /** Queue form supersedes the legacy single pending slot. Each interval stays
+   * durable until its exact coordinate-free ledger event is acknowledged. */
+  pendingSilenceGaps?: DurableSilenceGap[];
+  /** Monotonic, coordinate-free summary when the exact pending queue exceeds
+   * its explicit retention cap. `reportedDroppedCount` proves which cumulative
+   * snapshot reached the strict ledger without hiding later overflow. */
+  silenceGapOverflow?: DurableSilenceGapOverflow | null;
+  /** Last complete WAL record published into the mounted Activity projection.
+   * The cursor contains checksums/offsets only—never a coordinate. */
+  journalProjectionFrontier?: DurableJournalProjectionFrontier | null;
+}
+
+export interface DurableJournalProjectionFrontier {
+  clientActivityId: string;
+  cursor: HikeTrackProjectionCursor;
+  lastPointKey: string;
+  projectedAtMs: number;
 }
 
 export interface DurableSourceReceipt {
@@ -117,6 +136,7 @@ export interface DurableJsCallbackReceipt {
 // lease mutation. Therefore Finish/Logout either waits for a commit that began
 // before its fence, or disables the lease before the callback can validate.
 let ownershipTail: Promise<void> = Promise.resolve();
+let durableOwnershipCommandEpoch = 0;
 async function withOwnershipBoundary<T>(operation: () => Promise<T>): Promise<T> {
   const prior = ownershipTail.catch(() => undefined);
   let release: () => void = () => undefined;
@@ -143,12 +163,86 @@ export interface DurableSilenceGap {
   nativeVisibility: 'NATIVE_UNOBSERVABLE';
 }
 
-function pendingSilenceGapForContext(
+export interface DurableSilenceGapOverflow {
+  clientActivityId: string;
+  ownerGeneration: string;
+  droppedCount: number;
+  reportedDroppedCount: number;
+  firstDroppedAnchorReceiptWallTimeMs: number;
+  lastDroppedAnchorReceiptWallTimeMs: number;
+  lastUpdatedAtMs: number;
+  classification: 'SILENCE_GAP_RETENTION_OVERFLOW';
+  upstreamCause: 'UPSTREAM_UNKNOWN';
+  nativeVisibility: 'NATIVE_UNOBSERVABLE';
+}
+
+export const MAX_PENDING_DURABLE_SILENCE_GAPS = 64;
+
+function durableSilenceGapQueue(context: DurableActivityContext): DurableSilenceGap[] {
+  const candidates = [
+    ...(Array.isArray(context.pendingSilenceGaps) ? context.pendingSilenceGaps : []),
+    ...(context.pendingSilenceGap ? [context.pendingSilenceGap] : []),
+  ];
+  const byEvidenceId = new Map<string, DurableSilenceGap>();
+  for (const gap of candidates) {
+    if (!gap || gap.clientActivityId !== context.clientActivityId
+      || gap.ownerGeneration !== context.ownerGeneration
+      || typeof gap.evidenceId !== 'string') continue;
+    byEvidenceId.set(gap.evidenceId, gap);
+  }
+  return [...byEvidenceId.values()].sort((left, right) => (
+    left.anchorReceiptWallTimeMs - right.anchorReceiptWallTimeMs
+    || left.detectedAtMs - right.detectedAtMs
+  ));
+}
+
+function boundDurableSilenceGapQueue(context: DurableActivityContext): DurableSilenceGap[] {
+  if (context.silenceGapOverflow
+    && (context.silenceGapOverflow.clientActivityId !== context.clientActivityId
+      || context.silenceGapOverflow.ownerGeneration !== context.ownerGeneration)) {
+    context.silenceGapOverflow = null;
+  }
+  const pending = durableSilenceGapQueue(context);
+  const excess = Math.max(0, pending.length - MAX_PENDING_DURABLE_SILENCE_GAPS);
+  if (excess > 0) {
+    const dropped = pending.splice(0, excess);
+    const prior = context.silenceGapOverflow?.clientActivityId === context.clientActivityId
+      && context.silenceGapOverflow.ownerGeneration === context.ownerGeneration
+      ? context.silenceGapOverflow
+      : null;
+    context.silenceGapOverflow = {
+      clientActivityId: context.clientActivityId,
+      ownerGeneration: context.ownerGeneration,
+      droppedCount: (prior?.droppedCount ?? 0) + dropped.length,
+      reportedDroppedCount: prior?.reportedDroppedCount ?? 0,
+      firstDroppedAnchorReceiptWallTimeMs: Math.min(
+        prior?.firstDroppedAnchorReceiptWallTimeMs ?? Number.POSITIVE_INFINITY,
+        dropped[0].anchorReceiptWallTimeMs,
+      ),
+      lastDroppedAnchorReceiptWallTimeMs: Math.max(
+        prior?.lastDroppedAnchorReceiptWallTimeMs ?? Number.NEGATIVE_INFINITY,
+        dropped[dropped.length - 1].anchorReceiptWallTimeMs,
+      ),
+      lastUpdatedAtMs: Math.max(
+        prior?.lastUpdatedAtMs ?? 0,
+        ...dropped.map(gap => gap.detectedAtMs),
+      ),
+      classification: 'SILENCE_GAP_RETENTION_OVERFLOW',
+      upstreamCause: 'UPSTREAM_UNKNOWN',
+      nativeVisibility: 'NATIVE_UNOBSERVABLE',
+    };
+  }
+  context.pendingSilenceGaps = pending;
+  context.pendingSilenceGap = null;
+  return pending;
+}
+
+function stageSilenceGapsForContext(
   context: DurableActivityContext,
   nowMs: number,
   thresholdMs: number,
-): DurableSilenceGap | null {
-  if (context.pendingSilenceGap) return context.pendingSilenceGap;
+): DurableSilenceGap[] {
+  const pending = boundDurableSilenceGapQueue(context);
   const callbackReceipt = context.latestJsCallbackReceipt;
   const observationReceipt = context.latestSourceReceipt;
   const anchorReceiptWallTimeMs = Math.floor(
@@ -160,8 +254,11 @@ function pendingSilenceGapForContext(
   const durationMs = Math.max(0, nowMs - anchorReceiptWallTimeMs);
   if (!Number.isFinite(anchorReceiptWallTimeMs)
     || durationMs < thresholdMs
-    || context.silenceGapReportedForReceiptWallTimeMs === anchorReceiptWallTimeMs) return null;
-  return {
+    || context.silenceGapReportedForReceiptWallTimeMs === anchorReceiptWallTimeMs) {
+    context.pendingSilenceGaps = pending;
+    return pending;
+  }
+  const candidate: DurableSilenceGap = {
     evidenceId: `${context.clientActivityId}:silence:${anchorReceiptWallTimeMs}`,
     clientActivityId: context.clientActivityId,
     ownerGeneration: context.ownerGeneration,
@@ -176,6 +273,18 @@ function pendingSilenceGapForContext(
     upstreamCause: 'UPSTREAM_UNKNOWN',
     nativeVisibility: 'NATIVE_UNOBSERVABLE',
   };
+  if (!pending.some(gap => gap.evidenceId === candidate.evidenceId)) pending.push(candidate);
+  pending.sort((left, right) => left.anchorReceiptWallTimeMs - right.anchorReceiptWallTimeMs);
+  context.pendingSilenceGaps = pending;
+  return boundDurableSilenceGapQueue(context);
+}
+
+function pendingSilenceGapForContext(
+  context: DurableActivityContext,
+  nowMs: number,
+  thresholdMs: number,
+): DurableSilenceGap | null {
+  return stageSilenceGapsForContext(context, nowMs, thresholdMs)[0] ?? null;
 }
 
 /**
@@ -204,11 +313,38 @@ export async function detectDurableSilenceGapAfterResume(input: {
       const thresholdMs = Math.max(60_000, Math.floor(input.thresholdMs ?? 90_000));
       const gap = pendingSilenceGapForContext(context, nowMs, thresholdMs);
       if (!gap) return null;
-      context.pendingSilenceGap = gap;
       await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
       return gap;
     } catch {
       return null;
+    }
+  });
+}
+
+export async function detectDurableSilenceGapsAfterResume(input: {
+  ownerUserId: string;
+  clientActivityId: string;
+  ownerGeneration: string;
+  nowMs?: number;
+  thresholdMs?: number;
+}): Promise<DurableSilenceGap[]> {
+  return withOwnershipBoundary(async () => {
+    try {
+      if ((await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) !== '1') return [];
+      const encoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+      if (!encoded) return [];
+      const context = JSON.parse(encoded) as DurableActivityContext;
+      if (context.userId !== input.ownerUserId
+        || context.clientActivityId !== input.clientActivityId
+        || context.ownerGeneration !== input.ownerGeneration) return [];
+      const nowMs = Math.floor(input.nowMs ?? Date.now());
+      const thresholdMs = Math.max(60_000, Math.floor(input.thresholdMs ?? 90_000));
+      const gaps = stageSilenceGapsForContext(context, nowMs, thresholdMs);
+      if (gaps.length === 0) return [];
+      await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
+      return gaps;
+    } catch {
+      return [];
     }
   });
 }
@@ -224,12 +360,17 @@ export async function acknowledgeDurableSilenceGap(input: {
       const encoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
       if (!encoded) return false;
       const context = JSON.parse(encoded) as DurableActivityContext;
-      const pending = context.pendingSilenceGap;
+      const pending = durableSilenceGapQueue(context).find(gap => gap.evidenceId === input.evidenceId);
       if (context.userId !== input.ownerUserId
         || context.clientActivityId !== input.clientActivityId
         || context.ownerGeneration !== input.ownerGeneration
         || pending?.evidenceId !== input.evidenceId) return false;
-      context.silenceGapReportedForReceiptWallTimeMs = pending.anchorReceiptWallTimeMs;
+      context.silenceGapReportedForReceiptWallTimeMs = Math.max(
+        context.silenceGapReportedForReceiptWallTimeMs ?? 0,
+        pending.anchorReceiptWallTimeMs,
+      );
+      context.pendingSilenceGaps = durableSilenceGapQueue(context)
+        .filter(gap => gap.evidenceId !== input.evidenceId);
       context.pendingSilenceGap = null;
       await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
       return true;
@@ -277,6 +418,111 @@ export async function persistDurableSilenceGapEvent(input: {
   });
 }
 
+async function persistDurableSilenceGapOverflowEvent(input: {
+  ownerUserId: string;
+  clientActivityId: string;
+  ownerGeneration: string;
+  trigger: 'foreground-resume' | 'task-receipt' | 'process-recovery';
+}): Promise<boolean> {
+  const snapshot = await withOwnershipBoundary(async () => {
+    try {
+      if ((await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) !== '1') return null;
+      const encoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+      if (!encoded) return null;
+      const context = JSON.parse(encoded) as DurableActivityContext;
+      const overflow = context.silenceGapOverflow;
+      if (context.userId !== input.ownerUserId
+        || context.clientActivityId !== input.clientActivityId
+        || context.ownerGeneration !== input.ownerGeneration
+        || !overflow
+        || overflow.clientActivityId !== input.clientActivityId
+        || overflow.ownerGeneration !== input.ownerGeneration
+        || overflow.droppedCount <= overflow.reportedDroppedCount) return null;
+      return { ...overflow };
+    } catch {
+      return null;
+    }
+  });
+  if (!snapshot) return false;
+  const durable = await recordActivityStageEventDurably({
+    ownerUserId: input.ownerUserId,
+    clientActivityId: input.clientActivityId,
+    stage: 'provider-state',
+    evidenceId: `${input.clientActivityId}:silence-overflow:${snapshot.droppedCount}`,
+    wallTimeMs: snapshot.lastUpdatedAtMs,
+    details: {
+      eventCode: 'ACTIVITY_SILENCE_GAP_RETENTION_OVERFLOW',
+      event: 'silence-gap-retention-overflow',
+      trigger: input.trigger,
+      retainedExactIntervalLimit: MAX_PENDING_DURABLE_SILENCE_GAPS,
+      cumulativeDroppedIntervalCount: snapshot.droppedCount,
+      previouslyReportedDroppedIntervalCount: snapshot.reportedDroppedCount,
+      firstDroppedReceiptAnchorWallTimeMs: snapshot.firstDroppedAnchorReceiptWallTimeMs,
+      lastDroppedReceiptAnchorWallTimeMs: snapshot.lastDroppedAnchorReceiptWallTimeMs,
+      classification: snapshot.classification,
+      upstreamCause: snapshot.upstreamCause,
+      nativeVisibility: snapshot.nativeVisibility,
+      movementDuringIntervals: 'UNKNOWN',
+      syntheticLocationCreated: false,
+      ownerGenerationSuffix: snapshot.ownerGeneration.slice(-8),
+    },
+  });
+  if (!durable) return false;
+  return withOwnershipBoundary(async () => {
+    try {
+      const encoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+      if (!encoded) return false;
+      const context = JSON.parse(encoded) as DurableActivityContext;
+      const current = context.silenceGapOverflow;
+      if (context.userId !== input.ownerUserId
+        || context.clientActivityId !== input.clientActivityId
+        || context.ownerGeneration !== input.ownerGeneration
+        || !current) return false;
+      current.reportedDroppedCount = Math.max(
+        current.reportedDroppedCount,
+        snapshot.droppedCount,
+      );
+      context.silenceGapOverflow = current;
+      await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+export async function persistPendingDurableSilenceGapEvents(input: {
+  ownerUserId: string;
+  gaps: DurableSilenceGap[];
+  trigger: 'foreground-resume' | 'task-receipt' | 'process-recovery';
+  clientActivityId?: string;
+  ownerGeneration?: string;
+}): Promise<number> {
+  let acknowledged = 0;
+  const unique = new Map(input.gaps.map(gap => [gap.evidenceId, gap]));
+  for (const gap of [...unique.values()].sort((left, right) => (
+    left.anchorReceiptWallTimeMs - right.anchorReceiptWallTimeMs
+  ))) {
+    if (await persistDurableSilenceGapEvent({
+      ownerUserId: input.ownerUserId,
+      gap,
+      trigger: input.trigger,
+    })) acknowledged += 1;
+  }
+  const identity = input.gaps[0];
+  const clientActivityId = input.clientActivityId ?? identity?.clientActivityId;
+  const ownerGeneration = input.ownerGeneration ?? identity?.ownerGeneration;
+  if (clientActivityId && ownerGeneration) {
+    await persistDurableSilenceGapOverflowEvent({
+      ownerUserId: input.ownerUserId,
+      clientActivityId,
+      ownerGeneration,
+      trigger: input.trigger,
+    });
+  }
+  return acknowledged;
+}
+
 /**
  * Persist current session_id + hike-active flag for the background task
  * to read even after the app process is killed.
@@ -291,6 +537,10 @@ export async function persistBackgroundContext(
   context?: DurableActivityContext | null,
   options: { shouldContinue?: () => boolean } = {},
 ): Promise<boolean> {
+  // Publish command intent before waiting for an older storage transaction.
+  // Startup orphan cleanup snapshots this epoch, then performs native I/O
+  // outside the ownership mutex; a fresh Start therefore fences that cleanup.
+  durableOwnershipCommandEpoch += 1;
   return withOwnershipBoundary(async () => {
     try {
     if (options.shouldContinue && !options.shouldContinue()) return false;
@@ -301,14 +551,42 @@ export async function persistBackgroundContext(
       try {
         const priorEncoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
         const prior = priorEncoded ? JSON.parse(priorEncoded) as DurableActivityContext : null;
-        if (prior?.clientActivityId === context.clientActivityId
-          && prior.ownerGeneration === context.ownerGeneration) {
+        const sameActivity = prior?.clientActivityId === context.clientActivityId
+          && prior.userId === context.userId;
+        if (sameActivity) {
+          const priorFrontier = prior?.journalProjectionFrontier;
+          const nextFrontier = context.journalProjectionFrontier;
+          if (priorFrontier?.clientActivityId === context.clientActivityId
+            && (!nextFrontier
+              || priorFrontier.cursor.recordIndex > nextFrontier.cursor.recordIndex)) {
+            context.journalProjectionFrontier = priorFrontier;
+          }
+        }
+        if (sameActivity && prior?.ownerGeneration === context.ownerGeneration) {
           const priorReceipt = prior.latestSourceReceipt;
           const nextReceipt = context.latestSourceReceipt;
           const preservePriorReceipt = !!priorReceipt && (!nextReceipt
             || priorReceipt.observationTimeMs > nextReceipt.observationTimeMs
             || (priorReceipt.observationTimeMs === nextReceipt.observationTimeMs
               && priorReceipt.receiptWallTimeMs > nextReceipt.receiptWallTimeMs));
+          const priorCallback = prior.latestJsCallbackReceipt;
+          const nextCallback = context.latestJsCallbackReceipt;
+          const latestCallback = priorCallback && (!nextCallback
+            || priorCallback.receiptWallTimeMs > nextCallback.receiptWallTimeMs)
+            ? priorCallback
+            : nextCallback;
+          const pendingSilenceGaps = durableSilenceGapQueue({
+            ...context,
+            pendingSilenceGap: prior.pendingSilenceGap ?? context.pendingSilenceGap ?? null,
+            pendingSilenceGaps: [
+              ...(prior.pendingSilenceGaps ?? []),
+              ...(context.pendingSilenceGaps ?? []),
+            ],
+          });
+          const silenceGapOverflow = (prior.silenceGapOverflow?.droppedCount ?? 0)
+            >= (context.silenceGapOverflow?.droppedCount ?? 0)
+            ? prior.silenceGapOverflow
+            : context.silenceGapOverflow;
           context = {
             ...context,
             sourceExpectedSinceMs: prior.sourceExpectedSinceMs
@@ -318,17 +596,16 @@ export async function persistBackgroundContext(
               prior.silenceGapReportedForReceiptWallTimeMs
               ?? context.silenceGapReportedForReceiptWallTimeMs
               ?? null,
-            latestJsCallbackReceipt: prior.latestJsCallbackReceipt
-              ?? context.latestJsCallbackReceipt
-              ?? null,
-            pendingSilenceGap: prior.pendingSilenceGap
-              ?? context.pendingSilenceGap
-              ?? null,
+            latestJsCallbackReceipt: latestCallback ?? null,
+            pendingSilenceGap: null,
+            pendingSilenceGaps,
+            silenceGapOverflow: silenceGapOverflow ?? null,
             latestSourceReceipt: preservePriorReceipt ? priorReceipt : nextReceipt,
           };
         }
       } catch { /* a valid replacement below remains authoritative */ }
       context.sourceExpectedSinceMs ??= context.acceptAfterMs;
+      boundDurableSilenceGapQueue(context);
       await AsyncStorage.setItem(STORAGE_KEY_SESSION, sessionId);
       if (options.shouldContinue && !options.shouldContinue()) return false;
       await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
@@ -385,6 +662,7 @@ export type LocationCoords = {
   segmentId?: string;
   segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
   rawOrdinal?: number;
+  observationId?: string;
   /** Prevent the foreground drain from filtering a durably classified point twice. */
   continuityPreclassified?: boolean;
   canonicalDecision?: 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'REFINE';
@@ -410,12 +688,19 @@ type ForegroundProjectionWake = (owner: {
   receiptWallTimeMs: number;
 }) => void;
 let foregroundProjectionWake: ForegroundProjectionWake | null = null;
+let startupOrphanMutationWake: (() => void) | null = null;
 
 /** UI latency hint only. The accepted WAL remains the projection authority. */
 export function setActivityTaskForegroundProjectionWake(
   wake: ForegroundProjectionWake | null,
 ): void {
   foregroundProjectionWake = wake;
+}
+
+/** A startup orphan stop can finish after a fresh Activity acquired ownership.
+ * The mounted lifecycle registers this wake to re-assert its immutable owner. */
+export function setActivityStartupOrphanMutationWake(wake: (() => void) | null): void {
+  startupOrphanMutationWake = wake;
 }
 
 export function drainBackgroundLocations(): LocationCoords[] {
@@ -455,6 +740,46 @@ export async function readDurableActivityContext(): Promise<DurableActivityConte
       return parsed;
     } catch {
       return null;
+    }
+  });
+}
+
+export async function persistDurableJournalProjectionFrontier(input: {
+  ownerUserId: string;
+  clientActivityId: string;
+  ownerGeneration: string;
+  cursor: HikeTrackProjectionCursor;
+  lastPointKey: string;
+  projectedAtMs?: number;
+}): Promise<boolean> {
+  return withOwnershipBoundary(async () => {
+    try {
+      if ((await AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE)) !== '1') return false;
+      const sessionId = await AsyncStorage.getItem(STORAGE_KEY_SESSION);
+      const encoded = await AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT);
+      if (!sessionId || !encoded || sessionId !== input.clientActivityId) return false;
+      const context = JSON.parse(encoded) as DurableActivityContext;
+      if (context.userId !== input.ownerUserId
+        || context.clientActivityId !== input.clientActivityId
+        || context.ownerGeneration !== input.ownerGeneration
+        || input.cursor.version !== 1
+        || !Number.isInteger(input.cursor.recordIndex)
+        || input.cursor.recordIndex <= 0
+        || typeof input.lastPointKey !== 'string'
+        || input.lastPointKey.length === 0) return false;
+      const prior = context.journalProjectionFrontier;
+      if (prior?.clientActivityId === input.clientActivityId
+        && prior.cursor.recordIndex > input.cursor.recordIndex) return true;
+      context.journalProjectionFrontier = {
+        clientActivityId: input.clientActivityId,
+        cursor: { ...input.cursor },
+        lastPointKey: input.lastPointKey.slice(0, 240),
+        projectedAtMs: Math.floor(input.projectedAtMs ?? Date.now()),
+      };
+      await AsyncStorage.setItem(STORAGE_KEY_ACTIVITY_CONTEXT, JSON.stringify(context));
+      return true;
+    } catch {
+      return false;
     }
   });
 }
@@ -614,7 +939,15 @@ async function appendDirectlyToHikeTrack(
             course: point.course ?? null,
             courseAccuracy: point.courseAccuracy ?? null,
             source: point.source,
-            observationId: 'headless-restored-' + index + '-' + point.t,
+            observationId: point.observationId ?? (
+              Number.isFinite(point.rawOrdinal)
+                ? activityObservationEvidenceId({
+                    clientActivityId: point.clientActivityId,
+                    ownerGeneration: point.ownerGeneration,
+                    rawOrdinal: Number(point.rawOrdinal),
+                  })
+                : `headless-restored-${index}-${point.t}`
+            ),
             rawOrdinal: point.rawOrdinal,
             segmentId: point.segmentId ?? activeSegmentId,
           }));
@@ -691,7 +1024,11 @@ async function appendDirectlyToHikeTrack(
         speedAccuracy: event.speedAccuracy ?? null,
         courseAccuracy: event.courseAccuracy ?? null,
         source: 'background',
-        observationId: context.clientActivityId.slice(-8) + ':' + rawOrdinal,
+        observationId: activityObservationEvidenceId({
+          clientActivityId: context.clientActivityId,
+          ownerGeneration: context.ownerGeneration,
+          rawOrdinal,
+        }),
         rawOrdinal,
       };
       const dtFromPreviousRawMs = previousRawDiagnostic
@@ -743,6 +1080,9 @@ async function appendDirectlyToHikeTrack(
         reason: decision.reason,
         segmentId: activeSegmentId,
         receiptEvidenceId,
+        observationId: observation.observationId,
+        ownerGeneration: context.ownerGeneration,
+        rawOrdinal,
       }));
       void recordActivityStageEvent({
         ownerUserId: context.userId,
@@ -908,6 +1248,9 @@ async function appendDirectlyToHikeTrack(
             reason: 'candidate-confirmed',
             segmentId: activeSegmentId,
             receiptEvidenceId: sourceEvent.receiptEvidenceId ?? null,
+            observationId: canonicalObservation.observationId,
+            ownerGeneration: context.ownerGeneration,
+            rawOrdinal: canonicalObservation.rawOrdinal,
           }));
         }
         const acceptedContinuity = acceptRealGpsObservation(
@@ -1155,14 +1498,14 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   const batchReceiptMonotonicTimeMs = activityStageMonotonicNow();
   const nativeBatchSequence = ++backgroundNativeBatchSequence;
   const diagnosticTarget: {
-    current: { ownerUserId: string; clientActivityId: string } | null;
+    current: { ownerUserId: string; clientActivityId: string; ownerGeneration: string } | null;
   } = { current: null };
   // Diagnostics stay outside the ownership/WAL mutex, but an opted-in cold
   // headless batch must join its own recovery/appends before the handler can
   // return (including an all-rejected batch with no canonical events).
   const diagnosticWrites: Promise<void>[] = [];
   let projectionWakeOwner: Parameters<ForegroundProjectionWake>[0] | null = null;
-  let pendingSilenceGap: DurableSilenceGap | null = null;
+  let pendingSilenceGaps: DurableSilenceGap[] = [];
   const result = await withOwnershipBoundary(async () => {
   crashLogger.breadcrumb(
     `k10:task_fire loc_count=${data?.locations?.length ?? 0} err=${error ? String(error).slice(0, 40) : 'none'} elapsed_ms=${Date.now() - moduleLoadTs}`
@@ -1195,12 +1538,12 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   diagnosticTarget.current = {
     ownerUserId: context.userId,
     clientActivityId: context.clientActivityId,
+    ownerGeneration: context.ownerGeneration,
   };
   // Close any prior no-callback interval before replacing the callback anchor.
   // Persist callback liveness independently of GPS validity and WAL success so
   // empty, stale and native-error deliveries remain distinguishable.
-  pendingSilenceGap = pendingSilenceGapForContext(context, batchReceiptWallTimeMs, 90_000);
-  if (pendingSilenceGap) context.pendingSilenceGap = pendingSilenceGap;
+  pendingSilenceGaps = stageSilenceGapsForContext(context, batchReceiptWallTimeMs, 90_000);
   const validLocations = locations.filter(loc => (
     Number.isFinite(loc.timestamp)
     && Number.isFinite(loc.coords?.latitude)
@@ -1449,6 +1792,7 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
         segmentId: point.segmentId,
         segmentStartReason: point.segmentStartReason,
         rawOrdinal: point.rawOrdinal,
+        observationId: point.observationId,
         continuityPreclassified: true,
         canonicalDecision: point.canonicalDecision,
         decisionReason: point.decisionReason,
@@ -1478,12 +1822,14 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
     crashLogger.breadcrumb(`k10:path_b_err ${String(e?.message || e).slice(0, 60)}`);
   }
   });
-  if (pendingSilenceGap && diagnosticTarget.current) {
-    await persistDurableSilenceGapEvent({
+  if (diagnosticTarget.current) {
+    await persistPendingDurableSilenceGapEvents({
       ownerUserId: diagnosticTarget.current.ownerUserId,
-      gap: pendingSilenceGap,
+      gaps: pendingSilenceGaps,
       trigger: 'task-receipt',
-    }).catch(() => false);
+      clientActivityId: diagnosticTarget.current.clientActivityId,
+      ownerGeneration: diagnosticTarget.current.ownerGeneration,
+    }).catch(() => 0);
   }
   // The native ownership/WAL transaction has already completed. Persist one
   // partial diagnostic chunk per delivered native batch outside that mutex so
@@ -1539,13 +1885,14 @@ export type ActivityBackgroundStartupReconciliation =
   | 'preserved-active-owner'
   | 'orphan-stopped'
   | 'already-stopped'
+  | 'superseded'
   | 'native-unavailable';
 
 /**
- * App-entry reconciliation serialized with Start/Finish durable ownership.
- * A valid cold-recovery owner keeps its native TaskManager source. When there
- * is no valid live lease, an orphan is stopped before a fresh Start can acquire
- * the same boundary, eliminating the old startup-probe race.
+ * Storage inspection is serialized with Start/Finish, but native calls are
+ * deliberately outside that mutex. A hung CoreLocation Promise can therefore
+ * never imprison a fresh durable Start. Immutable command epochs and a final
+ * lease recheck either cancel the orphan cleanup or compensate a late stop.
  */
 export async function reconcileActivityBackgroundTaskOnStartup(nativeAdapter?: {
   isTaskDefined: (taskName: string) => boolean;
@@ -1553,38 +1900,82 @@ export async function reconcileActivityBackgroundTaskOnStartup(nativeAdapter?: {
   stop: (taskName: string) => Promise<void>;
 }): Promise<ActivityBackgroundStartupReconciliation> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return 'web-not-applicable';
-  return withOwnershipBoundary(async () => {
-    try {
-      const [active, sessionId, encoded] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE),
-        AsyncStorage.getItem(STORAGE_KEY_SESSION),
-        AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT),
-      ]);
-      let context: DurableActivityContext | null = null;
-      try { context = encoded ? JSON.parse(encoded) as DurableActivityContext : null; } catch { context = null; }
-      const validOwner = active === '1'
+  const readOwner = () => withOwnershipBoundary(async () => {
+    const [active, sessionId, encoded] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY_HIKE_ACTIVE),
+      AsyncStorage.getItem(STORAGE_KEY_SESSION),
+      AsyncStorage.getItem(STORAGE_KEY_ACTIVITY_CONTEXT),
+    ]);
+    let context: DurableActivityContext | null = null;
+    try { context = encoded ? JSON.parse(encoded) as DurableActivityContext : null; } catch { context = null; }
+    return {
+      valid: active === '1'
         && !!sessionId
         && context?.clientActivityId === sessionId
         && !!context.userId
         && !!context.ownerGeneration
-        && !!context.segmentId;
-      if (validOwner) return 'preserved-active-owner';
-      const adapter = nativeAdapter ?? await (async () => {
-        const Location = await import('expo-location');
-        const TaskManager = await import('expo-task-manager');
-        return {
-          isTaskDefined: (taskName: string) => TaskManager.isTaskDefined(taskName),
-          hasStarted: (taskName: string) => Location.hasStartedLocationUpdatesAsync(taskName),
-          stop: (taskName: string) => Location.stopLocationUpdatesAsync(taskName),
-        };
-      })();
-      if (!adapter.isTaskDefined(BACKGROUND_LOCATION_TASK)) return 'already-stopped';
-      const running = await adapter.hasStarted(BACKGROUND_LOCATION_TASK);
-      if (!running) return 'already-stopped';
-      await adapter.stop(BACKGROUND_LOCATION_TASK);
-      return 'orphan-stopped';
-    } catch {
+        && !!context.segmentId,
+    };
+  });
+  const boundedNative = async <T>(work: Promise<T>): Promise<{
+    status: 'settled'; value: T;
+  } | { status: 'failed' | 'timeout' }> => new Promise(resolve => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve({ status: 'timeout' });
+    }, 2_000);
+    work.then(value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ status: 'settled', value });
+    }).catch(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ status: 'failed' });
+    });
+  });
+  try {
+    const initial = await readOwner();
+    if (initial.valid) return 'preserved-active-owner';
+    const commandEpoch = durableOwnershipCommandEpoch;
+    const adapter = nativeAdapter ?? await (async () => {
+      const Location = await import('expo-location');
+      const TaskManager = await import('expo-task-manager');
+      return {
+        isTaskDefined: (taskName: string) => TaskManager.isTaskDefined(taskName),
+        hasStarted: (taskName: string) => Location.hasStartedLocationUpdatesAsync(taskName),
+        stop: (taskName: string) => Location.stopLocationUpdatesAsync(taskName),
+      };
+    })();
+    if (!adapter.isTaskDefined(BACKGROUND_LOCATION_TASK)) return 'already-stopped';
+    const probeWork = adapter.hasStarted(BACKGROUND_LOCATION_TASK);
+    const probe = await boundedNative(probeWork);
+    if (probe.status !== 'settled') return 'native-unavailable';
+    if (!probe.value) return 'already-stopped';
+    const beforeStop = await readOwner();
+    if (beforeStop.valid) return 'preserved-active-owner';
+    if (commandEpoch !== durableOwnershipCommandEpoch) return 'superseded';
+
+    const stopWork = adapter.stop(BACKGROUND_LOCATION_TASK);
+    const stop = await boundedNative(stopWork);
+    if (stop.status === 'timeout') {
+      void stopWork.then(async () => {
+        if ((await readOwner()).valid) startupOrphanMutationWake?.();
+      }).catch(() => undefined);
       return 'native-unavailable';
     }
-  });
+    if (stop.status === 'failed') return 'native-unavailable';
+    const afterStop = await readOwner();
+    if (afterStop.valid) {
+      startupOrphanMutationWake?.();
+      return 'preserved-active-owner';
+    }
+    return 'orphan-stopped';
+  } catch {
+    return 'native-unavailable';
+  }
 }

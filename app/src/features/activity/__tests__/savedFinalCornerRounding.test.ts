@@ -27,8 +27,33 @@ describe('saved Final road corner rounding', () => {
     expect(deviationM).toBeLessThanOrEqual(0.75);
   });
 
+  test('rounds one physical road corner in a densely sampled provider polyline', () => {
+    const source = [
+      meters(0, 0, 0),
+      meters(3, 0, 1),
+      meters(6, 0, 2),
+      meters(9, 0, 3),
+      meters(10, 0, 4),
+      meters(10, 1, 5),
+      meters(10, 4, 6),
+      meters(10, 7, 7),
+      meters(10, 10, 8),
+    ];
+    const result = roundSavedFinalRoadCorners(source);
+    expect(result.diagnostics).toMatchObject({
+      roundedCorners: 1,
+      postRoundRejected: false,
+    });
+    expect(result.diagnostics.skippedOverlapGuard).toBeGreaterThan(0);
+    expect(result.points[0]).toEqual(source[0]);
+    expect(result.points.at(-1)).toEqual(source.at(-1));
+    expect(result.points).not.toContainEqual(source[4]);
+  });
+
   test.each([
     ['hairpin', [meters(0, 0, 0), meters(10, 0, 1), meters(0, 0, 2)]],
+    ['shallow bend', [meters(0, 0, 0), meters(10, 0, 1), meters(20, 3, 2)]],
+    ['acute return', [meters(0, 0, 0), meters(10, 0, 1), meters(3.57, 7.66, 2)]],
     ['short arm', [meters(0, 0, 0), meters(3, 0, 1), meters(3, 10, 2)]],
     ['segment boundary', [
       meters(0, 0, 0, 'a'), meters(10, 0, 1, 'a'), meters(10, 10, 2, 'b'),
@@ -36,6 +61,19 @@ describe('saved Final road corner rounding', () => {
   ])('retains %s geometry verbatim', (_label, source) => {
     const result = roundSavedFinalRoadCorners(source);
     expect(result.diagnostics.roundedCorners).toBe(0);
+    expect(result.points).toEqual(source);
+  });
+
+  test('retains a tight switchback instead of softening its return topology', () => {
+    const source = [
+      meters(0, 0, 0),
+      meters(12, 0, 1),
+      meters(2, 2, 2),
+      meters(14, 4, 3),
+    ];
+    const result = roundSavedFinalRoadCorners(source);
+    expect(result.diagnostics.roundedCorners).toBe(0);
+    expect(result.diagnostics.skippedTurnShape).toBeGreaterThan(0);
     expect(result.points).toEqual(source);
   });
 

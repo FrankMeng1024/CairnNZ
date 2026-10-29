@@ -457,8 +457,8 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     await expect(task.persistDurableSilenceGapEvent({
       ownerUserId: 'user-a', gap, trigger: 'process-recovery',
     })).resolves.toBe(false);
-    expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]).pendingSilenceGap)
-      .toEqual(expect.objectContaining({ evidenceId: gap.evidenceId }));
+    expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]).pendingSilenceGaps)
+      .toEqual([expect.objectContaining({ evidenceId: gap.evidenceId })]);
     const replay = await task.detectDurableSilenceGapAfterResume({
       ownerUserId: 'user-a',
       clientActivityId: 'activity-gap-crash',
@@ -471,6 +471,150 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       ownerUserId: 'user-a', gap: replay, trigger: 'process-recovery',
     })).resolves.toBe(true);
     expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]).pendingSilenceGap).toBeNull();
+    expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]).pendingSilenceGaps).toEqual([]);
+  });
+
+  it('retains multiple SILENCE_GAP intervals when strict writes fail across later callbacks and recovery', async () => {
+    recordActivityStageEventDurably.mockResolvedValue(false);
+    const now = jest.spyOn(Date, 'now');
+    try {
+      const task = require('../backgroundLocationTask');
+      await task.persistBackgroundContext('activity-multi-gap', true, {
+        clientActivityId: 'activity-multi-gap',
+        userId: 'user-a',
+        ownerGeneration: 'generation-multi-gap',
+        segmentId: 'segment-multi-gap',
+        activityMode: 'hiking',
+        acceptAfterMs: 1_000,
+        sourceExpectedSinceMs: 1_000,
+        latestJsCallbackReceipt: {
+          receiptWallTimeMs: 1_000,
+          source: 'background',
+          batchSize: 0,
+          validObservationCount: 0,
+          errorDelivered: false,
+        },
+      });
+
+      now.mockReturnValue(121_000);
+      await handler({ data: { locations: [] }, error: null });
+      now.mockReturnValue(130_000);
+      await handler({ data: { locations: [] }, error: null });
+      now.mockReturnValue(260_000);
+      await handler({ data: { locations: [] }, error: null });
+
+      const context = JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]);
+      expect(context.pendingSilenceGaps).toEqual([
+        expect.objectContaining({ evidenceId: 'activity-multi-gap:silence:1000' }),
+        expect.objectContaining({ evidenceId: 'activity-multi-gap:silence:130000' }),
+      ]);
+      expect(context.pendingSilenceGap).toBeNull();
+      expect(JSON.stringify(context.pendingSilenceGaps))
+        .not.toMatch(/latitude|longitude|coordinates|"lat"|"lng"/i);
+
+      recordActivityStageEventDurably.mockResolvedValue(true);
+      const recovered = await task.detectDurableSilenceGapsAfterResume({
+        ownerUserId: 'user-a',
+        clientActivityId: 'activity-multi-gap',
+        ownerGeneration: 'generation-multi-gap',
+        nowMs: 260_001,
+        thresholdMs: 60_000,
+      });
+      expect(recovered.map((gap: any) => gap.evidenceId)).toEqual([
+        'activity-multi-gap:silence:1000',
+        'activity-multi-gap:silence:130000',
+      ]);
+      await expect(task.persistPendingDurableSilenceGapEvents({
+        ownerUserId: 'user-a',
+        gaps: recovered,
+        trigger: 'process-recovery',
+      })).resolves.toBe(2);
+      expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]).pendingSilenceGaps).toEqual([]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('bounds exact SILENCE_GAP retention and durably exports cumulative overflow on cold recovery', async () => {
+    const task = require('../backgroundLocationTask');
+    const pendingSilenceGaps = Array.from({ length: 70 }, (_, index) => {
+      const anchor = (index + 1) * 1_000;
+      return {
+        evidenceId: `activity-gap-cap:silence:${anchor}`,
+        clientActivityId: 'activity-gap-cap',
+        ownerGeneration: 'generation-gap-cap',
+        detectedAtMs: 100_000 + anchor,
+        anchorReceiptWallTimeMs: anchor,
+        lastObservationTimeMs: null,
+        durationMs: 100_000,
+        source: 'background',
+        classification: 'SILENCE_GAP',
+        upstreamCause: 'UPSTREAM_UNKNOWN',
+        nativeVisibility: 'NATIVE_UNOBSERVABLE',
+      };
+    });
+    await task.persistBackgroundContext('activity-gap-cap', true, {
+      clientActivityId: 'activity-gap-cap',
+      userId: 'user-a',
+      ownerGeneration: 'generation-gap-cap',
+      segmentId: 'segment-gap-cap',
+      activityMode: 'hiking',
+      acceptAfterMs: 70_000,
+      sourceExpectedSinceMs: 1_000,
+      silenceGapReportedForReceiptWallTimeMs: 70_000,
+      latestJsCallbackReceipt: {
+        receiptWallTimeMs: 70_000,
+        source: 'background',
+        batchSize: 0,
+        validObservationCount: 0,
+        errorDelivered: false,
+      },
+      pendingSilenceGaps,
+    });
+
+    let cold = await task.readDurableActivityContext();
+    expect(cold.pendingSilenceGaps).toHaveLength(task.MAX_PENDING_DURABLE_SILENCE_GAPS);
+    expect(cold.pendingSilenceGaps[0].anchorReceiptWallTimeMs).toBe(7_000);
+    expect(cold.silenceGapOverflow).toEqual(expect.objectContaining({
+      droppedCount: 6,
+      reportedDroppedCount: 0,
+      firstDroppedAnchorReceiptWallTimeMs: 1_000,
+      lastDroppedAnchorReceiptWallTimeMs: 6_000,
+      classification: 'SILENCE_GAP_RETENTION_OVERFLOW',
+      upstreamCause: 'UPSTREAM_UNKNOWN',
+      nativeVisibility: 'NATIVE_UNOBSERVABLE',
+    }));
+
+    const recovered = await task.detectDurableSilenceGapsAfterResume({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-gap-cap',
+      ownerGeneration: 'generation-gap-cap',
+      nowMs: 170_000,
+      thresholdMs: 60_000,
+    });
+    await task.persistPendingDurableSilenceGapEvents({
+      ownerUserId: 'user-a',
+      clientActivityId: 'activity-gap-cap',
+      ownerGeneration: 'generation-gap-cap',
+      gaps: recovered,
+      trigger: 'process-recovery',
+    });
+
+    expect(recordActivityStageEventDurably).toHaveBeenCalledWith(expect.objectContaining({
+      evidenceId: 'activity-gap-cap:silence-overflow:6',
+      details: expect.objectContaining({
+        eventCode: 'ACTIVITY_SILENCE_GAP_RETENTION_OVERFLOW',
+        retainedExactIntervalLimit: task.MAX_PENDING_DURABLE_SILENCE_GAPS,
+        cumulativeDroppedIntervalCount: 6,
+        movementDuringIntervals: 'UNKNOWN',
+        syntheticLocationCreated: false,
+      }),
+    }));
+    cold = await task.readDurableActivityContext();
+    expect(cold.pendingSilenceGaps).toEqual([]);
+    expect(cold.silenceGapOverflow.reportedDroppedCount).toBe(6);
+    expect(JSON.stringify(cold.silenceGapOverflow))
+      .not.toMatch(/latitude|longitude|coordinates|"lat"|"lng"/i);
   });
 
   it('wakes foreground projection only after the Task batch is durable', async () => {
@@ -618,7 +762,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
     expect(stopLocationUpdatesAsync).not.toHaveBeenCalled();
   });
 
-  it('serializes a slow startup orphan probe ahead of a fresh Start lease', async () => {
+  it('does not hold durable ownership behind a slow startup orphan probe or stop a fresh Start lease', async () => {
     let resolveProbe!: (started: boolean) => void;
     hasStartedLocationUpdatesAsync.mockImplementation(() => new Promise<boolean>(resolve => {
       resolveProbe = resolve;
@@ -634,7 +778,6 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     expect(resolveProbe).toBeDefined();
-    let startLeaseSettled = false;
     const acquire = task.persistBackgroundContext('activity-new', true, {
       clientActivityId: 'activity-new',
       userId: 'user-a',
@@ -642,16 +785,11 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       segmentId: 'segment-new',
       activityMode: 'hiking',
       acceptAfterMs: 2_000,
-    }).then((result: boolean) => {
-      startLeaseSettled = true;
-      return result;
     });
-    await Promise.resolve();
-    expect(startLeaseSettled).toBe(false);
-    resolveProbe(true);
-    await expect(startup).resolves.toBe('orphan-stopped');
     await expect(acquire).resolves.toBe(true);
-    expect(stopLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    resolveProbe(true);
+    await expect(startup).resolves.toBe('preserved-active-owner');
+    expect(stopLocationUpdatesAsync).not.toHaveBeenCalled();
     expect(JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT])).toMatchObject({
       clientActivityId: 'activity-new', ownerGeneration: 'generation-new',
     });

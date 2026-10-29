@@ -38,6 +38,18 @@ jest.mock('../../../services/pendingSyncStore', () => ({
   }),
   readPendingReadonly: jest.fn(async () => mockPending),
   savePending: jest.fn(async (next: any) => { mockPending = { ...next }; }),
+  updatePendingRoadRefinementIfPresent: jest.fn(async (input: any) => {
+    if (!mockPending) return false;
+    if (mockPending.userId !== input.expectedUserId) throw new Error('pending_activity_owner_mismatch');
+    mockPending = {
+      ...mockPending,
+      uploadState: 'ready',
+      preparationPhase: 'registry_committed',
+      roadRefinementState: input.state,
+      roadRefinementNextRetryAt: input.nextRetryAt,
+    };
+    return true;
+  }),
 }));
 jest.mock('../activityFinalArtifact', () => ({
   loadActivityFinalArtifact: jest.fn(async () => mockArtifact),
@@ -47,12 +59,14 @@ jest.mock('../activityFinalArtifact', () => ({
 jest.mock('../../../services/routing/pedestrianFinalRoute', () => ({
   reconstructPedestrianFinalRoute: (...args: any[]) => mockReconstruct(...args),
 }));
-jest.mock('../../../services/routing/snapTrack', () => ({
-  ...jest.requireActual('../../../services/routing/snapTrack'),
-  analyzeTrustedEndpointCoverage: jest.fn(() => ({ eligibleForAnchoring: true })),
-  preserveTrustedRouteEndpoints: jest.fn((_canonical: any, points: any) => points),
-  evaluateMatchedGeometryQuality: jest.fn(() => ({ accepted: true })),
-}));
+jest.mock('../../../services/routing/snapTrack', () => {
+  const actual = jest.requireActual('../../../services/routing/snapTrack');
+  return {
+    ...actual,
+    analyzeTrustedEndpointCoverage: jest.fn(() => ({ eligibleForAnchoring: true })),
+    preserveTrustedRouteEndpoints: jest.fn((_canonical: any, points: any) => points),
+  };
+});
 jest.mock('../../activitySimulator/simulatorLog', () => ({ appendSimulatorLog: jest.fn() }));
 jest.mock('../../../services/syncDaemon', () => ({ drainPending: jest.fn(async () => undefined) }));
 
@@ -66,10 +80,12 @@ import {
 } from '../activityFinalRefinementQueue';
 import { exportLatestActivityStageLedger, flushActivityStageLedger } from '../activityStageLedger';
 import { roundSavedFinalRoadCorners } from '../savedFinalCornerRounding';
+import { roundedFinalP95Counterexample } from './fixtures/roundedFinalP95Counterexample';
 
 const pendingMocks = jest.requireMock('../../../services/pendingSyncStore') as {
   savePending: jest.Mock;
   markPendingUploadReady: jest.Mock;
+  updatePendingRoadRefinementIfPresent: jest.Mock;
 };
 
 function baseArtifact() {
@@ -303,18 +319,67 @@ describe('durable Activity Final refinement queue', () => {
     expect(committed.canonicalPoints).toEqual(points);
   });
 
-  test('restartable queued work retains validated Base and releases exactly one payload when road refinement is unavailable', async () => {
+  test('falls back to the already-approved unrounded road candidate when rounding breaches canonical quality', async () => {
+    mockToken = 'token';
+    mockNetworkState = 'online';
+    const fixture = roundedFinalP95Counterexample();
+    mockArtifact = { ...baseArtifact(), points: fixture.current };
+    mockPending.payload.route_points_canonical = fixture.canonical.map(point => ({
+      lat: point.lat, lng: point.lng, t: point.t, segment_id: point.segmentId,
+      acc: point.accuracy,
+    }));
+    mockReconstruct.mockResolvedValue({
+      ok: true,
+      points: fixture.approvedUnrounded,
+      stats: {
+        sections: [{
+          displayStart: 0,
+          displayEnd: 2,
+          decision: 'refined',
+          networkSource: 'map-matching',
+          geometryMode: 'A_PEDESTRIAN_NETWORK',
+          confidence: 0.92,
+          corridorEvidence: { accepted: true },
+          seam: { accepted: true },
+          promotionUtility: { accepted: true, networkAuthority: 'strong' },
+        }],
+        requestResults: [requestResult({ acceptedCandidateCount: 1 })],
+        acceptedMatchedDistanceM: 20,
+        canonicalDerivedSectionCount: 0,
+        displayRefined: true,
+        wholeRouteValidation: { accepted: true },
+      },
+    });
+    mockCommitArtifact.mockImplementation(async (input: any) => ({
+      committed: true,
+      artifact: {
+        ...mockArtifact,
+        revision: 2,
+        parentRevision: 1,
+        source: 'matched',
+        displayFingerprint: 'unrounded-fallback',
+        points: input.displayPoints,
+      },
+    }));
+
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: mockArtifact,
+    });
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    expect(mockCommitArtifact).toHaveBeenCalledTimes(1);
+    expect(mockCommitArtifact.mock.calls[0][0].displayPoints).toEqual(fixture.approvedUnrounded);
+  });
+
+  test('restartable queued work retains validated Base without mutating its frozen upload snapshot', async () => {
     const artifact = baseArtifact();
+    const frozenUpload = JSON.parse(JSON.stringify(mockPending));
     await enqueueActivityFinalRefinement({
       ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: artifact,
     });
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
-    expect(pendingMocks.savePending).toHaveBeenCalledWith(expect.objectContaining({
-      idempotencyKey: 'same-key-through-preparation',
-      uploadState: 'preparing',
-      finalArtifact: expect.objectContaining({ revision: 1, source: 'base' }),
-    }));
-    expect(pendingMocks.markPendingUploadReady).toHaveBeenCalledWith('activity-a');
+    expect(pendingMocks.savePending).not.toHaveBeenCalled();
+    expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
+    expect(mockPending).toEqual(frozenUpload);
     expect(mockAddSession).toHaveBeenCalledWith(expect.objectContaining({
       finalGeometryState: 'base_ready',
       finalGeometryRevision: 1,
@@ -391,16 +456,14 @@ describe('durable Activity Final refinement queue', () => {
       roadEnhancementState: 'pending-network',
       requestHttpCategory: 'not-attempted',
     });
-    expect(pendingMocks.savePending).toHaveBeenLastCalledWith(expect.objectContaining({
-      uploadState: 'ready',
-      preparationPhase: 'registry_committed',
-      roadRefinementState: 'pending-network',
-    }));
+    expect(pendingMocks.updatePendingRoadRefinementIfPresent).toHaveBeenLastCalledWith({
+      localId: 'activity-a',
+      expectedUserId: 'owner-a',
+      state: 'pending-network',
+      nextRetryAt: null,
+    });
     expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
-    expect(mockAddSession).toHaveBeenLastCalledWith(expect.objectContaining({
-      finalGeometryState: 'base_ready',
-      roadRefinementPending: true,
-    }), 'owner-a');
+    expect(mockAddSession).not.toHaveBeenCalled();
 
     mockNetworkState = 'online';
     mockReconstruct.mockResolvedValue({
@@ -417,21 +480,49 @@ describe('durable Activity Final refinement queue', () => {
       },
     });
     const refined = { ...mockArtifact, revision: 2, source: 'matched', displayFingerprint: 'reconnected-refined' };
-    mockCommitArtifact.mockResolvedValue({ committed: true, artifact: refined });
+    mockCommitArtifact.mockImplementation(async () => {
+      mockArtifact = refined;
+      return { committed: true, artifact: refined };
+    });
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
     expect(mockReconstruct).toHaveBeenCalledTimes(1);
     // Once Base became uploadable offline, the idempotency-key payload was
     // frozen. The accepted reconnect refinement updates only local display.
     expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
-    expect(pendingMocks.savePending).toHaveBeenCalledTimes(1);
+    expect(pendingMocks.savePending).not.toHaveBeenCalled();
     expect(await readActivityFinalRefinementJob('owner-a', 'activity-a')).toMatchObject({
-      status: 'complete',
+      status: 'queued',
       roadEnhancementState: 'accepted',
       completedRevision: 2,
       networkAttemptCount: 1,
+      serverRevisionState: 'pending-base',
     });
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
     expect(mockReconstruct).toHaveBeenCalledTimes(1);
+  });
+
+  test('an ACK cleanup racing an offline refinement cannot recreate the upload outbox', async () => {
+    mockToken = 'token-that-must-not-be-used';
+    mockNetworkState = 'offline';
+    pendingMocks.updatePendingRoadRefinementIfPresent.mockImplementationOnce(async () => {
+      // The Sync ACK removed the file after the queue's read-only snapshot but
+      // before its atomic optional-state mutation acquired authority.
+      mockPending = null;
+      return false;
+    });
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-network');
+
+    expect(mockPending).toBeNull();
+    expect(pendingMocks.savePending).not.toHaveBeenCalled();
+    expect(mockAddSession).not.toHaveBeenCalled();
+    expect(await readActivityFinalRefinementJob('owner-a', 'activity-a')).toMatchObject({
+      status: 'queued',
+      roadEnhancementState: 'pending-network',
+    });
   });
 
   test('owner deletion cancellation is durable and prevents a queued job from running', async () => {
@@ -445,6 +536,63 @@ describe('durable Activity Final refinement queue', () => {
     reviewReceipts.push({ scenario: 'owner deletion cancellation', ...job });
     expect(job).toMatchObject({
       status: 'cancelled', outcome: 'deleted',
+    });
+    expect(job?.input).toBeUndefined();
+    expect(JSON.stringify(job)).not.toContain('canonicalPoints');
+    expect(JSON.parse(mockValues.get('@cairn:activity_final_refinement:index:v1:owner-a') ?? '[]'))
+      .not.toContain('activity-a');
+  });
+
+  test('index retention removes evicted terminal job payloads instead of orphaning precise coordinates', async () => {
+    const ids = Array.from({ length: 128 }, (_, index) => `old-${index}`);
+    for (const [index, id] of ids.entries()) {
+      mockValues.set(`@cairn:activity_final_refinement:v1:owner-a:${id}`, JSON.stringify({
+        format: 'cairn-activity-final-refinement',
+        version: 2,
+        ownerUserId: 'owner-a',
+        clientActivityId: id,
+        expectedBaseRevision: 1,
+        canonicalFingerprint: `canonical-${index}`,
+        status: 'complete',
+        outcome: 'base-retained',
+        attemptCount: 1,
+        createdAt: index,
+        updatedAt: index,
+        completedRevision: 1,
+        lastError: null,
+        input: {
+          canonicalPoints: [{ lat: -41, lng: 174, t: index + 1 }, { lat: -41.001, lng: 174, t: index + 2 }],
+          basePoints: [{ lat: -41, lng: 174, t: index + 1 }, { lat: -41.001, lng: 174, t: index + 2 }],
+          activityMode: 'hiking',
+          startedAt: index + 1,
+          durationS: 1,
+        },
+      }));
+    }
+    mockValues.set('@cairn:activity_final_refinement:index:v1:owner-a', JSON.stringify(ids));
+
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+
+    const retained = JSON.parse(mockValues.get('@cairn:activity_final_refinement:index:v1:owner-a') ?? '[]');
+    expect(retained).toHaveLength(128);
+    expect(retained).toContain('activity-a');
+    expect(retained).not.toContain('old-0');
+    expect(mockValues.has('@cairn:activity_final_refinement:v1:owner-a:old-0')).toBe(false);
+  });
+
+  test('a missing or corrupt optional artifact retains the uploaded Base and is never labelled user-deleted', async () => {
+    await enqueueActivityFinalRefinement({
+      ownerUserId: 'owner-a', clientActivityId: 'activity-a', baseArtifact: baseArtifact(),
+    });
+    mockArtifact = null;
+    await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
+    await expect(readActivityFinalRefinementJob('owner-a', 'activity-a')).resolves.toMatchObject({
+      status: 'complete',
+      outcome: 'base-retained',
+      lastError: 'artifact-unavailable',
+      roadEnhancementState: 'terminal-local',
     });
   });
 
@@ -532,8 +680,10 @@ describe('durable Activity Final refinement queue', () => {
     });
     await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('complete');
     expect(mockCommitArtifact).not.toHaveBeenCalled();
-    expect(pendingMocks.savePending).toHaveBeenCalledWith(expect.objectContaining({
-      finalArtifact: expect.objectContaining({ source: mockArtifact.source, revision: 1 }),
+    expect(pendingMocks.savePending).not.toHaveBeenCalled();
+    expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
+    expect(mockPending.finalArtifact).toEqual(expect.objectContaining({
+      source: mockArtifact.source, revision: 1,
     }));
   });
 
@@ -574,8 +724,12 @@ describe('durable Activity Final refinement queue', () => {
       await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-retry');
       let job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
       expect(job).toMatchObject({ networkAttemptCount: 1, nextRetryAt: 15_000, status: 'queued' });
+      const timerSpy = jest.spyOn(global, 'setTimeout');
+      timerSpy.mockClear();
       await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-retry');
       expect(mockReconstruct).toHaveBeenCalledTimes(1);
+      expect(timerSpy).toHaveBeenCalledWith(expect.any(Function), 5_000);
+      timerSpy.mockRestore();
 
       now = 15_001;
       await expect(resumeActivityFinalRefinement('owner-a', 'activity-a')).resolves.toBe('pending-retry');
@@ -686,13 +840,16 @@ describe('durable Activity Final refinement queue', () => {
       source: 'hybrid',
       expectedRevision: 1,
     }));
-    expect(pendingMocks.savePending).toHaveBeenCalledWith(expect.objectContaining({
-      finalArtifact: expect.objectContaining({ source: 'hybrid', revision: 2 }),
-    }));
+    expect(pendingMocks.savePending).not.toHaveBeenCalled();
+    expect(pendingMocks.markPendingUploadReady).not.toHaveBeenCalled();
+    expect(mockPending).toMatchObject({
+      idempotencyKey: 'same-key-through-preparation',
+      finalArtifact: { source: 'base', revision: 1 },
+    });
     const job = await readActivityFinalRefinementJob('owner-a', 'activity-a');
     reviewReceipts.push({ scenario: 'matched hybrid success', ...job });
     expect(job).toMatchObject({
-      status: 'complete',
+      status: 'queued',
       technicalOutcome: 'matched-success',
       authoritySource: 'runtime',
       matchingAttempted: true,
@@ -701,6 +858,7 @@ describe('durable Activity Final refinement queue', () => {
       selectedSource: 'hybrid',
       selectedFingerprint: 'hybrid-two-segments',
       completedRevision: 2,
+      serverRevisionState: 'pending-base',
     });
   });
 

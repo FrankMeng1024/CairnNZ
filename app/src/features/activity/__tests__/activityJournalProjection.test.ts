@@ -74,6 +74,25 @@ describe('durable Activity journal projection', () => {
     expect(projected.appendedFromJournal).toBe(1);
   });
 
+  test('does not collide equal ordinals from different immutable owner generations', () => {
+    const generationA = { ...point(0), rawOrdinal: 7, ownerGeneration: 'generation-a' };
+    const generationB = {
+      ...point(1),
+      rawOrdinal: 7,
+      ownerGeneration: 'generation-b',
+      segmentId: generationA.segmentId,
+      segmentStartReason: 'resume' as const,
+    };
+    const projected = projectActivityJournal([], [generationA, generationB]);
+    expect(projected.canonical).toHaveLength(2);
+    expect(projected.canonical.map(item => item.ownerGeneration)).toEqual([
+      'generation-a',
+      'generation-b',
+    ]);
+    expect(projectActivityJournal(projected.canonical, [generationA, generationB]).canonical)
+      .toHaveLength(2);
+  });
+
   test('rebasing at commit time retains a foreground fix accepted while the WAL read was in flight', () => {
     const journal = Array.from({ length: 96 }, (_, index) => point(index));
     const stateAtReadStart = journal.slice(0, 72);
@@ -227,6 +246,85 @@ describe('durable Activity journal projection', () => {
       appendedFromJournal: 0,
     });
   });
+
+  test.each([1, 512, 513, 514, 1_025, 4_097])(
+    'cooperative lifecycle replay for %i canonical WAL rows equals uninterrupted projection',
+    async (pointCount) => {
+      const segmentLength = Math.max(1, Math.floor(pointCount / 4));
+      const generationBoundary = Math.max(1, Math.floor(pointCount / 2));
+      const journal = Array.from({ length: pointCount }, (_, index) => {
+        const segmentIndex = Math.min(3, Math.floor(index / segmentLength));
+        const base = point(
+          index,
+          `segment-${segmentIndex}`,
+          index % 3 === 0 ? 'foreground' : 'background',
+        );
+        const generationIndex = index < generationBoundary ? index : index - generationBoundary;
+        return {
+          ...base,
+          rawOrdinal: (generationIndex + 1) * 4 + (index % 2),
+          ownerGeneration: index < generationBoundary ? 'generation-a' : 'generation-b',
+          ...(index === 0
+            ? { segmentStartReason: 'start' as const }
+            : index % segmentLength === 0
+              ? { segmentStartReason: index < generationBoundary
+                ? 'gps-reacquired' as const
+                : 'resume' as const }
+              : { segmentStartReason: undefined }),
+        };
+      });
+      const uninterrupted = projectActivityJournal([], journal);
+      let canonical: typeof uninterrupted.canonical = [];
+      let live: typeof uninterrupted.live = [];
+      let distanceAccumulator: typeof uninterrupted.distanceAccumulator | undefined;
+      let elevationGainM = 0;
+      const frontiers = pointCount > 1_025
+        ? [pointCount]
+        : [...new Set([
+            Math.max(1, Math.ceil(pointCount / 4)),
+            Math.max(1, Math.ceil(pointCount / 2)),
+            pointCount,
+          ])];
+      let finalReplay: Awaited<ReturnType<typeof projectActivityJournalCooperatively>> = null;
+      for (const frontier of frontiers) {
+        const replay = await projectActivityJournalCooperatively(
+          canonical,
+          journal.slice(0, frontier),
+          {
+            currentLive: live,
+            currentDistanceAccumulator: distanceAccumulator,
+            currentElevationGainM: elevationGainM,
+            maxPointsPerSlice: 127,
+          },
+        );
+        expect(replay).not.toBeNull();
+        finalReplay = replay;
+        canonical = replay!.projection.canonical;
+        live = replay!.projection.live;
+        distanceAccumulator = replay!.projection.distanceAccumulator;
+        elevationGainM = replay!.projection.elevationGainM;
+      }
+
+      const coldAfterProcessRecovery = pointCount > 1_025
+        ? finalReplay
+        : await projectActivityJournalCooperatively([], journal, { maxPointsPerSlice: 127 });
+      expect(coldAfterProcessRecovery).not.toBeNull();
+      expect(canonical).toEqual(uninterrupted.canonical);
+      expect(live).toEqual(uninterrupted.live);
+      expect(distanceAccumulator).toEqual(uninterrupted.distanceAccumulator);
+      expect(coldAfterProcessRecovery!.projection).toMatchObject({
+        canonical: uninterrupted.canonical,
+        live: uninterrupted.live,
+        distanceAccumulator: uninterrupted.distanceAccumulator,
+        distanceM: uninterrupted.distanceM,
+        elevationGainM: uninterrupted.elevationGainM,
+      });
+      expect(buildBaseFinalTrackPoints(canonical)).toEqual(
+        buildBaseFinalTrackPoints(uninterrupted.canonical),
+      );
+    },
+    30_000,
+  );
 
   test('a foreground fix arriving during yielded recovery rebases without stale publication or loss', async () => {
     const journal = Array.from({ length: 513 }, (_, index) => point(index));

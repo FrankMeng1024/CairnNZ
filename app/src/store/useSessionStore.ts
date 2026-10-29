@@ -36,6 +36,10 @@ export type ActivitySyncFailureKind = 'retryable' | 'auth_required' | 'action_re
 
 export interface TrackPoint extends Coordinate {
   t: number;  // Unix ms timestamp
+  /** Immutable qualified-observation identity. Legacy Activities may omit it. */
+  observationId?: string;
+  clientActivityId?: string;
+  ownerGeneration?: string;
   segmentId?: string;
   segmentStartReason?: 'start' | 'resume' | 'process-recovery' | 'gps-reacquired' | 'legacy';
 }
@@ -201,7 +205,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       let next;
       if (existingIdx >= 0) {
         next = base.slice();
-        next[existingIdx] = { ...next[existingIdx], ...session };
+        const existing = next[existingIdx];
+        const merged = { ...existing, ...session };
+        // Server ACK is monotonic. A late local projection/refinement write
+        // may replace display geometry, but must never move a confirmed card
+        // back to pending/syncing or discard its remote identity. Explicit
+        // resync/error transitions use markSyncState instead of addSession.
+        next[existingIdx] = existing.syncState === 'synced' && session.syncState !== 'synced'
+          ? {
+              ...merged,
+              syncState: 'synced',
+              remoteId: existing.remoteId ?? session.remoteId,
+              serverActivityId: existing.serverActivityId ?? session.serverActivityId,
+              syncFailureKind: undefined,
+              syncFailureStatus: undefined,
+              syncFailureCode: undefined,
+            }
+          : merged;
       } else {
         next = [session, ...base];
       }

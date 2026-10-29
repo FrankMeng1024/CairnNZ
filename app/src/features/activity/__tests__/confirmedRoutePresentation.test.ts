@@ -58,6 +58,30 @@ describe('confirmed route presentation', () => {
     expect(isAppendOnlyRouteUpdate([[0, 0], [1, 1]], [[0, 0], [1.1, 1]])).toBe(false);
   });
 
+  it('updates only the provisional road-aware tail without rebuilding confirmed chunks', () => {
+    const original = [point(0, 1_000), point(10, 2_000), point(20, 3_000), point(30, 4_000)];
+    const first = updateIncrementalRoutePresentation(createIncrementalRoutePresentation(), original);
+    const revised = [original[0], original[1], { ...original[2], lat: -40.99999 }, { ...original[3], lat: -40.99999 }];
+    const second = updateIncrementalRoutePresentation(first, revised);
+    expect(second.rebuilt).toBe(false);
+    expect(second.staticChunks).toBe(first.staticChunks);
+    expect(second.activeHead?.coordinates.at(-2)).toEqual([revised[2].lng, revised[2].lat]);
+    expect(second.activeHead?.coordinates.at(-1)).toEqual([revised[3].lng, revised[3].lat]);
+  });
+
+  it('disconnects an unsupported legacy edge when either time or distance proves a gap', () => {
+    const timeOnly = [
+      { ...point(0, 1_000), segmentId: undefined },
+      { ...point(1, 122_000), segmentId: undefined },
+    ];
+    const distanceOnly = [
+      { ...point(0, 1_000), segmentId: undefined },
+      { ...point(201, 2_000), segmentId: undefined },
+    ];
+    expect(buildConfirmedRouteSegments(timeOnly).map(segment => segment.coordinates.length)).toEqual([1, 1]);
+    expect(buildConfirmedRouteSegments(distanceOnly).map(segment => segment.coordinates.length)).toEqual([1, 1]);
+  });
+
   it('uses a short bounded clock for bursts and an 850ms ceiling for normal cadence', () => {
     expect(continuousRouteAnimationDurationMs(100)).toBe(180);
     expect(continuousRouteAnimationDurationMs(1_000)).toBe(720);

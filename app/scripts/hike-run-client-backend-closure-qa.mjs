@@ -15,7 +15,10 @@ const outputRoot = path.resolve(argument('--output', '_review/hike-run-client-ba
 const sourceHead = argument('--head', 'dirty-development-worktree');
 const sourceTree = argument('--tree', 'dirty-development-worktree');
 const scenario = argument('--scenario', 'full');
-if (!['full', 'focused-review'].includes(scenario)) throw new Error(`unknown_scenario:${scenario}`);
+const mapboxMode = argument('--mapbox', 'outage');
+if (!['full', 'focused-review', 'o97-m1-m4', 'o98-m1-m4'].includes(scenario)) throw new Error(`unknown_scenario:${scenario}`);
+if (!['outage', 'live'].includes(mapboxMode)) throw new Error(`unknown_mapbox_mode:${mapboxMode}`);
+const acceptanceRelease = scenario === 'o98-m1-m4' ? 'O98' : 'O97';
 if (!/^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/.test(apiUrl)) {
   throw new Error('refusing_non_loopback_backend');
 }
@@ -39,6 +42,7 @@ let lostAckClientActivityId = null;
 let lostAckBrowserAttempts = 0;
 let lostAckCommittedResponse = null;
 let mapboxBlockedRequests = 0;
+const mapboxProviderRequests = [];
 let heldAckClientActivityId = null;
 let heldAckCommittedResponse = null;
 let resolveHeldAckCommit = null;
@@ -189,8 +193,28 @@ const blockMapboxDirections = route => {
   return route.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"isolated Mapbox outage"}' });
 };
 await page.route('**/api/**', handleApiRoute);
-await page.route('**/matching/v5/**', blockMapboxMatching);
-await page.route('**/directions/v5/**', blockMapboxDirections);
+if (mapboxMode === 'outage') {
+  await page.route('**/matching/v5/**', blockMapboxMatching);
+  await page.route('**/directions/v5/**', blockMapboxDirections);
+}
+page.on('response', response => {
+  const url = response.url();
+  if (!/mapbox\.(?:com|cn)/i.test(url)) return;
+  mapboxProviderRequests.push({
+    kind: 'response',
+    status: response.status(),
+    url: redactProviderUrl(url),
+  });
+});
+page.on('requestfailed', request => {
+  const url = request.url();
+  if (!/mapbox\.(?:com|cn)/i.test(url)) return;
+  mapboxProviderRequests.push({
+    kind: 'failure',
+    error: request.failure()?.errorText ?? 'unknown',
+    url: redactProviderUrl(url),
+  });
+});
 
 async function installOwner(targetPage = page) {
   await targetPage.waitForFunction(() => Boolean(globalThis.__cairnStores?.pendingSyncStore
@@ -372,6 +396,203 @@ async function recorderArtifactState(clientActivityId) {
   }, { ownerId: ownerUserId, id: clientActivityId });
 }
 
+async function navigateToHiking() {
+  await page.evaluate(() => {
+    globalThis.__cairnStores.navigationRef.reset({
+      index: 1,
+      routes: [{ name: 'Home' }, { name: 'Hiking' }],
+    });
+  });
+  await page.waitForFunction(() => globalThis.__cairnStores.getCurrentRoute() === 'Hiking', null, { timeout: 30_000 });
+}
+
+async function beginRealRecorderJourney(sequence, firstCoordinate) {
+  const input = activityInput(sequence);
+  await context.setGeolocation({ latitude: firstCoordinate.lat, longitude: firstCoordinate.lng, accuracy: 5 });
+  await navigateToHiking();
+  const started = await page.evaluate(async ({ id, ownerId }) => {
+    const stores = globalThis.__cairnStores;
+    stores.useSettingsStore.setState({ debugMode: true });
+    stores.useTrackingStore.getState().setActivityMode('hiking');
+    const registryBeforeStart = await stores.activityRegistry.getActivityRegistry(ownerId);
+    const ok = await stores.useTrackingStore.getState().startTracking(id);
+    const state = stores.useTrackingStore.getState();
+    return {
+      ok,
+      status: state.status,
+      provider: state.locationProviderSource,
+      sessionId: state.sessionId,
+      ownerGeneration: state.liveOwnerGeneration,
+      startError: state.startError,
+      unfinishedBeforeStart: registryBeforeStart.unfinished ?? null,
+    };
+  }, { id: input.clientActivityId, ownerId: ownerUserId });
+  if (!started.ok || started.provider !== 'real' || started.sessionId !== input.clientActivityId) {
+    throw new Error(`real_recorder_start_failed:${JSON.stringify(started)}`);
+  }
+  return { input, started };
+}
+
+async function deliverBrowserLocation(coordinate, waitMs = 2_500) {
+  const before = await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.getState().trackPointsRaw.length);
+  await page.waitForTimeout(waitMs);
+  await context.setGeolocation({ latitude: coordinate.lat, longitude: coordinate.lng, accuracy: coordinate.accuracy ?? 5 });
+  await page.waitForFunction(previous => (
+    globalThis.__cairnStores.useTrackingStore.getState().trackPointsRaw.length > previous
+  ), before, { timeout: 15_000 });
+  return page.evaluate(() => {
+    const state = globalThis.__cairnStores.useTrackingStore.getState();
+    return {
+      deliveredBy: 'playwright-browser-geolocation',
+      rawPointCount: state.trackPointsRaw.length,
+      trackPointCount: state.trackPoints.length,
+      distanceM: state.distanceM,
+      status: state.status,
+      segmentId: state.currentSegmentId,
+    };
+  });
+}
+
+async function captureProductionActivityMap(label, camera = null) {
+  await page.waitForFunction(() => {
+    try {
+      const map = globalThis.__cairnMap;
+      const style = map?.getStyle?.();
+      const sourceIds = Object.keys(style?.sources ?? {}).filter(id => /track/i.test(id));
+      const layerIds = (style?.layers ?? []).map(layer => layer.id).filter(id => /track/i.test(id));
+      return map?.isStyleLoaded?.() === true && sourceIds.length > 0 && layerIds.length > 0;
+    } catch {
+      return false;
+    }
+  }, null, { timeout: 45_000 });
+  if (camera) {
+    await page.evaluate(nextCamera => {
+      globalThis.__cairnMap.jumpTo(nextCamera);
+    }, camera);
+    await page.waitForTimeout(1_000);
+  }
+  const proof = await page.evaluate(() => {
+    const map = globalThis.__cairnMap;
+    const style = map.getStyle();
+    const sourceIds = Object.keys(style.sources ?? {}).filter(id => /track/i.test(id));
+    const layerIds = (style.layers ?? []).map(layer => layer.id).filter(id => /track/i.test(id));
+    const sourceGeometry = sourceIds.map(id => {
+      const source = map.getSource(id);
+      const data = source?._data ?? source?._options?.data ?? null;
+      return { id, data };
+    });
+    const canvas = map.getCanvas();
+    return {
+      mapLoaded: map.loaded(),
+      styleLoaded: map.isStyleLoaded(),
+      sourceIds,
+      layerIds,
+      sourceGeometry,
+      canvas: { width: canvas.width, height: canvas.height },
+      camera: {
+        center: map.getCenter().toArray(),
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      },
+      trackPointCount: globalThis.__cairnStores.useTrackingStore.getState().trackPoints.length,
+      rawPointCount: globalThis.__cairnStores.useTrackingStore.getState().trackPointsRaw.length,
+    };
+  });
+  const file = `${label}.png`;
+  await page.screenshot({ path: path.join(outputRoot, file), fullPage: true });
+  return { ...proof, screenshot: file };
+}
+
+async function waitForVerifiedSync(clientActivityId, timeoutMs = 90_000) {
+  await page.waitForFunction(async ({ id, ownerId }) => {
+    const stores = globalThis.__cairnStores;
+    const pending = await stores.pendingSyncStore.listPending();
+    const registry = await stores.activityRegistry.getActivityRegistry(ownerId);
+    const session = stores.useSessionStore.getState().sessions.find(item => (
+      item.clientActivityId === id || item.id === id
+    ));
+    const registryAck = registry.completed.find(item => item.clientActivityId === id);
+    return !pending.some(item => item.localId === id)
+      && registryAck?.syncState === 'synced'
+      && session?.syncState === 'synced'
+      && Number.isFinite(Number(session?.remoteId ?? session?.serverActivityId));
+  }, { id: clientActivityId, ownerId: ownerUserId }, { timeout: timeoutMs });
+  return clientState(clientActivityId);
+}
+
+async function finalRevisionEvidence(clientActivityId) {
+  return page.evaluate(async id => {
+    const stores = globalThis.__cairnStores;
+    const session = stores.useSessionStore.getState().sessions.find(item => (
+      item.clientActivityId === id || item.id === id
+    ));
+    const ownerId = String(stores.useAppStore.getState().user?.id ?? '');
+    const revision = await stores.sessionService.fetchHikeFinalGeometryByClientId(id, ownerId).catch(error => ({ error: String(error) }));
+    const job = await stores.activityFinalRefinementQueue.readActivityFinalRefinementJob(ownerId, id).catch(error => ({ error: String(error) }));
+    const artifact = await stores.activityFinalArtifact.loadActivityFinalArtifact(ownerId, id).catch(error => ({ error: String(error) }));
+    return { session, revision, job, artifact };
+  }, clientActivityId);
+}
+
+async function waitForFinalRefinement(clientActivityId, timeoutMs = 90_000) {
+  await page.waitForFunction(async ({ id, ownerId }) => {
+    const queue = globalThis.__cairnStores.activityFinalRefinementQueue;
+    const job = await queue.readActivityFinalRefinementJob(ownerId, id).catch(() => null);
+    return job?.status === 'complete'
+      && (job.serverRevisionState === 'ack' || job.serverRevisionState === 'not-required');
+  }, { id: clientActivityId, ownerId: ownerUserId }, { timeout: timeoutMs });
+  return finalRevisionEvidence(clientActivityId);
+}
+
+function countJourneyRequests(clientActivityId) {
+  return requestLog.filter(entry => {
+    if (!/\/api\/sessions/.test(entry.path)) return false;
+    return entry.bodySha256 != null && responseLog.some(response => (
+      response.requestOrdinal === entry.ordinal && response.clientActivityId === clientActivityId
+    ));
+  });
+}
+
+async function finishAndWaitForFirstSync(clientActivityId, name) {
+  const finishStartedAt = Date.now();
+  const finish = await page.evaluate(activityName => (
+    globalThis.__cairnStores.useTrackingStore.getState().stopTracking(activityName)
+  ), name);
+  const localCommitted = await clientState(clientActivityId);
+  const afterAck = await waitForVerifiedSync(clientActivityId);
+  const revision = await finalRevisionEvidence(clientActivityId);
+  return {
+    finish,
+    finishStartedAt,
+    localCommitted,
+    afterAck,
+    revision,
+    requests: countJourneyRequests(clientActivityId),
+  };
+}
+
+async function journeyDiagnosticSummary(clientActivityId) {
+  const state = await clientState(clientActivityId);
+  const records = state.diagnostic?.records ?? [];
+  return {
+    recordCount: records.length,
+    rawReceiptCount: records.filter(record => record.kind === 'raw-observation').length,
+    applicationEvents: records.filter(record => record.kind === 'application-event').map(record => ({
+      stage: record.data?.stage ?? null,
+      event: record.data?.event ?? null,
+      phase: record.data?.phase ?? null,
+      decision: record.data?.decision ?? null,
+      reason: record.data?.reason ?? null,
+      appState: record.data?.appState ?? null,
+    })),
+    hasCoordinatesInApplicationEvents: records.some(record => (
+      record.kind === 'application-event'
+      && (record.data?.lat != null || record.data?.lng != null || record.data?.longitude != null)
+    )),
+  };
+}
+
 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
 await installOwner();
 const cases = [];
@@ -469,6 +690,7 @@ if (scenario === 'full') {
 {
   const input = activityInput(5);
   const mapboxBefore = mapboxBlockedRequests;
+  const mapboxProviderBefore = mapboxProviderRequests.length;
   const started = await page.evaluate(async ({ id, ownerId }) => {
     const stores = globalThis.__cairnStores;
     const registryBeforeStart = await stores.activityRegistry.getActivityRegistry(ownerId);
@@ -511,6 +733,9 @@ if (scenario === 'full') {
         trackPointCount: next.trackPoints.length, distanceM: next.distanceM };
     }));
   }
+  const liveMapProof = mapboxMode === 'live'
+    ? await captureProductionActivityMap('M3_LIVE_OFFLINE_RECORDING_390x844')
+    : null;
   // The isolated backend becomes reachable before Finish, then the phone is
   // deliberately offline again at the Save boundary.
   clientOnline = true;
@@ -527,10 +752,26 @@ if (scenario === 'full') {
   const afterColdReopen = await recorderArtifactState(input.clientActivityId);
 
   clientOnline = true;
-  const drain = await page.evaluate(() => globalThis.__cairnStores.syncDaemon.drainPending({
-    wakeReason: 'network_online', force: true,
-  }));
-  const afterAck = await clientState(input.clientActivityId);
+  let drain;
+  let afterAck;
+  if (scenario === 'o97-m1-m4' || scenario === 'o98-m1-m4') {
+    // Request interception is the Web harness's transport boundary; changing
+    // it does not alter expo-network/navigator.onLine. Dispatch the browser
+    // signal for UI parity, then invoke the production network-online wake
+    // that the native NetworkMonitor owns on device. Acceptance below still
+    // requires the real daemon, outbox, registry and session ACK boundaries.
+    await page.evaluate(() => globalThis.dispatchEvent(new Event('online')));
+    drain = await page.evaluate(() => globalThis.__cairnStores.syncDaemon.drainPending({
+      wakeReason: 'network_online', force: true,
+    }));
+    afterAck = await waitForVerifiedSync(input.clientActivityId);
+    drain = { ...drain, trigger: 'web-transport-recovery-production-network-online-wake' };
+  } else {
+    drain = await page.evaluate(() => globalThis.__cairnStores.syncDaemon.drainPending({
+      wakeReason: 'network_online', force: true,
+    }));
+    afterAck = await clientState(input.clientActivityId);
+  }
   writeJson(path.join(outputRoot, 'CURRENT_ACTIVITY_DIAGNOSTIC_EXPORT.json'), afterAck.diagnostic);
   const afterCleanup = await recorderArtifactState(input.clientActivityId);
   const afterCleanupManifest = await localManifest();
@@ -548,6 +789,8 @@ if (scenario === 'full') {
     .filter(record => record.kind === 'application-event' && record.data?.event === 'completed-activity-sync')
     .map(record => record.data.phase);
   const mapboxRequestsObserved = mapboxBlockedRequests - mapboxBefore;
+  const mapboxProviderEvidence = mapboxProviderRequests.slice(mapboxProviderBefore);
+  const revisionEvidence = await finalRevisionEvidence(input.clientActivityId);
   // Persist the Store/API/WAL/ACK proof before entering the optional map
   // pixel stage. A local Mapbox/WebGL failure must remain visible, but it
   // must not erase the already completed transaction and cleanup evidence.
@@ -568,6 +811,9 @@ if (scenario === 'full') {
       cleanClientReopen,
       diagnosticPhases,
       mapboxRequestsObserved,
+      mapboxProviderEvidence,
+      liveMapProof,
+      revisionEvidence,
     },
     clientRequests: requestLog,
     clientResponses: responseLog,
@@ -594,8 +840,10 @@ if (scenario === 'full') {
     }
   });
   await freshPage.route('**/api/**', handleApiRoute);
-  await freshPage.route('**/matching/v5/**', blockMapboxMatching);
-  await freshPage.route('**/directions/v5/**', blockMapboxDirections);
+  if (mapboxMode === 'outage') {
+    await freshPage.route('**/matching/v5/**', blockMapboxMatching);
+    await freshPage.route('**/directions/v5/**', blockMapboxDirections);
+  }
   await freshPage.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await installOwner(freshPage);
   const freshHydration = await freshPage.evaluate(async ({ ownerId, targetId }) => {
@@ -684,6 +932,7 @@ if (scenario === 'full') {
     id: 'recorder-wal-cold-reopen-ack-cleanup', input, started, observations, finish,
     beforeReload, beforeReloadManifest, afterColdReopen, drain, afterAck,
     afterCleanup, afterCleanupManifest, cleanClientReopen, diagnosticPhases, freshContextActivity,
+    liveMapProof, revisionEvidence, mapboxProviderEvidence,
     mapboxOutage: { response: 401, requestsObserved: mapboxRequestsObserved },
     passed: observations.at(-1)?.trackPointCount >= 2
       && beforeReload.pending.length === 1 && beforeReload.wal.available
@@ -696,13 +945,212 @@ if (scenario === 'full') {
       && diagnosticPhases.includes('ack') && diagnosticPhases.includes('phone-cleanup-complete')
       && cleanClientReopen.reopened === true
       && freshContextActivity.passed
-      && mapboxRequestsObserved >= 1,
+      && (mapboxMode === 'live'
+        ? liveMapProof?.styleLoaded === true
+          && liveMapProof.trackPointCount >= 2
+          && mapboxProviderEvidence.some(resource => resource.kind === 'response' && resource.status >= 200 && resource.status < 400)
+        : mapboxRequestsObserved >= 1),
   });
+}
+
+// O97/O98 M1-M4 acceptance uses only the production recorder, browser-delivered
+// geolocation boundary, real Mapbox renderer/service and loopback production
+// API. It never seeds the tracking store, Final artifact or Sync result.
+if (scenario === 'o97-m1-m4' || scenario === 'o98-m1-m4') {
+  if (mapboxMode !== 'live') throw new Error(`${acceptanceRelease.toLowerCase()}_m1_m4_requires_live_mapbox`);
+  clientOnline = true;
+  const fixedCamera = { center: [174.78055, -41.29055], zoom: 15.9, bearing: 0, pitch: 0 };
+  const publicRoadPath = [
+    { lat: -41.29082, lng: 174.77958 },
+    { lat: -41.29081, lng: 174.77986 },
+    { lat: -41.29080, lng: 174.78015 },
+    { lat: -41.29079, lng: 174.78045 },
+    { lat: -41.29078, lng: 174.78075 },
+    { lat: -41.29066, lng: 174.78088 },
+    { lat: -41.29046, lng: 174.78090 },
+    { lat: -41.29025, lng: 174.78092 },
+    { lat: -41.29004, lng: 174.78094 },
+  ];
+
+  // M1 — real Mapbox, actual recorder callback path, a measured 40-second
+  // stationary interval (raw receipts continue but canonical acceptance must
+  // not invent motion), a road turn, first Sync and cold server read-back.
+  {
+    const providerStart = mapboxProviderRequests.length;
+    const { input, started } = await beginRealRecorderJourney(101, publicRoadPath[0]);
+    const movement = [];
+    for (const coordinate of publicRoadPath.slice(1, 5)) {
+      movement.push(await deliverBrowserLocation(coordinate));
+    }
+    const stationary = [];
+    for (let index = 0; index < 10; index += 1) {
+      stationary.push(await deliverBrowserLocation({
+        lat: publicRoadPath[4].lat + (index % 2 === 0 ? 0.000001 : -0.000001),
+        lng: publicRoadPath[4].lng + (index % 2 === 0 ? -0.000001 : 0.000001),
+        accuracy: 5,
+      }, 4_000));
+    }
+    for (const coordinate of publicRoadPath.slice(5)) {
+      movement.push(await deliverBrowserLocation(coordinate));
+    }
+    const liveMap = await captureProductionActivityMap('M1_NORMAL_HIKE_LIVE_390x844', fixedCamera);
+    const preFinish = await recorderArtifactState(input.clientActivityId);
+    const sync = await finishAndWaitForFirstSync(input.clientActivityId, `${acceptanceRelease} M1 real Mapbox normal hike`);
+    const diagnostics = await journeyDiagnosticSummary(input.clientActivityId);
+    const providerEvidence = mapboxProviderRequests.slice(providerStart);
+    const canonicalStayedStill = stationary.some((entry, index) => (
+      index > 0 && entry.trackPointCount === stationary[index - 1].trackPointCount
+    ));
+    cases.push({
+      id: 'M1-real-mapbox-normal-hike', input, started, movement, stationary,
+      liveMap, preFinish, sync, diagnostics, providerEvidence,
+      passed: stationary.length === 10
+        && canonicalStayedStill
+        && preFinish.wal.available && preFinish.wal.pointCount >= publicRoadPath.length
+        && liveMap.styleLoaded && liveMap.trackPointCount >= 3
+        && liveMap.sourceGeometry.some(source => source.data != null)
+        && sync.afterAck.pending.length === 0
+        && sync.afterAck.session?.syncState === 'synced'
+        && sync.revision.revision?.revision >= 1
+        && providerEvidence.some(entry => entry.kind === 'response' && entry.status >= 200 && entry.status < 400),
+    });
+  }
+
+  // M2 — same public-road input plus twenty exact installed AppState callback
+  // invocations and Pause/Resume. This validates Web application ownership;
+  // it is deliberately not labelled as iOS suspension evidence.
+  {
+    const { input, started } = await beginRealRecorderJourney(102, publicRoadPath[0]);
+    const transitions = [];
+    const movement = [];
+    for (let index = 1; index < publicRoadPath.length; index += 1) {
+      transitions.push(await page.evaluate(() => globalThis.__cairnStores.dispatchActivityAppStateForQa('background')));
+      transitions.push(await page.evaluate(() => globalThis.__cairnStores.dispatchActivityAppStateForQa('active')));
+      movement.push(await deliverBrowserLocation(publicRoadPath[index]));
+    }
+    while (transitions.length < 20) {
+      transitions.push(await page.evaluate(() => globalThis.__cairnStores.dispatchActivityAppStateForQa('background')));
+      transitions.push(await page.evaluate(() => globalThis.__cairnStores.dispatchActivityAppStateForQa('active')));
+    }
+    const pause = await page.evaluate(async () => {
+      await globalThis.__cairnStores.useTrackingStore.getState().pauseTracking();
+      const state = globalThis.__cairnStores.useTrackingStore.getState();
+      return { status: state.status, segmentId: state.currentSegmentId };
+    });
+    const resume = await page.evaluate(async () => {
+      const ok = await globalThis.__cairnStores.useTrackingStore.getState().resumeTracking();
+      const state = globalThis.__cairnStores.useTrackingStore.getState();
+      return { ok, status: state.status, segmentId: state.currentSegmentId };
+    });
+    const postResume = await deliverBrowserLocation({ lat: -41.28984, lng: 174.78096 });
+    const liveMap = await captureProductionActivityMap('M2_FG_BG_PAUSE_RESUME_390x844', fixedCamera);
+    const sync = await finishAndWaitForFirstSync(input.clientActivityId, `${acceptanceRelease} M2 AppState parity`);
+    const diagnostics = await journeyDiagnosticSummary(input.clientActivityId);
+    const lifecycleEventCount = diagnostics.applicationEvents.filter(event => event.event === 'app-state-change').length;
+    const m1 = cases.find(item => item.id === 'M1-real-mapbox-normal-hike');
+    const sameCamera = JSON.stringify(liveMap.camera) === JSON.stringify(m1?.liveMap?.camera);
+    cases.push({
+      id: 'M2-real-mapbox-appstate-pause-resume', input, started, movement,
+      transitions, pause, resume, postResume, liveMap, sync, diagnostics,
+      comparison: { sameCamera, m1Layers: m1?.liveMap?.layerIds ?? [], m2Layers: liveMap.layerIds },
+      nativeInterpretation: 'Web exact-handler evidence only; iOS suspension and CoreLocation remain DEVICE_PENDING.',
+      passed: transitions.length === 20
+        && transitions.every(entry => entry.sessionId === input.clientActivityId
+          && entry.status === 'tracking'
+          && entry.lifecycleTransitionProcessed === true
+          && entry.lifecyclePlanAction === 'keep-current-owner')
+        && pause.status === 'paused' && resume.ok === true && resume.status === 'tracking'
+        && postResume.status === 'tracking'
+        && lifecycleEventCount >= 20
+        && sameCamera
+        && liveMap.styleLoaded && liveMap.sourceGeometry.some(source => source.data != null)
+        && sync.afterAck.pending.length === 0 && sync.afterAck.session?.syncState === 'synced',
+    });
+  }
+
+  // M3 second Activity begins immediately after the offline/restart Activity
+  // above. It proves owner generation rollover and independent first upload.
+  {
+    const secondPath = publicRoadPath.slice(0, 6);
+    const { input, started } = await beginRealRecorderJourney(103, secondPath[0]);
+    const movement = [];
+    for (const coordinate of secondPath.slice(1)) movement.push(await deliverBrowserLocation(coordinate));
+    const liveMap = await captureProductionActivityMap('M3_SECOND_ACTIVITY_390x844', fixedCamera);
+    const sync = await finishAndWaitForFirstSync(input.clientActivityId, `${acceptanceRelease} M3 immediate second Activity`);
+    const first = cases.find(item => item.id === 'recorder-wal-cold-reopen-ack-cleanup');
+    cases.push({
+      id: 'M3-immediate-second-activity', input, started, movement, liveMap, sync,
+      firstActivityClientId: first?.input?.clientActivityId ?? null,
+      passed: started.ownerGeneration !== first?.started?.ownerGeneration
+        && liveMap.styleLoaded && liveMap.trackPointCount >= 2
+        && sync.afterAck.pending.length === 0
+        && sync.afterAck.session?.syncState === 'synced',
+    });
+  }
+
+  // M4 — valid corner, an intentionally unmatched waterfront excursion,
+  // explicit segment discontinuity and close return. The production matcher,
+  // assembler, provenance gates, rounding and persisted artifact decide
+  // whether the safe result is rounded, unrounded or Base-retained.
+  {
+    const providerStart = mapboxProviderRequests.length;
+    const geometryPath = [
+      { lat: -41.29082, lng: 174.77958 },
+      { lat: -41.29081, lng: 174.78005 },
+      { lat: -41.29079, lng: 174.78055 },
+      { lat: -41.29050, lng: 174.78089 },
+      { lat: -41.29013, lng: 174.78093 },
+    ];
+    const { input, started } = await beginRealRecorderJourney(104, geometryPath[0]);
+    const movement = [];
+    for (const coordinate of geometryPath.slice(1)) movement.push(await deliverBrowserLocation(coordinate));
+    const pause = await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.getState().pauseTracking());
+    const resume = await page.evaluate(() => globalThis.__cairnStores.useTrackingStore.getState().resumeTracking());
+    movement.push(await deliverBrowserLocation({ lat: -41.28870, lng: 174.78680, accuracy: 6 }));
+    movement.push(await deliverBrowserLocation({ lat: -41.29018, lng: 174.78094, accuracy: 5 }));
+    movement.push(await deliverBrowserLocation({ lat: -41.29055, lng: 174.78086, accuracy: 5 }));
+    const liveMap = await captureProductionActivityMap('M4_GEOMETRY_GAPS_RETURN_390x844', fixedCamera);
+    const sync = await finishAndWaitForFirstSync(input.clientActivityId, `${acceptanceRelease} M4 geometry safeguards`);
+    const revision = await waitForFinalRefinement(input.clientActivityId);
+    const providerEvidence = mapboxProviderRequests.slice(providerStart);
+    const artifact = revision.artifact;
+    const segmentIds = [...new Set((artifact?.points ?? []).map(point => point.segmentId ?? point.segment_id).filter(Boolean))];
+    const safeOutcome = ['matched', 'hybrid', 'canonical'].includes(artifact?.source)
+      || revision.job?.outcome === 'base-retained'
+      || revision.job?.roadEnhancementState === 'terminal-local';
+    const serverRevisionConsistent = artifact?.revision > 1
+      ? revision.job?.serverRevisionState === 'ack'
+        && revision.revision?.revision === artifact.revision
+        && revision.revision?.displayFingerprint === artifact.displayFingerprint
+        && revision.revision?.canonicalFingerprint === artifact.canonicalFingerprint
+      : revision.job?.serverRevisionState === 'not-required'
+        && revision.revision?.revision === 1;
+    cases.push({
+      id: 'M4-real-mapbox-geometry-safeguards', input, started, movement,
+      pause, resume, liveMap, sync, revision, providerEvidence, segmentIds,
+      interpretation: artifact?.source === 'matched' || artifact?.source === 'hybrid'
+        ? 'Road candidate accepted after production post-round gates.'
+        : 'Production gates intentionally retained an unrounded/canonical/Base display.',
+      passed: liveMap.styleLoaded
+        && liveMap.sourceGeometry.some(source => source.data != null)
+        && safeOutcome
+        && revision.job?.status === 'complete'
+        && revision.job?.matchingAttempted === true
+        && revision.job?.governorAuthorized === true
+        && typeof revision.job?.candidateDecision === 'string'
+        && providerEvidence.some(entry => entry.kind === 'response' && entry.status >= 200 && entry.status < 400)
+        && artifact?.canonicalFingerprint === revision.job?.canonicalFingerprint
+        && serverRevisionConsistent
+        && sync.afterAck.pending.length === 0
+        && sync.afterAck.session?.syncState === 'synced',
+    });
+  }
 }
 
 // 6. The server commits Save while the client ACK is deliberately held. The
 // user deletes through the production Session store before that ACK is
 // released; the tombstone must win locally and the server row must be cleaned.
+if (scenario !== 'o97-m1-m4' && scenario !== 'o98-m1-m4') {
 {
   const input = activityInput(6);
   await seedPending(input);
@@ -744,6 +1192,7 @@ if (scenario === 'full') {
   releaseHeldAckResponse = null;
   heldAckRelease = null;
 }
+}
 
 const serverList = await api('/api/sessions', { headers: { Authorization: `Bearer ${token}` } });
 const deletedIds = cases.filter(item => item.id === 'server-commit-held-ack-delete-release').map(item => item.input.clientActivityId);
@@ -770,17 +1219,20 @@ const result = {
   platform: 'EXPO_WEB_ACTUAL_CLIENT_MODULES_AND_LOOPBACK_MYSQL_API',
   isolation: { loopbackOnly: true, syntheticOwner: true, productionRecordsTouched: false },
   scenario,
+  mapboxMode,
   cases,
   clientRequests: requestLog,
   clientResponses: responseLog,
   serverEvidenceBeforeTestDatabaseTeardown: { expectedIds, deletedIds, rowCount: serverRows.length, rows: serverRows, details: serverDetails },
   phoneCleanupRequestedServerDelete: requestLog.some(item => item.method === 'DELETE' && /\/api\/sessions/.test(item.path)),
+  mapboxProviderRequests,
   browserErrors,
 };
 result.passed = cases.every(item => item.passed)
   && serverRows.length === expectedIds.length
   && new Set(serverRows.map(item => item.client_activity_id)).size === expectedIds.length
-  && result.phoneCleanupRequestedServerDelete === true
+  && (scenario === 'o97-m1-m4' || scenario === 'o98-m1-m4'
+    || result.phoneCleanupRequestedServerDelete === true)
   && browserErrors.length === 0;
 writeJson(path.join(outputRoot, 'CLIENT_BACKEND_CLOSURE.json'), result);
 writeJson(path.join(outputRoot, 'CLIENT_HTTP_REQUESTS.json'), requestLog);

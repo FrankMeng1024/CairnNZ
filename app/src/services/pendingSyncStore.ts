@@ -444,6 +444,44 @@ export async function markPendingUploadReady(localId: string): Promise<void> {
   breadcrumb(`pendingSync:ready localId=${localId}`);
 }
 
+/**
+ * Update only the optional refinement lifecycle while the initial upload
+ * outbox still exists. This is deliberately an atomic "if present" mutation:
+ * an upload ACK may remove the outbox while Mapbox work is in flight, and a
+ * stale refinement completion must never recreate that acknowledged upload.
+ * The frozen payload, idempotency key and initial Final identity are left
+ * untouched; the independent refinement job owns any later display revision.
+ */
+export async function updatePendingRoadRefinementIfPresent(input: {
+  localId: string;
+  expectedUserId: string;
+  state: NonNullable<PendingHike['roadRefinementState']>;
+  nextRetryAt: number | null;
+}): Promise<boolean> {
+  if (!input.expectedUserId || input.expectedUserId === 'guest') {
+    throw new Error('pending_activity_owner_required');
+  }
+  return withMutation(async () => {
+    const fs = await getFs();
+    if (!fs) throw new Error('pending_activity_storage_unavailable');
+    const basePath = basePathFor(fs, input.localId);
+    const current = await readBest(fs, basePath);
+    if (!current) return false;
+    if (String(current.hike.userId) !== String(input.expectedUserId)) {
+      throw new Error('pending_activity_owner_mismatch');
+    }
+    const next: PendingHike = {
+      ...current.hike,
+      uploadState: 'ready',
+      preparationPhase: 'registry_committed',
+      roadRefinementState: input.state,
+      roadRefinementNextRetryAt: input.nextRetryAt,
+    };
+    await writeVerified(fs, basePath, next, current.generation + 1);
+    return true;
+  });
+}
+
 export async function listPending(): Promise<PendingHike[]> {
   return withMutation(async () => {
     const fs = await getFs();

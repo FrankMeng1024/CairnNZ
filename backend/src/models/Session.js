@@ -4,6 +4,7 @@
 const pool = require('../config/db');
 const crypto = require('crypto');
 const { sourceProvenanceForRealm } = require('../services/activitySourceProvenance');
+const { activityGeometryFingerprint } = require('../lib/activityGeometryFingerprint');
 
 const LEGACY_ZERO_SHELL_STALE_HOURS = 6;
 
@@ -117,7 +118,11 @@ const Session = {
 
   async findByIdAndUser(id, userId) {
     const [rows] = await pool.execute(
-      `SELECT id, user_id, client_activity_id, route_id, type, start_time, end_time, distance_m, duration_s, name, route_points, route_points_raw, flags, finalized_at, created_at
+      `SELECT id, user_id, client_activity_id, route_id, type, start_time, end_time, distance_m, duration_s, name,
+              route_points, route_points_raw, route_points_canonical, flags, finalized_at, created_at,
+              final_geometry_revision, final_geometry_fingerprint,
+              final_geometry_canonical_fingerprint, final_geometry_algorithm,
+              final_geometry_updated_at
        FROM sessions WHERE id = ? AND user_id = ?`,
       [id, userId]
     );
@@ -127,7 +132,132 @@ const Session = {
       ...s,
       route_points: parseJsonCol(s.route_points) ?? [],
       route_points_raw: parseJsonCol(s.route_points_raw) ?? null,
+      route_points_canonical: parseJsonCol(s.route_points_canonical) ?? null,
       flags: parseJsonCol(s.flags) ?? [],
+    };
+  },
+
+  async reviseFinalGeometry({
+    userId, clientActivityId, expectedRevision, expectedFingerprint,
+    revision, displayFingerprint, canonicalFingerprint, algorithmVersion, routePoints,
+  }) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.execute(
+        `SELECT id, finalized_at, route_points, route_points_canonical,
+                final_geometry_revision, final_geometry_fingerprint,
+                final_geometry_canonical_fingerprint, final_geometry_algorithm
+           FROM sessions
+          WHERE user_id = ? AND client_activity_id = ?
+          LIMIT 1 FOR UPDATE`,
+        [userId, clientActivityId],
+      );
+      const current = rows[0];
+      if (!current || current.finalized_at === null) {
+        await conn.rollback();
+        return { kind: 'not-found' };
+      }
+      const canonicalPoints = parseJsonCol(current.route_points_canonical) ?? [];
+      const displayPoints = parseJsonCol(current.route_points) ?? canonicalPoints;
+      const authoritativeCanonicalFingerprint = activityGeometryFingerprint(canonicalPoints);
+      const currentRevisionValue = Number(current.final_geometry_revision);
+      // Rows finalized before migration 059 are a compatible immutable Base
+      // revision. Derive their fingerprints from stored geometry; do not
+      // require a data rewrite merely to read or safely refine them.
+      const currentRevision = Number.isInteger(currentRevisionValue) && currentRevisionValue >= 1
+        ? currentRevisionValue
+        : 1;
+      const currentFingerprint = current.final_geometry_fingerprint
+        || activityGeometryFingerprint(displayPoints);
+      const currentCanonicalFingerprint = current.final_geometry_canonical_fingerprint
+        || authoritativeCanonicalFingerprint;
+      if (canonicalFingerprint !== authoritativeCanonicalFingerprint
+        || currentCanonicalFingerprint !== authoritativeCanonicalFingerprint) {
+        await conn.rollback();
+        return {
+          kind: 'conflict', sessionId: current.id,
+          revision: Number.isInteger(currentRevision) ? currentRevision : null,
+          displayFingerprint: currentFingerprint ?? null,
+          canonicalFingerprint: authoritativeCanonicalFingerprint,
+          reason: 'canonical-fingerprint-mismatch',
+        };
+      }
+      if (currentRevision === revision && currentFingerprint === displayFingerprint
+        && currentCanonicalFingerprint === canonicalFingerprint) {
+        await conn.commit();
+        return {
+          kind: 'replay', sessionId: current.id, revision: currentRevision,
+          displayFingerprint: currentFingerprint,
+          canonicalFingerprint: currentCanonicalFingerprint,
+          algorithmVersion: current.final_geometry_algorithm,
+        };
+      }
+      if (!Number.isInteger(currentRevision) || currentRevision !== expectedRevision
+        || currentFingerprint !== expectedFingerprint
+        || currentCanonicalFingerprint !== canonicalFingerprint
+        || revision !== expectedRevision + 1) {
+        await conn.rollback();
+        return {
+          kind: 'conflict', sessionId: current.id,
+          revision: Number.isInteger(currentRevision) ? currentRevision : null,
+          displayFingerprint: currentFingerprint ?? null,
+          canonicalFingerprint: currentCanonicalFingerprint ?? null,
+        };
+      }
+      await conn.execute(
+        `UPDATE sessions
+            SET route_points = ?, final_geometry_revision = ?,
+                final_geometry_fingerprint = ?,
+                final_geometry_canonical_fingerprint = ?,
+                final_geometry_algorithm = ?,
+                final_geometry_updated_at = UTC_TIMESTAMP(3)
+          WHERE id = ? AND user_id = ?`,
+        [
+          JSON.stringify(routePoints), revision, displayFingerprint,
+          canonicalFingerprint, algorithmVersion, current.id, userId,
+        ],
+      );
+      await conn.commit();
+      return {
+        kind: 'updated', sessionId: current.id, revision,
+        displayFingerprint, canonicalFingerprint, algorithmVersion,
+      };
+    } catch (error) {
+      try { await conn.rollback(); } catch { /* ignore */ }
+      throw error;
+    } finally {
+      conn.release();
+    }
+  },
+
+  async findFinalGeometryByClientActivity(clientActivityId, userId) {
+    const [rows] = await pool.execute(
+      `SELECT id, client_activity_id, route_points, route_points_canonical,
+              final_geometry_revision, final_geometry_fingerprint,
+              final_geometry_canonical_fingerprint, final_geometry_algorithm,
+              final_geometry_updated_at
+         FROM sessions
+        WHERE user_id = ? AND client_activity_id = ? AND finalized_at IS NOT NULL
+        LIMIT 1`,
+      [userId, clientActivityId],
+    );
+    if (!rows[0]) return null;
+    const displayPoints = parseJsonCol(rows[0].route_points) ?? [];
+    const canonicalPoints = parseJsonCol(rows[0].route_points_canonical) ?? displayPoints;
+    return {
+      ...rows[0],
+      route_points: displayPoints,
+      route_points_canonical: canonicalPoints,
+      final_geometry_revision: Number.isInteger(Number(rows[0].final_geometry_revision))
+        && Number(rows[0].final_geometry_revision) >= 1
+        ? Number(rows[0].final_geometry_revision)
+        : 1,
+      final_geometry_fingerprint: rows[0].final_geometry_fingerprint
+        || activityGeometryFingerprint(displayPoints),
+      final_geometry_canonical_fingerprint: rows[0].final_geometry_canonical_fingerprint
+        || activityGeometryFingerprint(canonicalPoints),
+      final_geometry_algorithm: rows[0].final_geometry_algorithm || 'legacy-base-v1',
     };
   },
 

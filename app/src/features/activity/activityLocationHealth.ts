@@ -83,8 +83,6 @@ export function deriveActivityLocationHealth(args: {
   const canonicalUserWarningMs = args.canonicalUserWarningMs ?? ACTIVITY_CANONICAL_USER_WARNING_MS;
   const sourceAgeMs = age(args.nowMs, args.latestSourceTimestamp);
   const canonicalAgeMs = age(args.nowMs, args.latestCanonicalTimestamp);
-  const foregroundRecoveryActive = args.foregroundRecoveryUntilMs != null
-    && args.nowMs < args.foregroundRecoveryUntilMs;
   const sourceHealth: ActivitySourceHealth = !args.sourceActive
     ? 'inactive'
     : sourceAgeMs === null
@@ -95,6 +93,13 @@ export function deriveActivityLocationHealth(args: {
     : canonicalAgeMs <= canonicalFreshnessMs
       || (sourceHealth === 'fresh' && args.motionState === 'probably-stationary')
       ? 'fresh' : 'degraded';
+  // The grace deadline is only a ceiling for genuinely incomplete recovery.
+  // Fresh source evidence plus a fresh canonical route proves readiness now;
+  // keeping a timer-only warning visible would report a failure that is not
+  // occurring. Inactive/stale/awaiting evidence still retains the warning.
+  const foregroundRecoveryActive = args.foregroundRecoveryUntilMs != null
+    && args.nowMs < args.foregroundRecoveryUntilMs
+    && !(sourceHealth === 'fresh' && canonicalHealth === 'fresh');
 
   let canonicalDegradationReason: ActivityLocationHealth['canonicalDegradationReason'] = 'none';
   if (canonicalHealth === 'awaiting-first-fix') canonicalDegradationReason = 'awaiting-first-fix';

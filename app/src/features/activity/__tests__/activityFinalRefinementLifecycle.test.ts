@@ -4,7 +4,23 @@ const mockSessions: any[] = [];
 let mockNetworkState: 'offline' | 'online' = 'offline';
 let mockRegistry: any = { unfinished: null, completed: [], tombstones: [] };
 const mockReconstruct = jest.fn();
-const mockSaveHikeAtomic = jest.fn(async (..._args: any[]) => ({ session_id: 77, idempotent_replay: false }));
+const mockSaveHikeAtomic = jest.fn(async (..._args: any[]) => {
+  if (mockNetworkState === 'offline') {
+    const error: any = new Error('synthetic offline');
+    error.status = 0;
+    throw error;
+  }
+  return { session_id: 77, idempotent_replay: false };
+});
+const mockReviseHikeFinalGeometry = jest.fn(async (input: any) => ({
+  ok: true,
+  sessionId: 77,
+  revision: input.revision,
+  displayFingerprint: input.displayFingerprint,
+  canonicalFingerprint: input.canonicalFingerprint,
+  algorithmVersion: input.algorithmVersion,
+  idempotentReplay: false,
+}));
 
 jest.mock('../../../store/storage', () => ({
   storage: {
@@ -102,6 +118,7 @@ jest.mock('../../../services/sessionService', () => ({
   deleteRemoteSession: jest.fn(async () => true),
   deleteRemoteSessionByClientId: jest.fn(async () => true),
   saveHikeAtomic: (...args: any[]) => mockSaveHikeAtomic(...args),
+  reviseHikeFinalGeometry: (input: any) => mockReviseHikeFinalGeometry(input),
   startSessionResolved: jest.fn(async () => ({ kind: 'started', serverActivityId: 77 })),
 }));
 jest.mock('../../../services/apiService', () => ({ authenticatedFetch: jest.fn() }));
@@ -157,6 +174,7 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
     mockNetworkState = 'offline';
     mockReconstruct.mockReset();
     mockSaveHikeAtomic.mockClear();
+    mockReviseHikeFinalGeometry.mockClear();
   });
 
   test.each(['hiking', 'running'] as const)(
@@ -171,6 +189,15 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
       { lat: -40.9999, lng: 174.0001, t: 2_000, segmentId: 's', accuracy: 7 },
       { lat: -40.9998, lng: 174.0002, t: 3_000, segmentId: 's', accuracy: 7 },
     ];
+    mockSessions.push({
+      id: activityId,
+      clientActivityId: activityId,
+      activityMode,
+      syncState: 'pending',
+      finalGeometryState: 'base_ready',
+      finalGeometryRevision: 1,
+      roadRefinementPending: true,
+    });
     const committed = await artifactApi.commitActivityFinalArtifact({
       ownerUserId: 'owner-a', clientActivityId: activityId,
       canonicalPoints: points, displayPoints: points, source: 'base',
@@ -196,6 +223,7 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
         canonicalFingerprint: committed.artifact.canonicalFingerprint,
         source: 'base', algorithmVersion: 'pedestrian-final-v2-base',
       },
+      roadRefinementState: 'pending-network',
     });
     await queue.enqueueActivityFinalRefinement({
       ownerUserId: 'owner-a', clientActivityId: activityId, baseArtifact: committed.artifact,
@@ -203,10 +231,11 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
 
     const offlineDaemon = require('../../../services/syncDaemon');
     await expect(offlineDaemon.drainPending({ wakeReason: 'hydrate' })).resolves.toMatchObject({
-      attempted: 1, skipped: 1, succeeded: 0,
+      attempted: 1, failed: 1, succeeded: 0,
     });
     expect(mockReconstruct).not.toHaveBeenCalled();
-    expect(mockSaveHikeAtomic).not.toHaveBeenCalled();
+    expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
+    mockSaveHikeAtomic.mockClear();
     expect(await pendingStore.readPendingReadonly(activityId)).toMatchObject({
       uploadState: 'ready', roadRefinementState: 'pending-network',
       idempotencyKey: 'unchanged-operation-key',
@@ -230,7 +259,7 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
       },
     });
     const onlineDaemon = require('../../../services/syncDaemon');
-    await expect(onlineDaemon.drainPending({ wakeReason: 'network_online' })).resolves.toMatchObject({
+    await expect(onlineDaemon.drainPending({ wakeReason: 'network_online', force: true })).resolves.toMatchObject({
       attempted: 1, succeeded: 1, failed: 0,
     });
     // Sync does not wait for optional Mapbox work on the first online wake.
@@ -248,7 +277,28 @@ describe('production offline Final queue to sync-daemon lifecycle', () => {
       .resolves.toBeNull();
 
     await onlineDaemon.drainPending({ wakeReason: 'foreground' });
-    expect(mockReconstruct).not.toHaveBeenCalled();
+    for (let turn = 0; turn < 100 && mockReviseHikeFinalGeometry.mock.calls.length === 0; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    expect(mockReconstruct).toHaveBeenCalledTimes(1);
+    const observedQueue = require('../activityFinalRefinementQueue');
+    const observedJob = await observedQueue.readActivityFinalRefinementJob('owner-a', activityId);
+    expect({ reviseCalls: mockReviseHikeFinalGeometry.mock.calls.length, job: observedJob }).toMatchObject({
+      reviseCalls: 1,
+      job: {
+        status: 'complete', serverRevisionState: 'ack', completedRevision: 2,
+        candidateDecision: 'accepted', roadEnhancementState: 'accepted',
+      },
+    });
     expect(mockSaveHikeAtomic).toHaveBeenCalledTimes(1);
+    const finalQueue = observedQueue;
+    for (let turn = 0; turn < 100; turn += 1) {
+      const job = await finalQueue.readActivityFinalRefinementJob('owner-a', activityId);
+      if (job?.status === 'complete') break;
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    await expect(finalQueue.readActivityFinalRefinementJob('owner-a', activityId)).resolves.toMatchObject({
+      status: 'complete', serverRevisionState: 'ack', completedRevision: 2,
+    });
   });
 });

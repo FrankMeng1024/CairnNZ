@@ -272,11 +272,24 @@ describe('Free Activity integration contracts', () => {
   test('real lifecycle treats inactive as transient and coalesces by owner state', () => {
     const tracking = read('src/store/useTrackingStore.ts');
     const lifecycle = read('src/features/activity/activityLocationLifecycle.ts');
+    const closureQa = read('scripts/hike-run-client-backend-closure-qa.mjs');
     expect(tracking).toContain('enqueueRealLocationLifecycleTransition(nextState)');
     expect(lifecycle).toContain("appState === 'inactive'");
     expect(lifecycle).toContain("action: 'hold-transient-inactive'");
     expect(lifecycle).toContain("action: 'keep-current-owner'");
     expect(tracking).not.toContain("markRecordingContinuityUnavailable('inactive'");
+    expect(tracking).toContain('lifecycleTransitionProcessed');
+    expect(closureQa).toContain('entry.lifecycleTransitionProcessed === true');
+    expect(closureQa).toContain("entry.lifecyclePlanAction === 'keep-current-owner'");
+  });
+
+  test('M4 closure cannot pass without a completed real provider decision and non-degenerate fingerprint proof', () => {
+    const closureQa = read('scripts/hike-run-client-backend-closure-qa.mjs');
+    expect(closureQa).toContain("revision.job?.status === 'complete'");
+    expect(closureQa).toContain('revision.job?.matchingAttempted === true');
+    expect(closureQa).toContain('revision.job?.governorAuthorized === true');
+    expect(closureQa).toContain("entry.kind === 'response' && entry.status >= 200 && entry.status < 400");
+    expect(closureQa).not.toContain('?? artifact?.canonicalFingerprint ?? null');
   });
 
   test('a timed-out native activation releases recovery behind a generation fence', () => {

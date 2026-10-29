@@ -545,7 +545,7 @@ export function recordActivityDiagnosticObservation(input: {
     course?: number | null; courseAccuracy?: number | null; source?: string;
     callbackIdentity?: string; nativeBatchSequence?: number; nativeBatchIndex?: number;
     appStateAtReceipt?: string; receiptWallTimeMs?: number; receiptMonotonicTimeMs?: number | null;
-    receiptEvidenceId?: string; ownerGeneration?: string;
+    receiptEvidenceId?: string; ownerGeneration?: string; observationId?: string; rawOrdinal?: number;
   };
   observationTimeMs: number;
 }): Promise<void> {
@@ -569,6 +569,8 @@ export function recordActivityDiagnosticObservation(input: {
     appStateAtReceipt: value.appStateAtReceipt ?? null,
     receiptEvidenceId: value.receiptEvidenceId ?? null,
     ownerGeneration: value.ownerGeneration ?? null,
+    observationId: value.observationId ?? null,
+    rawOrdinal: value.rawOrdinal ?? null,
   };
   return recordReplayAndAutomatic({
     ownerUserId: input.ownerUserId,
@@ -588,6 +590,9 @@ export function recordActivityDiagnosticDecision(input: {
   reason: string;
   segmentId: string | null;
   receiptEvidenceId?: string | null;
+  observationId?: string | null;
+  ownerGeneration?: string | null;
+  rawOrdinal?: number | null;
 }): Promise<void> {
   return recordReplayAndAutomatic({
     ownerUserId: input.ownerUserId,
@@ -611,6 +616,9 @@ export function recordActivityDiagnosticCanonicalPromotion(input: {
   reason: string;
   segmentId: string | null;
   receiptEvidenceId?: string | null;
+  observationId?: string | null;
+  ownerGeneration?: string | null;
+  rawOrdinal?: number | null;
 }): Promise<void> {
   return recordReplayAndAutomatic({
     ownerUserId: input.ownerUserId,

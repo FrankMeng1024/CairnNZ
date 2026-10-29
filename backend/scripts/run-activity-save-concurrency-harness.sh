@@ -70,7 +70,8 @@ for migration in \
   055_notification_delivery_outbox.sql \
   056_notification_target_receipt_reliability.sql \
   057_automatic_diagnostics.sql \
-  058_memory_subscription_intent_order.sql; do
+  058_memory_subscription_intent_order.sql \
+  059_activity_final_geometry_revision.sql; do
   docker exec -i "$CONTAINER" mysql -uroot -p"$DB_PASSWORD" "$DB_NAME" \
     < "$BACKEND_DIR/src/migrations/$migration" >/dev/null
 done

@@ -1,8 +1,12 @@
 import type { PedestrianFinalRequestResult } from '../../../services/routing/pedestrianFinalRoute';
+import { evaluateMatchedGeometryQuality } from '../../../services/routing/snapTrack';
 import {
   decideActivityFinalCandidatePromotion,
   decideRetainedLocalRefinement,
+  selectRoundedActivityFinalCandidate,
 } from '../activityFinalRefinementDecision';
+import { roundSavedFinalRoadCorners } from '../savedFinalCornerRounding';
+import { roundedFinalP95Counterexample } from './fixtures/roundedFinalP95Counterexample';
 
 const p = (eastM: number, northM: number) => ({
   lat: -43 + northM / 111_320,
@@ -46,6 +50,61 @@ describe('Final candidate promotion', () => {
     expect(decideActivityFinalCandidatePromotion({
       canonical, current, candidate: matched, networkMatched: true,
     })).toMatchObject({ accepted: true, reason: 'accepted-network-improvement' });
+  });
+
+  test('Rounding regression: canonical P95 is rechecked and an accepted unrounded road candidate wins', () => {
+    const fixture = roundedFinalP95Counterexample();
+    const rounded = roundSavedFinalRoadCorners(fixture.approvedUnrounded, {
+      eligibleCorners: fixture.eligibleCorners,
+    });
+    const before = evaluateMatchedGeometryQuality(fixture.canonical, fixture.approvedUnrounded);
+    const after = evaluateMatchedGeometryQuality(fixture.canonical, rounded.points);
+    process.stderr.write(`rounding-p95-repro=${JSON.stringify({ before: before.p95DeviationM, after: after.p95DeviationM, envelope: after.deviationEnvelopeM })}\n`);
+    expect(before).toMatchObject({ accepted: true, reason: 'accepted' });
+    expect(before.p95DeviationM).toBeCloseTo(7.989, 3);
+    expect(before.p95DeviationM).toBeLessThanOrEqual(before.deviationEnvelopeM);
+    expect(after).toMatchObject({ accepted: false, reason: 'raw_deviation' });
+    expect(after.p95DeviationM).toBeCloseTo(8.467, 3);
+    expect(after.p95DeviationM).toBeGreaterThan(after.deviationEnvelopeM);
+
+    const selected = selectRoundedActivityFinalCandidate({
+      ...fixture,
+    });
+    expect(selected).toMatchObject({
+      usedRoundedCandidate: false,
+      fellBackToApprovedUnrounded: true,
+      fallbackReason: 'canonical-quality:raw_deviation',
+    });
+    expect(selected.points).toEqual(fixture.approvedUnrounded);
+  });
+
+  test('post-round current-Final promotion is independently enforced', () => {
+    const candidate = [p(0, 0), p(40, 0), p(40, 40)].map((coordinate, index) => ({
+      ...coordinate, t: 1_000 + index * 50_000, segmentId: 'road-b',
+    }));
+    const amplitude = 3.347;
+    const samples: Array<[number, number]> = [
+      [0, 0], [10, amplitude], [20, -amplitude], [30, amplitude], [40, 0],
+      [40 + amplitude, 10], [40 - amplitude, 20], [40 + amplitude, 30], [40, 40],
+    ];
+    const canonical = samples.map(([east, north], index) => ({
+      ...p(east, north), t: 1_000 + index * 12_500, accuracy: 6, segmentId: 'road-b',
+    }));
+    expect(decideActivityFinalCandidatePromotion({
+      canonical, current: canonical, candidate, networkMatched: true,
+    })).toMatchObject({ accepted: true, reason: 'accepted-network-improvement' });
+    const selected = selectRoundedActivityFinalCandidate({
+      canonical, current: canonical, approvedUnrounded: candidate,
+      eligibleCorners: [false, true, false],
+    });
+    expect(selected).toMatchObject({
+      usedRoundedCandidate: false,
+      fellBackToApprovedUnrounded: true,
+      fallbackReason: 'current-final:length-regression',
+      roundedCanonicalQuality: { accepted: true },
+      roundedPromotion: { accepted: false, reason: 'length-regression' },
+    });
+    expect(selected.points).toEqual(candidate);
   });
 });
 

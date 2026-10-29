@@ -496,4 +496,56 @@ export function deriveRoadAwareLiveTrack<T extends {
   return result;
 }
 
+/**
+ * Road-aware presentation is deliberately provisional. Mapbox rendered
+ * features depend on viewport/style/tile readiness, so they may refine only a
+ * two-point tail. Once a point leaves that tail its displayed coordinate is
+ * immutable for the remainder of the mounted recording; a later tile query or
+ * observation cannot make historical linework rebound.
+ */
+export interface StableRoadAwareLivePresentation<T> {
+  sourceCount: number;
+  sourcePoints: ReadonlyArray<T>;
+  points: T[];
+}
+
+export function createStableRoadAwareLivePresentation<T>(): StableRoadAwareLivePresentation<T> {
+  return { sourceCount: 0, sourcePoints: [], points: [] };
+}
+
+export function updateStableRoadAwareLivePresentation<T extends {
+  lat: number;
+  lng: number;
+  t?: number;
+  segmentId?: string;
+  accuracy?: number | null;
+}>(
+  previous: StableRoadAwareLivePresentation<T>,
+  canonical: ReadonlyArray<T>,
+  context: ActivityRoadContext | null,
+): StableRoadAwareLivePresentation<T> {
+  if (canonical.length === 0) return createStableRoadAwareLivePresentation<T>();
+  const proposed = deriveRoadAwareLiveTrack(canonical, context);
+  const appendCompatible = previous.sourceCount > 0
+    && canonical.length >= previous.sourceCount
+    && previous.sourcePoints.length === previous.sourceCount
+    && canonical[0] === previous.sourcePoints[0]
+    && canonical[previous.sourceCount - 1] === previous.sourcePoints[previous.sourceCount - 1]
+    && (previous.sourceCount <= 2
+      || canonical[previous.sourceCount - 3] === previous.sourcePoints[previous.sourceCount - 3]);
+  if (!appendCompatible) {
+    return { sourceCount: canonical.length, sourcePoints: canonical, points: proposed };
+  }
+  const confirmedCount = Math.max(0, canonical.length - 2);
+  const retainedCount = Math.min(confirmedCount, previous.points.length);
+  return {
+    sourceCount: canonical.length,
+    sourcePoints: canonical,
+    points: [
+      ...previous.points.slice(0, retainedCount),
+      ...proposed.slice(retainedCount),
+    ],
+  };
+}
+
 export const ACTIVITY_ROAD_CONTEXT_QUERY_RADIUS_PX = 36;

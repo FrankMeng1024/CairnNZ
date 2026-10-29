@@ -761,15 +761,10 @@ function stageCoversEvidence(
   identity: string,
 ): boolean {
   const direct = evidenceIds(events, stage);
-  if (direct.has(identity)) return true;
-  const ordinal = Number(identity.slice(identity.lastIndexOf(':') + 1));
-  if (!Number.isFinite(ordinal)) return false;
-  return events.some(event => {
-    if (event.stage !== stage) return false;
-    const first = finiteDetail(event, 'firstRawOrdinal');
-    const last = finiteDetail(event, 'lastRawOrdinal');
-    return first !== null && last !== null && ordinal >= first && ordinal <= last;
-  });
+  // Ordinal ranges are useful summaries, never proof of exact coverage:
+  // rejected observations, process recovery and owner generations make them
+  // legitimately sparse. Only an explicit immutable identity closes a stage.
+  return direct.has(identity);
 }
 
 function correlatedStageCompleteness(

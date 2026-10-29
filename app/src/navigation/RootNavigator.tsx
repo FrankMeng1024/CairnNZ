@@ -450,6 +450,16 @@ export function RootNavigator() {
               // stay accessible for the whole session; test cleans up.
               // eslint-disable-next-line @typescript-eslint/no-require-imports
               stores.useTrackingStore = require('../store/useTrackingStore').useTrackingStore;
+              // O97 repair acceptance: dispatch only the already-installed
+              // production AppState callback and inspect the durable optional
+              // refinement job. These handles are Web-only and do not mutate
+              // normal native behavior or fabricate a recording result.
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.dispatchActivityAppStateForQa = require('../store/useTrackingStore').dispatchActivityAppStateForQa;
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.activityFinalRefinementQueue = require('../features/activity/activityFinalRefinementQueue');
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              stores.activityFinalArtifact = require('../features/activity/activityFinalArtifact');
               // Auth screen QA hook — expose useAppStore so Playwright can
               // toggle isLoggedIn / setUser(null) to preview Auth without
               // going through the real sign-in flow. 2026-08-15 sleep run.
