@@ -43,6 +43,68 @@ describe('causal Live route presentation', () => {
     expect(live.some(point => haversineM(point, sample(25, 0, 0)) < 1)).toBe(true);
   });
 
+  test('T03 keeps an uncertain lateral fix responsive, then settles it after the prior trend resumes', () => {
+    const canonical = [
+      sample(0, 0, 0), sample(0, 5, 1), sample(0, 10, 2),
+      sample(8, 15, 3),
+      sample(0, 20, 4), sample(0, 25, 5), sample(0, 30, 6), sample(0, 35, 7),
+    ];
+    const provisional = buildCausalLiveRoute(canonical.slice(0, 4));
+    expect(provisional.at(-1)).toBe(canonical[3]);
+
+    const settled = buildCausalLiveRoute(canonical);
+    const retainedDrift = settled.find(point => point.t === canonical[3].t);
+    expect(retainedDrift == null || haversineM(retainedDrift, canonical[3]) > 2).toBe(true);
+    expect(settled.at(-1)).toBe(canonical.at(-1));
+  });
+
+  test('T04 suppresses a short uncertainty-sized lateral run but T08 preserves a meaningful detour', () => {
+    const shortDrift = [
+      sample(0, 0, 0), sample(0, 5, 1), sample(0, 10, 2),
+      sample(5, 15, 3), sample(6, 20, 4), sample(5, 25, 5),
+      sample(0, 30, 6), sample(0, 35, 7), sample(0, 40, 8),
+    ];
+    const settled = buildCausalLiveRoute(shortDrift);
+    const maximumSettledEastM = Math.max(...settled.map(point => (
+      (point.lng - sample(0, 0, 0).lng) * 111_320 * Math.cos(LAT * Math.PI / 180)
+    )));
+    expect(maximumSettledEastM).toBeLessThan(5);
+
+    const detour = [
+      sample(0, 0, 0), sample(0, 6, 1), sample(0, 12, 2),
+      sample(14, 18, 3), sample(16, 26, 4), sample(14, 34, 5),
+      sample(0, 40, 6), sample(0, 46, 7), sample(0, 52, 8),
+    ];
+    const preserved = buildCausalLiveRoute(detour);
+    const maximumPreservedEastM = Math.max(...preserved.map(point => (
+      (point.lng - sample(0, 0, 0).lng) * 111_320 * Math.cos(LAT * Math.PI / 180)
+    )));
+    expect(maximumPreservedEastM).toBeGreaterThan(9);
+  });
+
+  test('T05 confirms a sustained turn from direction and displacement rather than elapsed time', () => {
+    const turn = [
+      sample(0, 0, 0), sample(0, 5, 1), sample(0, 10, 2), sample(0, 15, 3),
+      sample(0, 20, 4), sample(5, 20, 5), sample(10, 20, 6), sample(15, 20, 7),
+    ].map((point, index) => ({ ...point, t: index < 5 ? index * 900 : 4_000 + (index - 4) * 3_100 }));
+    const live = buildCausalLiveRoute(turn);
+    expect(live.some(point => haversineM(point, sample(0, 20, 0)) < 1)).toBe(true);
+    expect(live.at(-1)).toMatchObject({ lat: turn.at(-1)!.lat, lng: turn.at(-1)!.lng });
+  });
+
+  test('T05 preserves a sparse evidence-sized turn before it leaves the mutable tail', () => {
+    const sparseTurn = [
+      sample(0, 0, 0), sample(0, 5, 1), sample(0, 10, 2),
+      sample(0, 25, 3),
+      sample(14.1, 30.13, 4),
+      sample(18.8, 31.84, 5), sample(23.5, 33.55, 6), sample(28.2, 35.26, 7),
+    ].map((point, index) => ({ ...point, t: index * 1_000 }));
+    const live = buildCausalLiveRoute(sparseTurn);
+    const preservedCorner = live.find(point => point.t === sparseTurn[3].t);
+    expect(preservedCorner).toBeDefined();
+    expect(haversineM(preservedCorner!, sparseTurn[3])).toBeLessThan(0.1);
+  });
+
   test('preserves U-turn chronology and never joins a Gap', () => {
     const outbound = Array.from({ length: 8 }, (_, index) => sample(index * 6, 0, index));
     const returning = Array.from({ length: 8 }, (_, index) => sample(42 - index * 6, 1, index + 8)).slice(1);

@@ -9,8 +9,8 @@ const MIN_ARM_M = 5;
 const MAX_ARM_M = 45;
 const MIN_TURN_DEG = 28;
 const MAX_TURN_DEG = 112;
-const MAX_TANGENT_M = 1.35;
-const MAX_TANGENT_ARM_RATIO = 0.12;
+const MAX_TANGENT_M = 2.4;
+const MAX_TANGENT_ARM_RATIO = 0.18;
 const CROSSING_GUARD_M = 3;
 
 interface XY { x: number; y: number }
@@ -129,10 +129,11 @@ function maximumDistanceFromSourceCorridor(candidate: XY[], source: XY[]): numbe
 }
 
 /**
- * Applies a sub-metre quadratic fillet only to an already accepted road-match
+ * Applies a tightly bounded quadratic fillet to an already accepted display
  * segment. Endpoints, segment identity, canonical GPS, stats and Memory are
  * outside this display-only transform. Hairpins, short arms and crossings are
- * intentionally retained verbatim.
+ * intentionally retained verbatim, and whole-route gates can reject every
+ * proposed curve together.
  */
 export function roundSavedFinalRoadCorners(
   points: TrackPoint[],

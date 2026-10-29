@@ -8,17 +8,17 @@ const meters = (x: number, y: number, index: number, segmentId = 'road-a') => ({
 });
 
 describe('saved Final road corner rounding', () => {
-  test('adds a light sub-metre arc to an accepted right-angle road turn', () => {
+  test('adds a visible bounded arc to an accepted right-angle display turn', () => {
     const source = [meters(0, 0, 0), meters(10, 0, 1), meters(10, 10, 2)];
     const result = roundSavedFinalRoadCorners(source);
     expect(result.diagnostics.roundedCorners).toBe(1);
-    expect(result.diagnostics.maximumTangentM).toBeCloseTo(1.2, 1);
+    expect(result.diagnostics.maximumTangentM).toBeCloseTo(1.8, 1);
     expect(result.points.length).toBeGreaterThan(source.length);
     expect(result.points[0]).toEqual(source[0]);
     expect(result.points[result.points.length - 1]).toEqual(source[2]);
     expect(new Set(result.points.map(point => point.segmentId))).toEqual(new Set(['road-a']));
-    // The centre sample cuts the mathematical corner only gently. At this
-    // scale its distance to either original road arm is about 0.3 m.
+    // The centre sample cuts the mathematical corner only gently and remains
+    // inside the independently enforced 0.8 m source corridor.
     const centre = result.points[Math.floor(result.points.length / 2)];
     const deviationM = Math.min(
       Math.abs(centre.lat) * 111_320,

@@ -64,7 +64,10 @@ describe('Final candidate promotion', () => {
     expect(before.p95DeviationM).toBeCloseTo(7.989, 3);
     expect(before.p95DeviationM).toBeLessThanOrEqual(before.deviationEnvelopeM);
     expect(after).toMatchObject({ accepted: false, reason: 'raw_deviation' });
-    expect(after.p95DeviationM).toBeCloseTo(8.467, 3);
+    // The more visible fillet moves this counterexample farther outside the
+    // same immutable 8 m envelope; the exact displacement is not authority.
+    expect(after.p95DeviationM).toBeGreaterThan(8.5);
+    expect(after.p95DeviationM).toBeLessThan(9);
     expect(after.p95DeviationM).toBeGreaterThan(after.deviationEnvelopeM);
 
     const selected = selectRoundedActivityFinalCandidate({

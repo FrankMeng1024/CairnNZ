@@ -5,6 +5,7 @@ import type { TrackPoint } from '../../store/useSessionStore';
 export const LIVE_MUTABLE_TAIL_MAX_POINTS = 10;
 export const LIVE_MUTABLE_TAIL_MAX_AGE_MS = 15_000;
 export const LIVE_MUTABLE_TAIL_MAX_DISTANCE_M = 18;
+export const LIVE_TREND_CONTEXT_MAX_POINTS = 5;
 const EARTH_METRES_PER_DEGREE = 111_320;
 
 function angleDelta(left: number, right: number): number {
@@ -78,6 +79,27 @@ function protectedIndices(points: TrackPoint[], uncertaintyM: number): number[] 
     }
     return null;
   };
+  const directionalEvidence = (start: number, end: number) => {
+    let east = 0;
+    let north = 0;
+    let distanceM = 0;
+    let edgeCount = 0;
+    for (let edge = start; edge < end; edge += 1) {
+      const edgeDistanceM = adjacentDistanceM[edge];
+      if (edgeDistanceM < 0.5) continue;
+      const radians = cachedBearing(edge, edge + 1) * Math.PI / 180;
+      east += Math.sin(radians) * edgeDistanceM;
+      north += Math.cos(radians) * edgeDistanceM;
+      distanceM += edgeDistanceM;
+      edgeCount += 1;
+    }
+    return {
+      bearingDeg: (Math.atan2(east, north) * 180 / Math.PI + 360) % 360,
+      concentration: distanceM > 0 ? Math.hypot(east, north) / distanceM : 0,
+      distanceM,
+      edgeCount,
+    };
+  };
   const signedLocalTurns = points.map((_point, index) => {
     if (index === 0 || index >= points.length - 1) return 0;
     return ((cachedBearing(index, index + 1) - cachedBearing(index - 1, index) + 540) % 360) - 180;
@@ -125,12 +147,53 @@ function protectedIndices(points: TrackPoint[], uncertaintyM: number): number[] 
       && nearTurn >= 70
       && localTurn >= 55
       && !hasOpposingNearbyTurn;
-    if (
-      evidenceSizedLocalTurn
+    const cornerCandidate = evidenceSizedLocalTurn
       || (nearTurn >= 70 && corridorTurn >= 48)
-      || compactSupportedCorner
-    ) {
-      protectedSet.add(index);
+      || compactSupportedCorner;
+    if (cornerCandidate) {
+      // A single V-shaped sample is not a movement trend. Confirm a display
+      // anchor only after both approach and departure contain directionally
+      // coherent travel sized to observed uncertainty. Fast, sparse delivery
+      // may establish this with one long edge; walking needs shorter samples.
+      const trendSupportM = Math.max(7, Math.min(15, uncertaintyM * 0.85));
+      const trendPrevious = neighbourAtDistance(index, -1, trendSupportM);
+      const trendNext = neighbourAtDistance(index, 1, trendSupportM);
+      const incomingTrend = trendPrevious == null ? null : directionalEvidence(trendPrevious, index);
+      const outgoingTrend = trendNext == null ? null : directionalEvidence(index, trendNext);
+      const evidenceCountSupported = (evidence: ReturnType<typeof directionalEvidence> | null) => Boolean(
+        evidence && (evidence.edgeCount >= 2
+          // A sparse native batch can establish a real turn with one
+          // evidence-sized edge on each side. Keep this aligned with the
+          // existing physical corner gate so the turn cannot leave the
+          // mutable tail before its later samples confirm it.
+          || evidence.distanceM >= Math.max(14, uncertaintyM)),
+      );
+      const trendTurn = incomingTrend && outgoingTrend
+        ? angleDelta(incomingTrend.bearingDeg, outgoingTrend.bearingDeg)
+        : 0;
+      const trendSupported = Boolean(
+        incomingTrend && outgoingTrend
+        && evidenceCountSupported(incomingTrend)
+        && evidenceCountSupported(outgoingTrend)
+        && incomingTrend.distanceM >= trendSupportM
+        && outgoingTrend.distanceM >= trendSupportM
+        && incomingTrend.concentration >= 0.9
+        && outgoingTrend.concentration >= 0.9
+        && trendTurn >= 30,
+      );
+      const excursionStart = Math.max(0, index - 3);
+      const excursionEnd = Math.min(points.length - 1, index + 3);
+      let excursionPathM = 0;
+      for (let edge = excursionStart; edge < excursionEnd; edge += 1) {
+        excursionPathM += adjacentDistanceM[edge];
+      }
+      const excursionChordM = displayDistanceM(points[excursionStart], points[excursionEnd]);
+      // A real short detour, U-turn or switchback may deliberately lack one
+      // coherent bearing. Preserve it when its extra travelled shape exceeds
+      // both display noise and a substantial fraction of uncertainty.
+      const meaningfulExcursion = excursionPathM - excursionChordM
+        >= Math.max(8, uncertaintyM * 0.75);
+      if (trendSupported || meaningfulExcursion) protectedSet.add(index);
     }
     const incomingMs = points[index].t - points[index - 1].t;
     const outgoingMs = points[index + 1].t - points[index].t;
@@ -330,11 +393,11 @@ export function createCausalLiveReplayCheckpoint(
     };
   }
   const segmentId = canonical[canonical.length - 1].segmentId ?? '__legacy';
-  // Mutable decisions use at most ten points plus two immutable boundary
-  // witnesses. Everything older is already represented by the frozen Live
-  // prefix and need not be replayed on foreground return or the next GPS fix.
+  // Mutable decisions use at most ten points plus a small immutable trend
+  // context. The context can prove a sustained approach without becoming
+  // mutable itself; everything older is already represented by frozen Live.
   let boundedStart = canonical.length - 1;
-  const maximumEvidence = LIVE_MUTABLE_TAIL_MAX_POINTS + 2;
+  const maximumEvidence = LIVE_MUTABLE_TAIL_MAX_POINTS + LIVE_TREND_CONTEXT_MAX_POINTS;
   while (boundedStart > 0
     && canonical.length - boundedStart < maximumEvidence
     && (canonical[boundedStart - 1].segmentId ?? '__legacy') === segmentId) boundedStart -= 1;
@@ -342,7 +405,7 @@ export function createCausalLiveReplayCheckpoint(
     && (canonical[boundedStart - 1].segmentId ?? '__legacy') === segmentId;
   const boundedEvidence = canonical.slice(boundedStart);
   const mutableStart = mutableTailStartIndex(boundedEvidence);
-  const contextStart = Math.max(0, mutableStart - 2);
+  const contextStart = Math.max(0, mutableStart - LIVE_TREND_CONTEXT_MAX_POINTS);
   const cutoffT = boundedEvidence[mutableStart]?.t ?? canonical[canonical.length - 1].t;
   let liveTailStart = live.length;
   while (liveTailStart > 0) {
@@ -374,7 +437,7 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
     if (state.liveTail.length > 0) {
       state.frozen.push(...state.liveTail.filter(candidate => candidate.t < cutoffT));
     }
-    const contextStart = Math.max(0, mutableStart - 2);
+    const contextStart = Math.max(0, mutableStart - LIVE_TREND_CONTEXT_MAX_POINTS);
     state.liveTail = simplifyTail(
       state.segmentEvidence.slice(contextStart),
       !state.segmentHasPriorEvidence && contextStart === 0,
