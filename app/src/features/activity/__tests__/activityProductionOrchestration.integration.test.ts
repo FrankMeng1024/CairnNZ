@@ -131,7 +131,11 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
   persistBackgroundContext: jest.fn(async () => true),
   readDurableActivityContext: jest.fn(() => mockDurableActivityContextReader()),
   detectDurableSilenceGapAfterResume: jest.fn(async () => null),
+  detectDurableSilenceGapsAfterResume: jest.fn(async () => []),
+  persistPendingDurableSilenceGapEvents: jest.fn(async () => 0),
+  persistDurableJournalProjectionFrontier: jest.fn(async () => true),
   setActivityTaskForegroundProjectionWake: jest.fn(),
+  setActivityStartupOrphanMutationWake: jest.fn(),
 }));
 jest.mock('../../../services/debugLogger', () => ({
   debugLogger: { startSession: jest.fn(), endSession: jest.fn(async () => null), log: jest.fn(), logError: jest.fn(), isEnabled: jest.fn(() => false) },
@@ -337,12 +341,19 @@ describe.each(['hiking', 'running'] as const)(
         if (index === 2) {
           mockNetworkState = 'online';
           mockNetworkListener?.({ state: 'online' });
+          mockAppStateCurrent = 'background';
           mockAppStateListener?.('background');
         }
         if (index === 5) {
           mockNetworkState = 'offline';
           mockNetworkListener?.({ state: 'offline' });
+          mockAppStateCurrent = 'active';
           mockAppStateListener?.('active');
+          await settleUntil(
+            () => useTrackingStore.getState().trackPoints.some(point => point.rawOrdinal === 5),
+            160,
+            `${mode}:background-wal-projected`,
+          );
         }
         const source = index >= 2 && index < 5 ? 'background' as const : 'foreground' as const;
         const timestamp = base + index * 5_000;
@@ -363,22 +374,21 @@ describe.each(['hiking', 'running'] as const)(
             lng: coordinate.lng,
             acc: coordinate.accuracy,
             speed: coordinate.speed,
+            rawOrdinal: index + 1,
+            observationId: `${clientActivityId}:observation-${index + 1}`,
             src: 'bg',
             clientActivityId,
             ownerGeneration: state.liveOwnerGeneration!,
             segmentId: state.currentSegmentId!,
           });
         }
-        const decision = await useTrackingStore.getState().addTrackPoint({
-          ...coordinate,
-          ...(source === 'background' ? {
-            continuityPreclassified: true,
-            canonicalDecision: 'ACCEPT' as const,
-            decisionReason: 'background-task-accepted',
-            committedBeforeFence: true,
-            segmentId: useTrackingStore.getState().currentSegmentId ?? undefined,
-          } : {}),
-        }, timestamp);
+        const decision = source === 'background'
+          // TaskManager already qualified and committed these observations.
+          // Foreground recovery must consume the WAL exactly once; injecting
+          // the same point through addTrackPoint would manufacture a second
+          // JS delivery that never exists in production.
+          ? { accepted: true, reason: 'background-task-accepted' }
+          : await useTrackingStore.getState().addTrackPoint(coordinate, timestamp);
         decisions.push({ accepted: decision.accepted, reason: decision.reason });
       }
       mockWallTimeMs = base + 40_000;
@@ -526,8 +536,19 @@ describe.each(['hiking', 'running'] as const)(
               );
             }
           }
-          if (index === 1) (mockAppStateListener as ((state: 'background') => void) | null)?.('background');
-          if (index === 5) (mockAppStateListener as ((state: 'active') => void) | null)?.('active');
+          if (index === 1) {
+            mockAppStateCurrent = 'background';
+            (mockAppStateListener as ((state: 'background') => void) | null)?.('background');
+          }
+          if (index === 5) {
+            mockAppStateCurrent = 'active';
+            (mockAppStateListener as ((state: 'active') => void) | null)?.('active');
+            await settleUntil(
+              () => useTrackingStore.getState().trackPoints.some(point => point.rawOrdinal === 5),
+              160,
+              `${timeline.name}:background-wal-projected`,
+            );
+          }
           const source = sources[index];
           const coordinate = {
             lat: -41.2865,
@@ -549,6 +570,8 @@ describe.each(['hiking', 'running'] as const)(
               lng: coordinate.lng,
               acc: coordinate.accuracy,
               speed: coordinate.speed,
+              rawOrdinal: index + 1,
+              observationId: `${timeline.clientActivityId}:observation-${index + 1}`,
               src: 'bg',
               clientActivityId: timeline.clientActivityId,
               ownerGeneration: state.liveOwnerGeneration!,
@@ -556,19 +579,9 @@ describe.each(['hiking', 'running'] as const)(
               ...(index === 3 ? { segmentStartReason: 'gps-reacquired' as const } : {}),
             });
           }
-          const decision = await useTrackingStore.getState().addTrackPoint({
-            ...coordinate,
-            ...(source === 'background' ? {
-              continuityPreclassified: true,
-              canonicalDecision: 'ACCEPT' as const,
-              decisionReason: 'background-task-accepted',
-              committedBeforeFence: true,
-              segmentId: index >= 3
-                ? `${timeline.clientActivityId}:reacquired`
-                : useTrackingStore.getState().currentSegmentId ?? undefined,
-              ...(index === 3 ? { segmentStartReason: 'gps-reacquired' as const } : {}),
-            } : {}),
-          }, mockWallTimeMs);
+          const decision = source === 'background'
+            ? { accepted: true, reason: 'background-task-accepted' }
+            : await useTrackingStore.getState().addTrackPoint(coordinate, mockWallTimeMs);
           decisions.push({ accepted: decision.accepted, reason: decision.reason });
         }
         await settleUntil(
@@ -783,7 +796,8 @@ describe('production-path foreground resume recovery', () => {
     };
     mockAppStateCurrent = 'background';
     mockAppStateListener?.('background');
-    await settleUntil(() => mockNativeBackgroundStarted, 160, `${clientActivityId}:background-active`);
+    await settleTurns();
+    expect(mockNativeBackgroundStarted).toBe(true);
     useTrackingStore.setState({ latestSourceLocationTime: null, latestSourceKind: null });
     return { ownerGeneration, segmentId, observationTimeMs };
   }
@@ -801,6 +815,7 @@ describe('production-path foreground resume recovery', () => {
       const newTime = mockWallTimeMs + fieldCase.staleGapMs + 60_000;
       const fixture = fieldResumePoints(fieldCase, newTime);
       const stale = { ...fixture.stale, segmentStartReason: 'start' as const };
+      const mountedStale = { ...stale, clientActivityId, ownerGeneration };
 
       await appendHikePoint({
         t: stale.t, lat: stale.lat, lng: stale.lng, acc: stale.accuracy,
@@ -820,12 +835,12 @@ describe('production-path foreground resume recovery', () => {
         src: 'bg', clientActivityId, ownerGeneration, segmentId: fixture.segmentId,
       });
       useTrackingStore.setState({
-        trackPoints: [stale],
-        trackPointsSmoothed: [stale],
-        trackPointsRaw: [stale],
-        distanceAccumulator: buildActivityDistanceAccumulator([stale]),
+        trackPoints: [mountedStale],
+        trackPointsSmoothed: [mountedStale],
+        trackPointsRaw: [mountedStale],
+        distanceAccumulator: buildActivityDistanceAccumulator([mountedStale]),
         distanceM: 0,
-        lastCoordinate: stale,
+        lastCoordinate: mountedStale,
         lastCoordinateTime: stale.t,
         lastFixTimestamp: stale.t,
         currentSegmentId: fixture.segmentId,
@@ -850,15 +865,15 @@ describe('production-path foreground resume recovery', () => {
       };
 
       const writer = require('../../../services/hikeTrackWriter');
-      const originalRead = writer.readActiveHikeTail.bind(writer);
+      const originalRead = writer.readHikeTrackProjectionPage.bind(writer);
       let releasePlayback: () => void = () => undefined;
       const playbackGate = new Promise<void>(resolve => { releasePlayback = resolve; });
       let fullPlaybackStarted = false;
-      const tailSpy = jest.spyOn(writer, 'readActiveHikeTail').mockImplementation(
+      const projectionSpy = jest.spyOn(writer, 'readHikeTrackProjectionPage').mockImplementation(
         async (...args: unknown[]) => {
-          const [sessionId, limit] = args as [string, number?];
-          const result = await originalRead(sessionId, limit);
-          if (limit == null) {
+          const [sessionId, cursor, limit] = args as [string, unknown, number?];
+          const result = await originalRead(sessionId, cursor, limit);
+          if (cursor == null) {
             fullPlaybackStarted = true;
             await playbackGate;
           }
@@ -872,11 +887,12 @@ describe('production-path foreground resume recovery', () => {
       location.startLocationUpdatesAsync.mockClear();
       mockAppStateCurrent = 'background';
       mockAppStateListener?.('background');
-      await settleUntil(
-        () => location.startLocationUpdatesAsync.mock.calls.length > 0,
-        160,
-        `${fieldCase.name}:background-owner`,
-      );
+      // Start already established the single persistent TaskManager owner.
+      // Ordinary AppState changes must neither start a second source nor stop
+      // the current one.
+      await settleTurns();
+      expect(mockNativeBackgroundStarted).toBe(true);
+      expect(location.startLocationUpdatesAsync).not.toHaveBeenCalled();
       mockAppStateCurrent = 'active';
       mockAppStateListener?.('active');
       await settleUntil(() => fullPlaybackStarted, 160, `${fieldCase.name}:playback-start`);
@@ -942,37 +958,51 @@ describe('production-path foreground resume recovery', () => {
       expect(final.trackPointsSmoothed.at(-1)).toMatchObject({ rawOrdinal: 3, segmentId: fixture.segmentId });
       } finally {
         releasePlayback();
-        tailSpy.mockRestore();
+        projectionSpy.mockRestore();
       }
     },
   );
 
-  test('Pause while the durable-context read is held cannot publish a stale source receipt', async () => {
+  test('Pause while bounded continuity restore is held cannot publish a stale source receipt', async () => {
     const clientActivityId = '91000000-0000-4000-8000-000000000001';
     const fixture = await primeHeldResume(clientActivityId);
-    const heldContext = deferredValue<any>();
-    let contextReadCount = 0;
-    mockDurableActivityContextReader = async () => {
-      contextReadCount += 1;
-      return contextReadCount === 1 ? heldContext.promise : mockDurableActivityContext;
-    };
+    const writer = require('../../../services/hikeTrackWriter');
+    const originalRead = writer.readActiveHikeTail.bind(writer);
+    const heldTail = deferredValue<void>();
+    let boundedTailStarted = false;
+    const tailSpy = jest.spyOn(writer, 'readActiveHikeTail').mockImplementation(
+      async (...args: unknown[]) => {
+        const [sessionId, limit] = args as [string, number?];
+        const result = await originalRead(sessionId, limit);
+        if (limit === 2) {
+          boundedTailStarted = true;
+          await heldTail.promise;
+        }
+        return result;
+      },
+    );
 
-    mockAppStateCurrent = 'active';
-    mockAppStateListener?.('active');
-    await settleUntil(() => contextReadCount === 1, 160, 'pause:context-read-held');
-    const pause = useTrackingStore.getState().pauseTracking();
-    expect(useTrackingStore.getState().status).toBe('paused');
-    heldContext.resolve(mockDurableActivityContext);
-    await pause;
-    await settleTurns();
+    try {
+      mockAppStateCurrent = 'active';
+      mockAppStateListener?.('active');
+      await settleUntil(() => boundedTailStarted, 160, 'pause:tail-read-held');
+      const pause = useTrackingStore.getState().pauseTracking();
+      expect(useTrackingStore.getState().status).toBe('paused');
+      heldTail.resolve();
+      await pause;
+      await settleTurns();
 
-    expect(useTrackingStore.getState()).toMatchObject({
-      status: 'paused',
-      sessionId: clientActivityId,
-      liveOwnerGeneration: fixture.ownerGeneration,
-      latestSourceLocationTime: null,
-      latestSourceKind: null,
-    });
+      expect(useTrackingStore.getState()).toMatchObject({
+        status: 'paused',
+        sessionId: clientActivityId,
+        liveOwnerGeneration: fixture.ownerGeneration,
+        latestSourceLocationTime: null,
+        latestSourceKind: null,
+      });
+    } finally {
+      heldTail.resolve();
+      tailSpy.mockRestore();
+    }
   });
 
   test('account switch while the bounded WAL read is held cannot expose the old owner receipt', async () => {
@@ -1041,23 +1071,20 @@ describe('production-path foreground resume recovery', () => {
       await settleTurns(20);
 
       const backgroundTask = require('../../../services/backgroundLocationTask');
-      backgroundTask.persistBackgroundContext.mockClear();
-      mockAppStateCurrent = 'background';
-      mockAppStateListener?.('background');
       await settleUntil(
         () => backgroundTask.persistBackgroundContext.mock.calls.some((call: unknown[]) => (
           (call[2] as any)?.clientActivityId === newClientActivityId
         )),
         160,
-        'activity-replace:new-context-persisted',
+        'activity-replace:new-start-context-persisted',
       );
       const persisted = backgroundTask.persistBackgroundContext.mock.calls.find((call: unknown[]) => (
         (call[2] as any)?.clientActivityId === newClientActivityId
       ))?.[2];
       expect(persisted).toMatchObject({
         clientActivityId: newClientActivityId,
-        latestSourceReceipt: null,
       });
+      expect(persisted.latestSourceReceipt ?? null).toBeNull();
       expect(persisted.latestSourceReceipt?.observationTimeMs).not.toBe(oldFixture.observationTimeMs);
     } finally {
       heldTail.resolve();
@@ -1262,38 +1289,27 @@ describe('production-path Start to immediate background handoff', () => {
     },
   );
 
-  test('active-to-background keeps the foreground source until native background ownership is verified', async () => {
+  test('active-to-background keeps the verified persistent TaskManager owner without source churn', async () => {
     const location = require('expo-location');
-    const foregroundRemove = jest.fn();
-    location.watchPositionAsync.mockImplementationOnce(async () => ({ remove: foregroundRemove }));
     const clientActivityId = '92000000-0000-4000-8000-000000000023';
     useTrackingStore.getState().setActivityMode('hiking');
     await expect(useTrackingStore.getState().startTracking(clientActivityId)).resolves.toBe(true);
-    await settleUntil(() => location.watchPositionAsync.mock.calls.length === 1, 160, 'foreground-active');
-
-    const backgroundStart = deferredValue<void>();
-    let backgroundStartEntered = false;
-    location.startLocationUpdatesAsync.mockImplementationOnce(async () => {
-      backgroundStartEntered = true;
-      await backgroundStart.promise;
-      mockNativeBackgroundStarted = true;
-    });
+    expect(mockNativeBackgroundStarted).toBe(true);
+    expect(location.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    location.startLocationUpdatesAsync.mockClear();
+    location.stopLocationUpdatesAsync.mockClear();
     mockAppStateCurrent = 'background';
     mockAppStateListener?.('background');
-    await settleUntil(() => backgroundStartEntered, 160, 'background-start-held-after-foreground');
+    await settleTurns();
 
-    expect(foregroundRemove).not.toHaveBeenCalled();
-    backgroundStart.resolve();
-    await settleUntil(
-      () => mockNativeBackgroundStarted && foregroundRemove.mock.calls.length === 1,
-      160,
-      'background-owner-verified-before-foreground-stop',
-    );
-    expect(location.hasStartedLocationUpdatesAsync).toHaveBeenCalled();
+    expect(mockNativeBackgroundStarted).toBe(true);
+    expect(location.watchPositionAsync).not.toHaveBeenCalled();
+    expect(location.startLocationUpdatesAsync).not.toHaveBeenCalled();
+    expect(location.stopLocationUpdatesAsync).not.toHaveBeenCalled();
   });
 
   test.each(['hiking', 'running'] as const)(
-    '%s foreground re-entry before native background start resolves converges to one foreground owner',
+    '%s foreground re-entry before native TaskManager start resolves converges to that persistent owner',
     async (mode) => {
       const clientActivityId = mode === 'hiking'
         ? '92000000-0000-4000-8000-000000000031'
@@ -1313,17 +1329,14 @@ describe('production-path Start to immediate background handoff', () => {
       mockAppStateCurrent = 'active';
       backgroundStart.resolve();
       await expect(starting).resolves.toBe(true);
-      await settleUntil(
-        () => location.watchPositionAsync.mock.calls.length === 1 && !mockNativeBackgroundStarted,
-        160,
-        `${mode}:foreground-owner-restored`,
-      );
+      await settleTurns();
       expect(useTrackingStore.getState()).toMatchObject({
         status: 'tracking', sessionId: clientActivityId, locationAvailable: true,
       });
       expect(location.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
-      expect(location.watchPositionAsync).toHaveBeenCalledTimes(1);
-      expect(mockNativeBackgroundStarted).toBe(false);
+      expect(location.watchPositionAsync).not.toHaveBeenCalled();
+      expect(location.stopLocationUpdatesAsync).not.toHaveBeenCalled();
+      expect(mockNativeBackgroundStarted).toBe(true);
     },
   );
 

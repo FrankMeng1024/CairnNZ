@@ -382,6 +382,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
         },
       });
       await handler({ data: { locations: [point(132_000)] }, error: null });
+      await task.settleBackgroundDiagnosticWrites();
       expect(recordActivityStageEventDurably).toHaveBeenCalledWith(expect.objectContaining({
         evidenceId: 'activity-gap-recovery:silence:1000',
         details: expect.objectContaining({
@@ -502,6 +503,7 @@ describe('backgroundLocationTask durable ownership fencing', () => {
       await handler({ data: { locations: [] }, error: null });
       now.mockReturnValue(260_000);
       await handler({ data: { locations: [] }, error: null });
+      await task.settleBackgroundDiagnosticWrites();
 
       const context = JSON.parse(values[task.STORAGE_KEY_ACTIVITY_CONTEXT]);
       expect(context.pendingSilenceGaps).toEqual([

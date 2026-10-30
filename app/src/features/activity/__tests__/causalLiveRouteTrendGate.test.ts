@@ -37,6 +37,10 @@ const maximumLateralM = (route: TrackPoint[]) => Math.max(
   0,
   ...route.map(sample => Math.abs(eastM(sample))),
 );
+const routeLengthM = (route: TrackPoint[]) => route.slice(1).reduce(
+  (sum, sample, index) => sum + haversineM(route[index], sample),
+  0,
+);
 
 function straightWithTransientDrift(dtMs: number): TrackPoint[] {
   const speedMps = 1.4;
@@ -250,6 +254,26 @@ describe('O98 mandatory movement-trend correctness gate', () => {
     // envelope, but the reversal must remain unmistakably present.
     expect(liveSwitchback.some(sample => eastM(sample) < 5
       && (sample.lat - LAT) * METRES_PER_DEGREE > 6)).toBe(true);
+  });
+
+  test('retains meaningful progress around a clean continuous curve and closed loop', () => {
+    const radiusM = 20;
+    const canonical = Array.from({ length: 64 }, (_, index) => {
+      const angle = Math.PI * 2 * index / 63;
+      return {
+        ...point(radiusM * Math.cos(angle), radiusM * Math.sin(angle), index * 1_000),
+        accuracy: 6,
+        observationId: `curve:${index}`,
+        rawOrdinal: index,
+      };
+    });
+    const live = buildCausalLiveRoute(canonical);
+
+    expect(routeLengthM(live)).toBeGreaterThan(routeLengthM(canonical) * 0.8);
+    expect(haversineM(live[0], canonical[0])).toBeLessThan(0.05);
+    expect(haversineM(live.at(-1)!, canonical.at(-1)!)).toBeLessThan(0.05);
+    expect(Math.max(...live.map(sample => eastM(sample)))).toBeGreaterThan(18);
+    expect(Math.min(...live.map(sample => eastM(sample)))).toBeLessThan(-18);
   });
 
   test('T06 simplifies an uncertainty-sized detour but preserves a meaningful one', () => {

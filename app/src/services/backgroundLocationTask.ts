@@ -689,6 +689,22 @@ type ForegroundProjectionWake = (owner: {
 }) => void;
 let foregroundProjectionWake: ForegroundProjectionWake | null = null;
 let startupOrphanMutationWake: (() => void) | null = null;
+let backgroundDiagnosticTail: Promise<void> = Promise.resolve();
+
+function scheduleBackgroundDiagnosticWrite(work: () => Promise<void>): void {
+  const scheduled = backgroundDiagnosticTail
+    .catch(() => undefined)
+    .then(work);
+  backgroundDiagnosticTail = scheduled.catch(() => undefined);
+}
+
+/** Test/export barrier only. Native callback completion and WAL handoff never
+ * await this best-effort diagnostic queue. SILENCE_GAP candidates remain in
+ * the durable Activity context until this queue (or a later recovery) obtains
+ * a strict ledger acknowledgement. */
+export async function settleBackgroundDiagnosticWrites(): Promise<void> {
+  await backgroundDiagnosticTail.catch(() => undefined);
+}
 
 /** UI latency hint only. The accepted WAL remains the projection authority. */
 export function setActivityTaskForegroundProjectionWake(
@@ -1823,24 +1839,32 @@ const handleBackgroundLocationTask = async ({ data, error }: { data: any; error:
   }
   });
   if (diagnosticTarget.current) {
-    await persistPendingDurableSilenceGapEvents({
-      ownerUserId: diagnosticTarget.current.ownerUserId,
-      gaps: pendingSilenceGaps,
-      trigger: 'task-receipt',
-      clientActivityId: diagnosticTarget.current.clientActivityId,
-      ownerGeneration: diagnosticTarget.current.ownerGeneration,
-    }).catch(() => 0);
+    const target = diagnosticTarget.current;
+    scheduleBackgroundDiagnosticWrite(async () => {
+      await persistPendingDurableSilenceGapEvents({
+        ownerUserId: target.ownerUserId,
+        gaps: pendingSilenceGaps,
+        trigger: 'task-receipt',
+        clientActivityId: target.clientActivityId,
+        ownerGeneration: target.ownerGeneration,
+      }).catch(() => 0);
+    });
   }
   // The native ownership/WAL transaction has already completed. Persist one
-  // partial diagnostic chunk per delivered native batch outside that mutex so
-  // a headless runtime can terminate without losing the opted-in raw suffix,
-  // while Finish and the next callback never wait behind diagnostic I/O.
+  // partial diagnostic chunk per delivered native batch outside that mutex.
+  // Diagnostic storage is intentionally not part of the Task callback ACK:
+  // a stalled opt-in ledger or debug sink must not serialize later native
+  // delivery behind non-authoritative I/O. The diagnostic writers already own
+  // their durable, serialized queues; export/flush can await those separately.
   if (diagnosticTarget.current) {
-    await Promise.allSettled(diagnosticWrites);
-    await flushActivityDiagnosticReplay(
-      diagnosticTarget.current.ownerUserId,
-      diagnosticTarget.current.clientActivityId,
-    ).catch(() => undefined);
+    const target = diagnosticTarget.current;
+    scheduleBackgroundDiagnosticWrite(async () => {
+      await Promise.allSettled(diagnosticWrites);
+      await flushActivityDiagnosticReplay(
+        target.ownerUserId,
+        target.clientActivityId,
+      ).catch(() => undefined);
+    });
   }
   if (projectionWakeOwner && (AppState as any)?.currentState === 'active') {
     try { foregroundProjectionWake?.(projectionWakeOwner); } catch { /* latency hint only */ }

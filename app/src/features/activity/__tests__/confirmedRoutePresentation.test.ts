@@ -5,6 +5,7 @@ import {
   isAppendOnlyRouteUpdate,
   MAX_CONTINUOUS_ROUTE_MUTABLE_POINTS,
   MAX_LIVE_ROUTE_HEAD_POINTS,
+  MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS,
   planContinuousRouteTarget,
   updateIncrementalRoutePresentation,
 } from '../confirmedRoutePresentation';
@@ -69,6 +70,25 @@ describe('confirmed route presentation', () => {
     expect(second.activeHead?.coordinates.at(-1)).toEqual([revised[3].lng, revised[3].lat]);
   });
 
+  it('publishes a penultimate road-context revision when the newest fix is unchanged', () => {
+    const original = [point(0, 1_000), point(10, 2_000), point(20, 3_000), point(30, 4_000)];
+    const first = updateIncrementalRoutePresentation(createIncrementalRoutePresentation(), original);
+    const revised = original.map((sample, index) => (
+      index === original.length - 2 ? { ...sample, lat: sample.lat + 0.00002 } : sample
+    ));
+    const second = updateIncrementalRoutePresentation(first, revised);
+
+    expect(second.rebuilt).toBe(false);
+    expect(second.activeHead?.coordinates.at(-2)).toEqual([
+      revised.at(-2)!.lng,
+      revised.at(-2)!.lat,
+    ]);
+    expect(second.activeHead?.coordinates.at(-1)).toEqual([
+      revised.at(-1)!.lng,
+      revised.at(-1)!.lat,
+    ]);
+  });
+
   it('disconnects an unsupported legacy edge when either time or distance proves a gap', () => {
     const timeOnly = [
       { ...point(0, 1_000), segmentId: undefined },
@@ -113,7 +133,8 @@ describe('confirmed route presentation', () => {
       state = updateIncrementalRoutePresentation(state, points.slice(0, count));
     }
     expect(state.staticChunks).toHaveLength(1);
-    expect(state.activeHead!.coordinates.length).toBe(11);
+    expect(state.activeHead!.coordinates.length)
+      .toBe(MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS + 10);
     expect(state.staticChunks[0].coordinates.at(-1)).toEqual(state.activeHead!.coordinates[0]);
     expect(state.latestUpdatePayloadBytes).toBeLessThanOrEqual(MAX_LIVE_ROUTE_HEAD_POINTS * 16);
   });
@@ -131,15 +152,66 @@ describe('confirmed route presentation', () => {
     expect(state.activeHead!.coordinates[0]).toEqual(state.activeHead!.coordinates[2]);
   });
 
+  it('rebuilds when the legal mutable suffix crosses a newly frozen segment boundary', () => {
+    const original = [
+      ...Array.from({ length: 12 }, (_, index) => point(index * 2, index * 1_000, 'a')),
+      ...Array.from({ length: 3 }, (_, index) => point((index + 12) * 2, (index + 12) * 1_000, 'b')),
+    ];
+    const first = updateIncrementalRoutePresentation(
+      createIncrementalRoutePresentation(),
+      original,
+    );
+    const revised = original.map((sample, index) => (
+      index === 8 ? { ...sample, lat: sample.lat + 3 / 111_320 } : sample
+    ));
+    const second = updateIncrementalRoutePresentation(first, revised);
+    const rendered = [...second.staticChunks, ...(second.activeHead ? [second.activeHead] : [])];
+
+    expect(first.activeHeadStartIndex).toBe(12);
+    expect(second.rebuilt).toBe(true);
+    expect(rendered.map(segment => segment.coordinates)).toEqual(
+      buildConfirmedRouteSegments(revised).map(segment => segment.coordinates),
+    );
+  });
+
   it.each([1_800, 7_200, 18_000])('bounds per-update route payload for %i accepted points', (count) => {
     const points = Array.from({ length: count }, (_, index) => point(index, index * 1_000));
     let state = createIncrementalRoutePresentation();
     const growing: ReturnType<typeof point>[] = [];
     for (const nextPoint of points) {
       growing.push(nextPoint);
-      state = updateIncrementalRoutePresentation(state, growing);
+      // Production publishes a new readonly route value. Keep the benchmark
+      // faithful to that contract instead of mutating the prior state's input.
+      state = updateIncrementalRoutePresentation(state, growing.slice());
       expect(state.latestUpdatePayloadBytes).toBeLessThanOrEqual((MAX_LIVE_ROUTE_HEAD_POINTS + 2) * 16);
     }
-    expect(state.staticChunks.length).toBeLessThanOrEqual(Math.ceil(count / (MAX_LIVE_ROUTE_HEAD_POINTS - 1)));
+    expect(state.staticChunks.length).toBeLessThanOrEqual(Math.ceil(
+      count / (MAX_LIVE_ROUTE_HEAD_POINTS - MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS),
+    ));
+  });
+
+  it('keeps a changing causal suffix bounded while preserving every rendered edge', () => {
+    let points = [point(0, 0), point(2, 1_000), point(4, 2_000)];
+    let state = updateIncrementalRoutePresentation(
+      createIncrementalRoutePresentation(),
+      points,
+    );
+    for (let index = 3; index < 1_025; index += 1) {
+      points = [
+        ...points.slice(0, -1),
+        { ...points.at(-1)!, lat: points.at(-1)!.lat + 0.2 / 111_320 },
+        point(index * 2, index * 1_000),
+      ];
+      state = updateIncrementalRoutePresentation(state, points);
+      expect(state.activeHead?.coordinates.length ?? 0)
+        .toBeLessThanOrEqual(MAX_LIVE_ROUTE_HEAD_POINTS);
+    }
+    const renderedEdges = [...state.staticChunks, ...(state.activeHead ? [state.activeHead] : [])]
+      .reduce((count, chunk) => count + Math.max(0, chunk.coordinates.length - 1), 0);
+    expect(renderedEdges).toBe(points.length - 1);
+    expect(state.activeHead?.coordinates.at(-2)).toEqual([
+      points.at(-2)!.lng,
+      points.at(-2)!.lat,
+    ]);
   });
 });

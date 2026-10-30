@@ -210,6 +210,58 @@ function localTrendSettlementCandidate(
     : null;
 }
 
+/**
+ * Resource expiry is not trend confirmation, but a continuously curving path
+ * still needs occasional display anchors or a bounded tail eventually
+ * collapses a loop/bend to its chord.  This gate retains the accepted sample
+ * only when symmetric evidence shows a coherent, one-sided change of heading.
+ * An isolated excursion and alternating GPS wobble have opposing turn signs
+ * and cannot satisfy it.  The coordinate is never predicted or moved.
+ */
+function sustainedCurvatureSettlementCandidate(
+  evidence: ReadonlyArray<TrackPoint>,
+  candidateIndex: number,
+): TrackPoint | null {
+  const startIndex = candidateIndex - 3;
+  const endIndex = candidateIndex + 3;
+  if (startIndex < 0 || endIndex >= evidence.length) return null;
+  const window = evidence.slice(startIndex, endIndex + 1);
+  for (let index = 1; index < window.length; index += 1) {
+    if (window[index].t - window[index - 1].t >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) {
+      return null;
+    }
+  }
+  const edgeDistances = window.slice(1).map((point, index) => (
+    displayDistanceM(window[index], point)
+  ));
+  const approachM = edgeDistances.slice(0, 3).reduce((sum, value) => sum + value, 0);
+  const departureM = edgeDistances.slice(3).reduce((sum, value) => sum + value, 0);
+  if (approachM < 3 || departureM < 3) return null;
+
+  const signedTurns: number[] = [];
+  for (let index = 1; index < window.length - 1; index += 1) {
+    if (edgeDistances[index - 1] < 0.5 || edgeDistances[index] < 0.5) continue;
+    signedTurns.push(
+      ((bearing(window[index], window[index + 1])
+        - bearing(window[index - 1], window[index]) + 540) % 360) - 180,
+    );
+  }
+  const meaningful = signedTurns.filter(turn => Math.abs(turn) >= 1.5);
+  if (meaningful.length < 3) return null;
+  const positive = meaningful.filter(turn => turn > 0);
+  const negative = meaningful.filter(turn => turn < 0);
+  const dominant = positive.length >= negative.length ? positive : negative;
+  const opposing = positive.length >= negative.length ? negative : positive;
+  const totalTurn = Math.abs(dominant.reduce((sum, turn) => sum + turn, 0));
+  if (
+    dominant.length < 3
+    || dominant.length < Math.ceil(meaningful.length * 0.75)
+    || totalTurn < 10
+    || opposing.some(turn => Math.abs(turn) >= 8)
+  ) return null;
+  return evidence[candidateIndex];
+}
+
 function presentationEvidenceIndex(
   evidence: ReadonlyArray<TrackPoint>,
   candidate: TrackPoint,
@@ -1023,6 +1075,9 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
       && needsSettledAnchor
     ) {
       const locallySettled = localTrendSettlementCandidate(
+        state.segmentEvidence,
+        settlementIndex,
+      ) ?? sustainedCurvatureSettlementCandidate(
         state.segmentEvidence,
         settlementIndex,
       );

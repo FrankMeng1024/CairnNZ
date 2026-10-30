@@ -1,4 +1,9 @@
 import { haversineM } from '../../utils/geo';
+import {
+  activityPresentationIdentity,
+  activityPresentationScopeKey,
+  sameActivityPresentationPoint,
+} from './activityPresentationIdentity';
 
 export type ActivityRoadContextAvailability =
   | 'available'
@@ -507,10 +512,29 @@ export interface StableRoadAwareLivePresentation<T> {
   sourceCount: number;
   sourcePoints: ReadonlyArray<T>;
   points: T[];
+  scopeKey: string | null;
+  contextAuthority: {
+    mapMountId: string;
+    queryGeneration: number;
+  } | null;
+  lastAppliedContext: ActivityRoadContext | null;
+  publishedStable: Map<string, {
+    display: T;
+    sourceFingerprint: string;
+    durable: boolean;
+  }>;
 }
 
 export function createStableRoadAwareLivePresentation<T>(): StableRoadAwareLivePresentation<T> {
-  return { sourceCount: 0, sourcePoints: [], points: [] };
+  return {
+    sourceCount: 0,
+    sourcePoints: [],
+    points: [],
+    scopeKey: null,
+    contextAuthority: null,
+    lastAppliedContext: null,
+    publishedStable: new Map(),
+  };
 }
 
 export function updateStableRoadAwareLivePresentation<T extends {
@@ -519,43 +543,136 @@ export function updateStableRoadAwareLivePresentation<T extends {
   t?: number;
   segmentId?: string;
   accuracy?: number | null;
+  observationId?: string;
+  clientActivityId?: string;
+  ownerGeneration?: string;
+  rawOrdinal?: number;
+  liveTrendConfirmed?: true;
+  livePresentationSettled?: true;
 }>(
   previous: StableRoadAwareLivePresentation<T>,
   canonical: ReadonlyArray<T>,
   context: ActivityRoadContext | null,
 ): StableRoadAwareLivePresentation<T> {
   if (canonical.length === 0) return createStableRoadAwareLivePresentation<T>();
-  const proposed = deriveRoadAwareLiveTrack(canonical, context);
-  const stablePrefixCompatible = previous.sourceCount > 0
-    && canonical.length >= previous.sourceCount
-    && previous.sourcePoints.length === previous.sourceCount
-    && canonical[0] === previous.sourcePoints[0]
-    && (previous.sourceCount <= 2
-      || canonical[previous.sourceCount - 3] === previous.sourcePoints[previous.sourceCount - 3]);
-  if (!stablePrefixCompatible) {
-    return { sourceCount: canonical.length, sourcePoints: canonical, points: proposed };
-  }
-  const exactOldTail = canonical[previous.sourceCount - 1]
-    === previous.sourcePoints[previous.sourceCount - 1]
-    && (previous.sourceCount <= 1
-      || canonical[previous.sourceCount - 2] === previous.sourcePoints[previous.sourceCount - 2]);
-  const confirmedCount = Math.max(0, canonical.length - 2);
-  // A causal Live append may legitimately revise its previous two provisional
-  // source positions. Preserve only the prefix that was already outside that
-  // mutable tail; otherwise an old road-adjusted provisional point can rebound
-  // when the source tail settles. A strict append can retain all old display
-  // points because their source coordinates did not change.
-  const retainedCount = Math.min(
-    exactOldTail ? confirmedCount : Math.max(0, previous.sourceCount - 2),
-    previous.points.length,
+  const nextScopeKey = activityPresentationScopeKey(canonical);
+  const scopeChanged = previous.sourceCount > 0
+    && previous.scopeKey !== nextScopeKey
+    && (previous.scopeKey != null || nextScopeKey != null);
+  const base = scopeChanged
+    ? createStableRoadAwareLivePresentation<T>()
+    : previous;
+  const staleContext = context != null
+    && base.contextAuthority?.mapMountId === context.mapMountId
+    && context.queryGeneration < base.contextAuthority.queryGeneration;
+  // The screen already cancels stale rendered-feature queries, but presentation
+  // state is the final authority boundary. An old async result may be replayed
+  // after checkpoint restoration or object reconstruction; it must not regain
+  // permission to move the provisional tail. Reuse the last accepted context
+  // for a stale result, while an explicit null still removes road assistance.
+  const effectiveContext = staleContext ? base.lastAppliedContext : context;
+  // Causal Live owns a ten-observation provisional domain. Reconcile a small
+  // overlap beyond that domain so contractions, insertions and rehydrated
+  // objects can be handled without re-identifying the complete Activity on
+  // every fix. A changed boundary means this is not a legal suffix update and
+  // deliberately falls back to a complete presentation reconciliation.
+  const minimumSourceCount = Math.min(base.sourceCount, canonical.length);
+  let reconcileStart = Math.max(0, minimumSourceCount - 12);
+  const prefixReusable = reconcileStart > 0
+    && base.sourcePoints.length === base.sourceCount
+    && base.points.length === base.sourceCount
+    && sameActivityPresentationPoint(
+      canonical[reconcileStart - 1],
+      base.sourcePoints[reconcileStart - 1],
+      reconcileStart - 1,
+    );
+  if (!prefixReusable) reconcileStart = 0;
+  // Road-aware decisions inspect at most four causal tail points. Supplying the
+  // entire history needlessly cloned a 20k-point Activity for every append.
+  const roadTailStart = Math.max(0, canonical.length - 4);
+  const roadTail = deriveRoadAwareLiveTrack(
+    canonical.slice(roadTailStart),
+    effectiveContext,
   );
+  // A point becomes immutable when it leaves the two-point road tail. Capture
+  // the coordinate that was actually published immediately before promotion,
+  // rather than recomputing it under the next context. Only the bounded old
+  // tail can newly cross this boundary, so this never scans full history.
+  const priorTailDisplay = new Map<string, {
+    display: T;
+    sourceFingerprint: string;
+  }>();
+  const priorTailStart = Math.max(0, base.sourceCount - 12);
+  for (let index = priorTailStart; index < base.sourceCount; index += 1) {
+    const source = base.sourcePoints[index];
+    const display = base.points[index];
+    if (!source || !display) continue;
+    const identity = activityPresentationIdentity(source, index);
+    priorTailDisplay.set(identity.key, {
+      display,
+      sourceFingerprint: identity.sourceFingerprint,
+    });
+  }
+  const stableBoundary = Math.max(0, canonical.length - 2);
+  const points = prefixReusable ? base.points.slice(0, reconcileStart) : [];
+  for (let index = reconcileStart; index < canonical.length; index += 1) {
+    const canonicalPoint = canonical[index];
+    const point = index < roadTailStart
+      ? canonicalPoint
+      : roadTail[index - roadTailStart];
+    const identity = activityPresentationIdentity(canonical[index], index);
+    const published = base.publishedStable.get(identity.key);
+    const priorTail = priorTailDisplay.get(identity.key);
+    const newlyStable = index < stableBoundary
+      || canonical[index].liveTrendConfirmed
+      || canonical[index].livePresentationSettled;
+    const retained = published?.sourceFingerprint === identity.sourceFingerprint
+      ? published.display
+      : newlyStable && priorTail?.sourceFingerprint === identity.sourceFingerprint
+        ? priorTail.display
+        : null;
+    let resolved = point;
+    if (!retained) {
+      if (published) base.publishedStable.delete(identity.key);
+    } else {
+      const source = canonical[index];
+      resolved = (
+        (source.liveTrendConfirmed && !retained.liveTrendConfirmed)
+        || (source.livePresentationSettled && !retained.livePresentationSettled)
+      ) ? {
+        ...retained,
+        ...(source.liveTrendConfirmed ? { liveTrendConfirmed: true as const } : null),
+        ...(source.livePresentationSettled ? { livePresentationSettled: true as const } : null),
+      } : retained;
+    }
+    if (newlyStable) {
+      const existing = base.publishedStable.get(identity.key);
+      if (existing?.sourceFingerprint === identity.sourceFingerprint) {
+        if (resolved !== existing.display) {
+          base.publishedStable.set(identity.key, { ...existing, display: resolved });
+        }
+      } else {
+        base.publishedStable.set(identity.key, {
+          display: resolved,
+          sourceFingerprint: identity.sourceFingerprint,
+          durable: identity.durable,
+        });
+      }
+    }
+    points.push(resolved);
+  }
   return {
     sourceCount: canonical.length,
     sourcePoints: canonical,
-    points: [
-      ...previous.points.slice(0, retainedCount),
-      ...proposed.slice(retainedCount),
-    ],
+    points,
+    scopeKey: nextScopeKey,
+    contextAuthority: staleContext
+      ? base.contextAuthority
+      : context == null
+        ? base.contextAuthority
+        : { mapMountId: context.mapMountId, queryGeneration: context.queryGeneration },
+    lastAppliedContext: staleContext ? base.lastAppliedContext : context,
+    publishedStable: base.publishedStable,
   };
 }
 

@@ -1,10 +1,18 @@
 import { haversineM } from '../../utils/geo';
+import {
+  activityPresentationScopeKey,
+  sameActivityPresentationPoint,
+} from './activityPresentationIdentity';
 
 export interface ConfirmedRoutePoint {
   lat: number;
   lng: number;
   t?: number;
   segmentId?: string;
+  observationId?: string;
+  clientActivityId?: string;
+  ownerGeneration?: string;
+  rawOrdinal?: number;
 }
 
 export interface ConfirmedRouteSegment {
@@ -13,6 +21,11 @@ export interface ConfirmedRouteSegment {
 }
 
 export const MAX_LIVE_ROUTE_HEAD_POINTS = 256;
+// The causal presentation may revise up to ten recent source observations.
+// A frozen chunk therefore keeps one overlap point before that entire domain;
+// otherwise a legal suffix correction can move a vertex already embedded in
+// the preceding static edge.
+export const MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS = 10;
 
 export interface IncrementalRoutePresentation {
   sourceCount: number;
@@ -27,6 +40,7 @@ export interface IncrementalRoutePresentation {
   latestUpdatePayloadBytes: number;
   cumulativePayloadBytes: number;
   rebuilt: boolean;
+  scopeKey: string | null;
 }
 
 export function createIncrementalRoutePresentation(): IncrementalRoutePresentation {
@@ -43,6 +57,7 @@ export function createIncrementalRoutePresentation(): IncrementalRoutePresentati
     latestUpdatePayloadBytes: 0,
     cumulativePayloadBytes: 0,
     rebuilt: false,
+    scopeKey: null,
   };
 }
 
@@ -79,56 +94,91 @@ export function updateIncrementalRoutePresentation(
   fallbackGapDistanceM = 200,
 ): IncrementalRoutePresentation {
   if (points.length === 0) return createIncrementalRoutePresentation();
-  const appendOnly = previousState.sourceCount > 0
-    && points.length >= previousState.sourceCount
-    && points[previousState.sourceCount - 1] === previousState.lastSourcePoint;
-  const boundedTailRevision = previousState.sourceCount > 0
-    && points.length >= previousState.sourceCount
+  const scopeKey = activityPresentationScopeKey(points);
+  const scopeChanged = previousState.sourceCount > 0
+    && previousState.scopeKey !== scopeKey
+    && (previousState.scopeKey != null || scopeKey != null);
+  if (scopeChanged) {
+    let rebuilt = createIncrementalRoutePresentation();
+    for (const point of points) {
+      rebuilt = appendPoint(rebuilt, point, fallbackGapMs, fallbackGapDistanceM);
+    }
+    return { ...rebuilt, sourcePoints: points, scopeKey, rebuilt: true };
+  }
+  const headStart = previousState.activeHeadStartIndex;
+  const hasComparableHead = previousState.sourceCount > 0
     && previousState.sourcePoints.length === previousState.sourceCount
-    && points[0] === previousState.sourcePoints[0]
-    && (previousState.sourceCount <= 2
-      || points[previousState.sourceCount - 3] === previousState.sourcePoints[previousState.sourceCount - 3]);
+    && headStart != null
+    && previousState.activeHead != null;
+  // The static prefix is immutable by contract. Its boundary fingerprint is
+  // enough to authorize bounded tail reconciliation; a changed boundary,
+  // contraction across it, or owner replacement falls back to a full rebuild.
+  const staticBoundaryMatches = hasComparableHead
+    && points.length > headStart!
+    && (headStart === 0 || sameActivityPresentationPoint(
+      points[headStart - 1],
+      previousState.sourcePoints[headStart - 1],
+      headStart - 1,
+    ));
+  const comparableEnd = Math.min(previousState.sourceCount, points.length);
+  const comparisonStart = Math.max(
+    0,
+    comparableEnd - MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS,
+  );
+  let firstChangedHeadIndex: number | null = null;
+  if (staticBoundaryMatches) {
+    for (let index = comparisonStart; index < comparableEnd; index += 1) {
+      if (!sameActivityPresentationPoint(
+        points[index],
+        previousState.sourcePoints[index],
+        index,
+      )) {
+        firstChangedHeadIndex = index;
+        break;
+      }
+    }
+  }
+  const headPrefixMatches = staticBoundaryMatches && firstChangedHeadIndex == null;
+  const appendOnly = headPrefixMatches && points.length >= previousState.sourceCount;
+  const boundedTailRevision = staticBoundaryMatches && (
+    (firstChangedHeadIndex != null && firstChangedHeadIndex >= headStart!)
+    || (firstChangedHeadIndex == null && points.length < previousState.sourceCount)
+  );
   if (!appendOnly && !boundedTailRevision) {
     let rebuilt = createIncrementalRoutePresentation();
     for (const point of points) {
       rebuilt = appendPoint(rebuilt, point, fallbackGapMs, fallbackGapDistanceM);
     }
-    return { ...rebuilt, sourcePoints: points, rebuilt: true };
+    return { ...rebuilt, sourcePoints: points, scopeKey, rebuilt: true };
   }
   let next = previousState;
-  if (boundedTailRevision && !appendOnly) {
-    const revisionStart = Math.max(0, previousState.sourceCount - 2);
-    const headStart = previousState.activeHeadStartIndex;
-    if (headStart === null || revisionStart < headStart || !previousState.activeHead) {
-      let rebuilt = createIncrementalRoutePresentation();
-      for (const point of points) {
-        rebuilt = appendPoint(rebuilt, point, fallbackGapMs, fallbackGapDistanceM);
-      }
-      return { ...rebuilt, sourcePoints: points, rebuilt: true };
-    }
-    const coordinates = previousState.activeHead.coordinates.slice();
-    for (let index = revisionStart; index < previousState.sourceCount; index += 1) {
-      coordinates[index - headStart] = coordinateOf(points[index]);
-    }
-    const activeHead = { ...previousState.activeHead, coordinates };
-    const latestUpdatePayloadBytes = payloadBytes([activeHead]);
+  if (boundedTailRevision) {
+    // Re-run the ordinary append/chunk path from the existing overlap point.
+    // This preserves frozen chunk object identity while guaranteeing that a
+    // legal revision cannot grow the mutable head beyond its hard bound.
     next = {
       ...previousState,
-      lastSourcePoint: points[previousState.sourceCount - 1],
-      activeHead,
-      geometryBuildCount: previousState.geometryBuildCount + 1,
-      sourceUpdateCount: previousState.sourceUpdateCount + 1,
-      latestUpdatePayloadBytes,
-      cumulativePayloadBytes: previousState.cumulativePayloadBytes + latestUpdatePayloadBytes,
+      sourceCount: headStart!,
+      lastSourcePoint: headStart! > 0 ? points[headStart! - 1] : null,
+      sourcePoints: previousState.sourcePoints.slice(0, headStart!),
+      activeHead: null,
+      activeHeadStartIndex: null,
+      latestUpdatePayloadBytes: 0,
     };
+    for (let index = headStart!; index < points.length; index += 1) {
+      next = appendPoint(next, points[index], fallbackGapMs, fallbackGapDistanceM);
+    }
   }
   if (points.length === previousState.sourceCount) {
-    return { ...next, sourcePoints: points, rebuilt: false };
+    return { ...next, sourcePoints: points, scopeKey, rebuilt: false };
+  }
+  if (boundedTailRevision) {
+    return { ...next, sourcePoints: points, scopeKey, rebuilt: false };
   }
   for (let index = previousState.sourceCount; index < points.length; index += 1) {
     next = appendPoint(next, points[index], fallbackGapMs, fallbackGapDistanceM);
   }
-  return { ...next, sourcePoints: points, rebuilt: false };
+  return { ...next, sourcePoints: points, scopeKey, rebuilt: false };
 }
 
 function appendPoint(
@@ -158,7 +208,11 @@ function appendPoint(
   } else {
     activeHead = { ...activeHead, coordinates: [...activeHead.coordinates, coordinateOf(point)] };
     if (activeHead.coordinates.length > MAX_LIVE_ROUTE_HEAD_POINTS) {
-      const frozenCoordinates = activeHead.coordinates.slice(0, MAX_LIVE_ROUTE_HEAD_POINTS);
+      const frozenPointCount = Math.max(
+        2,
+        activeHead.coordinates.length - MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS,
+      );
+      const frozenCoordinates = activeHead.coordinates.slice(0, frozenPointCount);
       const frozen = {
         key: `${activeHead.key}:body-${nextChunkOrdinal++}`,
         coordinates: frozenCoordinates,
@@ -167,9 +221,9 @@ function appendPoint(
       changedChunks.push(frozen);
       activeHead = {
         key: `${point.segmentId ?? 'legacy'}:head-${nextChunkOrdinal}`,
-        coordinates: [frozenCoordinates[frozenCoordinates.length - 1], coordinateOf(point)],
+        coordinates: activeHead.coordinates.slice(frozenPointCount - 1),
       };
-      activeHeadStartIndex = state.sourceCount - 1;
+      activeHeadStartIndex = state.sourceCount - activeHead.coordinates.length + 1;
     }
   }
   changedChunks.push(activeHead);
@@ -188,6 +242,7 @@ function appendPoint(
     latestUpdatePayloadBytes,
     cumulativePayloadBytes: state.cumulativePayloadBytes + latestUpdatePayloadBytes,
     rebuilt: state.rebuilt,
+    scopeKey: state.scopeKey,
   };
 }
 

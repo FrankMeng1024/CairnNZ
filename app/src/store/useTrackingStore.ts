@@ -1735,8 +1735,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     };
     const startIdentityIsCurrent = () => {
       const live = get();
-      return String(useAppStore.getState().user?.id ?? '') === userId
-        && live.ownerUserId === userId
+      // Cleanup authority is the immutable owner stored by this exact Start,
+      // not the account that happens to be signed in when a delayed native or
+      // education operation settles. An account switch intentionally makes
+      // startAuthorityIsCurrent() false, but it must not strand Activity A in
+      // `requesting`. A subsequently started Activity B has a different
+      // session/generation tuple and therefore remains fenced from A's
+      // rollback without relying on mutable global account state.
+      return live.ownerUserId === userId
         && live.sessionId === localSessionId
         && live.liveOwnerGeneration === ownerGeneration;
     };
@@ -7545,6 +7551,19 @@ function enqueueRealLocationLifecycleTransition(
       coordinateSource: 'none',
     });
     if (plan.action === 'keep-current-owner' && nextState === 'active') {
+      // The persistent TaskManager remains the native owner, but its latest
+      // headless receipt/continuity checkpoint may not yet exist in this JS
+      // realm. Restore that bounded durable predecessor independently from
+      // permission verification and complete-history projection. This keeps a
+      // fresh source from looking lost after foreground return without making
+      // already-published geometry wait for storage or a new GPS fix.
+      void restoreForegroundContinuityFromDurableContext(owner, intentEpoch)
+        .catch(error => {
+          crashLogger.breadcrumb(
+            `activity:resume_continuity_deferred ${String(error).slice(0, 80)}`,
+          );
+          return 'unavailable' as const;
+        });
       // Diagnostic durability owns its own strict retry queue. It must not
       // delay a healthy route or native-source verification on resume.
       void recordResumeSilenceGapIfPresent('foreground-resume').catch(error => {

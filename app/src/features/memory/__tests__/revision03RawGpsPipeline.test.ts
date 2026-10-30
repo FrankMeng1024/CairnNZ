@@ -122,7 +122,11 @@ jest.mock('../../../services/backgroundLocationTask', () => ({
   persistBackgroundContext: jest.fn(async () => true),
   readDurableActivityContext: jest.fn(async () => null),
   detectDurableSilenceGapAfterResume: jest.fn(async () => null),
+  detectDurableSilenceGapsAfterResume: jest.fn(async () => []),
+  persistPendingDurableSilenceGapEvents: jest.fn(async () => 0),
+  persistDurableJournalProjectionFrontier: jest.fn(async () => true),
   setActivityTaskForegroundProjectionWake: jest.fn(),
+  setActivityStartupOrphanMutationWake: jest.fn(),
 }));
 jest.mock('../../../services/hikeTrackWriter', () => ({
   appendHikePoint: jest.fn(async (point: any) => { mockHikeJournalPoints.push(point); }), startHikeTrack: jest.fn(async () => undefined),
