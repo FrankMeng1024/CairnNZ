@@ -148,6 +148,63 @@ export interface RoundedActivityFinalCandidateSelection {
   roundedPromotion: FinalCandidatePromotionDecision | null;
 }
 
+export interface RoundedLocalFinalCandidateSelection {
+  points: TrackPoint[];
+  usedRoundedCandidate: boolean;
+  fellBackToApprovedUnrounded: boolean;
+  fallbackReason: string | null;
+  roundingDiagnostics: SavedFinalCornerRoundingDiagnostics;
+  roundedCanonicalQuality: MatchedGeometryQuality | null;
+}
+
+/**
+ * Display-only softening for an already accepted Local/Trend Final. Road
+ * authority is deliberately irrelevant here: this selector neither promotes
+ * a provider candidate nor changes canonical evidence. The bounded fillet
+ * must pass its local corridor/topology guards and the same canonical quality
+ * gate used by matched geometry, otherwise the accepted input is retained.
+ */
+export function selectRoundedLocalFinalCandidate(input: {
+  canonical: TrackPoint[];
+  approvedUnrounded: TrackPoint[];
+}): RoundedLocalFinalCandidateSelection {
+  const rounded = roundSavedFinalRoadCorners(input.approvedUnrounded);
+  if (rounded.diagnostics.roundedCorners === 0) {
+    return {
+      points: input.approvedUnrounded.map(point => ({ ...point })),
+      usedRoundedCandidate: false,
+      fellBackToApprovedUnrounded: rounded.diagnostics.postRoundRejected,
+      fallbackReason: rounded.diagnostics.postRoundRejected
+        ? `rounding-local:${rounded.diagnostics.postRoundRejectReason ?? 'rejected'}`
+        : null,
+      roundingDiagnostics: rounded.diagnostics,
+      roundedCanonicalQuality: null,
+    };
+  }
+  const roundedCanonicalQuality = evaluateMatchedGeometryQuality(
+    input.canonical,
+    rounded.points,
+  );
+  if (!roundedCanonicalQuality.accepted) {
+    return {
+      points: input.approvedUnrounded.map(point => ({ ...point })),
+      usedRoundedCandidate: false,
+      fellBackToApprovedUnrounded: true,
+      fallbackReason: `canonical-quality:${roundedCanonicalQuality.reason}`,
+      roundingDiagnostics: rounded.diagnostics,
+      roundedCanonicalQuality,
+    };
+  }
+  return {
+    points: rounded.points,
+    usedRoundedCandidate: true,
+    fellBackToApprovedUnrounded: false,
+    fallbackReason: null,
+    roundingDiagnostics: rounded.diagnostics,
+    roundedCanonicalQuality,
+  };
+}
+
 /**
  * A road candidate reaches this boundary only after the caller has accepted
  * its unrounded geometry. Rounding is display-only and is strictly weaker

@@ -3334,6 +3334,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           displayPoints: baseFinalTrackPoints,
           source: 'base',
           displayMode: localFinalSelection.displayMode,
+          algorithmVersion: localFinalSelection.algorithmVersion,
         });
         finalArtifact = baseCommit.artifact;
         const basePayload = {
@@ -3395,7 +3396,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           memoryNewCells: 0,
           syncState: 'pending',
           finalGeometryState: 'refining',
-          finalGeometryVersion: 'pedestrian-final-v2-base',
+          finalGeometryVersion: finalArtifact.algorithmVersion,
           finalGeometryRevision: finalArtifact.revision,
           finalGeometryFingerprint: finalArtifact.displayFingerprint,
           roadRefinementPending: false,
@@ -3429,6 +3430,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             phase: 'local-artifact-durable',
             selectedSource: finalArtifact.source,
             selectedDisplayMode: finalArtifact.displayMode ?? 'base',
+            localRoundedCornerCount: localFinalSelection.roundingSelections.reduce((sum, selection) => (
+              sum + (selection.usedRoundedCandidate
+                ? selection.roundingDiagnostics.roundedCorners
+                : 0)
+            ), 0),
+            localRoundFallbackCount: localFinalSelection.roundingSelections.filter(selection => (
+              selection.fellBackToApprovedUnrounded
+            )).length,
             selectedRevision: finalArtifact.revision,
             selectedFingerprint: finalArtifact.displayFingerprint,
           },
@@ -3439,7 +3448,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           canonicalSegmentCount: canonicalSegments.length,
         });
         appendSimulatorLog('ACTIVITY_COMPLETION', 'activity_base_final_committed', {
-          algorithmVersion: 'pedestrian-final-v2-base',
+          algorithmVersion: finalArtifact.algorithmVersion,
           canonicalPointCount: s.trackPoints.length,
           displayPointCount: baseFinalTrackPoints.length,
           segmentCount: canonicalSegments.length,
@@ -6283,6 +6292,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
           || current.liveOwnerGeneration !== before.liveOwnerGeneration
         ) return reject('ownership-changed-during-commit');
 
+        let publishedElevationState: ElevationQualityState | undefined;
         set((state) => {
           const canonicalStateChanged = state.trackPoints !== acceptance.baseTrackPoints;
           const rebased = canonicalStateChanged
@@ -6290,10 +6300,27 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 state.trackPoints,
                 state.trackPointsSmoothed,
                 state.distanceAccumulator,
-                Math.max(state.elevationGainM, acceptedTransition.elevationGainM ?? 0),
+                state.elevationGainM,
                 acceptedPoints,
+                realElevationState,
               )
             : null;
+          if (canonicalStateChanged && rebased?.elevationState) {
+            let elevationState = realElevationState;
+            acceptance.elevationDecisions = acceptedPoints.map(point => {
+              const decision = reduceElevationObservation(
+                elevationState,
+                { ...point, segmentId: point.segmentId || 'legacy-0' },
+              );
+              elevationState = decision.state;
+              return { point, decision };
+            });
+            acceptance.elevationDecision = acceptance.elevationDecisions.at(-1)?.decision;
+            acceptance.elevationState = rebased.elevationState;
+            publishedElevationState = rebased.elevationState;
+          } else {
+            publishedElevationState = acceptance.elevationState;
+          }
           const rebasedTail = rebased?.canonical[rebased.canonical.length - 1];
           const next = canonicalStateChanged && rebased
             ? {
@@ -6307,11 +6334,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
                 ),
                 distanceM: rebased.distanceM,
                 distanceAccumulator: rebased.distanceAccumulator,
-                elevationGainM: Math.max(
-                  state.elevationGainM,
-                  acceptedTransition.elevationGainM ?? 0,
-                  rebased.elevationGainM,
-                ),
+                // The rebased reducer is the only state that contains both
+                // asynchronous canonical branches in evidence order. Maxing
+                // sibling gains would retain a stale/overstated frontier.
+                elevationGainM: rebased.elevationGainM,
                 lastCoordinate: rebasedTail ?? acceptedTransition.lastCoordinate,
                 lastCoordinateTime: rebasedTail?.t ?? acceptedTransition.lastCoordinateTime,
                 lastFixTimestamp: rebasedTail?.t ?? acceptedTransition.lastFixTimestamp,
@@ -6368,7 +6394,9 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
         }
         if (!isSimulatorSample || isRawGpsSimulatorSample) {
           if (acceptance.continuityState) realGpsContinuityState = acceptance.continuityState;
-          if (!isSimulatorSample && acceptance.elevationState) realElevationState = acceptance.elevationState;
+          if (!isSimulatorSample && publishedElevationState) {
+            realElevationState = publishedElevationState;
+          }
           if (!realGpsContinuityState.pending && realGpsCandidateTimer) {
             clearTimeout(realGpsCandidateTimer);
             realGpsCandidateTimer = null;
@@ -8259,6 +8287,7 @@ async function drainCommittedBackgroundLocations(
           currentLive: projectionOwner.trackPointsSmoothed,
           currentDistanceAccumulator: projectionOwner.distanceAccumulator,
           currentElevationGainM: projectionOwner.elevationGainM,
+          currentElevationState: realElevationState,
           maxPointsPerSlice: projectionAuthority === 'foreground'
             || projectionAuthority === 'foreground-live'
             ? FOREGROUND_RESUME_PROJECTION_POINTS_PER_SLICE
@@ -8279,7 +8308,6 @@ async function drainCommittedBackgroundLocations(
         const rebased = rebaseActivityJournalProjection(
           projection,
           stateAtCommit.trackPoints,
-          stateAtCommit.elevationGainM,
         );
         if (!rebased) {
           prepared = await projectActivityJournalCooperatively(
@@ -8289,6 +8317,7 @@ async function drainCommittedBackgroundLocations(
               currentLive: stateAtCommit.trackPointsSmoothed,
               currentDistanceAccumulator: stateAtCommit.distanceAccumulator,
               currentElevationGainM: stateAtCommit.elevationGainM,
+              currentElevationState: realElevationState,
               maxPointsPerSlice: projectionAuthority === 'foreground'
                 || projectionAuthority === 'foreground-live'
                 ? FOREGROUND_RESUME_PROJECTION_POINTS_PER_SLICE
@@ -8339,6 +8368,7 @@ async function drainCommittedBackgroundLocations(
           };
         });
         if (published) {
+          if (projection.elevationState) realElevationState = projection.elevationState;
           clearCommittedResumeFrontierIfPublished(useTrackingStore.getState());
           const publishedAtMs = Date.now();
           const first = projection.canonical[0] as SegmentedTrackPoint | undefined;

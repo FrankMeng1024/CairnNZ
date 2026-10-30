@@ -6,6 +6,8 @@ import {
   buildCausalLiveRouteCooperatively,
   causalLiveReplayResult,
   createCausalLiveReplayCheckpoint,
+  LIVE_MUTABLE_TAIL_MAX_POINTS,
+  LIVE_TREND_CONTEXT_MAX_POINTS,
 } from './causalLiveRoute';
 import {
   activityDistanceEstimate,
@@ -19,6 +21,7 @@ import {
   createElevationQualityState,
   elevationQualityGain,
   reduceElevationObservation,
+  type ElevationQualityState,
 } from './elevationQuality';
 import { activityEvidencePointKey } from './activityEvidenceIdentity';
 
@@ -47,6 +50,67 @@ function asTrackPoint(point: CanonicalJournalPoint | TrackPoint): TrackPoint {
   };
 }
 
+function buildElevationProjection(points: ReadonlyArray<TrackPoint>): {
+  elevationGainM: number;
+  elevationState: ElevationQualityState;
+} {
+  let elevationState = createElevationQualityState();
+  let legacyElevationGainM = 0;
+  let previous: TrackPoint | null = null;
+  for (const point of points) {
+    const segmentId = point.segmentId || 'legacy-0';
+    elevationState = reduceElevationObservation(
+      elevationState,
+      { ...point, segmentId },
+    ).state;
+    if (previous && (previous.segmentId || 'legacy-0') === segmentId
+      && previous.alt != null && point.alt != null && point.alt > previous.alt) {
+      legacyElevationGainM += point.alt - previous.alt;
+    }
+    previous = point;
+  }
+  return {
+    elevationGainM: elevationState.hasVerticalQualityEvidence
+      ? elevationQualityGain(elevationState)
+      : legacyElevationGainM,
+    elevationState,
+  };
+}
+
+function appendElevationProjection(
+  prefix: ReadonlyArray<TrackPoint>,
+  suffix: ReadonlyArray<TrackPoint>,
+  prefixElevationGainM: number,
+  prefixElevationState?: ElevationQualityState,
+): { elevationGainM: number; elevationState: ElevationQualityState } {
+  if (!prefixElevationState) return buildElevationProjection([...prefix, ...suffix]);
+  let elevationState = prefixElevationState;
+  let legacyElevationGainM = prefixElevationGainM;
+  let previous = prefix[prefix.length - 1] ?? null;
+  for (const point of suffix) {
+    const segmentId = point.segmentId || 'legacy-0';
+    elevationState = reduceElevationObservation(
+      elevationState,
+      { ...point, segmentId },
+    ).state;
+    if (!elevationState.hasVerticalQualityEvidence
+      && previous
+      && (previous.segmentId || 'legacy-0') === segmentId
+      && previous.alt != null
+      && point.alt != null
+      && point.alt > previous.alt) {
+      legacyElevationGainM += point.alt - previous.alt;
+    }
+    previous = point;
+  }
+  return {
+    elevationGainM: elevationState.hasVerticalQualityEvidence
+      ? elevationQualityGain(elevationState)
+      : legacyElevationGainM,
+    elevationState,
+  };
+}
+
 function projectMergedActivityPoints(
   current: ReadonlyArray<TrackPoint>,
   incoming: ReadonlyArray<CanonicalJournalPoint | TrackPoint>,
@@ -66,12 +130,14 @@ function projectMergedActivityPoints(
     || (left.rawOrdinal ?? Number.MAX_SAFE_INTEGER) - (right.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
   ));
   const stats = calculateActivityStats(canonical);
+  const elevation = buildElevationProjection(canonical);
   return {
     canonical,
     live: buildCausalLiveRoute(canonical),
     distanceM: stats.distanceM,
     distanceAccumulator: buildActivityDistanceAccumulator(canonical),
-    elevationGainM: stats.elevationGainM,
+    elevationGainM: elevation.elevationGainM,
+    elevationState: elevation.elevationState,
     appendedFromJournal,
   };
 }
@@ -100,6 +166,9 @@ export interface ActivityJournalProjection {
   distanceM: number;
   distanceAccumulator: ActivityDistanceAccumulator;
   elevationGainM: number;
+  /** Exact in-process reducer frontier for O(append) warm WAL catch-up. It is
+   * optional for legacy/cold callers; durable truth remains the canonical WAL. */
+  elevationState?: ElevationQualityState;
   appendedFromJournal: number;
 }
 
@@ -138,6 +207,7 @@ export function projectAcceptedActivityPointsFromCheckpoint(
   currentDistanceAccumulator: ActivityDistanceAccumulator,
   currentElevationGainM: number,
   accepted: ReadonlyArray<TrackPoint>,
+  currentElevationState?: ElevationQualityState,
 ): ActivityJournalProjection {
   const canonical = current.map(asTrackPoint);
   const keys = new Set(canonical.map(pointKey));
@@ -153,12 +223,20 @@ export function projectAcceptedActivityPointsFromCheckpoint(
     distanceAccumulator = appendActivityDistancePoint(distanceAccumulator, point);
     appendedFromJournal += 1;
   }
+  const appended = canonical.slice(current.length);
+  const elevation = appendElevationProjection(
+    current,
+    appended,
+    currentElevationGainM,
+    currentElevationState,
+  );
   return {
     canonical,
     live: causalLiveReplayResult(checkpoint),
     distanceAccumulator,
     distanceM: activityDistanceEstimate(distanceAccumulator).distanceM,
-    elevationGainM: currentElevationGainM,
+    elevationGainM: elevation.elevationGainM,
+    elevationState: elevation.elevationState,
     appendedFromJournal,
   };
 }
@@ -183,6 +261,7 @@ export interface CooperativeActivityJournalProjectionOptions {
   currentLive?: ReadonlyArray<TrackPoint>;
   currentDistanceAccumulator?: ActivityDistanceAccumulator;
   currentElevationGainM?: number;
+  currentElevationState?: ElevationQualityState;
   maxPointsPerSlice?: number;
   yieldToHost?: () => Promise<void>;
   shouldContinue?: () => boolean;
@@ -253,12 +332,24 @@ export async function projectActivityJournalCooperatively(
   const canReuseLive = prefixMatches
     && current.length > 0
     && options.currentLive != null
-    && options.currentLive.length > 0;
+    && options.currentLive.length > 0
+    && (
+      current.length <= LIVE_MUTABLE_TAIL_MAX_POINTS + LIVE_TREND_CONTEXT_MAX_POINTS
+      // O97 and early O98 checkpoints did not carry reducer provenance. A
+      // long legacy Live array can contain the old bounded-tail omission, so
+      // it must be rebuilt once from the complete WAL rather than blessed as
+      // an exact current-reducer checkpoint.
+      || options.currentLive.some(point => (
+        point.liveTrendConfirmed || point.livePresentationSettled
+      ))
+    );
   let canonical: TrackPoint[];
   let live: TrackPoint[];
   let distanceAccumulator: ActivityDistanceAccumulator;
   let appendedFromJournal = 0;
   let fullLiveRebuilds = 0;
+  let elevationState = options.currentElevationState;
+  let appendedLegacyElevationGainM = 0;
 
   if (canReuseLive) {
     canonical = measureSynchronous(() => current.map(asTrackPoint));
@@ -266,11 +357,29 @@ export async function projectActivityJournalCooperatively(
     distanceAccumulator = options.currentDistanceAccumulator
       ?? measureSynchronous(() => buildActivityDistanceAccumulator(canonical));
     appendedFromJournal = journal.length - current.length;
+    let previousElevationPoint = canonical[canonical.length - 1] ?? null;
     if (!await cooperativeRange(appendedFromJournal, offset => {
       const point = asTrackPoint(journal[current.length + offset]);
       canonical.push(point);
       appendCausalLiveReplayPoint(checkpoint, point);
       distanceAccumulator = appendActivityDistancePoint(distanceAccumulator, point);
+      if (elevationState) {
+        const segmentId = point.segmentId || 'legacy-0';
+        if (!elevationState.hasVerticalQualityEvidence
+          && point.verticalAccuracy == null
+          && previousElevationPoint
+          && (previousElevationPoint.segmentId || 'legacy-0') === segmentId
+          && previousElevationPoint.alt != null
+          && point.alt != null
+          && point.alt > previousElevationPoint.alt) {
+          appendedLegacyElevationGainM += point.alt - previousElevationPoint.alt;
+        }
+        elevationState = reduceElevationObservation(
+          elevationState,
+          { ...point, segmentId },
+        ).state;
+      }
+      previousElevationPoint = point;
     })) return null;
     live = causalLiveReplayResult(checkpoint);
   } else {
@@ -324,39 +433,58 @@ export async function projectActivityJournalCooperatively(
     yieldCount += replay.metrics.yieldCount;
     fullLiveRebuilds = 1;
     distanceAccumulator = createActivityDistanceAccumulator();
+    elevationState = createElevationQualityState();
   }
   let elevationGainM = options.currentElevationGainM ?? 0;
-  if (!canReuseLive || appendedFromJournal > 0 || options.currentDistanceAccumulator == null) {
+  const needsDistanceReplay = !canReuseLive;
+  const needsElevationReplay = !canReuseLive
+    || (appendedFromJournal > 0 && options.currentElevationState == null);
+  if (needsDistanceReplay || needsElevationReplay) {
     let replayedDistance = createActivityDistanceAccumulator();
-    let elevationState = createElevationQualityState();
+    let replayedElevationState = createElevationQualityState();
     let legacyElevationGainM = 0;
     let hasVerticalQualityEvidence = false;
     let previous: TrackPoint | null = null;
     if (!await cooperativeRange(canonical.length, index => {
       const point = canonical[index];
-      replayedDistance = appendActivityDistancePoint(replayedDistance, point);
-      const segmentId = point.segmentId || 'legacy-0';
-      if (point.verticalAccuracy != null) hasVerticalQualityEvidence = true;
-      elevationState = reduceElevationObservation(elevationState, { ...point, segmentId }).state;
-      if (previous && (previous.segmentId || 'legacy-0') === segmentId
-        && previous.alt != null && point.alt != null && point.alt > previous.alt) {
-        legacyElevationGainM += point.alt - previous.alt;
+      if (needsDistanceReplay) {
+        replayedDistance = appendActivityDistancePoint(replayedDistance, point);
       }
-      previous = point;
+      const segmentId = point.segmentId || 'legacy-0';
+      if (needsElevationReplay) {
+        if (point.verticalAccuracy != null) hasVerticalQualityEvidence = true;
+        replayedElevationState = reduceElevationObservation(
+          replayedElevationState,
+          { ...point, segmentId },
+        ).state;
+        if (previous && (previous.segmentId || 'legacy-0') === segmentId
+          && previous.alt != null && point.alt != null && point.alt > previous.alt) {
+          legacyElevationGainM += point.alt - previous.alt;
+        }
+        previous = point;
+      }
     })) return null;
-    if (!canReuseLive || options.currentDistanceAccumulator == null) {
+    if (needsDistanceReplay) {
       distanceAccumulator = replayedDistance;
     }
-    elevationGainM = hasVerticalQualityEvidence
+    if (needsElevationReplay) {
+      elevationState = replayedElevationState;
+      elevationGainM = hasVerticalQualityEvidence
+        ? elevationQualityGain(replayedElevationState)
+        : legacyElevationGainM;
+    }
+  } else if (elevationState) {
+    elevationGainM = elevationState.hasVerticalQualityEvidence
       ? elevationQualityGain(elevationState)
-      : legacyElevationGainM;
+      : elevationGainM + appendedLegacyElevationGainM;
   }
   const projection: ActivityJournalProjection = {
     canonical,
     live,
     distanceM: activityDistanceEstimate(distanceAccumulator).distanceM,
     distanceAccumulator,
-    elevationGainM: Math.max(options.currentElevationGainM ?? 0, elevationGainM),
+    elevationGainM,
+    elevationState,
     appendedFromJournal,
   };
   return {
@@ -380,7 +508,6 @@ export async function projectActivityJournalCooperatively(
 export function rebaseActivityJournalProjection(
   prepared: ActivityJournalProjection,
   current: ReadonlyArray<TrackPoint>,
-  currentElevationGainM = prepared.elevationGainM,
 ): ActivityJournalProjection | null {
   const keys = new Set(prepared.canonical.map(pointKey));
   const suffix = current.filter(point => !keys.has(pointKey(point))).map(asTrackPoint);
@@ -401,12 +528,23 @@ export function rebaseActivityJournalProjection(
     appendCausalLiveReplayPoint(checkpoint, point);
     distanceAccumulator = appendActivityDistancePoint(distanceAccumulator, point);
   }
+  // `current` and `prepared` can be sibling asynchronous branches. A caller's
+  // current elevation reducer therefore cannot be copied onto the merged
+  // canonical route. Advance the prepared frontier through the exact suffix,
+  // or rebuild it when the legacy checkpoint did not carry reducer state.
+  const elevation = appendElevationProjection(
+    prepared.canonical,
+    suffix,
+    prepared.elevationGainM,
+    prepared.elevationState,
+  );
   return {
     ...prepared,
     canonical,
     live: causalLiveReplayResult(checkpoint),
     distanceAccumulator,
     distanceM: activityDistanceEstimate(distanceAccumulator).distanceM,
-    elevationGainM: Math.max(prepared.elevationGainM, currentElevationGainM),
+    elevationGainM: elevation.elevationGainM,
+    elevationState: elevation.elevationState,
   };
 }

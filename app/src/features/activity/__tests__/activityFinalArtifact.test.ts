@@ -152,6 +152,68 @@ describe('versioned Activity Final artifact', () => {
     });
   });
 
+  test('persists a safe display-only Local Final fillet without changing canonical authority', async () => {
+    const metres = (eastM: number, northM: number, index: number) => ({
+      lat: -43 + northM / 111_320,
+      lng: 170 + eastM / (111_320 * Math.cos(-43 * Math.PI / 180)),
+      t: 1_700_100_000_000 + index * 4_000,
+      accuracy: 4,
+      segmentId: 'safe-local-corner',
+      ...(index === 0 ? { segmentStartReason: 'start' as const } : {}),
+    });
+    const canonicalCorner = [
+      metres(0, 0, 0), metres(10, 0, 1), metres(20, 0, 2), metres(30, 0, 3),
+      metres(40, 0, 4), metres(40, 10, 5), metres(40, 20, 6),
+      metres(40, 30, 7), metres(40, 40, 8),
+    ];
+    const canonicalSnapshot = canonicalCorner.map(point => ({ ...point }));
+    const selection = buildLocalFinalTrackPointsWithDecision(canonicalCorner);
+    expect(selection.algorithmVersion).toBe('pedestrian-final-v5-local-fillet');
+    expect(selection.roundingSelections).toHaveLength(1);
+    expect(selection.roundingSelections[0]).toMatchObject({
+      usedRoundedCandidate: true,
+      fellBackToApprovedUnrounded: false,
+      roundingDiagnostics: { roundedCorners: 1, postRoundRejected: false },
+      roundedCanonicalQuality: { accepted: true },
+    });
+    expect(selection.points[0]).toMatchObject({
+      lat: canonicalCorner[0].lat,
+      lng: canonicalCorner[0].lng,
+      t: canonicalCorner[0].t,
+      segmentId: canonicalCorner[0].segmentId,
+      segmentStartReason: 'start',
+    });
+    expect(selection.points.at(-1)).toMatchObject({
+      lat: canonicalCorner.at(-1)!.lat,
+      lng: canonicalCorner.at(-1)!.lng,
+      t: canonicalCorner.at(-1)!.t,
+      segmentId: canonicalCorner.at(-1)!.segmentId,
+    });
+    expect(new Set(selection.points.map(point => point.segmentId)))
+      .toEqual(new Set(['safe-local-corner']));
+
+    const committed = await commitActivityFinalArtifact({
+      ownerUserId: 'owner-local-fillet',
+      clientActivityId: 'activity-local-fillet',
+      canonicalPoints: canonicalCorner,
+      displayPoints: selection.points,
+      source: 'base',
+      displayMode: selection.displayMode,
+      algorithmVersion: selection.algorithmVersion,
+      expectedRevision: null,
+    });
+    const cold = await loadActivityFinalArtifact('owner-local-fillet', 'activity-local-fillet');
+    expect(cold).toEqual(committed.artifact);
+    expect(cold).toMatchObject({
+      revision: 1,
+      source: 'base',
+      algorithmVersion: 'pedestrian-final-v5-local-fillet',
+      canonicalFingerprint: activityGeometryFingerprint(canonicalCorner),
+      displayFingerprint: activityGeometryFingerprint(selection.points),
+    });
+    expect(canonicalCorner).toEqual(canonicalSnapshot);
+  });
+
   test('cold-reads an actual reconstruction → assembly → provenance → rounding v4 revision without mutating evidence', async () => {
     const metres = (eastM: number, northM: number, index: number) => ({
       lat: -43 + northM / 111_320,

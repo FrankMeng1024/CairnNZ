@@ -4,6 +4,7 @@ import {
   decideActivityFinalCandidatePromotion,
   decideRetainedLocalRefinement,
   selectRoundedActivityFinalCandidate,
+  selectRoundedLocalFinalCandidate,
 } from '../activityFinalRefinementDecision';
 import { roundSavedFinalRoadCorners } from '../savedFinalCornerRounding';
 import { roundedFinalP95Counterexample } from './fixtures/roundedFinalP95Counterexample';
@@ -14,6 +15,21 @@ const p = (eastM: number, northM: number) => ({
 });
 
 describe('Final candidate promotion', () => {
+  test('local display rounding falls back when the rounded result crosses canonical quality', () => {
+    const fixture = roundedFinalP95Counterexample();
+    const selected = selectRoundedLocalFinalCandidate({
+      canonical: fixture.canonical,
+      approvedUnrounded: fixture.approvedUnrounded,
+    });
+    expect(selected).toMatchObject({
+      usedRoundedCandidate: false,
+      fellBackToApprovedUnrounded: true,
+      fallbackReason: expect.stringContaining('canonical-quality:'),
+      roundedCanonicalQuality: { accepted: false },
+    });
+    expect(selected.points).toEqual(fixture.approvedUnrounded);
+  });
+
   test('different fallback geometry has no promotion authority without an accepted network match', () => {
     const canonical = [p(0, 0), p(40, 0), p(80, 0), p(40, 1), p(0, 1)];
     const current = [p(0, 0), p(80, 0.5), p(0, 1)];

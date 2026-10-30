@@ -4,6 +4,11 @@ import {
   deriveRoadAwareLiveTrack,
   updateStableRoadAwareLivePresentation,
 } from '../activityRoadContext';
+import { appendCausalLivePoint } from '../causalLiveRoute';
+import {
+  createIncrementalRoutePresentation,
+  updateIncrementalRoutePresentation,
+} from '../confirmedRoutePresentation';
 
 const base = {
   center: { lat: -41.00004, lng: 174.0001 },
@@ -228,5 +233,58 @@ describe('Activity RoadContext presentation boundary', () => {
     expect(presentation.points[1]).toBe(confirmedCoordinate);
     expect(presentation.points[1].lat).toBeCloseTo(-41, 6);
     expect(presentation.points.at(-1)).toBe(extended.at(-1));
+  });
+
+  test('production causal tail revisions keep the road-aware frozen prefix and avoid a full render rebuild', () => {
+    const metresPerLng = 111_320 * Math.cos(41 * Math.PI / 180);
+    const canonical = Array.from({ length: 32 }, (_, index) => ({
+      lat: -41 + index * 1.4 / 111_320,
+      lng: 174 + (index >= 12 && index <= 15 ? 5 : 0) / metresPerLng,
+      t: 1_000 + index * 1_000,
+      segmentId: 'causal-road',
+      accuracy: 15,
+    }));
+    const context = buildActivityRoadContext({
+      ...base,
+      observedThroughTimestamp: canonical.at(-1)!.t,
+      center: canonical.at(-1)!,
+      features: { features: [{
+        id: 'north-corridor',
+        layer: { id: 'road-path', sourceLayer: 'transportation' },
+        properties: { class: 'footway' },
+        geometry: {
+          type: 'LineString',
+          coordinates: [[174, -41.001], [174, -40.999]],
+        },
+      }] },
+    });
+    let causal: typeof canonical = [];
+    const history: typeof canonical = [];
+    let road = createStableRoadAwareLivePresentation<typeof canonical[number]>();
+    let rendered = createIncrementalRoutePresentation();
+    let observedBoundedRevision = false;
+
+    for (const sample of canonical) {
+      history.push(sample);
+      const nextCausal = appendCausalLivePoint(causal, sample, history) as typeof canonical;
+      const boundedRevision = road.sourceCount >= 3
+        && nextCausal.length >= road.sourceCount
+        && nextCausal[0] === road.sourcePoints[0]
+        && nextCausal[road.sourceCount - 3] === road.sourcePoints[road.sourceCount - 3]
+        && nextCausal[road.sourceCount - 1] !== road.sourcePoints[road.sourceCount - 1];
+      const frozenPrefix = road.points.slice(0, Math.max(0, road.sourceCount - 2));
+      road = updateStableRoadAwareLivePresentation(road, nextCausal, context);
+      const nextRendered = updateIncrementalRoutePresentation(rendered, road.points);
+      if (boundedRevision) {
+        observedBoundedRevision = true;
+        frozenPrefix.forEach((point, index) => expect(road.points[index]).toBe(point));
+        expect(nextRendered.rebuilt).toBe(false);
+      }
+      causal = nextCausal;
+      rendered = nextRendered;
+    }
+
+    expect(observedBoundedRevision).toBe(true);
+    expect(rendered.sourceCount).toBe(road.points.length);
   });
 });

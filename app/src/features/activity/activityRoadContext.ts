@@ -526,18 +526,29 @@ export function updateStableRoadAwareLivePresentation<T extends {
 ): StableRoadAwareLivePresentation<T> {
   if (canonical.length === 0) return createStableRoadAwareLivePresentation<T>();
   const proposed = deriveRoadAwareLiveTrack(canonical, context);
-  const appendCompatible = previous.sourceCount > 0
+  const stablePrefixCompatible = previous.sourceCount > 0
     && canonical.length >= previous.sourceCount
     && previous.sourcePoints.length === previous.sourceCount
     && canonical[0] === previous.sourcePoints[0]
-    && canonical[previous.sourceCount - 1] === previous.sourcePoints[previous.sourceCount - 1]
     && (previous.sourceCount <= 2
       || canonical[previous.sourceCount - 3] === previous.sourcePoints[previous.sourceCount - 3]);
-  if (!appendCompatible) {
+  if (!stablePrefixCompatible) {
     return { sourceCount: canonical.length, sourcePoints: canonical, points: proposed };
   }
+  const exactOldTail = canonical[previous.sourceCount - 1]
+    === previous.sourcePoints[previous.sourceCount - 1]
+    && (previous.sourceCount <= 1
+      || canonical[previous.sourceCount - 2] === previous.sourcePoints[previous.sourceCount - 2]);
   const confirmedCount = Math.max(0, canonical.length - 2);
-  const retainedCount = Math.min(confirmedCount, previous.points.length);
+  // A causal Live append may legitimately revise its previous two provisional
+  // source positions. Preserve only the prefix that was already outside that
+  // mutable tail; otherwise an old road-adjusted provisional point can rebound
+  // when the source tail settles. A strict append can retain all old display
+  // points because their source coordinates did not change.
+  const retainedCount = Math.min(
+    exactOldTail ? confirmedCount : Math.max(0, previous.sourceCount - 2),
+    previous.points.length,
+  );
   return {
     sourceCount: canonical.length,
     sourcePoints: canonical,

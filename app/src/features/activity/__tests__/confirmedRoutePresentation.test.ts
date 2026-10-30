@@ -82,6 +82,24 @@ describe('confirmed route presentation', () => {
     expect(buildConfirmedRouteSegments(distanceOnly).map(segment => segment.coordinates.length)).toEqual([1, 1]);
   });
 
+  it('uses the App 120 s / 200 m legacy fallback while explicit evidence gaps always split', () => {
+    const legacy60s30m = [
+      { ...point(0, 0), segmentId: undefined },
+      { ...point(30, 60_000), segmentId: undefined },
+    ];
+    const legacy90s30m = [
+      { ...point(0, 0), segmentId: undefined },
+      { ...point(30, 90_000), segmentId: undefined },
+    ];
+    const explicitGap = [point(0, 0, 'before-gap'), point(30, 60_000, 'after-gap')];
+    expect(buildConfirmedRouteSegments(legacy60s30m).map(segment => segment.coordinates.length))
+      .toEqual([2]);
+    expect(buildConfirmedRouteSegments(legacy90s30m).map(segment => segment.coordinates.length))
+      .toEqual([2]);
+    expect(buildConfirmedRouteSegments(explicitGap).map(segment => segment.coordinates.length))
+      .toEqual([1, 1]);
+  });
+
   it('uses a short bounded clock for bursts and an 850ms ceiling for normal cadence', () => {
     expect(continuousRouteAnimationDurationMs(100)).toBe(180);
     expect(continuousRouteAnimationDurationMs(1_000)).toBe(720);

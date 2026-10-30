@@ -126,7 +126,8 @@ export interface PendingHike {
     algorithmVersion:
       | 'pedestrian-final-v2-base'
       | 'pedestrian-final-v3-trend'
-      | 'pedestrian-final-v4-road-fillet';
+      | 'pedestrian-final-v4-road-fillet'
+      | 'pedestrian-final-v5-local-fillet';
   };
 }
 

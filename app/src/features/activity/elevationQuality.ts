@@ -10,6 +10,9 @@ export interface ElevationObservation extends Coordinate {
 
 export interface ElevationQualityState {
   version: typeof ELEVATION_QUALITY_VERSION;
+  /** Activity-wide provenance bit. Legacy gain remains separate until a real
+   * vertical-accuracy sample makes the quality reducer authoritative. */
+  hasVerticalQualityEvidence: boolean;
   segmentId: string | null;
   recentAltitudesM: number[];
   filteredAltitudeM: number | null;
@@ -41,6 +44,7 @@ export interface ElevationDecision {
 export function createElevationQualityState(cumulativeGainM = 0): ElevationQualityState {
   return {
     version: ELEVATION_QUALITY_VERSION,
+    hasVerticalQualityEvidence: false,
     segmentId: null,
     recentAltitudesM: [],
     filteredAltitudeM: null,
@@ -82,9 +86,15 @@ export function reduceElevationObservation(
     ? point.verticalAccuracy
     : null;
   const newSegment = currentState.segmentId !== point.segmentId;
+  const hasVerticalQualityEvidence = currentState.hasVerticalQualityEvidence
+    || verticalAccuracyM !== null;
   const base = newSegment
-    ? { ...createElevationQualityState(currentState.cumulativeGainM), segmentId: point.segmentId }
-    : currentState;
+    ? {
+        ...createElevationQualityState(currentState.cumulativeGainM),
+        hasVerticalQualityEvidence,
+        segmentId: point.segmentId,
+      }
+    : { ...currentState, hasVerticalQualityEvidence };
 
   if (rawAltitudeM === null) {
     return {

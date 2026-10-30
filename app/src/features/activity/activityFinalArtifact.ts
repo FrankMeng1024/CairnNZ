@@ -5,9 +5,18 @@ import {
   buildBaseFinalGeometry,
   buildEvidenceSupportedTrendFinalGeometry,
 } from '../../services/routing/pedestrianFinalRoute';
+import {
+  selectRoundedLocalFinalCandidate,
+  type RoundedLocalFinalCandidateSelection,
+} from './activityFinalRefinementDecision';
 
 export type ActivityFinalSource = 'base' | 'matched' | 'hybrid' | 'limited' | 'server-restored';
 export type ActivityFinalDisplayMode = 'base' | 'local' | 'trend' | 'road';
+export type ActivityFinalAlgorithmVersion =
+  | 'pedestrian-final-v2-base'
+  | 'pedestrian-final-v3-trend'
+  | 'pedestrian-final-v4-road-fillet'
+  | 'pedestrian-final-v5-local-fillet';
 
 export interface ActivityFinalArtifact {
   format: 'cairn-activity-final';
@@ -16,10 +25,7 @@ export interface ActivityFinalArtifact {
   clientActivityId: string;
   revision: number;
   parentRevision: number | null;
-  algorithmVersion:
-    | 'pedestrian-final-v2-base'
-    | 'pedestrian-final-v3-trend'
-    | 'pedestrian-final-v4-road-fillet';
+  algorithmVersion: ActivityFinalAlgorithmVersion;
   source: ActivityFinalSource;
   /** Traceable consumer representation; optional for pre-upgrade artifacts. */
   displayMode?: ActivityFinalDisplayMode;
@@ -96,8 +102,11 @@ export function buildLocalFinalTrackPointsWithDecision(points: TrackPoint[]): {
   points: TrackPoint[];
   displayMode: 'local' | 'trend';
   segmentModes: Array<'local' | 'trend'>;
+  algorithmVersion: ActivityFinalAlgorithmVersion;
+  roundingSelections: RoundedLocalFinalCandidateSelection[];
 } {
   const segmentModes: Array<'local' | 'trend'> = [];
+  const roundingSelections: RoundedLocalFinalCandidateSelection[] = [];
   const selectedPoints = segmentTrace(points).segments.flatMap(segment => {
     const first = segment[0];
     const last = segment[segment.length - 1];
@@ -110,7 +119,7 @@ export function buildLocalFinalTrackPointsWithDecision(points: TrackPoint[]): {
     }));
     const trend = buildEvidenceSupportedTrendFinalGeometry(canonical);
     segmentModes.push(trend.diagnostics.accepted ? 'trend' : 'local');
-    return trend.points.map((point, index) => ({
+    const unrounded = trend.points.map((point, index) => ({
       lat: point.lat,
       lng: point.lng,
       alt: point.alt,
@@ -122,11 +131,26 @@ export function buildLocalFinalTrackPointsWithDecision(points: TrackPoint[]): {
         ? { segmentStartReason: first.segmentStartReason }
         : {}),
     }));
+    const rounded = selectRoundedLocalFinalCandidate({
+      canonical: segment,
+      approvedUnrounded: unrounded,
+    });
+    roundingSelections.push(rounded);
+    return rounded.points;
   });
+  const roundedCornerCount = roundingSelections.reduce((sum, selection) => (
+    sum + (selection.usedRoundedCandidate ? selection.roundingDiagnostics.roundedCorners : 0)
+  ), 0);
   return {
     points: selectedPoints,
     displayMode: segmentModes.includes('trend') ? 'trend' : 'local',
     segmentModes,
+    algorithmVersion: roundedCornerCount > 0
+      ? 'pedestrian-final-v5-local-fillet'
+      : segmentModes.includes('trend')
+        ? 'pedestrian-final-v3-trend'
+        : 'pedestrian-final-v2-base',
+    roundingSelections,
   };
 }
 
@@ -167,6 +191,7 @@ export async function commitActivityFinalArtifact(input: {
   displayPoints: TrackPoint[];
   source: ActivityFinalSource;
   displayMode?: ActivityFinalDisplayMode;
+  algorithmVersion?: ActivityFinalAlgorithmVersion;
   expectedRevision?: number | null;
 }): Promise<{ committed: boolean; artifact: ActivityFinalArtifact }> {
   if (!input.ownerUserId || input.ownerUserId === 'guest' || !input.clientActivityId) {
@@ -212,11 +237,11 @@ export async function commitActivityFinalArtifact(input: {
       clientActivityId: input.clientActivityId,
       revision: (current?.revision ?? 0) + 1,
       parentRevision: current?.revision ?? null,
-      algorithmVersion: displayMode === 'road'
+      algorithmVersion: input.algorithmVersion ?? (displayMode === 'road'
         ? 'pedestrian-final-v4-road-fillet'
         : displayMode === 'trend'
           ? 'pedestrian-final-v3-trend'
-          : 'pedestrian-final-v2-base',
+          : 'pedestrian-final-v2-base'),
       source: input.source,
       displayMode,
       canonicalFingerprint,

@@ -36,6 +36,12 @@ export type ActivitySyncFailureKind = 'retryable' | 'auth_required' | 'action_re
 
 export interface TrackPoint extends Coordinate {
   t: number;  // Unix ms timestamp
+  /** Display-only Live trend checkpoint. Never canonical GPS/metrics/Memory
+   * authority and omitted by the Activity wire serializers. */
+  liveTrendConfirmed?: true;
+  /** Display-only resource-boundary resolution of a previously visible tail
+   * vertex. This is not evidence that a movement trend was confirmed. */
+  livePresentationSettled?: true;
   /** Immutable qualified-observation identity. Legacy Activities may omit it. */
   observationId?: string;
   clientActivityId?: string;
@@ -79,7 +85,8 @@ export interface TrackingSession {
   finalGeometryVersion?:
     | 'pedestrian-final-v2-base'
     | 'pedestrian-final-v3-trend'
-    | 'pedestrian-final-v4-road-fillet';
+    | 'pedestrian-final-v4-road-fillet'
+    | 'pedestrian-final-v5-local-fillet';
   finalGeometryRevision?: number;
   finalGeometryFingerprint?: string;
   /** Stable local route is usable while one optional online refinement is queued. */

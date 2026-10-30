@@ -1,12 +1,14 @@
 import type { CanonicalJournalPoint } from '../../../services/hikeTrackWriter';
 import {
   projectAcceptedActivityPoints,
+  projectAcceptedActivityPointsFromCheckpoint,
   projectActivityJournal,
   projectActivityJournalCooperatively,
   rebaseActivityJournalProjection,
 } from '../activityJournalProjection';
 import { buildBaseFinalTrackPoints } from '../activityFinalArtifact';
 import { appendCausalLivePoint } from '../causalLiveRoute';
+import { createElevationQualityState, reduceElevationObservation } from '../elevationQuality';
 import { performance } from 'node:perf_hooks';
 import os from 'node:os';
 
@@ -247,6 +249,73 @@ describe('durable Activity journal projection', () => {
     });
   });
 
+  test('a long legacy Live checkpoint without reducer provenance is rebuilt from complete WAL', async () => {
+    const journal = Array.from({ length: 1_025 }, (_, index) => point(index));
+    const expected = projectActivityJournal([], journal);
+    const legacyIncompleteLive = [
+      ...expected.live.slice(0, 2),
+      ...expected.live.slice(-8),
+    ].map(({ liveTrendConfirmed: _confirmed, livePresentationSettled: _settled, ...sample }) => (
+      sample
+    ));
+
+    const recovered = await projectActivityJournalCooperatively(
+      expected.canonical,
+      journal,
+      {
+        currentLive: legacyIncompleteLive,
+        currentDistanceAccumulator: expected.distanceAccumulator,
+        currentElevationGainM: expected.elevationGainM,
+        maxPointsPerSlice: 32,
+      },
+    );
+
+    expect(recovered).not.toBeNull();
+    expect(recovered!.projection.live).toEqual(expected.live);
+    expect(recovered!.metrics).toMatchObject({
+      fullLiveRebuilds: 1,
+      reusedLiveCheckpoint: false,
+    });
+  });
+
+  test('one warm WAL append does not replay full-history metric work', async () => {
+    const prefix = Array.from({ length: 1_025 }, (_, index) => point(index));
+    const mounted = projectActivityJournal([], prefix);
+    const elevationState = prefix.reduce((state, sample) => (
+      reduceElevationObservation(state, sample).state
+    ), createElevationQualityState());
+    let hostYields = 0;
+    const extended = await projectActivityJournalCooperatively(
+      mounted.canonical,
+      [...prefix, point(prefix.length)],
+      {
+        currentLive: mounted.live,
+        currentDistanceAccumulator: mounted.distanceAccumulator,
+        currentElevationGainM: mounted.elevationGainM,
+        currentElevationState: elevationState,
+        maxPointsPerSlice: 16,
+        yieldToHost: async () => { hostYields += 1; },
+      },
+    );
+
+    expect(extended).not.toBeNull();
+    expect(extended!.metrics).toMatchObject({
+      appendedFromJournal: 1,
+      reusedLiveCheckpoint: true,
+      fullLiveRebuilds: 0,
+      yieldCount: 0,
+    });
+    expect(hostYields).toBe(0);
+    const expected = projectActivityJournal([], [...prefix, point(prefix.length)]);
+    expect(extended!.projection).toMatchObject({
+      canonical: expected.canonical,
+      live: expected.live,
+      distanceM: expected.distanceM,
+      distanceAccumulator: expected.distanceAccumulator,
+      elevationGainM: expected.elevationGainM,
+    });
+  });
+
   test.each([1, 512, 513, 514, 1_025, 4_097])(
     'cooperative lifecycle replay for %i canonical WAL rows equals uninterrupted projection',
     async (pointCount) => {
@@ -348,6 +417,82 @@ describe('durable Activity journal projection', () => {
     expect(rebased!.canonical).toEqual(expected.canonical);
     expect(rebased!.live).toEqual(expected.live);
     expect(rebased!.canonical.at(-1)).toMatchObject({ rawOrdinal: 514 });
+  });
+
+  test('concurrent background recovery and foreground acceptance share one exact elevation frontier', async () => {
+    const journal = Array.from({ length: 96 }, (_, index) => ({
+      ...point(index),
+      alt: index * 1.5,
+      verticalAccuracy: 2,
+    }));
+    const foreground = {
+      ...point(journal.length, 'segment-a', 'foreground'),
+      alt: journal.length * 1.5,
+      verticalAccuracy: 2,
+    };
+    let mounted = journal.slice(0, 24) as CanonicalJournalPoint[];
+    let injected = false;
+    const prepared = await projectActivityJournalCooperatively(mounted, journal, {
+      maxPointsPerSlice: 8,
+      yieldToHost: async () => {
+        if (!injected) {
+          injected = true;
+          mounted = [...mounted, foreground];
+        }
+        await Promise.resolve();
+      },
+    });
+    expect(prepared).not.toBeNull();
+
+    const rebased = rebaseActivityJournalProjection(prepared!.projection, mounted);
+    const expected = projectActivityJournal(mounted, journal);
+    expect(rebased).toEqual(expected);
+    expect(rebased!.elevationState).toEqual(expected.elevationState);
+    expect(rebased!.elevationGainM).toBeGreaterThan(40);
+
+    const checkpointAppend = projectAcceptedActivityPointsFromCheckpoint(
+      prepared!.projection.canonical,
+      prepared!.projection.live,
+      prepared!.projection.distanceAccumulator,
+      prepared!.projection.elevationGainM,
+      [foreground],
+      prepared!.projection.elevationState,
+    );
+    expect(checkpointAppend.elevationState).toEqual(expected.elevationState);
+    expect(checkpointAppend.elevationGainM).toBe(expected.elevationGainM);
+  });
+
+  test('legacy warm elevation append retains and advances positive gain without full replay', async () => {
+    const legacy = Array.from({ length: 64 }, (_, index) => ({
+      ...point(index),
+      alt: index,
+      verticalAccuracy: null,
+    }));
+    const mounted = projectActivityJournal([], legacy);
+    const extendedJournal = [
+      ...legacy,
+      { ...point(64), alt: 64, verticalAccuracy: null },
+      { ...point(65), alt: 66, verticalAccuracy: null },
+    ];
+    const projected = await projectActivityJournalCooperatively(
+      mounted.canonical,
+      extendedJournal,
+      {
+        currentLive: mounted.live,
+        currentDistanceAccumulator: mounted.distanceAccumulator,
+        currentElevationGainM: mounted.elevationGainM,
+        currentElevationState: mounted.elevationState,
+      },
+    );
+    const expected = projectActivityJournal([], extendedJournal);
+    expect(projected).not.toBeNull();
+    expect(projected!.projection.elevationGainM).toBe(expected.elevationGainM);
+    expect(projected!.projection.elevationState).toEqual(expected.elevationState);
+    expect(projected!.metrics).toMatchObject({
+      appendedFromJournal: 2,
+      reusedLiveCheckpoint: true,
+      fullLiveRebuilds: 0,
+    });
   });
 
   test.each(['hiking', 'running'])('%s preserves one Activity through three foreground/background cycles and a yielded-recovery fix', async () => {

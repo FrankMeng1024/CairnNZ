@@ -6,6 +6,15 @@ export const LIVE_MUTABLE_TAIL_MAX_POINTS = 10;
 export const LIVE_MUTABLE_TAIL_MAX_AGE_MS = 15_000;
 export const LIVE_MUTABLE_TAIL_MAX_DISTANCE_M = 18;
 export const LIVE_TREND_CONTEXT_MAX_POINTS = 5;
+const LIVE_PRESENTATION_EVIDENCE_BUCKET_MS = 1_000;
+const LIVE_PRESENTATION_GAP_BOUNDARY_MS = 12_000;
+// Recovery scans this bounded canonical suffix only to reconstruct mutable
+// trend context after an exact Live checkpoint. It never limits WAL paging or
+// the already-published frozen route; legacy/unproven checkpoints are forced
+// through complete WAL replay by activityJournalProjection.
+const LIVE_RECOVERY_TREND_CONTEXT_SCAN_MAX_POINTS = 512;
+const LIVE_SETTLED_ANCHOR_MAX_AGE_MS = 10_000;
+const LIVE_SETTLED_ANCHOR_MAX_DISTANCE_M = 12;
 const EARTH_METRES_PER_DEGREE = 111_320;
 
 function angleDelta(left: number, right: number): number {
@@ -30,6 +39,118 @@ function displayDistanceM(from: TrackPoint, to: TrackPoint): number {
   return Math.hypot(delta.x, delta.y);
 }
 
+/** Stable observation identity for display decisions. Coordinates are omitted
+ * because display-only stabilization is allowed to move a provisional point. */
+function presentationEvidenceKey(point: TrackPoint): string {
+  if (point.observationId) return point.observationId;
+  if (point.clientActivityId && point.ownerGeneration && Number.isFinite(point.rawOrdinal)) {
+    return `${point.clientActivityId}:${point.ownerGeneration}:${Number(point.rawOrdinal)}`;
+  }
+  if (Number.isFinite(point.rawOrdinal)) {
+    return `${point.segmentId ?? '__legacy'}:raw:${Number(point.rawOrdinal)}`;
+  }
+  return `${point.segmentId ?? '__legacy'}:t:${Math.floor(point.t)}`;
+}
+
+function confirmedPresentationPoint(point: TrackPoint, preserveReference = false): TrackPoint {
+  if (preserveReference || point.liveTrendConfirmed) return point;
+  return { ...point, liveTrendConfirmed: true };
+}
+
+function settledPresentationPoint(point: TrackPoint): TrackPoint {
+  if (point.liveTrendConfirmed || point.livePresentationSettled) return point;
+  return { ...point, livePresentationSettled: true };
+}
+
+function appendPresentationEvidence(
+  evidence: TrackPoint[],
+  point: TrackPoint,
+): void {
+  const previous = evidence.at(-1);
+  const pointBucket = Math.floor(point.t / LIVE_PRESENTATION_EVIDENCE_BUCKET_MS);
+  const previousBucket = previous == null
+    ? null
+    : Math.floor(previous.t / LIVE_PRESENTATION_EVIDENCE_BUCKET_MS);
+  let currentBucketStart = evidence.length;
+  while (
+    currentBucketStart > 0
+    && previousBucket != null
+    && Math.floor(evidence[currentBucketStart - 1].t / LIVE_PRESENTATION_EVIDENCE_BUCKET_MS)
+      === previousBucket
+  ) currentBucketStart -= 1;
+  const currentBucketCount = evidence.length - currentBucketStart;
+  const hasSupportedLocalDirectionChange = (
+    approach: TrackPoint | undefined,
+    candidate: TrackPoint | undefined,
+    departure: TrackPoint,
+  ): boolean => {
+    if (approach == null || candidate == null) return false;
+    const uncertaintyM = Math.max(
+      1,
+      Math.min(12, candidate.accuracy ?? departure.accuracy ?? 8),
+    );
+    return displayDistanceM(approach, candidate) >= 0.5
+      && displayDistanceM(candidate, departure) >= 0.5
+      && angleDelta(bearing(approach, candidate), bearing(candidate, departure)) >= 35
+      && pointToSegmentDistanceM(candidate, approach, departure)
+        >= Math.max(0.5, Math.min(1.5, uncertaintyM * 0.1));
+  };
+  if (previousBucket === pointBucket) {
+    // Retain the first sample as the bucket's deterministic trend anchor and
+    // update a separate provisional newest sample for immediate feedback. A
+    // single independently supported direction-change vertex may also remain
+    // inside the bucket. Without that bounded third slot, a denser sampling
+    // superset can overwrite the exact apex of a real turn merely because it
+    // shares a Unix-second bucket with a later fix.
+    if (currentBucketCount === 1) {
+      evidence.push(point);
+    } else if (currentBucketCount === 2) {
+      const candidate = evidence.at(-1);
+      const approach = evidence[currentBucketStart - 1]
+        ?? evidence[currentBucketStart];
+      if (hasSupportedLocalDirectionChange(approach, candidate, point)) {
+        evidence.push(point);
+      } else {
+        evidence[evidence.length - 1] = point;
+      }
+    } else {
+      // [bucket anchor, supported vertex, responsive newest]. Keep memory and
+      // work bounded while preserving the already demonstrated vertex.
+      evidence[evidence.length - 1] = point;
+    }
+    return;
+  }
+  // Once a bucket closes, discard its provisional newest sample. Its first
+  // sample is the cadence-independent historical evidence. When the bucket
+  // contains a supported interior vertex, retain that vertex and discard only
+  // the responsive newest point. The new bucket's first sample then becomes
+  // both its anchor and responsive newest point.
+  if (
+    currentBucketCount >= 2
+    && point.t - (previous?.t ?? point.t) < LIVE_PRESENTATION_GAP_BOUNDARY_MS
+  ) {
+    if (currentBucketCount >= 3) {
+      evidence.pop();
+    } else {
+      const approach = evidence[currentBucketStart - 1]
+        ?? evidence[currentBucketStart];
+      const candidate = evidence.at(-1);
+      if (!hasSupportedLocalDirectionChange(approach, candidate, point)) {
+        evidence.pop();
+      }
+    }
+  }
+  evidence.push(point);
+}
+
+function compactPresentationEvidence(
+  points: ReadonlyArray<TrackPoint>,
+): TrackPoint[] {
+  const compacted: TrackPoint[] = [];
+  for (const point of points) appendPresentationEvidence(compacted, point);
+  return compacted;
+}
+
 function bearing(from: TrackPoint, to: TrackPoint): number {
   const delta = localMetricDelta(from, to);
   return (Math.atan2(delta.x, delta.y) * 180 / Math.PI + 360) % 360;
@@ -51,7 +172,113 @@ function pointToSegmentDistanceM(point: TrackPoint, start: TrackPoint, end: Trac
   return Math.hypot(p.x - dx * fraction, p.y - dy * fraction);
 }
 
-function protectedIndices(points: TrackPoint[], uncertaintyM: number): number[] {
+function localTrendSettlementCandidate(
+  evidence: ReadonlyArray<TrackPoint>,
+  candidateIndex: number,
+): TrackPoint | null {
+  if (candidateIndex < 0 || candidateIndex >= evidence.length) return null;
+  let startIndex = Math.max(0, candidateIndex - 4);
+  let endIndex = Math.min(evidence.length - 1, candidateIndex + 4);
+  for (let index = candidateIndex; index > startIndex; index -= 1) {
+    if (evidence[index].t - evidence[index - 1].t >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) {
+      startIndex = index;
+      break;
+    }
+  }
+  for (let index = candidateIndex + 1; index <= endIndex; index += 1) {
+    if (evidence[index].t - evidence[index - 1].t >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) {
+      endIndex = index - 1;
+      break;
+    }
+  }
+  // At a real gap/segment boundary only one side can exist. Three coherent
+  // samples on that side are enough to resolve the boundary presentation;
+  // they do not confirm a movement trend or alter the canonical endpoint.
+  if (endIndex - startIndex + 1 < 3) return null;
+  const candidate = evidence[candidateIndex];
+  const window = evidence.slice(startIndex, endIndex + 1);
+  const corridorStart = window[0];
+  const corridorEnd = window[window.length - 1];
+  const settlementEnvelopeM = Math.max(1, Math.min(2.5, (candidate.accuracy ?? 8) * 0.25));
+  // Stable history contains only actual accepted coordinates. If symmetric
+  // evidence places the point outside its local corridor, let that provisional
+  // vertex age out instead of manufacturing and freezing a replacement. Clean
+  // anchors remain exact, while confirmed turns are handled before settlement.
+  return pointToSegmentDistanceM(candidate, corridorStart, corridorEnd)
+    <= settlementEnvelopeM
+    ? candidate
+    : null;
+}
+
+function presentationEvidenceIndex(
+  evidence: ReadonlyArray<TrackPoint>,
+  candidate: TrackPoint,
+): number {
+  const key = presentationEvidenceKey(candidate);
+  const exact = evidence.findIndex(point => presentationEvidenceKey(point) === key);
+  if (exact >= 0) return exact;
+  let nearestIndex = -1;
+  let nearestDeltaMs = Number.POSITIVE_INFINITY;
+  evidence.forEach((point, index) => {
+    if ((point.segmentId ?? '__legacy') !== (candidate.segmentId ?? '__legacy')) return;
+    const deltaMs = Math.abs(point.t - candidate.t);
+    if (deltaMs < nearestDeltaMs) {
+      nearestIndex = index;
+      nearestDeltaMs = deltaMs;
+    }
+  });
+  return nearestDeltaMs <= LIVE_PRESENTATION_EVIDENCE_BUCKET_MS ? nearestIndex : -1;
+}
+
+function resolvedExpiredPresentationPoint(
+  evidence: ReadonlyArray<TrackPoint>,
+  candidate: TrackPoint,
+): TrackPoint | null {
+  const index = presentationEvidenceIndex(evidence, candidate);
+  if (index < 0) return null;
+  const resolved = localTrendSettlementCandidate(evidence, index);
+  return resolved == null ? null : {
+    ...candidate,
+    lat: resolved.lat,
+    lng: resolved.lng,
+  };
+}
+
+function resolvedBoundaryPresentationPoint(
+  evidence: ReadonlyArray<TrackPoint>,
+): TrackPoint | null {
+  if (evidence.length === 0) return null;
+  let continuousStart = Math.max(0, evidence.length - 7);
+  for (let index = evidence.length - 1; index > continuousStart; index -= 1) {
+    if (evidence[index].t - evidence[index - 1].t >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) {
+      continuousStart = index;
+      break;
+    }
+  }
+  const window = evidence.slice(continuousStart);
+  const endpoint = window[window.length - 1];
+  // A silence or segment boundary supplies no evidence about movement after
+  // the last accepted observation. Extrapolating the old trend moved genuine
+  // turn endpoints by 10–20 m and made the fabricated point immutable. Keep
+  // the accepted endpoint exactly; presentation can resume provisionally when
+  // the next segment/evidence arrives, without inventing an unseen position.
+  return endpoint;
+}
+
+function signedCrossTrackDistanceM(point: TrackPoint, start: TrackPoint, end: TrackPoint): number {
+  const corridor = localMetricDelta(start, end);
+  const offset = localMetricDelta(start, point);
+  const corridorM = Math.hypot(corridor.x, corridor.y);
+  if (corridorM === 0) return 0;
+  return (corridor.x * offset.y - corridor.y * offset.x) / corridorM;
+}
+
+function protectedIndices(
+  points: TrackPoint[],
+  uncertaintyM: number,
+  includeGapBoundaries = true,
+  gapBoundaryOnlyIndices?: Set<number>,
+): number[] {
   const protectedSet = new Set<number>([0, points.length - 1]);
   const adjacentDistanceM = points.slice(1).map((point, index) => displayDistanceM(points[index], point));
   const cumulativeDistanceM = [0];
@@ -171,6 +398,9 @@ function protectedIndices(points: TrackPoint[], uncertaintyM: number): number[] 
       const trendTurn = incomingTrend && outgoingTrend
         ? angleDelta(incomingTrend.bearingDeg, outgoingTrend.bearingDeg)
         : 0;
+      const trendProminenceM = trendPrevious != null && trendNext != null
+        ? pointToSegmentDistanceM(points[index], points[trendPrevious], points[trendNext])
+        : 0;
       const trendSupported = Boolean(
         incomingTrend && outgoingTrend
         && evidenceCountSupported(incomingTrend)
@@ -188,16 +418,114 @@ function protectedIndices(points: TrackPoint[], uncertaintyM: number): number[] 
         excursionPathM += adjacentDistanceM[edge];
       }
       const excursionChordM = displayDistanceM(points[excursionStart], points[excursionEnd]);
+      const excursionProminenceM = Math.max(...points
+        .slice(excursionStart + 1, excursionEnd)
+        .map(candidate => pointToSegmentDistanceM(
+          candidate,
+          points[excursionStart],
+          points[excursionEnd],
+        )), 0);
       // A real short detour, U-turn or switchback may deliberately lack one
       // coherent bearing. Preserve it when its extra travelled shape exceeds
       // both display noise and a substantial fraction of uncertainty.
       const meaningfulExcursion = excursionPathM - excursionChordM
-        >= Math.max(8, uncertaintyM * 0.75);
-      if (trendSupported || meaningfulExcursion) protectedSet.add(index);
+        >= Math.max(8, uncertaintyM * 0.75)
+        && excursionProminenceM >= Math.max(8, uncertaintyM * 0.65);
+      const prominentTrendTurn = trendSupported && (
+        evidenceSizedLocalTurn
+        // A short triangular excursion inside the observed uncertainty is not
+        // a durable direction change merely because both sides are coherent.
+        // A real sparse corner still clears this gate through evidence-sized
+        // edges or prominence beyond most of the uncertainty envelope.
+        || trendProminenceM >= Math.max(5, uncertaintyM * 0.75)
+      );
+      if (prominentTrendTurn || meaningfulExcursion) protectedSet.add(index);
     }
+    // A meaningful detour can be a smooth, one-sided bow rather than a sharp
+    // corner. Confirm it only when multiple observations sustain the same
+    // side of a supported corridor and the travelled path is materially
+    // longer than the chord. An isolated V-shaped fix therefore cannot turn
+    // a presentation resource boundary into movement evidence.
+    const excursionSupportM = Math.max(12, uncertaintyM);
+    const excursionPrevious = neighbourAtDistance(index, -1, excursionSupportM);
+    const excursionNext = neighbourAtDistance(index, 1, excursionSupportM);
+    if (excursionPrevious != null && excursionNext != null && excursionNext - excursionPrevious >= 3) {
+      const excursionThresholdM = Math.max(8, uncertaintyM * 0.65);
+      const signedDeviationM = signedCrossTrackDistanceM(
+        points[index],
+        points[excursionPrevious],
+        points[excursionNext],
+      );
+      const side = Math.sign(signedDeviationM);
+      const sameSideEvidenceCount = side === 0 ? 0 : points
+        .slice(excursionPrevious + 1, excursionNext)
+        .filter(candidate => {
+          const deviationM = signedCrossTrackDistanceM(
+            candidate,
+            points[excursionPrevious],
+            points[excursionNext],
+          );
+          return Math.sign(deviationM) === side
+            && Math.abs(deviationM) >= excursionThresholdM * 0.45;
+        }).length;
+      const excursionPathM = cumulativeDistanceM[excursionNext]
+        - cumulativeDistanceM[excursionPrevious];
+      const excursionChordM = displayDistanceM(
+        points[excursionPrevious],
+        points[excursionNext],
+      );
+      if (
+        Math.abs(signedDeviationM) >= excursionThresholdM
+        && sameSideEvidenceCount >= 2
+        && excursionPathM - excursionChordM >= Math.max(6, uncertaintyM * 0.45)
+      ) protectedSet.add(index);
+    }
+    const curvatureStart = Math.max(1, index - 2);
+    const curvatureEnd = Math.min(points.length - 2, index + 2);
+    const curvatureTurns = signedLocalTurns
+      .slice(curvatureStart, curvatureEnd + 1)
+      .filter(turn => Math.abs(turn) >= 2);
+    const positiveCurvature = curvatureTurns.filter(turn => turn > 0);
+    const negativeCurvature = curvatureTurns.filter(turn => turn < 0);
+    const dominantCurvature = positiveCurvature.length >= negativeCurvature.length
+      ? positiveCurvature
+      : negativeCurvature;
+    let curvatureTravelM = 0;
+    for (let edge = Math.max(0, curvatureStart - 1); edge <= curvatureEnd; edge += 1) {
+      curvatureTravelM += adjacentDistanceM[edge] ?? 0;
+    }
+    // Gradual bends do not contain one sharp corner, but a run of coherent
+    // same-direction turns is still movement trend evidence. Alternating GPS
+    // wobble and a single V-shaped excursion cannot satisfy this gate.
+    if (
+      dominantCurvature.length >= 4
+      && Math.abs(dominantCurvature.reduce((sum, turn) => sum + turn, 0)) >= 18
+      && dominantCurvature.length >= Math.ceil(curvatureTurns.length * 0.75)
+      && curvatureTravelM >= Math.max(18, uncertaintyM * 1.4)
+    ) protectedSet.add(index);
+    const reversalSupportM = Math.max(7, Math.min(14, uncertaintyM * 0.85));
+    const reversalPrevious = neighbourAtDistance(index, -1, reversalSupportM);
+    const reversalNext = neighbourAtDistance(index, 1, reversalSupportM);
+    const reversalIncoming = reversalPrevious == null
+      ? null
+      : directionalEvidence(reversalPrevious, index);
+    const reversalOutgoing = reversalNext == null
+      ? null
+      : directionalEvidence(index, reversalNext);
+    if (
+      reversalIncoming && reversalOutgoing
+      && reversalIncoming.edgeCount >= 2
+      && reversalOutgoing.edgeCount >= 2
+      && reversalIncoming.concentration >= 0.65
+      && reversalOutgoing.concentration >= 0.65
+      && angleDelta(reversalIncoming.bearingDeg, reversalOutgoing.bearingDeg) >= 135
+    ) protectedSet.add(index);
     const incomingMs = points[index].t - points[index - 1].t;
     const outgoingMs = points[index + 1].t - points[index].t;
-    if (incomingMs >= 12_000 || outgoingMs >= 12_000) protectedSet.add(index);
+    if (includeGapBoundaries && (incomingMs >= 12_000 || outgoingMs >= 12_000)) {
+      if (!protectedSet.has(index)) gapBoundaryOnlyIndices?.add(index);
+      protectedSet.add(index);
+    }
   }
   return Array.from(protectedSet).sort((a, b) => a - b);
 }
@@ -230,9 +558,12 @@ function stabilizeDisplayTail(
   points: TrackPoint[],
   preserveStart: boolean,
   uncertaintyM: number,
+  precomputedProtectedIndices?: ReadonlyArray<number>,
 ): TrackPoint[] {
   if (points.length < 3) return points.slice();
-  const protectedSet = new Set(protectedIndices(points, uncertaintyM));
+  const protectedSet = new Set(
+    precomputedProtectedIndices ?? protectedIndices(points, uncertaintyM),
+  );
   return points.map((point, index) => {
     if (
       index === points.length - 1
@@ -276,13 +607,21 @@ function simplifyTail(
   points: TrackPoint[],
   preserveStart = false,
   requiredFreezeBoundaryIndex: number | null = null,
+  precomputedProtectedIndices?: ReadonlyArray<number>,
 ): TrackPoint[] {
   if (points.length <= 2) return points.slice();
   const accuracies = points.flatMap(point => (
     point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0 ? [point.accuracy] : []
   )).sort((a, b) => a - b);
   const uncertaintyM = accuracies.length > 0 ? accuracies[Math.floor(accuracies.length / 2)] : 8;
-  const stabilized = stabilizeDisplayTail(points, preserveStart, uncertaintyM);
+  const stableProtectedIndices = precomputedProtectedIndices
+    ?? protectedIndices(points, uncertaintyM);
+  const stabilized = stabilizeDisplayTail(
+    points,
+    preserveStart,
+    uncertaintyM,
+    stableProtectedIndices,
+  );
   const directM = displayDistanceM(stabilized[0], stabilized[stabilized.length - 1]);
   // Endpoints of a noisy sample window can sit on opposite sides of the
   // corridor, so the maximum distance to their chord can approach the full
@@ -301,8 +640,24 @@ function simplifyTail(
     .filter((sign, index) => sign !== turnSigns[index]).length;
   const highFrequencyWobble = turnSigns.length >= 4
     && alternatingTurnCount >= Math.ceil((turnSigns.length - 1) * 0.35);
+  const excursionThresholdM = Math.max(8, uncertaintyM * 0.65);
+  const signedCorridorOffsetsM = stabilized.slice(1, -1).map(point => (
+    signedCrossTrackDistanceM(point, stabilized[0], stabilized[stabilized.length - 1])
+  ));
+  const sustainedSide = (side: -1 | 1) => signedCorridorOffsetsM
+    .filter(offsetM => Math.sign(offsetM) === side
+      && Math.abs(offsetM) >= excursionThresholdM * 0.45);
+  const sustainedOneSidedExcursion = Math.max(
+    ...signedCorridorOffsetsM.map(offsetM => Math.abs(offsetM)),
+    0,
+  ) >= excursionThresholdM
+    && (sustainedSide(-1).length >= 2 || sustainedSide(1).length >= 2)
+    && stabilized.slice(1).reduce((sum, candidate, index) => (
+      sum + displayDistanceM(stabilized[index], candidate)
+    ), 0) - directM >= Math.max(6, uncertaintyM * 0.45);
   const uncertaintyBoundedStraight = directM >= 30
     && highFrequencyWobble
+    && !sustainedOneSidedExcursion
     && Math.max(...stabilized.map(point => pointToSegmentDistanceM(
       point,
       stabilized[0],
@@ -311,7 +666,7 @@ function simplifyTail(
   const toleranceM = uncertaintyBoundedStraight
     ? straightEnvelopeM
     : Math.max(2.4, Math.min(6, uncertaintyM * 0.42));
-  const boundaries = protectedIndices(stabilized, uncertaintyM).filter(index => {
+  const boundaries = stableProtectedIndices.filter(index => {
     if (!uncertaintyBoundedStraight || index === 0 || index === stabilized.length - 1) return true;
     const incomingMs = stabilized[index].t - stabilized[index - 1].t;
     const outgoingMs = stabilized[index + 1].t - stabilized[index].t;
@@ -376,10 +731,31 @@ export function appendCausalLivePoint(
 
 export interface CausalLiveReplayCheckpoint {
   frozen: TrackPoint[];
+  frozenEvidenceKeys: Set<string>;
   liveTail: TrackPoint[];
   segmentEvidence: TrackPoint[];
   segmentId: string | null;
   segmentHasPriorEvidence: boolean;
+}
+
+function insertFrozenPresentationPoint(
+  state: CausalLiveReplayCheckpoint,
+  point: TrackPoint,
+): void {
+  const key = presentationEvidenceKey(point);
+  if (state.frozenEvidenceKeys.has(key)) return;
+  let insertionIndex = state.frozen.length;
+  while (insertionIndex > 0) {
+    const previous = state.frozen[insertionIndex - 1];
+    if (previous.t < point.t || (
+      previous.t === point.t
+      && (previous.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
+        <= (point.rawOrdinal ?? Number.MAX_SAFE_INTEGER)
+    )) break;
+    insertionIndex -= 1;
+  }
+  state.frozen.splice(insertionIndex, 0, point);
+  state.frozenEvidenceKeys.add(key);
 }
 
 export function createCausalLiveReplayCheckpoint(
@@ -388,7 +764,7 @@ export function createCausalLiveReplayCheckpoint(
 ): CausalLiveReplayCheckpoint {
   if (canonical.length === 0) {
     return {
-      frozen: [], liveTail: [], segmentEvidence: [], segmentId: null,
+      frozen: [], frozenEvidenceKeys: new Set(), liveTail: [], segmentEvidence: [], segmentId: null,
       segmentHasPriorEvidence: false,
     };
   }
@@ -396,25 +772,66 @@ export function createCausalLiveReplayCheckpoint(
   // Mutable decisions use at most ten points plus a small immutable trend
   // context. The context can prove a sustained approach without becoming
   // mutable itself; everything older is already represented by frozen Live.
-  let boundedStart = canonical.length - 1;
+  let rawStart = Math.max(0, canonical.length - LIVE_RECOVERY_TREND_CONTEXT_SCAN_MAX_POINTS);
+  while (rawStart > 0
+    && canonical.length - rawStart < LIVE_RECOVERY_TREND_CONTEXT_SCAN_MAX_POINTS
+    && (canonical[rawStart - 1].segmentId ?? '__legacy') === segmentId) rawStart -= 1;
+  while (rawStart < canonical.length - 1
+    && (canonical[rawStart].segmentId ?? '__legacy') !== segmentId) rawStart += 1;
+  const hasEarlierRawSegmentEvidence = rawStart > 0
+    && (canonical[rawStart - 1].segmentId ?? '__legacy') === segmentId;
+  const compacted = compactPresentationEvidence(
+    canonical.slice(rawStart),
+  );
+  let boundedStart = compacted.length - 1;
   const maximumEvidence = LIVE_MUTABLE_TAIL_MAX_POINTS + LIVE_TREND_CONTEXT_MAX_POINTS;
   while (boundedStart > 0
-    && canonical.length - boundedStart < maximumEvidence
-    && (canonical[boundedStart - 1].segmentId ?? '__legacy') === segmentId) boundedStart -= 1;
-  const hasEarlierSegmentEvidence = boundedStart > 0
-    && (canonical[boundedStart - 1].segmentId ?? '__legacy') === segmentId;
-  const boundedEvidence = canonical.slice(boundedStart);
+    && compacted.length - boundedStart < maximumEvidence) boundedStart -= 1;
+  const hasEarlierSegmentEvidence = hasEarlierRawSegmentEvidence || boundedStart > 0;
+  const boundedEvidence = compacted.slice(boundedStart);
   const mutableStart = mutableTailStartIndex(boundedEvidence);
   const contextStart = Math.max(0, mutableStart - LIVE_TREND_CONTEXT_MAX_POINTS);
-  const cutoffT = boundedEvidence[mutableStart]?.t ?? canonical[canonical.length - 1].t;
-  let liveTailStart = live.length;
-  while (liveTailStart > 0) {
-    const candidate = live[liveTailStart - 1];
-    if ((candidate.segmentId ?? '__legacy') !== segmentId || candidate.t < cutoffT) break;
-    liveTailStart -= 1;
+  const recoveryAccuracies = boundedEvidence.flatMap(candidate => (
+    candidate.accuracy != null && Number.isFinite(candidate.accuracy) && candidate.accuracy > 0
+      ? [candidate.accuracy]
+      : []
+  )).sort((left, right) => left - right);
+  const recoveryUncertaintyM = recoveryAccuracies.length > 0
+    ? recoveryAccuracies[Math.floor(recoveryAccuracies.length / 2)]
+    : 8;
+  const recoverySupportedKeys = new Set(protectedIndices(
+    boundedEvidence,
+    recoveryUncertaintyM,
+    false,
+  ).filter(index => index > 0 && index < boundedEvidence.length - 1)
+    .map(index => presentationEvidenceKey(boundedEvidence[index])));
+  if (!hasEarlierSegmentEvidence) {
+    recoverySupportedKeys.add(presentationEvidenceKey(boundedEvidence[0]));
   }
+  const oldestRecoveryEvidenceT = boundedEvidence[0]?.t
+    ?? canonical[canonical.length - 1].t;
+  let liveTailStart = 0;
+  for (let index = 0; index < live.length; index += 1) {
+    const candidate = live[index];
+    if (
+      (candidate.segmentId ?? '__legacy') !== segmentId
+      || candidate.t < oldestRecoveryEvidenceT
+      || candidate.liveTrendConfirmed === true
+      || candidate.livePresentationSettled === true
+      || recoverySupportedKeys.has(presentationEvidenceKey(candidate))
+    ) liveTailStart = index + 1;
+  }
+  const recoveredFrozen = live.slice(0, liveTailStart).map((candidate, index) => {
+    if (candidate.liveTrendConfirmed || candidate.livePresentationSettled) return candidate;
+    const key = presentationEvidenceKey(candidate);
+    if (index === 0) return candidate;
+    return recoverySupportedKeys.has(key)
+      ? confirmedPresentationPoint(candidate)
+      : settledPresentationPoint(candidate);
+  });
   return {
-    frozen: live.slice(0, liveTailStart),
+    frozen: recoveredFrozen,
+    frozenEvidenceKeys: new Set(recoveredFrozen.map(presentationEvidenceKey)),
     liveTail: live.slice(liveTailStart),
     segmentEvidence: boundedEvidence.slice(contextStart),
     segmentId,
@@ -425,24 +842,201 @@ export function createCausalLiveReplayCheckpoint(
 export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, point: TrackPoint): void {
     const nextSegmentId = point.segmentId ?? '__legacy';
     if (state.segmentId !== nextSegmentId) {
-      state.frozen.push(...state.liveTail);
+      const resolvedBoundary = resolvedBoundaryPresentationPoint(state.segmentEvidence);
+      if (resolvedBoundary != null) {
+        // Insert the resolved endpoint first. The mutable tail can contain the
+        // same observation identity with its earlier provisional coordinate;
+        // first-write identity fencing prevents that stale display coordinate
+        // from replacing the evidence-driven boundary settlement below.
+        insertFrozenPresentationPoint(
+          state,
+          settledPresentationPoint(resolvedBoundary),
+        );
+      }
+      for (const candidate of state.liveTail) {
+        const resolved = resolvedExpiredPresentationPoint(
+          state.segmentEvidence,
+          candidate,
+        ) ?? candidate;
+        insertFrozenPresentationPoint(
+          state,
+          settledPresentationPoint(resolved),
+        );
+      }
       state.liveTail = [];
       state.segmentEvidence = [];
       state.segmentId = nextSegmentId;
       state.segmentHasPriorEvidence = false;
     }
-    state.segmentEvidence.push(point);
+    const previousEvidenceT = state.segmentEvidence.at(-1)?.t ?? null;
+    appendPresentationEvidence(state.segmentEvidence, point);
     const mutableStart = mutableTailStartIndex(state.segmentEvidence);
     const cutoffT = state.segmentEvidence[mutableStart]?.t ?? point.t;
-    if (state.liveTail.length > 0) {
-      state.frozen.push(...state.liveTail.filter(candidate => candidate.t < cutoffT));
-    }
     const contextStart = Math.max(0, mutableStart - LIVE_TREND_CONTEXT_MAX_POINTS);
-    state.liveTail = simplifyTail(
-      state.segmentEvidence.slice(contextStart),
+    const accuracies = state.segmentEvidence.flatMap(candidate => (
+      candidate.accuracy != null && Number.isFinite(candidate.accuracy) && candidate.accuracy > 0
+        ? [candidate.accuracy]
+        : []
+    )).sort((left, right) => left - right);
+    const uncertaintyM = accuracies.length > 0
+      ? accuracies[Math.floor(accuracies.length / 2)]
+      : 8;
+    const gapBoundaryOnlyIndices = new Set<number>();
+    const allProtectedIndices = protectedIndices(
+      state.segmentEvidence,
+      uncertaintyM,
+      true,
+      gapBoundaryOnlyIndices,
+    );
+    const supportedIndices = new Set(allProtectedIndices.filter(index => (
+      index > 0
+      && index < state.segmentEvidence.length - 1
+      && !gapBoundaryOnlyIndices.has(index)
+    )));
+    const presentationProtectedIndices = new Set(allProtectedIndices);
+    const supportedKeys = new Set(Array.from(supportedIndices).map(index => (
+      presentationEvidenceKey(state.segmentEvidence[index])
+    )));
+    if (!state.segmentHasPriorEvidence) {
+      supportedKeys.add(presentationEvidenceKey(state.segmentEvidence[0]));
+    }
+    const evidenceWindow = state.segmentEvidence.slice(contextStart);
+    const evidenceWindowProtectedIndices = Array.from(presentationProtectedIndices)
+      .map(index => index - contextStart)
+      .filter(index => index > 0 && index < evidenceWindow.length - 1);
+    evidenceWindowProtectedIndices.unshift(0);
+    evidenceWindowProtectedIndices.push(evidenceWindow.length - 1);
+    const confirmedFreezeBoundaryIndex = supportedIndices.has(mutableStart)
+      ? mutableStart - contextStart
+      : null;
+    const nextPresentation = simplifyTail(
+      evidenceWindow,
       !state.segmentHasPriorEvidence && contextStart === 0,
-      mutableStart - contextStart,
-    ).filter(candidate => candidate.t >= cutoffT);
+      // A time/distance window boundary is not itself movement evidence. Keep
+      // the exact sample only when the current window independently confirms
+      // it as a supported turn; an unsupported drift remains simplified.
+      confirmedFreezeBoundaryIndex != null && confirmedFreezeBoundaryIndex >= 0
+        ? confirmedFreezeBoundaryIndex
+        : null,
+      evidenceWindowProtectedIndices,
+    );
+    // Apply evidence-confirmed turns before any resource/window settlement in
+    // this same reducer step. Otherwise first-write identity fencing lets a
+    // robustly shifted `settled` point steal the identity of the exact corner,
+    // permanently flattening a genuine turn that is already supported.
+    for (const candidate of nextPresentation) {
+      const candidateKey = presentationEvidenceKey(candidate);
+      if (
+        candidate.t < point.t
+        && supportedKeys.has(candidateKey)
+        && !state.frozenEvidenceKeys.has(candidateKey)
+      ) {
+        const preserveFirstReference = state.frozen.length === 0
+          && candidate.t === state.segmentEvidence[0]?.t;
+        const confirmed = confirmedPresentationPoint(candidate, preserveFirstReference);
+        insertFrozenPresentationPoint(state, confirmed);
+      }
+    }
+    const closesSilenceGap = previousEvidenceT != null
+      && point.t - previousEvidenceT >= LIVE_PRESENTATION_GAP_BOUNDARY_MS;
+    if (closesSilenceGap) {
+      const beforeGapEvidence = state.segmentEvidence.slice(0, -1);
+      const resolvedBoundary = resolvedBoundaryPresentationPoint(
+        beforeGapEvidence,
+      );
+      if (resolvedBoundary != null) {
+        insertFrozenPresentationPoint(
+          state,
+          settledPresentationPoint(resolvedBoundary),
+        );
+      }
+      for (const candidate of state.liveTail) {
+        const resolved = resolvedExpiredPresentationPoint(
+          beforeGapEvidence,
+          candidate,
+        ) ?? candidate;
+        insertFrozenPresentationPoint(
+          state,
+          settledPresentationPoint(resolved),
+        );
+      }
+    }
+    // Every previously visible vertex that leaves the triple-bounded mutable
+    // tail is either resolved against current symmetric evidence or was
+    // already frozen. Never copy a stale provisional coordinate into history,
+    // and never allow an unmarked >15 s vertex to disappear on a later frame.
+    for (const candidate of state.liveTail) {
+      const candidateKey = presentationEvidenceKey(candidate);
+      if (
+        closesSilenceGap
+        || candidate.t >= cutoffT
+        || state.frozenEvidenceKeys.has(candidateKey)
+      ) continue;
+      const resolved = resolvedExpiredPresentationPoint(
+        state.segmentEvidence,
+        candidate,
+      );
+      if (resolved != null) {
+        insertFrozenPresentationPoint(
+          state,
+          settledPresentationPoint(resolved),
+        );
+      }
+    }
+    // Periodically settle a resource-bounded display anchor from symmetric
+    // evidence around an observation that has left the mutable tail. The
+    // observation identity and timestamp remain intact, while its display-only
+    // coordinate is projected onto the locally supported trend. This keeps a
+    // long route complete without freezing a transient lateral excursion.
+    // Resource expiry still does not mean trend confirmation.
+    const settlementIndex = mutableStart - 1;
+    const settlementSource = settlementIndex >= 0
+      ? state.segmentEvidence[settlementIndex]
+      : null;
+    const settlementKey = settlementSource == null
+      ? null
+      : presentationEvidenceKey(settlementSource);
+    let precedingFrozen: TrackPoint | null = null;
+    if (settlementSource != null) {
+      for (let index = state.frozen.length - 1; index >= 0; index -= 1) {
+        const candidate = state.frozen[index];
+        if (
+          candidate.t < settlementSource.t
+          && (candidate.segmentId ?? '__legacy') === nextSegmentId
+        ) {
+          precedingFrozen = candidate;
+          break;
+        }
+      }
+    }
+    const needsSettledAnchor = settlementSource != null && (
+      precedingFrozen == null
+      || settlementSource.t - precedingFrozen.t >= LIVE_SETTLED_ANCHOR_MAX_AGE_MS
+      || displayDistanceM(precedingFrozen, settlementSource)
+        >= LIVE_SETTLED_ANCHOR_MAX_DISTANCE_M
+    );
+    if (
+      settlementSource != null
+      && settlementKey != null
+      && !supportedKeys.has(settlementKey)
+      && !state.frozenEvidenceKeys.has(settlementKey)
+      && needsSettledAnchor
+    ) {
+      const locallySettled = localTrendSettlementCandidate(
+        state.segmentEvidence,
+        settlementIndex,
+      );
+      if (locallySettled != null) {
+        insertFrozenPresentationPoint(
+          state,
+          settledPresentationPoint(locallySettled),
+        );
+      }
+    }
+    const latestFrozenT = state.frozen.at(-1)?.t ?? Number.NEGATIVE_INFINITY;
+    state.liveTail = nextPresentation.filter(candidate => (
+      candidate.t > latestFrozenT && candidate.t >= cutoffT
+    ));
     if (contextStart > 0) {
       state.segmentEvidence = state.segmentEvidence.slice(contextStart);
       state.segmentHasPriorEvidence = true;
