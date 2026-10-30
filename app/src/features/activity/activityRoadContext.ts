@@ -549,6 +549,7 @@ export function updateStableRoadAwareLivePresentation<T extends {
   rawOrdinal?: number;
   liveTrendConfirmed?: true;
   livePresentationSettled?: true;
+  livePresentationBreakBefore?: true;
 }>(
   previous: StableRoadAwareLivePresentation<T>,
   canonical: ReadonlyArray<T>,

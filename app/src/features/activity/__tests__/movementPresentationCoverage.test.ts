@@ -1,4 +1,6 @@
 import { buildCausalLiveRoute } from '../causalLiveRoute';
+import { buildConfirmedRouteSegments } from '../confirmedRoutePresentation';
+import { haversineM } from '../../../utils/geo';
 import {
   parametricPath,
   pathLengthM,
@@ -20,6 +22,18 @@ const oval = (eastRadiusM: number, northRadiusM: number) => parametricPath(progr
 const sCurve = (lengthM: number, amplitudeM: number) => parametricPath(progress => (
   [lengthM * progress, amplitudeM * Math.sin(progress * Math.PI * 2)]
 ));
+
+function renderedConnectedLengthM(points: ReturnType<typeof buildCausalLiveRoute>): number {
+  return buildConfirmedRouteSegments(points).reduce((total, segment) => (
+    total + segment.coordinates.slice(1).reduce((segmentTotal, [lng, lat], index) => {
+      const [previousLng, previousLat] = segment.coordinates[index];
+      return segmentTotal + haversineM(
+        { lat: previousLat, lng: previousLng },
+        { lat, lng },
+      );
+    }, 0)
+  ), 0);
+}
 
 describe('O98 one-pass meaningful movement coverage', () => {
   test.each([
@@ -97,7 +111,7 @@ describe('O98 one-pass meaningful movement coverage', () => {
     expect(pathLengthM(display) / pathLengthM(sampled.truth)).toBeLessThan(1.08);
   });
 
-  test('uncertainty-sized correlated lateral motion does not settle into immutable straight-line zigzags', () => {
+  test('uncertainty-sized lateral motion stays calm or exposes real acceptance gaps', () => {
     const straight = parametricPath(progress => [220 * progress, 0]);
     const rows = [0.5, 1, 2, 4].flatMap(cadenceSeconds => (
       [0.5, 0.75, 1].map(accuracyFraction => {
@@ -113,6 +127,15 @@ describe('O98 one-pass meaningful movement coverage', () => {
         });
         const accepted = qualifyForLive(sampled.observations);
         const display = buildCausalLiveRoute(accepted);
+        const presentationSegments = buildConfirmedRouteSegments(display);
+        const acceptedGapKeys = accepted.slice(1).flatMap((point, index) => (
+          point.t - accepted[index].t >= 12_000
+            ? [point.observationId]
+            : []
+        ));
+        const markedGapKeys = new Set(display.flatMap(point => (
+          point.livePresentationBreakBefore ? [point.observationId] : []
+        )));
         return {
           cadenceSeconds,
           accuracyFraction,
@@ -121,13 +144,26 @@ describe('O98 one-pass meaningful movement coverage', () => {
           confirmed: display.filter(point => point.liveTrendConfirmed === true).length,
           settled: display.filter(point => point.livePresentationSettled === true).length,
           lengthRatio: pathLengthM(display) / pathLengthM(sampled.truth),
+          connectedLengthRatio: renderedConnectedLengthM(display) / pathLengthM(sampled.truth),
+          acceptedGapCount: acceptedGapKeys.length,
+          renderedSegmentCount: presentationSegments.length,
+          missingGapMarkers: acceptedGapKeys.filter(key => !markedGapKeys.has(key)).length,
         };
       })
     ));
     process.stderr.write(`movement-straight-uncertainty=${JSON.stringify(rows)}\n`);
 
     rows.forEach(row => {
-      expect(row.lengthRatio).toBeLessThan(1.15);
+      // `lengthRatio` intentionally appears in the diagnostic ledger because
+      // the old test joined every retained point, including real acceptance
+      // gaps, and therefore mislabelled truthful gap endpoints as zigzags.
+      // Product rendering must evaluate connected segments instead.
+      expect(row.connectedLengthRatio).toBeLessThan(1.15);
+      expect(row.renderedSegmentCount).toBe(row.acceptedGapCount + 1);
+      expect(row.missingGapMarkers).toBe(0);
+      if (row.acceptedGapCount === 0) {
+        expect(row.display).toBeLessThan(row.accepted / 2);
+      }
     });
   });
 });

@@ -76,13 +76,16 @@ function presentationEvidenceKey(point: TrackPoint): string {
 }
 
 function confirmedPresentationPoint(point: TrackPoint, preserveReference = false): TrackPoint {
-  if (preserveReference || point.liveTrendConfirmed) return point;
-  return { ...point, liveTrendConfirmed: true };
+  if (preserveReference && !point.livePresentationProvisional) return point;
+  const { livePresentationProvisional: _provisional, ...durable } = point;
+  if (point.liveTrendConfirmed) return durable;
+  return { ...durable, liveTrendConfirmed: true };
 }
 
 function settledPresentationPoint(point: TrackPoint): TrackPoint {
-  if (point.liveTrendConfirmed || point.livePresentationSettled) return point;
-  return { ...point, livePresentationSettled: true };
+  const { livePresentationProvisional: _provisional, ...durable } = point;
+  if (point.liveTrendConfirmed || point.livePresentationSettled) return durable;
+  return { ...durable, livePresentationSettled: true };
 }
 
 function appendPresentationEvidence(
@@ -172,6 +175,22 @@ function compactPresentationEvidence(
   const compacted: TrackPoint[] = [];
   for (const point of points) appendPresentationEvidence(compacted, point);
   return compacted;
+}
+
+function incomingSilenceGapEvidenceKeys(
+  canonical: ReadonlyArray<TrackPoint>,
+  startIndex: number,
+): Set<string> {
+  const keys = new Set<string>();
+  for (let index = Math.max(1, startIndex); index < canonical.length; index += 1) {
+    const previous = canonical[index - 1];
+    const point = canonical[index];
+    if (
+      (previous.segmentId ?? '__legacy') === (point.segmentId ?? '__legacy')
+      && point.t - previous.t >= LIVE_PRESENTATION_GAP_BOUNDARY_MS
+    ) keys.add(presentationEvidenceKey(point));
+  }
+  return keys;
 }
 
 function bearing(from: TrackPoint, to: TrackPoint): number {
@@ -569,7 +588,11 @@ function hasCoordinateOnlyStraightOscillation(
   const start = evidence[0];
   const end = evidence.at(-1)!;
   const chordM = displayDistanceM(start, end);
-  if (chordM < 30) return false;
+  // Candidate windows are sized by physical/time support. Requiring a fixed
+  // 30 m chord made the same lateral wave pass at dense cadence and fail at
+  // sparse cadence. The uncertainty-scaled floor keeps this a corridor test
+  // while allowing equivalent movement evidence to classify consistently.
+  if (chordM < Math.max(12, uncertaintyM * 1.5)) return false;
   const turnSigns = evidence.slice(1, -1).flatMap((_point, offset) => {
     const index = offset + 1;
     const signed = ((bearing(evidence[index], evidence[index + 1])
@@ -578,19 +601,145 @@ function hasCoordinateOnlyStraightOscillation(
   });
   const alternatingTurns = turnSigns.slice(1)
     .filter((sign, index) => sign !== turnSigns[index]).length;
-  if (
-    turnSigns.length < 4
-    || alternatingTurns < Math.ceil((turnSigns.length - 1) * 0.35)
-  ) return false;
-  const straightEnvelopeM = Math.max(3, Math.min(12, uncertaintyM * 0.95));
-  const maximumOffsetM = Math.max(...evidence.slice(1, -1).map(point => (
-    pointToSegmentDistanceM(point, start, end)
-  )), 0);
+  const highFrequencyWobble = turnSigns.length >= 4
+    && alternatingTurns >= Math.ceil((turnSigns.length - 1) * 0.35);
+  const signedOffsetsM = evidence.slice(1, -1).map(point => (
+    signedCrossTrackDistanceM(point, start, end)
+  ));
+  const sideThresholdM = Math.max(1.5, uncertaintyM * 0.2);
+  const twoSidedWobble = Math.max(...signedOffsetsM, 0) >= sideThresholdM
+    && Math.min(...signedOffsetsM, 0) <= -sideThresholdM;
+  if (!highFrequencyWobble && !twoSidedWobble) return false;
+  const straightEnvelopeM = Math.max(4, Math.min(14, uncertaintyM * 1.25));
+  const maximumOffsetM = Math.max(...signedOffsetsM.map(Math.abs), 0);
   if (maximumOffsetM > straightEnvelopeM) return false;
   const pathM = evidence.slice(1).reduce((sum, point, index) => (
     sum + displayDistanceM(evidence[index], point)
   ), 0);
   return pathM - chordM >= Math.max(4, uncertaintyM * 0.4);
+}
+
+function uncertaintyBoundedWithoutSymmetricSupport(
+  evidence: ReadonlyArray<TrackPoint>,
+  candidateIndex: number,
+): boolean {
+  if (candidateIndex <= 0 || candidateIndex >= evidence.length - 1) return false;
+  // The caller already retains a hard-bounded trend context. Use all
+  // continuous evidence that remains in that context when symmetric support
+  // is incomplete; a point-count subwindow would reintroduce cadence
+  // dependence precisely when dense sampling consumes the budget fastest.
+  let startIndex = 0;
+  let endIndex = evidence.length - 1;
+  for (let index = candidateIndex; index > startIndex; index -= 1) {
+    if (evidence[index].t - evidence[index - 1].t >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) {
+      startIndex = index;
+      break;
+    }
+  }
+  for (let index = candidateIndex + 1; index <= endIndex; index += 1) {
+    if (evidence[index].t - evidence[index - 1].t >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) {
+      endIndex = index - 1;
+      break;
+    }
+  }
+  if (candidateIndex <= startIndex || candidateIndex >= endIndex) return false;
+  const window = evidence.slice(startIndex, endIndex + 1);
+  const accuracies = window.flatMap(point => (
+    point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0
+      ? [point.accuracy]
+      : []
+  )).sort((left, right) => left - right);
+  const uncertaintyM = accuracies.length > 0
+    ? accuracies[Math.floor(accuracies.length / 2)]
+    : 8;
+  if (
+    hasScalarInconsistentAlternatingMotion(window)
+    || hasCoordinateOnlyStraightOscillation(window)
+    || hasBriefUncertaintyExcursion(window)
+  ) return true;
+  if (hasCoherentCurvatureEvidence(window, candidateIndex - startIndex)) return false;
+  const signedOffsetsM = window.slice(1, -1).map(point => (
+    signedCrossTrackDistanceM(point, window[0], window.at(-1)!)
+  ));
+  const sideThresholdM = Math.max(1.5, uncertaintyM * 0.2);
+  const maximumOffsetM = Math.max(...signedOffsetsM.map(Math.abs), 0);
+  if (
+    Math.max(...signedOffsetsM, 0) >= sideThresholdM
+    && Math.min(...signedOffsetsM, 0) <= -sideThresholdM
+    && maximumOffsetM <= Math.max(8, uncertaintyM * 1.25)
+  ) return true;
+  const candidateOffsetM = pointToSegmentDistanceM(
+    evidence[candidateIndex],
+    evidence[startIndex],
+    evidence[endIndex],
+  );
+  // With incomplete future/approach support, an uncertainty-sized deviation
+  // remains provisional. A geometrically material turn or detour can still
+  // pass through the ordinary direction/coverage gates; a small excursion
+  // cannot become immutable before its return evidence arrives.
+  return candidateOffsetM <= Math.max(3, uncertaintyM * 0.85);
+}
+
+function hasBriefUncertaintyExcursion(
+  evidence: ReadonlyArray<TrackPoint>,
+): boolean {
+  if (evidence.length < 5) return false;
+  const accuracies = evidence.flatMap(point => (
+    point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0
+      ? [point.accuracy]
+      : []
+  )).sort((left, right) => left - right);
+  const uncertaintyM = accuracies.length > 0
+    ? accuracies[Math.floor(accuracies.length / 2)]
+    : 8;
+  const start = evidence[0];
+  const end = evidence.at(-1)!;
+  const chordM = displayDistanceM(start, end);
+  if (chordM < Math.max(12, uncertaintyM)) return false;
+  const offsetsM = evidence.map(point => pointToSegmentDistanceM(point, start, end));
+  const maximumOffsetM = Math.max(...offsetsM);
+  if (
+    maximumOffsetM < Math.max(2.5, uncertaintyM * 0.25)
+    || maximumOffsetM > Math.max(8, uncertaintyM * 1.1)
+  ) return false;
+  const materialOffsetM = Math.max(1.5, maximumOffsetM * 0.35);
+  const supportedIndices = offsetsM.flatMap((offsetM, index) => (
+    index > 0 && index < evidence.length - 1 && offsetM >= materialOffsetM
+      ? [index]
+      : []
+  ));
+  if (supportedIndices.length === 0) return false;
+  const cumulativeM = [0];
+  for (let index = 1; index < evidence.length; index += 1) {
+    cumulativeM.push(cumulativeM.at(-1)! + displayDistanceM(evidence[index - 1], evidence[index]));
+  }
+  const totalTravelM = cumulativeM.at(-1)!;
+  if (totalTravelM <= 0) return false;
+  const supportedTravelM = cumulativeM[supportedIndices.at(-1)!]
+    - cumulativeM[supportedIndices[0]];
+  // Compare the established corridors outside the excursion itself. Index
+  // quartiles are cadence-sensitive after one-second evidence compaction: a
+  // dense excursion can occupy most retained indices even though it covers a
+  // small fraction of physical travel. The adjacent outside spans express
+  // the actual before/after movement and remain valid when one side is near a
+  // bounded-context edge.
+  const approachIndex = Math.max(1, supportedIndices[0] - 1);
+  const departureIndex = Math.min(
+    evidence.length - 2,
+    supportedIndices.at(-1)! + 1,
+  );
+  if (
+    displayDistanceM(evidence[0], evidence[approachIndex]) < 1
+    || displayDistanceM(evidence[departureIndex], evidence.at(-1)!) < 1
+  ) return false;
+  const approachBearing = bearing(evidence[0], evidence[approachIndex]);
+  const departureBearing = bearing(evidence[departureIndex], evidence.at(-1)!);
+  if (angleDelta(approachBearing, departureBearing) > 30) return false;
+  // A transient bump occupies only a small part of an otherwise established
+  // corridor. Sustained curvature, a detour and a switchback distribute their
+  // cross-track support across the physical window instead of appearing as a
+  // short uncertainty-sized island.
+  return supportedTravelM / totalTravelM < 0.45;
 }
 
 interface OscillationMaskCacheEntry {
@@ -632,11 +781,163 @@ function hasUncertaintyBoundedOscillation(
   return present;
 }
 
+function candidateOscillationWindow(
+  evidence: ReadonlyArray<TrackPoint>,
+  candidateIndex: number,
+): TrackPoint[] | null {
+  if (candidateIndex < 0 || candidateIndex >= evidence.length) return null;
+  const accuracies = evidence.flatMap(point => (
+    point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0
+      ? [point.accuracy]
+      : []
+  )).sort((left, right) => left - right);
+  const uncertaintyM = accuracies.length > 0
+    ? accuracies[Math.floor(accuracies.length / 2)]
+    : 8;
+  const speeds = evidence.flatMap(point => (
+    point.speed != null && Number.isFinite(point.speed) && point.speed >= 0.5
+      ? [point.speed]
+      : []
+  )).sort((left, right) => left - right);
+  const representativeSpeedMps = speeds.length > 0
+    ? speeds[Math.floor(speeds.length / 2)]
+    : 1.4;
+  // Use a physical baseline that is long enough to distinguish a sustained
+  // bend from one half-wave of ordinary walking wobble. This is still bounded
+  // by the retained trend context and scales with reported uncertainty rather
+  // than sampling density.
+  const supportTargetM = Math.max(22, Math.min(36, uncertaintyM * 1.75));
+  const minimumSupportDurationMs = Math.max(
+    4_000,
+    Math.min(12_000, uncertaintyM / representativeSpeedMps * 1_500),
+  );
+  let startIndex = candidateIndex;
+  let endIndex = candidateIndex;
+  let approachM = 0;
+  let departureM = 0;
+  while (startIndex > 0 && (
+    approachM < supportTargetM
+    || evidence[candidateIndex].t - evidence[startIndex].t < minimumSupportDurationMs
+  )) {
+    const intervalMs = evidence[startIndex].t - evidence[startIndex - 1].t;
+    if (intervalMs >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) break;
+    approachM += displayDistanceM(evidence[startIndex - 1], evidence[startIndex]);
+    startIndex -= 1;
+  }
+  while (endIndex < evidence.length - 1 && (
+    departureM < supportTargetM
+    || evidence[endIndex].t - evidence[candidateIndex].t < minimumSupportDurationMs
+  )) {
+    const intervalMs = evidence[endIndex + 1].t - evidence[endIndex].t;
+    if (intervalMs >= LIVE_PRESENTATION_GAP_BOUNDARY_MS) break;
+    departureM += displayDistanceM(evidence[endIndex], evidence[endIndex + 1]);
+    endIndex += 1;
+  }
+  if (
+    approachM < Math.max(10, uncertaintyM * 0.9)
+    || departureM < Math.max(10, uncertaintyM * 0.9)
+    || evidence[candidateIndex].t - evidence[startIndex].t < minimumSupportDurationMs
+    || evidence[endIndex].t - evidence[candidateIndex].t < minimumSupportDurationMs
+  ) return null;
+  return evidence.slice(startIndex, endIndex + 1);
+}
+
+/**
+ * A wider coherent bend may contain alternating short-edge bearings when GPS
+ * uncertainty is similar to the distance between fixes. Detect curvature at
+ * two physical scales before allowing a straight-oscillation classifier to
+ * veto the candidate. This is candidate-local: uncertainty near one sample
+ * never suppresses every supported anchor in the retained window.
+ */
+function hasCoherentCurvatureEvidence(
+  window: ReadonlyArray<TrackPoint>,
+  centerIndex: number,
+): boolean {
+  if (window.length < 5) return false;
+  if (centerIndex <= 0 || centerIndex >= window.length - 1) return false;
+  const accuracies = window.flatMap(point => (
+    point.accuracy != null && Number.isFinite(point.accuracy) && point.accuracy > 0
+      ? [point.accuracy]
+      : []
+  )).sort((left, right) => left - right);
+  const uncertaintyM = accuracies.length > 0
+    ? accuracies[Math.floor(accuracies.length / 2)]
+    : 8;
+  const candidate = window[centerIndex];
+  const signedTurn = (start: TrackPoint, end: TrackPoint): number => (
+    ((bearing(candidate, end) - bearing(start, candidate) + 540) % 360) - 180
+  );
+  const scaleTurns = [1, 0.75, 0.5].map(scale => {
+    const startIndex = Math.max(0, centerIndex - Math.max(1, Math.floor(centerIndex * scale)));
+    const endIndex = Math.min(
+      window.length - 1,
+      centerIndex + Math.max(1, Math.ceil((window.length - 1 - centerIndex) * scale)),
+    );
+    return signedTurn(window[startIndex], window[endIndex]);
+  });
+  const outerTurn = scaleTurns[0];
+  const outerSign = Math.sign(outerTurn);
+  const supportingTurns = scaleTurns.filter(turn => (
+    Math.abs(turn) >= 2 && Math.sign(turn) === outerSign
+  ));
+  const opposingTurns = scaleTurns.filter(turn => (
+    Math.abs(turn) >= 2 && Math.sign(turn) === -outerSign
+  ));
+  if (
+    outerSign === 0
+    || Math.abs(outerTurn) < 5
+    || supportingTurns.length < 2
+    || opposingTurns.reduce((sum, turn) => sum + Math.abs(turn), 0)
+      > supportingTurns.reduce((sum, turn) => sum + Math.abs(turn), 0) * 0.6
+  ) return false;
+  const pathM = window.slice(1).reduce((sum, point, index) => (
+    sum + displayDistanceM(window[index], point)
+  ), 0);
+  const chordM = displayDistanceM(window[0], window.at(-1)!);
+  const prominenceM = pointToSegmentDistanceM(candidate, window[0], window.at(-1)!);
+  // A single half-wave of straight-corridor wobble can look locally curved
+  // at the smallest scale. Require the wider chord departure to clear a
+  // meaningful fraction of the reported uncertainty before exempting it
+  // from the oscillation mask. Sustained curvature accumulates that support
+  // naturally; uncertainty-sized alternating drift does not.
+  return prominenceM >= Math.max(0.25, uncertaintyM * 0.02)
+    // A large-radius curve can have millimetres of arc/chord excess inside the
+    // bounded context even though its bearing changes coherently at every
+    // scale. The turn-direction and two-sided-wobble gates carry the semantic
+    // proof; this epsilon rejects numerical collinearity without erasing slow,
+    // broad curves merely because memory is bounded.
+    && pathM - chordM >= Math.max(0.01, uncertaintyM * 0.001);
+}
+
+function hasCoherentMultiscaleCurvature(
+  evidence: ReadonlyArray<TrackPoint>,
+  candidateIndex: number,
+): boolean {
+  const window = candidateOscillationWindow(evidence, candidateIndex);
+  if (window == null) return false;
+  const candidateKey = presentationEvidenceKey(evidence[candidateIndex]);
+  const centerIndex = window.findIndex(point => presentationEvidenceKey(point) === candidateKey);
+  return hasCoherentCurvatureEvidence(window, centerIndex);
+}
+
 function isNearUncertaintyBoundedOscillation(
   evidence: ReadonlyArray<TrackPoint>,
   candidateIndex: number,
 ): boolean {
-  if (candidateIndex < 0 || candidateIndex >= evidence.length) return false;
+  const window = candidateOscillationWindow(evidence, candidateIndex);
+  if (window == null) {
+    return uncertaintyBoundedWithoutSymmetricSupport(evidence, candidateIndex);
+  }
+  if (hasBriefUncertaintyExcursion(window)) return true;
+  // Scalar-speed disagreement plus alternating coordinate motion is strong
+  // local wobble evidence. A curve exemption is intentionally limited to the
+  // coordinate-only straight-corridor classifier so valid Running speed and
+  // real bends cannot be flattened by a walking-density assumption.
+  if (
+    !hasScalarInconsistentAlternatingMotion(window)
+    && hasCoherentMultiscaleCurvature(evidence, candidateIndex)
+  ) return false;
+  evidence = window;
   return hasUncertaintyBoundedOscillation(evidence);
 }
 
@@ -1134,6 +1435,26 @@ function insertFrozenPresentationPoint(
   state.frozenEvidenceKeys.add(key);
 }
 
+function settleLiveTailAtEvidenceBoundary(
+  state: CausalLiveReplayCheckpoint,
+  evidence: ReadonlyArray<TrackPoint>,
+): void {
+  for (const candidate of state.liveTail) {
+    const resolved = resolvedExpiredPresentationPoint(evidence, candidate);
+    // A segment or silence boundary limits future evidence; it is not new
+    // support for a provisional deviation. If the evidence observed before
+    // the boundary cannot resolve that coordinate, discard the display-only
+    // revision instead of making it immutable. Intrinsic non-provisional
+    // samples remain eligible so genuine accepted boundary geometry is not
+    // lost merely because recording continues in a new segment.
+    if (resolved == null && candidate.livePresentationProvisional) continue;
+    insertFrozenPresentationPoint(
+      state,
+      settledPresentationPoint(resolved ?? candidate),
+    );
+  }
+}
+
 export function createCausalLiveReplayCheckpoint(
   canonical: ReadonlyArray<TrackPoint> = [],
   live: ReadonlyArray<TrackPoint> = [],
@@ -1157,9 +1478,14 @@ export function createCausalLiveReplayCheckpoint(
     && (canonical[rawStart].segmentId ?? '__legacy') !== segmentId) rawStart += 1;
   const hasEarlierRawSegmentEvidence = rawStart > 0
     && (canonical[rawStart - 1].segmentId ?? '__legacy') === segmentId;
+  const incomingGapKeys = incomingSilenceGapEvidenceKeys(canonical, rawStart);
   const compacted = compactPresentationEvidence(
     canonical.slice(rawStart),
-  );
+  ).map(point => (
+    incomingGapKeys.has(presentationEvidenceKey(point))
+      ? { ...point, livePresentationBreakBefore: true as const }
+      : point
+  ));
   let boundedStart = compacted.length - 1;
   const maximumEvidence = LIVE_MUTABLE_TAIL_MAX_POINTS + LIVE_TREND_CONTEXT_MAX_POINTS;
   while (boundedStart > 0
@@ -1198,14 +1524,24 @@ export function createCausalLiveReplayCheckpoint(
       || recoverySupportedKeys.has(presentationEvidenceKey(candidate))
     ) liveTailStart = index + 1;
   }
-  const recoveredFrozen = live.slice(0, liveTailStart).map((candidate, index) => {
-    if (candidate.liveTrendConfirmed || candidate.livePresentationSettled) return candidate;
-    const key = presentationEvidenceKey(candidate);
-    if (index === 0) return candidate;
-    return recoverySupportedKeys.has(key)
-      ? confirmedPresentationPoint(candidate)
-      : settledPresentationPoint(candidate);
-  });
+  const recoveredFrozen = live.slice(0, liveTailStart)
+    .flatMap((candidate, index) => {
+      if (candidate.livePresentationProvisional) return [];
+      if (candidate.liveTrendConfirmed || candidate.livePresentationSettled) return [candidate];
+      const key = presentationEvidenceKey(candidate);
+      // The first published coordinate is the immutable visual origin of this
+      // checkpoint. Preserve it even after the bounded canonical context has
+      // advanced beyond it; dropping it makes warm incremental replay diverge
+      // from the exact cold replay.
+      if (index === 0) return [candidate];
+      if (recoverySupportedKeys.has(key)) return [confirmedPresentationPoint(candidate)];
+      // Object reconstruction is not movement evidence. An unmarked point can
+      // sit before a later durable anchor simply because it was previously in
+      // the responsive tail. Resolve it against retained symmetric evidence,
+      // or drop it; never turn array position into permanent geometry.
+      const resolved = resolvedExpiredPresentationPoint(boundedEvidence, candidate);
+      return resolved == null ? [] : [settledPresentationPoint(resolved)];
+    });
   return {
     frozen: recoveredFrozen,
     frozenEvidenceKeys: new Set(recoveredFrozen.map(presentationEvidenceKey)),
@@ -1222,8 +1558,8 @@ export function createCausalLiveReplayCheckpoint(
   };
 }
 
-export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, point: TrackPoint): void {
-    const nextSegmentId = point.segmentId ?? '__legacy';
+export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, sourcePoint: TrackPoint): void {
+    const nextSegmentId = sourcePoint.segmentId ?? '__legacy';
     if (state.segmentId !== nextSegmentId) {
       const resolvedBoundary = resolvedBoundaryPresentationPoint(state.segmentEvidence);
       if (resolvedBoundary != null) {
@@ -1236,16 +1572,7 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
           settledPresentationPoint(resolvedBoundary),
         );
       }
-      for (const candidate of state.liveTail) {
-        const resolved = resolvedExpiredPresentationPoint(
-          state.segmentEvidence,
-          candidate,
-        ) ?? candidate;
-        insertFrozenPresentationPoint(
-          state,
-          settledPresentationPoint(resolved),
-        );
-      }
+      settleLiveTailAtEvidenceBoundary(state, state.segmentEvidence);
       state.liveTail = [];
       state.segmentEvidence = [];
       state.recentCanonicalEvidence = [];
@@ -1253,6 +1580,16 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
       state.segmentHasPriorEvidence = false;
     }
     const previousEvidenceT = state.segmentEvidence.at(-1)?.t ?? null;
+    const closesSilenceGap = previousEvidenceT != null
+      && sourcePoint.t - previousEvidenceT >= LIVE_PRESENTATION_GAP_BOUNDARY_MS;
+    // Keep the discontinuity as display provenance on the post-gap point.
+    // The canonical observation remains untouched, while later simplification
+    // can distinguish a real accepted-evidence gap from an ordinary long span
+    // between retained vertices on a continuous path. This does not claim
+    // that native or JS callbacks were absent between the accepted fixes.
+    const point: TrackPoint = closesSilenceGap
+      ? { ...sourcePoint, livePresentationBreakBefore: true }
+      : sourcePoint;
     state.recentCanonicalEvidence.push(point);
     if (state.recentCanonicalEvidence.length > LIVE_RECENT_CANONICAL_MAX_POINTS) {
       state.recentCanonicalEvidence = state.recentCanonicalEvidence
@@ -1287,14 +1624,43 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
       && !gapBoundaryOnlyIndices.has(index)
     )));
     const presentationProtectedIndices = new Set(allProtectedIndices);
+    // Keep the immediately preceding accepted observation in the provisional
+    // presentation tail. This provides responsive, revisable movement to the
+    // road-aware layer without treating recency as trend confirmation. The
+    // point deliberately does not enter `supportedIndices`, so it cannot make
+    // mutable geometry authoritative merely because the tail later contracts.
+    const responsiveIndex = state.segmentEvidence.length - 2;
+    const responsiveApproachIndex = responsiveIndex - 1;
+    const responsiveTailDeviationM = responsiveApproachIndex >= 0
+      ? pointToSegmentDistanceM(
+          state.segmentEvidence[responsiveIndex],
+          state.segmentEvidence[responsiveApproachIndex],
+          point,
+        )
+      : 0;
+    const responsiveTailTurn = responsiveApproachIndex >= 0
+      ? angleDelta(
+          bearing(state.segmentEvidence[responsiveApproachIndex], state.segmentEvidence[responsiveIndex]),
+          bearing(state.segmentEvidence[responsiveIndex], point),
+        )
+      : 0;
+    const responsiveTailNeedsInterior = responsiveIndex > 0 && (
+      responsiveTailDeviationM >= Math.max(0.75, Math.min(2, uncertaintyM * 0.1))
+      || responsiveTailTurn >= 15
+    );
+    if (responsiveTailNeedsInterior) presentationProtectedIndices.add(responsiveIndex);
+    const responsiveOnlyKey = responsiveTailNeedsInterior
+      && !allProtectedIndices.includes(responsiveIndex)
+      ? presentationEvidenceKey(state.segmentEvidence[responsiveIndex])
+      : null;
     const supportedKeys = new Set(Array.from(supportedIndices).map(index => (
       presentationEvidenceKey(state.segmentEvidence[index])
     )));
     if (!state.segmentHasPriorEvidence) {
       supportedKeys.add(presentationEvidenceKey(state.segmentEvidence[0]));
     }
-    // A long silence is a real discontinuity even when Activity segmentId did
-    // not change. Once evidence exists on the other side, preserve both exact
+    // A long accepted-evidence gap is a display discontinuity even when the
+    // Activity segmentId did not change. Once evidence exists on the other side, preserve both exact
     // accepted boundary observations as settled display anchors. They are not
     // movement-trend confirmation, but allowing either endpoint to age out of
     // RDP would make a previously visible gap boundary disappear and could
@@ -1352,8 +1718,29 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
         insertFrozenPresentationPoint(state, confirmed);
       }
     }
-    const closesSilenceGap = previousEvidenceT != null
-      && point.t - previousEvidenceT >= LIVE_PRESENTATION_GAP_BOUNDARY_MS;
+    // A display vertex that survives uncertainty-scaled RDP and subsequently
+    // leaves the raw mutable tail is bounded spatial-coverage evidence. Keep
+    // it only after the candidate-local oscillation classifier has ruled out
+    // a straight-corridor wobble. This prevents a long gentle bend from
+    // repeatedly losing all of its progress as the window advances, without
+    // turning resource expiry into movement confirmation.
+    for (let index = 1; index < nextPresentation.length - 1; index += 1) {
+      const candidate = nextPresentation[index];
+      if (candidate.t >= cutoffT) continue;
+      const candidateKey = presentationEvidenceKey(candidate);
+      if (state.frozenEvidenceKeys.has(candidateKey)) continue;
+      if (candidateKey === responsiveOnlyKey) continue;
+      const evidenceIndex = presentationEvidenceIndex(state.segmentEvidence, candidate);
+      if (
+        evidenceIndex <= 0
+        || evidenceIndex >= state.segmentEvidence.length - 1
+        || isNearUncertaintyBoundedOscillation(state.segmentEvidence, evidenceIndex)
+      ) continue;
+      insertFrozenPresentationPoint(
+        state,
+        settledPresentationPoint(candidate),
+      );
+    }
     if (closesSilenceGap) {
       const beforeGapEvidence = state.segmentEvidence.slice(0, -1);
       const resolvedBoundary = resolvedBoundaryPresentationPoint(
@@ -1365,16 +1752,7 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
           settledPresentationPoint(resolvedBoundary),
         );
       }
-      for (const candidate of state.liveTail) {
-        const resolved = resolvedExpiredPresentationPoint(
-          beforeGapEvidence,
-          candidate,
-        ) ?? candidate;
-        insertFrozenPresentationPoint(
-          state,
-          settledPresentationPoint(resolved),
-        );
-      }
+      settleLiveTailAtEvidenceBoundary(state, beforeGapEvidence);
     }
     // Every previously visible vertex that leaves the triple-bounded mutable
     // tail is either resolved against current symmetric evidence or was
@@ -1386,6 +1764,7 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
         closesSilenceGap
         || candidate.t >= cutoffT
         || state.frozenEvidenceKeys.has(candidateKey)
+        || (candidate.livePresentationProvisional && !supportedKeys.has(candidateKey))
       ) continue;
       const resolved = resolvedExpiredPresentationPoint(
         state.segmentEvidence,
@@ -1469,7 +1848,20 @@ export function appendCausalLiveReplayPoint(state: CausalLiveReplayCheckpoint, p
     const latestFrozenT = state.frozen.at(-1)?.t ?? Number.NEGATIVE_INFINITY;
     state.liveTail = nextPresentation.filter(candidate => (
       candidate.t > latestFrozenT && candidate.t >= cutoffT
-    ));
+    )).map(candidate => {
+      const candidateKey = presentationEvidenceKey(candidate);
+      if (
+        candidateKey !== responsiveOnlyKey
+        || supportedKeys.has(candidateKey)
+      ) {
+        if (!candidate.livePresentationProvisional) return candidate;
+        const { livePresentationProvisional: _provisional, ...intrinsic } = candidate;
+        return intrinsic;
+      }
+      return candidate.livePresentationProvisional
+        ? candidate
+        : { ...candidate, livePresentationProvisional: true };
+    });
     if (contextStart > 0) {
       state.segmentEvidence = state.segmentEvidence.slice(contextStart);
       state.segmentHasPriorEvidence = true;

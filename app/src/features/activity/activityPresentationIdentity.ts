@@ -7,6 +7,7 @@ export interface ActivityPresentationIdentityPoint {
   clientActivityId?: string;
   ownerGeneration?: string;
   rawOrdinal?: number;
+  livePresentationBreakBefore?: true;
 }
 
 export interface ActivityPresentationIdentity {
@@ -82,6 +83,7 @@ export function activityPresentationIdentity(
       finiteNumber(point.rawOrdinal),
       point.lat.toPrecision(15),
       point.lng.toPrecision(15),
+      point.livePresentationBreakBefore ? 'break-before' : 'continuous',
     ].join('\u0001'),
   };
 }

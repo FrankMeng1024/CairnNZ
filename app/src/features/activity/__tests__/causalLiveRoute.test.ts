@@ -1,6 +1,9 @@
 import {
   appendCausalLivePoint,
+  appendCausalLiveReplayPoint,
   buildCausalLiveRoute,
+  causalLiveReplayResult,
+  createCausalLiveReplayCheckpoint,
   LIVE_MUTABLE_TAIL_MAX_AGE_MS,
   LIVE_MUTABLE_TAIL_MAX_DISTANCE_M,
 } from '../causalLiveRoute';
@@ -56,6 +59,84 @@ describe('causal Live route presentation', () => {
     const retainedDrift = settled.find(point => point.t === canonical[3].t);
     expect(retainedDrift == null || haversineM(retainedDrift, canonical[3]) > 2).toBe(true);
     expect(settled.at(-1)).toBe(canonical.at(-1));
+  });
+
+  test.each([
+    ['a new source segment', (point: TrackPoint) => ({ ...point, segmentId: 'b' })],
+    ['a genuine silence boundary', (point: TrackPoint) => ({ ...point, t: point.t + 15_000 })],
+  ])('does not freeze a contradicted provisional deviation at %s', (_label, boundaryPoint) => {
+    const checkpoint = createCausalLiveReplayCheckpoint();
+    const accepted = [
+      ...Array.from({ length: 11 }, (_, index) => ({
+        ...sample(0, index * 1.4, 0),
+        t: index * 1_000,
+        observationId: `straight:${index}`,
+      })),
+      { ...sample(5, 15.4, 0), t: 11_000, observationId: 'temporary-deviation' },
+      { ...sample(0, 16.8, 0), t: 12_000, observationId: 'trend-recovered' },
+    ];
+    accepted.forEach(point => appendCausalLiveReplayPoint(checkpoint, point));
+
+    const temporary = causalLiveReplayResult(checkpoint)
+      .find(point => point.observationId === 'temporary-deviation');
+    expect(temporary?.livePresentationProvisional).toBe(true);
+
+    appendCausalLiveReplayPoint(checkpoint, boundaryPoint({
+      ...sample(0, 18.2, 0),
+      t: 13_000,
+      observationId: 'after-boundary',
+    }));
+    const final = causalLiveReplayResult(checkpoint);
+    const frozenDeviation = final.find(point => (
+      point.observationId === 'temporary-deviation'
+      && (point.livePresentationSettled || point.liveTrendConfirmed)
+    ));
+
+    expect(frozenDeviation).toBeUndefined();
+    expect(Math.max(...final.map(point => Math.abs(
+      (point.lng - sample(0, 0, 0).lng) * 111_320 * Math.cos(LAT * Math.PI / 180)
+    )))).toBeLessThanOrEqual(1);
+  });
+
+  test('cold checkpoint recovery preserves a proven same-segment silence break', () => {
+    const canonical = [0, 5_000, 10_000, 30_000].map((t, index) => ({
+      ...sample(0, index * 5, 0, 'one-source-segment'),
+      t,
+      observationId: `gap-recovery:${index}`,
+    }));
+    const live = buildCausalLiveRoute(canonical);
+    expect(live.find(point => point.t === 30_000)?.livePresentationBreakBefore).toBe(true);
+
+    const recovered = createCausalLiveReplayCheckpoint(
+      canonical.map(point => ({ ...point })),
+      live.map(point => ({ ...point })),
+    );
+    appendCausalLiveReplayPoint(recovered, {
+      ...sample(0, 20, 0, 'one-source-segment'),
+      t: 35_000,
+      observationId: 'gap-recovery:4',
+    });
+
+    expect(causalLiveReplayResult(recovered)
+      .find(point => point.t === 30_000)?.livePresentationBreakBefore).toBe(true);
+  });
+
+  test('checkpoint recovery retains an older proven gap outside the 512-point context scan', () => {
+    const canonical = Array.from({ length: 540 }, (_, index) => ({
+      ...sample(0, index * 1.4, 0, 'long-source-segment'),
+      t: index < 12 ? index * 1_000 : 25_000 + (index - 12) * 1_000,
+      observationId: `long-gap-recovery:${index}`,
+    }));
+    const live = buildCausalLiveRoute(canonical);
+    const recovered = createCausalLiveReplayCheckpoint(canonical, live);
+    appendCausalLiveReplayPoint(recovered, {
+      ...sample(0, 540 * 1.4, 0, 'long-source-segment'),
+      t: 25_000 + (540 - 12) * 1_000,
+      observationId: 'long-gap-recovery:540',
+    });
+
+    expect(causalLiveReplayResult(recovered)
+      .find(point => point.t === 25_000)?.livePresentationBreakBefore).toBe(true);
   });
 
   test('T04 suppresses a short uncertainty-sized lateral run but T08 preserves a meaningful detour', () => {
@@ -189,6 +270,16 @@ describe('causal Live route presentation', () => {
       const retainedTimes = new Set(published.map(candidate => candidate.t));
       const revised = before.filter(candidate => !retainedTimes.has(candidate.t));
       for (const candidate of revised) {
+        expect(candidate.liveTrendConfirmed).not.toBe(true);
+        expect(candidate.livePresentationSettled).not.toBe(true);
+        const closesSilenceGap = published.at(-1)?.livePresentationBreakBefore === true;
+        if (closesSilenceGap) {
+          // No evidence arrives during silence, so wall-clock age cannot turn
+          // the last provisional tail into settled history. The first fix on
+          // the other side may discard it if pre-gap evidence contradicted it.
+          expect(candidate.livePresentationProvisional).toBe(true);
+          continue;
+        }
         expect(point.t - candidate.t).toBeLessThanOrEqual(LIVE_MUTABLE_TAIL_MAX_AGE_MS);
         const from = history.findIndex(item => item.t === candidate.t);
         const to = history.length - 1;

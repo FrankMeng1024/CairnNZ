@@ -13,6 +13,7 @@ export interface ConfirmedRoutePoint {
   clientActivityId?: string;
   ownerGeneration?: string;
   rawOrdinal?: number;
+  livePresentationBreakBefore?: true;
 }
 
 export interface ConfirmedRouteSegment {
@@ -72,7 +73,14 @@ function presentationBreak(
   fallbackGapDistanceM: number,
 ): boolean {
   if (!previous) return false;
-  if (previous.segmentId && next.segmentId && previous.segmentId !== next.segmentId) return true;
+  if (next.livePresentationBreakBefore) return true;
+  if (previous.segmentId && next.segmentId) {
+    // Durable source segment identity represents accepted continuity. Display
+    // simplification can legitimately leave minutes between retained
+    // vertices; that is not evidence of GPS silence. Time/distance fallback
+    // remains only for legacy points that lack segment provenance.
+    return previous.segmentId !== next.segmentId;
+  }
   const dtMs = previous.t != null && next.t != null ? next.t - previous.t : 0;
   return dtMs > fallbackGapMs || haversineM(previous, next) > fallbackGapDistanceM;
 }
@@ -265,11 +273,11 @@ export function buildConfirmedRouteSegments(
   for (let index = 1; index < points.length; index += 1) {
     const previous = points[index - 1];
     const point = points[index];
-    const explicitBreak = Boolean(
-      previous.segmentId && point.segmentId && previous.segmentId !== point.segmentId,
-    );
+    const hasSourceContinuity = Boolean(previous.segmentId && point.segmentId);
+    const explicitBreak = point.livePresentationBreakBefore === true
+      || (hasSourceContinuity && previous.segmentId !== point.segmentId);
     const dtMs = previous.t != null && point.t != null ? point.t - previous.t : 0;
-    const fallbackBreak = !explicitBreak
+    const fallbackBreak = !hasSourceContinuity
       && (dtMs > fallbackGapMs
         || haversineM(previous, point) > fallbackGapDistanceM);
     if (explicitBreak || fallbackBreak) {

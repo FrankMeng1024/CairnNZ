@@ -35,6 +35,24 @@ describe('confirmed route presentation', () => {
     expect(buildConfirmedRouteSegments(points).map(segment => segment.coordinates.length)).toEqual([2, 1]);
   });
 
+  it('keeps a proven same-segment silence disconnected after causal simplification', () => {
+    const points = [
+      point(0, 1_000, 'continuous-source-segment'),
+      {
+        ...point(30, 181_000, 'continuous-source-segment'),
+        livePresentationBreakBefore: true as const,
+      },
+    ];
+    expect(buildConfirmedRouteSegments(points).map(segment => segment.coordinates.length))
+      .toEqual([1, 1]);
+    const rendered = updateIncrementalRoutePresentation(
+      createIncrementalRoutePresentation(),
+      points,
+    );
+    expect(rendered.staticChunks.map(chunk => chunk.coordinates.length)).toEqual([]);
+    expect(rendered.activeHead?.coordinates).toHaveLength(1);
+  });
+
   it('targets one full LineString while preserving an immutable prefix', () => {
     const coordinates: [number, number][] = [[0, 0], [1, 1], [2, 2], [3, 3]];
     expect(planContinuousRouteTarget(coordinates, 3)).toEqual({

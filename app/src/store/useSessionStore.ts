@@ -42,6 +42,13 @@ export interface TrackPoint extends Coordinate {
   /** Display-only resource-boundary resolution of a previously visible tail
    * vertex. This is not evidence that a movement trend was confirmed. */
   livePresentationSettled?: true;
+  /** Display-only responsive-tail vertex. It may be revised or removed when
+   * later evidence arrives and must never be promoted solely by ageing. */
+  livePresentationProvisional?: true;
+  /** Display-only discontinuity before this point, derived from adjacent
+   * accepted evidence while its chronology was available. Simplification may
+   * create a large timestamp span, so renderers must not infer this from time. */
+  livePresentationBreakBefore?: true;
   /** Immutable qualified-observation identity. Legacy Activities may omit it. */
   observationId?: string;
   clientActivityId?: string;
