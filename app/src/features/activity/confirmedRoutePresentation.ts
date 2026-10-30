@@ -3,6 +3,7 @@ import {
   activityPresentationScopeKey,
   sameActivityPresentationPoint,
 } from './activityPresentationIdentity';
+import { applyAdaptiveRouteVisualGeometry } from './adaptiveRouteVisualGeometry';
 
 export interface ConfirmedRoutePoint {
   lat: number;
@@ -14,6 +15,7 @@ export interface ConfirmedRoutePoint {
   ownerGeneration?: string;
   rawOrdinal?: number;
   livePresentationBreakBefore?: true;
+  accuracy?: number | null;
 }
 
 export interface ConfirmedRouteSegment {
@@ -27,6 +29,7 @@ export const MAX_LIVE_ROUTE_HEAD_POINTS = 256;
 // otherwise a legal suffix correction can move a vertex already embedded in
 // the preceding static edge.
 export const MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS = 10;
+export const MAX_LIVE_ROUTE_TOPOLOGY_CONTEXT_POINTS = 256;
 
 export interface IncrementalRoutePresentation {
   sourceCount: number;
@@ -35,6 +38,10 @@ export interface IncrementalRoutePresentation {
   staticChunks: ConfirmedRouteSegment[];
   activeHead: ConfirmedRouteSegment | null;
   activeHeadStartIndex: number | null;
+  activeHeadSourcePoints: ReadonlyArray<ConfirmedRoutePoint>;
+  activeHeadLastRoundedSourceOffset: number | null;
+  activeHeadCoordinateSourceOffsets: number[];
+  topologyContextSourcePoints: ReadonlyArray<ConfirmedRoutePoint>;
   nextChunkOrdinal: number;
   geometryBuildCount: number;
   sourceUpdateCount: number;
@@ -52,6 +59,10 @@ export function createIncrementalRoutePresentation(): IncrementalRoutePresentati
     staticChunks: [],
     activeHead: null,
     activeHeadStartIndex: null,
+    activeHeadSourcePoints: [],
+    activeHeadLastRoundedSourceOffset: null,
+    activeHeadCoordinateSourceOffsets: [],
+    topologyContextSourcePoints: [],
     nextChunkOrdinal: 0,
     geometryBuildCount: 0,
     sourceUpdateCount: 0,
@@ -171,6 +182,13 @@ export function updateIncrementalRoutePresentation(
       sourcePoints: previousState.sourcePoints.slice(0, headStart!),
       activeHead: null,
       activeHeadStartIndex: null,
+      activeHeadSourcePoints: [],
+      activeHeadLastRoundedSourceOffset: null,
+      activeHeadCoordinateSourceOffsets: [],
+      topologyContextSourcePoints: points.slice(
+        Math.max(0, headStart! - MAX_LIVE_ROUTE_TOPOLOGY_CONTEXT_POINTS),
+        headStart!,
+      ),
       latestUpdatePayloadBytes: 0,
     };
     for (let index = headStart!; index < points.length; index += 1) {
@@ -199,6 +217,13 @@ function appendPoint(
   let staticChunks = state.staticChunks;
   let activeHead = state.activeHead;
   let activeHeadStartIndex = state.activeHeadStartIndex;
+  let activeHeadSourcePoints = state.activeHeadSourcePoints;
+  let activeHeadLastRoundedSourceOffset = state.activeHeadLastRoundedSourceOffset;
+  let activeHeadCoordinateSourceOffsets = state.activeHeadCoordinateSourceOffsets;
+  const topologyContextSourcePoints = [
+    ...state.topologyContextSourcePoints,
+    point,
+  ].slice(-MAX_LIVE_ROUTE_TOPOLOGY_CONTEXT_POINTS);
   let nextChunkOrdinal = state.nextChunkOrdinal;
   const changedChunks: ConfirmedRouteSegment[] = [];
 
@@ -212,26 +237,85 @@ function appendPoint(
       key: `${point.segmentId ?? `legacy-${point.t ?? state.sourceCount}`}:head-${nextChunkOrdinal}`,
       coordinates: [coordinateOf(point)],
     };
+    activeHeadSourcePoints = [point];
+    activeHeadLastRoundedSourceOffset = null;
+    activeHeadCoordinateSourceOffsets = [0];
     activeHeadStartIndex = state.sourceCount;
   } else {
-    activeHead = { ...activeHead, coordinates: [...activeHead.coordinates, coordinateOf(point)] };
-    if (activeHead.coordinates.length > MAX_LIVE_ROUTE_HEAD_POINTS) {
-      const frozenPointCount = Math.max(
-        2,
-        activeHead.coordinates.length - MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS,
+    const newSourceOffset = activeHeadSourcePoints.length;
+    activeHeadSourcePoints = [...activeHeadSourcePoints, point];
+    const cornerOffset = activeHeadSourcePoints.length - 2;
+    const overlapsPreviousCurve = activeHeadLastRoundedSourceOffset != null
+      && cornerOffset - activeHeadLastRoundedSourceOffset <= 1;
+    const newestCorner = overlapsPreviousCurve || activeHeadSourcePoints.length < 3
+      ? null
+      : applyAdaptiveRouteVisualGeometry(activeHeadSourcePoints.slice(-3), {
+        armMode: 'adjacent',
+        topologyContext: state.topologyContextSourcePoints.slice(0, -2),
+      });
+    if (newestCorner?.diagnostics.roundedCorners === 1) {
+      activeHead = {
+        ...activeHead,
+        coordinates: [
+          ...activeHead.coordinates.slice(0, -1),
+          ...newestCorner.points.slice(1).map(coordinateOf),
+        ],
+      };
+      activeHeadCoordinateSourceOffsets = [
+        ...activeHeadCoordinateSourceOffsets.slice(0, -1),
+        ...Array.from(
+          { length: newestCorner.points.length - 1 },
+          () => newSourceOffset,
+        ),
+      ];
+      activeHeadLastRoundedSourceOffset = cornerOffset;
+    } else {
+      activeHead = {
+        ...activeHead,
+        coordinates: [...activeHead.coordinates, coordinateOf(point)],
+      };
+      activeHeadCoordinateSourceOffsets = [
+        ...activeHeadCoordinateSourceOffsets,
+        newSourceOffset,
+      ];
+    }
+    if (activeHeadSourcePoints.length > MAX_LIVE_ROUTE_HEAD_POINTS) {
+      const tentativeSourceOffset = Math.max(
+        1,
+        activeHeadSourcePoints.length - MAX_LIVE_ROUTE_MUTABLE_SOURCE_POINTS - 1,
       );
-      const frozenCoordinates = activeHead.coordinates.slice(0, frozenPointCount);
+      let boundaryCoordinateIndex = -1;
+      for (let index = 0; index < activeHeadCoordinateSourceOffsets.length; index += 1) {
+        if (activeHeadCoordinateSourceOffsets[index] <= tentativeSourceOffset) {
+          boundaryCoordinateIndex = index;
+        }
+      }
+      const retainedSourceOffset = activeHeadCoordinateSourceOffsets[
+        Math.max(1, boundaryCoordinateIndex)
+      ];
+      const frozenCoordinates = activeHead.coordinates.slice(
+        0,
+        Math.max(1, boundaryCoordinateIndex) + 1,
+      );
       const frozen = {
         key: `${activeHead.key}:body-${nextChunkOrdinal++}`,
         coordinates: frozenCoordinates,
       };
       staticChunks = [...staticChunks, frozen];
       changedChunks.push(frozen);
+      activeHeadSourcePoints = activeHeadSourcePoints.slice(retainedSourceOffset);
       activeHead = {
         key: `${point.segmentId ?? 'legacy'}:head-${nextChunkOrdinal}`,
-        coordinates: activeHead.coordinates.slice(frozenPointCount - 1),
+        coordinates: activeHead.coordinates.slice(Math.max(1, boundaryCoordinateIndex)),
       };
-      activeHeadStartIndex = state.sourceCount - activeHead.coordinates.length + 1;
+      activeHeadCoordinateSourceOffsets = activeHeadCoordinateSourceOffsets
+        .slice(Math.max(1, boundaryCoordinateIndex))
+        .map(offset => offset - retainedSourceOffset);
+      activeHeadStartIndex = (activeHeadStartIndex ?? 0) + retainedSourceOffset;
+      activeHeadLastRoundedSourceOffset = activeHeadLastRoundedSourceOffset != null
+        && activeHeadLastRoundedSourceOffset >= retainedSourceOffset
+        ? activeHeadLastRoundedSourceOffset - retainedSourceOffset
+        : null;
     }
   }
   changedChunks.push(activeHead);
@@ -243,6 +327,10 @@ function appendPoint(
     staticChunks,
     activeHead,
     activeHeadStartIndex,
+    activeHeadSourcePoints,
+    activeHeadLastRoundedSourceOffset,
+    activeHeadCoordinateSourceOffsets,
+    topologyContextSourcePoints,
     nextChunkOrdinal,
     geometryBuildCount: state.geometryBuildCount + 1,
     sourceUpdateCount: state.sourceUpdateCount

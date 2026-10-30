@@ -1,4 +1,7 @@
-import type { PedestrianFinalRequestResult } from '../../services/routing/pedestrianFinalRoute';
+import type {
+  PedestrianFinalRequestResult,
+  PedestrianFinalStats,
+} from '../../services/routing/pedestrianFinalRoute';
 import {
   evaluateMatchedGeometryQuality,
   type MatchedGeometryQuality,
@@ -10,6 +13,36 @@ import {
 } from './savedFinalCornerRounding';
 
 type FinalPoint = { lat: number; lng: number };
+
+/** Road-backed Final rounding needs the same strict local provenance mask in
+ * the queue, tests and visual verification. Keeping the pure decision here
+ * prevents a review harness from approximating production selection rules. */
+export function confidentRoadCornerMask(
+  pointCount: number,
+  stats: PedestrianFinalStats,
+): boolean[] {
+  const mask = Array.from({ length: pointCount }, () => false);
+  const sections = Array.isArray(stats.sections) ? stats.sections : [];
+  for (let index = 1; index < pointCount - 1; index += 1) {
+    const section = sections.find(candidate => (
+      candidate.displayStart != null
+      && candidate.displayEnd != null
+      && index - 1 >= candidate.displayStart
+      && index + 1 <= candidate.displayEnd
+    ));
+    if (!section) continue;
+    mask[index] = section.decision === 'refined'
+      && section.networkSource === 'map-matching'
+      && (section.geometryMode === 'A_PEDESTRIAN_NETWORK'
+        || section.geometryMode === 'B_ROAD_OFFSET')
+      && section.confidence >= 0.75
+      && section.corridorEvidence?.accepted === true
+      && section.seam?.accepted === true
+      && section.promotionUtility?.accepted === true
+      && section.promotionUtility.networkAuthority === 'strong';
+  }
+  return mask;
+}
 
 export interface FinalCandidatePromotionDecision {
   accepted: boolean;

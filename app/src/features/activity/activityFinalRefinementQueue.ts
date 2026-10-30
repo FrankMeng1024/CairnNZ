@@ -10,7 +10,6 @@ import {
 import {
   reconstructPedestrianFinalRoute,
   type PedestrianFinalRequestResult,
-  type PedestrianFinalStats,
 } from '../../services/routing/pedestrianFinalRoute';
 import { createActivityMapboxRequestGovernor } from '../../services/routing/activityRequestGovernor';
 import { networkMonitor } from '../../services/networkMonitor';
@@ -30,6 +29,7 @@ import {
 import { recordActivityStageEvent } from './activityStageLedger';
 import {
   activityFinalRefinementRequestCategory,
+  confidentRoadCornerMask,
   decideActivityFinalCandidatePromotion,
   decideRetainedLocalRefinement,
   selectRoundedActivityFinalCandidate,
@@ -108,33 +108,7 @@ function scheduleRetryWake(job: ActivityFinalRefinementJob): void {
   retryTimers.set(key, timer);
 }
 
-export function confidentRoadCornerMask(
-  pointCount: number,
-  stats: PedestrianFinalStats,
-): boolean[] {
-  const mask = Array.from({ length: pointCount }, () => false);
-  const sections = Array.isArray(stats.sections) ? stats.sections : [];
-  for (let index = 1; index < pointCount - 1; index += 1) {
-    const section = sections.find(candidate => (
-      candidate.displayStart != null
-      && candidate.displayEnd != null
-      && index - 1 >= candidate.displayStart
-      && index + 1 <= candidate.displayEnd
-    ));
-    if (!section) continue;
-    const strongLocalRoadAuthority = section.decision === 'refined'
-      && section.networkSource === 'map-matching'
-      && (section.geometryMode === 'A_PEDESTRIAN_NETWORK'
-        || section.geometryMode === 'B_ROAD_OFFSET')
-      && section.confidence >= 0.75
-      && section.corridorEvidence?.accepted === true
-      && section.seam?.accepted === true
-      && section.promotionUtility?.accepted === true
-      && section.promotionUtility.networkAuthority === 'strong';
-    mask[index] = strongLocalRoadAuthority;
-  }
-  return mask;
-}
+export { confidentRoadCornerMask } from './activityFinalRefinementDecision';
 
 const jobKey = (ownerUserId: string, clientActivityId: string) => `${ROOT}${ownerUserId}:${clientActivityId}`;
 const indexKey = (ownerUserId: string) => `${INDEX}${ownerUserId}`;

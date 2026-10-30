@@ -12,7 +12,8 @@ describe('saved Final road corner rounding', () => {
     const source = [meters(0, 0, 0), meters(10, 0, 1), meters(10, 10, 2)];
     const result = roundSavedFinalRoadCorners(source);
     expect(result.diagnostics.roundedCorners).toBe(1);
-    expect(result.diagnostics.maximumTangentM).toBeCloseTo(1.8, 1);
+    expect(result.diagnostics.maximumTangentM).toBeGreaterThan(2);
+    expect(result.diagnostics.maximumTangentM).toBeLessThan(3);
     expect(result.points.length).toBeGreaterThan(source.length);
     expect(result.points[0]).toEqual(source[0]);
     expect(result.points[result.points.length - 1]).toEqual(source[2]);
@@ -139,7 +140,7 @@ describe('saved Final road corner rounding', () => {
     expect(result.points).toContainEqual(source[2]);
   });
 
-  test('falls back when a short source time span would duplicate rounded timestamps', () => {
+  test('skips rounding when a short source time span would duplicate rounded timestamps', () => {
     const source = [
       meters(0, 0, 0),
       { ...meters(10, 0, 1), t: 1_001 },
@@ -150,8 +151,8 @@ describe('saved Final road corner rounding', () => {
     });
     expect(result.diagnostics).toMatchObject({
       roundedCorners: 0,
-      postRoundRejected: true,
-      postRoundRejectReason: 'timestamp-order',
+      postRoundRejected: false,
+      postRoundRejectReason: null,
     });
     expect(result.points).toEqual(source);
   });
